@@ -171,6 +171,19 @@ construct intents per the table. Deleted from Folino, because
   explicit `select(.rest(…))` after it goes too;
 - the tie-chain walk in `+Pitch.swift`'s `retune` — `.setNotePitch` walks it.
 
+**As shipped, the caret-landing claim above needs a narrower reading.**
+Dropping the explicit `select(.rest(…))` does not mean the caret always stays
+exactly where it was. `rederiveSelection()` compares the pre-mutation caret
+and selection slots against `lastAffectedLocation` (the collapsed rest's slot,
+always `elementIndex 0` of its voice-measure) and only takes the "keep this
+marker, follow the other" branch when one of them already sat at that slot —
+true precisely when the deleted note was the *leading timed element* of its
+voice-measure. In every other case (deleting a later element that happens to
+empty the bar) both branch checks fail, `rederiveSelection()` falls through to
+`select(affected)`, and the caret lands on the collapsed rest exactly as the
+old explicit `select(.rest(…))` did. The dropped call was redundant only for
+the leading-element case.
+
 **What stays host-side, deliberately.** Input *interpretation* and key
 *availability* are the view model's job, not planning: which pitch a letter
 means (`MeasureAccidentals.plannedPitch`), what the rest key means with
@@ -193,6 +206,17 @@ Two behaviors currently ride on data the command-building code had in hand and
    fresh write produces is exactly the planner's chain (its head has no
    `tieBack`), and an unchained write is a chain of one, so a single code path
    covers both.
+
+   **As shipped, that single code path is gated, not unconditional.** Walking
+   `TiePlanner.tieChain(containing:)` after every apply would overshoot for an
+   in-bar overwrite of a note that is already tied to something else — the
+   chain-walk landing belongs only to a write that itself crossed the bar. The
+   host decides `crossesBar` **before** applying, against the pre-edit score
+   (`CrossBarInputPlanner.fitsInMeasure(_:at:in:)`), and calls
+   `chainTail(from:in:)` only when that predicate is true; an in-bar write
+   takes the plain `land(after:)` path unconditionally, exactly as before this
+   design (`EditorViewModel+Input.swift`'s `inputPitch(letter:onRest:)` and
+   `inputPitch(letter:onNote:)`).
 2. **Selection after `appendTiedNote`.** Today the composite's `location` is
    pinned to the *source* note so re-derivation keeps the selection there;
    ssm's `.composite` reports its first member's location (the appended
@@ -241,6 +265,18 @@ never edit semantics.
   letter input with the caret on a multi-note chord's upper note; if the
   existing behavior matters, the host keeps a narrow `.setNotePitch` branch
   for that case — a call-site decision, not a planning one.
+
+  **As shipped: it settled as the narrow host-side branch.** A caret on a
+  chord's upper notehead (`noteIndexInChord != 0`), reached by adding a note
+  and then typing a letter to fix it, takes `.setNotePitch` (composited with
+  `.setChordDuration` when a length is armed, since `.setNotePitch` alone
+  never re-times) instead of `.writeNote`, which would re-pitch notehead 0.
+  The barline case is the one exception: any note index takes `.writeNote`
+  there, because the pre-intent code already collapsed the chord to a single
+  note before the write crossed the bar, which is exactly what `.writeNote`
+  plans. The divergence carries a `PARITY(android)` marker
+  (`EditorViewModel+Input.swift`) — Android's `.writeNote` path still
+  re-pitches notehead 0 unconditionally.
 - **Refusal surfaces change shape.** `apply` returning `false` replaces the
   caught `invalidEdit`; `lastRefusalReason` is available for debugging. The
   `generation`-unmoved contract every op relies on is preserved either way.
@@ -421,14 +457,29 @@ three session-scoped assumptions:
   trampoline at session start when the session already `canUndo`;
   `registerSystemUndo`'s symmetric re-registration handles the rest.
 
-One consequence is accepted as designed rather than patched: **redo survives
-deposit, including after ✕.** `unwindSessionEdits` walks back via `undo()`,
-which populates the redo stack; the deposited session therefore lets the next
-session redo what ✕ discarded. This is the consistent reading — *all* history
-survives, and redo is the exact inverse of the discard, symmetric with undo
-reaching back across sessions. The file is correct throughout (✕ rewrote it;
-a redo re-dirties and autosaves). If review wants ✕ to be final, the fix is an
-ssm addition — see "Risks and open items".
+**As shipped, this reads the other way: ✕ ends all retained history for the
+score, redo included.** The agreed text below argued for the opposite —
+letting the deposited session redo what ✕ just discarded, as the exact inverse
+of undo reaching back across sessions — and was overridden by a controller
+ruling once the two contracts sat side by side: `main` had already shipped "✕
+discards the session" (commit `15bcde6f`) as the button's own promise, and a
+redo that resurrects the discarded edit one session later breaks that promise
+rather than honoring it symmetrically. `discardSessionEdits()` sets
+`didDiscardSession = true` and calls `historyStore.invalidate(scoreItem.id)`;
+`endSession()`'s `depositSessionIfWorthKeeping()` is guarded by
+`!didDiscardSession`, so nothing is retained for the next session to redo from
+— the same contract as an app kill. No ssm addition was needed for this; the
+"Optional ssm addition" item below is now unnecessary in full, not merely
+deferred.
+
+*(Superseded reasoning, kept for context: one consequence was accepted as
+designed rather than patched — **redo survives deposit, including after ✕.**
+`unwindSessionEdits` walks back via `undo()`, which populates the redo stack;
+the deposited session therefore lets the next session redo what ✕ discarded.
+This was read as the consistent choice — *all* history survives, and redo is
+the exact inverse of the discard, symmetric with undo reaching back across
+sessions. The file was correct throughout either way (✕ rewrote it; a redo
+re-dirties and autosaves). This is the reasoning the ruling above overrides.)*
 
 ## Testing
 
@@ -482,6 +533,13 @@ including the cross-barline shape.
   memory-note's assumption that route A "needs an ssm API addition" is
   otherwise **not confirmed** — everything required ships in the pinned
   1.15.0.
+
+  **As shipped: not needed, at all.** Review took the ✕-is-final reading (see
+  the "redo survives deposit" correction above under "Existing code that must
+  change"), which the host implements entirely on its own side by suppressing
+  its own deposit — `discardRedoHistory()` was never added, and no other part
+  of this design needed an ssm change either. Every required surface shipped
+  in the pinned 1.15.0, exactly as the second sentence above already said.
 - **Memory figures are computed, not measured.** Struct strides were estimated
   from the field lists of `Note` and `Chord`; if the real numbers matter, a
   one-off `MemoryLayout` dump in the ssm dev clone settles them. The cap has
@@ -495,6 +553,18 @@ including the cross-barline shape.
    `EditorViewModel`, add `apply(_ intent:)`, migrate the 25 call sites and
    the four test files' seeding calls, delete the dead planning. Pass: gate
    suites green + no `EditCommand` construction left in the Editor package.
+
+   **As shipped, this single step landed as four tasks**, not one commit:
+   first, a transitional, verbatim host-side transcription of ssm's own
+   planning behind the *same* `apply(_ intent:)` seam (so nothing downstream
+   of it had to change twice), migrating the first slice of call sites onto
+   it; then two further call-site slices migrating the rest; then the engine
+   swap that deleted the transcription and handed planning to
+   `ScoreEditSession` for real. The gate suite stayed green at that final
+   engine-swap commit on the first run — the transitional transcription and
+   ssm's actual planner produced identical behavior across all 181 tests,
+   which is the practical proof that Folino's duplicated planning and ssm's
+   had already converged before this design started.
 2. **Step 1, verification:** the new intent-construction tests and the
    chord-note-index test.
 3. **Step 2, store:** Domain protocol, App concrete + unit tests, Noop for
