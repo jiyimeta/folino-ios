@@ -228,6 +228,12 @@ extension EditorViewModel {
         // Decided BEFORE the apply, against the pre-edit score: after a chain write the caret belongs past the
         // chain's tail, but after an in-bar write it belongs one slot on even if the slot's note is (or becomes)
         // tied to something else — walking the chain unconditionally would overshoot there.
+        //
+        // The predicate measures the armed length against the bar without asking whether the slot is inside a
+        // tuplet, where ssm skips the re-time and so writes no chain at all. Harmless HERE, and only here: the
+        // target is a rest, a rest cannot already be tied, so the write's own chain is the only one there is and
+        // `chainTail` falls back to `head` when it did not produce one. The note-input site below has no such
+        // guarantee — see the comment there.
         let crossesBar = duration.map { !CrossBarInputPlanner.fitsInMeasure($0, at: veID, in: score) } ?? false
         let generationBeforeInput = generation
         guard apply(.inputNote(at: restID, pitch: planned.pitch, tpc: planned.tpc, duration: duration)) else {
@@ -267,6 +273,13 @@ extension EditorViewModel {
         if let armed = armedInputDuration, case let .chord(chord)? = score[veID], chord.duration != armed {
             duration = armed
         }
+        // Same predicate as the rest-input site, and NOT harmless for the same reason: the target here already
+        // holds a note, which may already be tied forward. When the predicate says "crosses the bar" but ssm wrote
+        // no chain — inside a tuplet, where it skips the re-time, or in a slot with no bar left to overrun —
+        // `chainTail` walks the PRE-EXISTING chain instead of the one this write made, and the caret lands past a
+        // chain the write never created. Left alone deliberately: reaching it needs a tuplet member or staff-end
+        // slot, an armed length that overruns the bar, and a pre-existing tie forward, all at once, and the cost is
+        // a misplaced caret rather than a wrong note.
         let crossesBar = duration.map { !CrossBarInputPlanner.fitsInMeasure($0, at: veID, in: score) } ?? false
         let generationBeforeInput = generation
         let applied: Bool
