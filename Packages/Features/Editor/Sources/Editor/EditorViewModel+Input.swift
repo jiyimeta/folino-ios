@@ -240,11 +240,18 @@ extension EditorViewModel {
         }
     }
 
-    /// A letter key on a slot that already holds a note: re-pitch it, and re-time it to the armed length too.
+    // PARITY(android): letter input on a chord's upper notehead — Android's `.writeNote` path re-pitches
+    //   notehead 0; Android still needs the caret-notehead `.setNotePitch` branch iOS keeps here.
+    /// A letter key on a slot that already holds a note: re-pitch it, and re-time it to the armed length too —
+    /// `.writeNote`'s own meaning. Writing over an existing note is still writing a note, and the length keys say
+    /// what the next note will be, so a quarter armed over an existing half has to produce a quarter.
     ///
-    /// Both, not just the pitch. Writing over an existing note is still writing a note, and the length keys say what
-    /// the next note will be — so a quarter armed over an existing half has to produce a quarter. Leaving the length
-    /// alone silently ignored half of what the pad was showing.
+    /// One case stays host-side: a caret naming a chord's UPPER notehead (`noteIndexInChord != 0`) — reached by
+    /// ＋音 adding a note (which selects the added note) and typing a letter to fix it. `.writeNote` re-pitches
+    /// notehead 0; the user in that flow means the notehead the caret names, so the intent is built to say so
+    /// (which notehead a letter means is interpretation, not planning). The barline case takes `.writeNote` for
+    /// any index: the pre-intent code already collapsed the chord to a single note of the new pitch when the armed
+    /// length crossed the bar, and that is exactly what `.writeNote` plans.
     private func inputPitch(letter: Character, onNote noteID: NoteID, in score: Score) {
         let veID = VoiceElementID(noteID)
         guard let note = score[noteID],
@@ -252,43 +259,35 @@ extension EditorViewModel {
                   forLetter: letter, nearestTo: note.pitch, at: veID, in: score,
               )
         else { return }
-        let pitch = SetNotePitch(at: noteID, pitch: target.pitch, tpc: target.tpc)
-        let generationBeforeInput = generation
-        if writeCrossingBarline(
-            pitch: target.pitch, tpc: target.tpc, at: veID, in: score, from: generationBeforeInput,
-        ) { return }
-        if let armed = armedInputDuration, case let .chord(chord)? = score[veID],
-           chord.duration != armed, !isInsideTuplet(veID)
-        {
-            applyCommand(CompositeEditCommand(
-                commands: [SetChordDuration(at: veID, duration: armed), pitch],
-                location: veID,
-            ))
-        } else {
-            applyCommand(pitch)
+        var duration: NoteDuration?
+        if let armed = armedInputDuration, case let .chord(chord)? = score[veID], chord.duration != armed {
+            duration = armed
         }
-        land(after: veID, unlessStillAt: generationBeforeInput)
-    }
-
-    /// The armed length doesn't fit the bar → write it as tied notes across the barline instead (spelled by
-    /// `CrossBarInputPlanner`), and report that input is done. False means this isn't that case and the caller's
-    /// ordinary single-slot path should run.
-    ///
-    /// The chain is one composite, so it is one undo step; the selection lands on the note's first piece while the
-    /// caret advances past its last, which is the same "selection on what you wrote, caret on what's next" split
-    /// every other input takes — just measured across the whole chain rather than one slot.
-    private func writeCrossingBarline(
-        pitch: Int, tpc: Int, at location: VoiceElementID, in score: Score, from previousGeneration: Int,
-    ) -> Bool {
-        guard let armed = armedInputDuration,
-              let plan = CrossBarInputPlanner.plan(
-                  .chord(Chord(duration: armed, notes: [Note(pitch: pitch, tpc: tpc)])),
-                  duration: armed, at: location, in: score,
-              )
-        else { return false }
-        applyCommand(CompositeEditCommand(commands: plan.commands, location: plan.head))
-        land(selection: plan.head, caretAfter: plan.tail, unlessStillAt: previousGeneration)
-        return true
+        let crossesBar = duration.map { !CrossBarInputPlanner.fitsInMeasure($0, at: veID, in: score) } ?? false
+        let generationBeforeInput = generation
+        let applied: Bool
+        if noteID.noteIndexInChord == 0 || crossesBar {
+            applied = apply(.writeNote(at: veID, pitch: target.pitch, tpc: target.tpc, duration: duration))
+        } else {
+            let repitch = EditIntent.setNotePitch(
+                at: noteID, pitch: target.pitch, tpc: target.tpc, accidental: nil,
+            )
+            if let duration, !isInsideTuplet(veID) {
+                applied = apply(.composite([.setChordDuration(at: veID, duration: duration), repitch]))
+            } else {
+                applied = apply(repitch)
+            }
+        }
+        guard applied else { return }
+        if crossesBar, let mutated = self.score {
+            land(
+                selection: veID,
+                caretAfter: chainTail(from: veID, in: mutated),
+                unlessStillAt: generationBeforeInput,
+            )
+        } else {
+            land(after: veID, unlessStillAt: generationBeforeInput)
+        }
     }
 
     /// Where input leaves the two markers: the selection on the note just written at `location`, the caret on the
