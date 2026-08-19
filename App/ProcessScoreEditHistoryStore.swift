@@ -29,6 +29,10 @@ final class ProcessScoreEditHistoryStore: NSObject, ScoreEditHistoryStore {
         // Memory pressure empties the store: the deposited sessions are a convenience cache, and "bounded until
         // jetsam disagrees" is not bounded. Same contract as a kill; the checked-out session is unaffected — the
         // store does not own it.
+        //
+        // This observer is never removed. That is correct only because this store is process-lifetime composition
+        // state (one instance, created once in `AppBootstrap`, alive until the app dies) — a future refactor that
+        // gives it a shorter lifetime must add `removeObserver` explicitly rather than inherit this omission.
         notificationCenter.addObserver(
             self,
             selector: #selector(handleMemoryWarning),

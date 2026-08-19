@@ -76,7 +76,7 @@ struct EditorViewModelSessionTests {
         #expect(vm.score == EditorFixtures.fourQuarterRests())
     }
 
-    @Test func `applyCommand re-derives selection onto the newly input note`() {
+    @Test func `apply re-derives selection onto the newly input note`() {
         let vm = makeViewModel()
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
         vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
