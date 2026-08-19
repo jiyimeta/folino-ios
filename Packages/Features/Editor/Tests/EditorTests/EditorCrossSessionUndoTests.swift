@@ -98,4 +98,103 @@ struct EditorCrossSessionUndoTests {
         // And the view model asked with the ROW's hash — the guard the whole keying scheme rests on.
         #expect(store.sessionRequests.first?.contentHash == vm.scoreItem.contentHash)
     }
+
+    // MARK: - Signed depth and the count-driven unwind (Task 8)
+
+    /// Seeds one committed session so the next `beginSession` adopts real history, and returns the session-open
+    /// score of the SECOND session (= the first session's edited result).
+    private func seedOneCommittedEdit(into vm: EditorViewModel) async throws -> Score {
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
+        let edited = try #require(vm.score)
+        await vm.endSession()
+        return edited
+    }
+
+    @Test func `undo below the session start drives the depth negative and counts as edits to discard`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let vm = makeViewModel(store: store, directory: dir)
+        let edited = try await seedOneCommittedEdit(into: vm)
+
+        vm.beginSession(score: edited)
+        #expect(vm.sessionEditDepth == 0)
+        #expect(vm.sessionHasEdits == false)
+
+        vm.undo() // reaches BELOW this session's start, into the previous session's history
+
+        #expect(vm.sessionEditDepth == -1)
+        // A session that net-undid earlier work has changed the score: ✕ must ask before throwing that away, and
+        // the session-end control must read "edited".
+        #expect(vm.sessionHasEdits)
+        #expect(vm.sessionEndMode == .commitEdited)
+    }
+
+    @Test func `discarding a net-negative session redoes back to the session-open score`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let vm = makeViewModel(store: store, directory: dir)
+        let edited = try await seedOneCommittedEdit(into: vm)
+
+        vm.beginSession(score: edited)
+        vm.undo()
+        #expect(vm.score == EditorFixtures.fourQuarterRests())
+
+        await vm.discardSessionEdits()
+
+        // The unwind went FORWARD (redo) to land on the session-open score — the previous session's edit intact.
+        #expect(vm.score == edited)
+        #expect(vm.sessionEditDepth == 0)
+    }
+
+    @Test func `discard unwinds only this session's edits and ends all retained history for the score`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let vm = makeViewModel(store: store, directory: dir)
+        let edited = try await seedOneCommittedEdit(into: vm)
+
+        vm.beginSession(score: edited) // adopts — the store entry is checked out
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 2), pitch: 62, tpc: 16, duration: nil))
+
+        await vm.discardSessionEdits()
+
+        // Only THIS session's edit was unwound: the score is the session-open one, previous edit intact…
+        #expect(vm.score == edited)
+        // …and ✕ is final: the retained history is invalidated, and the exit's endSession must not deposit.
+        #expect(store.invalidatedIDs == [vm.scoreItemID])
+        await vm.endSession()
+        #expect(store.retained.isEmpty)
+        vm.beginSession(score: edited)
+        #expect(!vm.canUndo) // the same contract as an app kill
+    }
+
+    @Test func `revertToOriginal invalidates the retained history`() async {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        var item = EditorFixtures.sampleItem()
+        item.originalFileName = "score.original.mscz"
+        item.originalContentHash = "orig"
+        item.originalProvenance = .importTime
+        let vm = EditorViewModel(
+            scoreItem: item,
+            scoresDirectory: dir,
+            gateway: FakeScoreFileGateway(),
+            repository: FakeScoreLibraryRepository(),
+            originalStore: FakeScoreOriginalStore(),
+            historyStore: store,
+            playback: nil,
+        )
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
+
+        await vm.revertToOriginal()
+
+        // The file no longer relates to any retained history — dropped eagerly, not left for the lazy hash miss.
+        #expect(store.invalidatedIDs == [vm.scoreItemID])
+        #expect(store.retained.isEmpty)
+    }
 }

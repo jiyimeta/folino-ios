@@ -77,6 +77,14 @@ extension EditorViewModel {
 
         unwindSessionEdits()
 
+        // ✕ is final (controller ruling over the spec's redo-survives reading). The unwind above walked back via
+        // undo, populating the session's redo stack — a deposited session would let the NEXT session redo exactly
+        // what was just discarded, contradicting the "✕ discards the session" contract. So a ✕ ends ALL retained
+        // history for this score: the deposit is suppressed and any retained entry dropped — the same contract as
+        // an app kill. The file is correct either way; the flush below settles it.
+        didDiscardSession = true
+        historyStore.invalidate(scoreItem.id)
+
         // Unconditionally dirty: whether or not the debounce got to run, the file is now either this session's edits
         // or the pre-session score, and only a write can settle which.
         isDirty = true

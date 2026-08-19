@@ -38,19 +38,21 @@ public final class EditorViewModel {
     /// real depth (Task 16 review fix).
     public private(set) var appliedEditCount = 0
 
-    /// How deep this session's undo stack is: incremented by `apply` and `redo()`, decremented by `undo()`,
-    /// reset by `beginSession`. Distinct from `appliedEditCount`, which only ever counts up.
+    /// The session's signed net offset from its starting score: incremented by `apply` and `redo()`, decremented
+    /// by `undo()`, reset by `beginSession`. NEGATIVE when the session has undone below its own start — adopted
+    /// history makes that reachable — which is still a change to the score this session made.
     ///
-    /// Observed, and maintained here rather than read from `ScoreEditSession.canUndo`, because the strip's
-    /// session-end control switches on it: a mutation inside `ScoreEditSession` (a reference type from another
-    /// module) notifies nothing, so a view bound to `canUndo` only refreshes when something else in the same body
-    /// pass happens to change. This is what makes "the moment you change something, the control changes" true.
+    /// Observed, and maintained here rather than read from the session, because the strip's session-end control
+    /// switches on it: a mutation inside `ScoreEditSession` (a reference type from another module) notifies
+    /// nothing, so a view bound to `canUndo` only refreshes when something else in the same body pass happens to
+    /// change. This is what makes "the moment you change something, the control changes" true.
     public private(set) var sessionEditDepth = 0
 
     /// Whether this session has anything of its own to throw away — the difference between ✕ closing the session
-    /// and ✕ asking first.
+    /// and ✕ asking first. Signed: a session that net-UNDID earlier sessions' work (negative depth) has changed
+    /// the score too, and ✕ must offer to discard that as well.
     public var sessionHasEdits: Bool {
-        sessionEditDepth > 0
+        sessionEditDepth != 0
     }
 
     public var isSessionActive: Bool {
@@ -158,6 +160,11 @@ public final class EditorViewModel {
     /// True once a non-MSCX/MSCZ source has been rewritten as a sibling `.mscz` file. One-way: never reset, since
     /// it drives the Task 16 one-time "saved as .mscz" notice.
     public internal(set) var didSaveAsSiblingMSCZ = false
+    /// True once this session was ended by ✕ — `discardSessionEdits()` ran. Read by `endSession()`'s deposit guard,
+    /// because the ✕ exit path still runs `endSession()` (`EditorDiscardButton` → `requestExit()` → `onEndEditing`):
+    /// a discarded session's history — the redo of the discarded edits included — must not survive into the next
+    /// session. Reset by `beginSession`.
+    @ObservationIgnored var didDiscardSession = false
 
     /// Bumped when something outside the Editor asks for the input pad — today, the host's note-input coach mark being
     /// tapped. A counter rather than a `Bool` so a second request still lands after the user has closed the pad again;
@@ -252,6 +259,7 @@ public final class EditorViewModel {
         generation = 0
         appliedEditCount = 0
         sessionEditDepth = 0
+        didDiscardSession = false
         capturedOriginalThisSession = false
         // Fire-and-forget: the strip's revert offer is derived from the row, and the row can be behind what is
         // actually on disk. Nothing downstream waits on this — when it finds something, the control changes.
@@ -276,7 +284,7 @@ public final class EditorViewModel {
     /// session has any history at all (an untouched session has nothing worth a slot). `scoreItem.contentHash` is
     /// the digest of exactly the bytes `session.score` was last saved as, because `flushPendingSave()` ran first.
     private func depositSessionIfWorthKeeping() {
-        guard let session, !isDirty, session.canUndo || session.canRedo else { return }
+        guard let session, !didDiscardSession, !isDirty, session.canUndo || session.canRedo else { return }
         historyStore.retain(session, for: scoreItem.id, contentHash: scoreItem.contentHash)
     }
 
@@ -284,7 +292,7 @@ public final class EditorViewModel {
         // `session.undo()` guards `canUndo` and reports an engine failure as `false`, preserving the old contract:
         // a swallowed failure must not fire a false generation bump / onSelectionChanged / onScoreChanged.
         guard let session, session.undo() else { return }
-        sessionEditDepth = max(0, sessionEditDepth - 1)
+        sessionEditDepth -= 1
         generation += 1
         rederiveSelection()
         onScoreChanged(session.score)
@@ -292,18 +300,24 @@ public final class EditorViewModel {
         scheduleAutosave()
     }
 
-    /// Unwinds this session's whole undo stack at once, notifying the host a single time at the end.
+    /// Rewinds this session to the score it opened on, notifying the host a single time at the end.
     ///
-    /// Lives here, next to `undo()`, because `sessionEditDepth`, `generation` and `rederiveSelection` are all
-    /// file-private to this type — and because the loop is the same operation as `undo()`, just without a stopping
-    /// point. `discardSessionEdits()` owns the rest of the story (the disk, the sidecar); this owns the score.
+    /// Count-driven, NOT `while canUndo`: with retained history the stack bottom no longer means "where this
+    /// session started" — an adopted session can undo below its own start, and walking `canUndo` to exhaustion
+    /// would silently discard PREVIOUS sessions' edits. `sessionEditDepth` is the signed net offset from session
+    /// start, so undoing it (or redoing its negation) lands exactly on the session-open score from either
+    /// direction. Store bookkeeping (invalidate, deposit suppression) lives in `discardSessionEdits()`, this
+    /// method's only production caller; this owns the score alone.
     ///
     /// One notification rather than one per step: the host re-lays the score out on every `onScoreChanged`, so a
     /// long session would otherwise redraw the whole thing once per edit on the way back.
     func unwindSessionEdits() {
         guard let session else { return }
-        while session.canUndo {
-            guard session.undo() else { break }
+        while sessionEditDepth > 0, session.undo() {
+            sessionEditDepth -= 1
+        }
+        while sessionEditDepth < 0, session.redo() {
+            sessionEditDepth += 1
         }
         sessionEditDepth = 0
         generation += 1

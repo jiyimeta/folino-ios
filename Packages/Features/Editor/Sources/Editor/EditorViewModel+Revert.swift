@@ -78,6 +78,11 @@ extension EditorViewModel {
             return
         }
 
+        // The file no longer relates to any retained history for this score, and waiting for the lazy hash
+        // mismatch would hold a dead multi-MB session in one of three slots. The live session is torn down below
+        // without deposit, as today.
+        historyStore.invalidate(scoreItem.id)
+
         // The file is the original now, no matter what happens below — nothing past this point may touch isDirty
         // or the debounce again. `isReverting` also resets here, not just on the failure path below: this view
         // model is reused across every edit session a Reader screen opens, and leaving it `true` would silently

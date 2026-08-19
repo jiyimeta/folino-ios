@@ -108,6 +108,15 @@ public struct EditorChromeView: View {
         .onChange(of: viewModel.appliedEditCount) { _, _ in
             viewModel.registerSystemUndo(with: undoManager)
         }
+        // An adopted history is reachable from the strip's undo button the moment the session opens, but the
+        // three-finger gesture goes through the system UndoManager, which only learns about edits when a
+        // trampoline is registered — and that happens per NEWLY applied edit. Arm one initial trampoline when the
+        // session already has history; `registerSystemUndo`'s symmetric re-registration handles everything after.
+        .onAppear {
+            if viewModel.canUndo {
+                viewModel.registerSystemUndo(with: undoManager)
+            }
+        }
         .onDisappear {
             undoManager?.removeAllActions(withTarget: viewModel)
         }
