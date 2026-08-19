@@ -65,7 +65,7 @@ struct EditorViewModelRevertTests {
         let store = FakeScoreOriginalStore()
         let vm = makeViewModel(item: capturedItem(), originalStore: store, gateway: gateway, directory: dir)
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
-        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
 
         await vm.revertToOriginal()
 
@@ -87,7 +87,7 @@ struct EditorViewModelRevertTests {
         var notified: ScoreItem?
         vm.onRevertCompleted = { notified = $0 }
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
-        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
 
         await vm.revertToOriginal()
 
@@ -108,7 +108,7 @@ struct EditorViewModelRevertTests {
         store.revertError = DomainError.persistenceFailed(reason: "test")
         let vm = makeViewModel(item: capturedItem(), originalStore: store, gateway: gateway, directory: dir)
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
-        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
 
         await vm.revertToOriginal()
 
@@ -143,7 +143,7 @@ struct EditorViewModelRevertTests {
         var notified: ScoreItem?
         vm.onRevertCompleted = { notified = $0 }
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
-        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
 
         await vm.revertToOriginal()
 
@@ -184,7 +184,7 @@ struct EditorViewModelRevertTests {
         vm.refreshRow(revertedElsewhere)
 
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
-        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
         await vm.flushPendingSave()
 
         // The discriminating assertion: `captureOriginalIfNeeded` must have been called with the REFRESHED item —
@@ -228,7 +228,7 @@ struct EditorViewModelRevertTests {
         store.captureGate = gate
         let vm = makeViewModel(item: capturedItem(), originalStore: store, gateway: gateway, directory: dir)
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
-        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
 
         // Drive the save ourselves (bypassing the 2 s debounce) — the same choke point either real trigger uses.
         let saveTask = Task { await vm.flushPendingSave() }

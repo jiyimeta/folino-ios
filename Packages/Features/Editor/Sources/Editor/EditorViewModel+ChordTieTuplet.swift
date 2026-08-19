@@ -14,10 +14,10 @@ extension EditorViewModel {
         isAddToChordArmed.toggle()
     }
 
-    /// −音 → `RemoveNoteFromChord` on the selected notehead (last note leaves a rest, engine-canonical).
+    /// −音 → `.removeNoteFromChord` on the selected notehead (last note leaves a rest, engine-canonical).
     public func removeSelectedNoteFromChord() {
         guard case let .note(noteID)? = selectedItem else { return }
-        applyCommand(RemoveNoteFromChord(at: noteID))
+        apply(.removeNoteFromChord(at: noteID))
     }
 
     /// iPad +3度 / +8度 → `AddNoteToChord` with `IntervalPlanner`'s pitch.
@@ -53,9 +53,8 @@ extension EditorViewModel {
     private func addNoteToChord(at noteID: NoteID, pitch: Int, tpc: Int, keySig: Int) {
         let accidental = PitchSpelling.displayedAccidental(forTpc: tpc, in: keySig)
         let veID = VoiceElementID(noteID)
-        let generationBeforeAdd = generation
-        applyCommand(AddNoteToChord(at: veID, pitch: pitch, tpc: tpc, accidental: accidental))
-        guard generation != generationBeforeAdd, let score, case let .chord(chord)? = score[veID] else { return }
+        guard apply(.addNoteToChord(at: veID, pitch: pitch, tpc: tpc, accidental: accidental)),
+              let score, case let .chord(chord)? = score[veID] else { return }
         let addedNoteID = NoteID(
             staff: noteID.staff,
             measureIndex: noteID.measureIndex,
@@ -171,9 +170,9 @@ extension EditorViewModel {
               let targetID = TiePlanner.tieTarget(for: noteID, in: score)
         else { return }
         if note.tieForward != nil {
-            applyCommand(SetTie(from: noteID, to: targetID, sourceTieForward: nil, targetTieBack: nil))
+            apply(.setTie(from: noteID, to: targetID, sourceTieForward: nil, targetTieBack: nil))
         } else {
-            applyCommand(SetTie(from: noteID, to: targetID, sourceTieForward: 1, targetTieBack: 1))
+            apply(.setTie(from: noteID, to: targetID, sourceTieForward: 1, targetTieBack: 1))
         }
     }
 
@@ -218,7 +217,7 @@ extension EditorViewModel {
         // because the one slot you tried it on refused.
         armedTuplet = actualNotes
         guard let caretItem else { return }
-        applyCommand(CreateTuplet(
+        apply(.createTuplet(
             at: Self.tupletTarget(caretItem),
             actualNotes: actualNotes,
             normalNotes: Self.normalNotes(forActualNotes: actualNotes),
@@ -228,7 +227,7 @@ extension EditorViewModel {
     /// Collapses the tuplet containing the caret back into a single chord/rest of the same tick span.
     public func removeTuplet() {
         guard let caretItem else { return }
-        applyCommand(RemoveTuplet(at: Self.tupletTarget(caretItem)))
+        apply(.removeTuplet(at: Self.tupletTarget(caretItem)))
     }
 
     private static func tupletTarget(_ item: SheetMusicCore.ScoreItemID) -> VoiceElementID {

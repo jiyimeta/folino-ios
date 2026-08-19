@@ -91,7 +91,7 @@ struct EditorViewModelPersistenceTests {
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
-        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
 
         await vm.flushPendingSave()
 
@@ -123,7 +123,7 @@ struct EditorViewModelPersistenceTests {
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
-        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
 
         #expect(vm.didSaveAsSiblingMSCZ == false)
         await vm.flushPendingSave()
@@ -152,9 +152,9 @@ struct EditorViewModelPersistenceTests {
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
-        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
-        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 2), pitch: 62, tpc: 16))
-        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 3), pitch: 64, tpc: 18))
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 2), pitch: 62, tpc: 16, duration: nil))
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 3), pitch: 64, tpc: 18, duration: nil))
 
         await vm.flushPendingSave()
 
@@ -200,7 +200,7 @@ struct EditorViewModelPersistenceTests {
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
-        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
 
         await vm.flushPendingSave()
 
@@ -233,7 +233,7 @@ struct EditorViewModelPersistenceTests {
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
-        vm.applyCommand(InputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14))
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
 
         await vm.flushPendingSave()
 

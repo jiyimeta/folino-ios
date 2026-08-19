@@ -54,7 +54,7 @@ extension EditorViewModel {
     public func setAccidental(_ accidental: Accidental?) {
         guard case let .note(noteID)? = selectedItem else { return }
         let generationBeforeSet = generation
-        applyCommand(SetAccidental(at: noteID, accidental: accidental))
+        apply(.setAccidental(at: noteID, accidental: accidental))
         auditionSelectedNote(unlessStillAt: generationBeforeSet)
     }
 }

@@ -67,6 +67,10 @@ public final class EditorViewModel {
     func markDirtyForTesting() {
         isDirty = true
     }
+
+    /// Every intent handed to `apply(_:)`, in order, refused ones included — the seam the intent-construction tests
+    /// read. DEBUG-only: release builds carry neither the array nor its appends.
+    @ObservationIgnored private(set) var appliedIntents: [EditIntent] = []
     #endif
 
     // Selection and caret (both rendered by the Reader through the seam — the selection as a tint on the item, the
@@ -82,27 +86,6 @@ public final class EditorViewModel {
     public internal(set) var selection: ScoreSelection = .none
     public internal(set) var selectedItem: SheetMusicCore.ScoreItemID?
     public internal(set) var caretItem: SheetMusicCore.ScoreItemID?
-
-    /// Whether the pad has anything at all to act on. With neither a caret nor a selection there is no slot to write
-    /// into and no item to edit, so every key is inert (there is nothing for one to mean).
-    public var hasEditTarget: Bool {
-        caretItem != nil || selectedItem != nil
-    }
-
-    /// Whether the SELECTION names a notehead — the shape ⌫ / ♯ / ♭ need. False for a rest, a tuplet bracket, or an
-    /// empty selection, which is what gates those three keys: with the caret running ahead of the selection, "there
-    /// is a caret" no longer implies "there is a note to sharpen".
-    public var isNoteSelected: Bool {
-        if case .note = selectedItem { true } else { false }
-    }
-
-    /// Whether the floating callout has anything to stand beside. The card is pinned to one timed slot and edits
-    /// THAT slot's length, which a rest has exactly as a note does — so it shows for both, and only drops the pitch
-    /// steps and the tie key on a rest (see `EditorCalloutView`). A tuplet bracket names no slot, and neither does
-    /// an empty selection.
-    public var hasSelectionCallout: Bool {
-        Self.slot(of: selectedItem) != nil
-    }
 
     // Arming state (Tasks 5/7). internal(set), not private(set): the ops live in same-type extensions in OTHER
     // files (`EditorViewModel+Input.swift` etc.), and Swift's `private` does not span files.
@@ -352,6 +335,30 @@ public final class EditorViewModel {
         onScoreChanged(editor.score)
         isDirty = true
         scheduleAutosave()
+    }
+
+    /// Central apply choke point for intent-driven edits — the seam every op is migrating to, and (from the engine
+    /// swap on) the only one. Plans the intent exactly as `ScoreEditSession.apply(_:)` would, via the transitional
+    /// copy of its planning, and routes the planned command through `applyCommand` so selection re-derivation,
+    /// generation bump, `onScoreChanged`, and autosave can never be skipped. Returns `false` when the intent was
+    /// refused; the engine's contract leaves the score untouched, so `generation` is unmoved and no side effect
+    /// fires.
+    @discardableResult
+    func apply(_ intent: EditIntent) -> Bool {
+        #if DEBUG
+        appliedIntents.append(intent)
+        #endif
+        guard let editor else { return false }
+        let planned: (any EditCommand)?
+        do {
+            planned = try TransitionalIntentPlanning.command(for: intent, in: editor.score)
+        } catch {
+            return false
+        }
+        guard let planned else { return false }
+        let generationBeforeApply = generation
+        applyCommand(planned)
+        return generation != generationBeforeApply
     }
 
     /// `command` with the accidental-glyph repairs its own edit makes necessary bundled onto it, as one undo step —

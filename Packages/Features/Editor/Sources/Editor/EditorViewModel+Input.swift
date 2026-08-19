@@ -42,14 +42,14 @@ extension EditorViewModel {
         case let .note(noteID):
             guard case let .chord(chord)? = score[VoiceElementID(noteID)] else { return }
             if chord.notes.count > 1 {
-                applyCommand(RemoveNoteFromChord(at: noteID))
+                apply(.removeNoteFromChord(at: noteID))
             } else {
                 deleteElement(at: VoiceElementID(noteID), in: score)
             }
         case let .rest(restID):
             deleteElement(at: VoiceElementID(restID), in: score)
         case let .tuplet(tupletID):
-            applyCommand(RemoveTuplet(at: VoiceElementID(
+            apply(.removeTuplet(at: VoiceElementID(
                 staff: tupletID.staff,
                 measureIndex: tupletID.measureIndex,
                 voiceIndex: tupletID.voiceIndex,
