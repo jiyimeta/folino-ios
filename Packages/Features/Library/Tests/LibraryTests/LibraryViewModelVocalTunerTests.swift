@@ -28,6 +28,7 @@ struct LibraryViewModelVocalTunerTests {
             gateway: FakeScoreFileGateway(),
             shareService: share,
             metadataReader: FakeScoreMetadataReading(),
+            creator: FakeScoreFileCreator(),
             vocalTunerHandoff: handoff,
             analytics: analytics,
         )

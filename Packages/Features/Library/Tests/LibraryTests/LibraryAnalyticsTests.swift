@@ -41,7 +41,7 @@ struct LibraryAnalyticsTests {
             repository: repo, originalStore: FakeScoreOriginalStore(), importer: importer,
             gateway: FakeScoreFileGateway(),
             shareService: FakeScoreShareService(), metadataReader: FakeScoreMetadataReading(),
-            analytics: analytics, crashReporter: crashReporter,
+            creator: FakeScoreFileCreator(), analytics: analytics, crashReporter: crashReporter,
         )
         return VMFixture(vm: vm, repo: repo, importer: importer, analytics: analytics, crashReporter: crashReporter)
     }

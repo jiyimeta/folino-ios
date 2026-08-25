@@ -38,7 +38,7 @@ struct LibraryViewModelTests {
         let metadataReader = FakeScoreMetadataReading()
         let vm = LibraryViewModel(
             repository: repo, originalStore: originalStore, importer: importer, gateway: gateway,
-            shareService: share, metadataReader: metadataReader,
+            shareService: share, metadataReader: metadataReader, creator: FakeScoreFileCreator(),
         )
         return VMFixture(
             vm: vm, repo: repo, importer: importer, gateway: gateway,
@@ -242,7 +242,9 @@ extension LibraryViewModelTests {
         let plan = Self.makePlan(duplicates: [existing])
         let differentItem = Self.makeItem(title: "DifferentItem")
         f.importer.commitFactory = { _, decision in
-            if case .openExisting = decision { return existing }
+            if case .openExisting = decision {
+                return existing
+            }
             return differentItem
         }
 
@@ -256,7 +258,9 @@ extension LibraryViewModelTests {
         let plan = Self.makePlan(duplicates: [existing])
         let new = Self.makeItem(title: "New")
         f.importer.commitFactory = { _, decision in
-            if case .importAsNew = decision { return new }
+            if case .importAsNew = decision {
+                return new
+            }
             return existing
         }
 

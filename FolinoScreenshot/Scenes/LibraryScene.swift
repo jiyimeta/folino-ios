@@ -121,6 +121,7 @@ struct LibraryScene: View {
             gateway: FixtureGateway(),
             shareService: FixtureShareService(),
             metadataReader: FixtureMetadataReader(),
+            creator: FixtureCreator(),
         )
     }
 }

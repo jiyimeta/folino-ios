@@ -27,6 +27,12 @@ extension AnalyticsEvent {
         )
     }
 
+    /// Logged when the scratch-creation form successfully builds and saves a new blank score. No parameters in M1 —
+    /// every creation goes through the same form, so there is nothing yet to distinguish.
+    public static func scoreCreated() -> AnalyticsEvent {
+        AnalyticsEvent(name: "score_created")
+    }
+
     public static func scoreOpened(from: AnalyticsSource) -> AnalyticsEvent {
         AnalyticsEvent(
             name: "select_content",
@@ -277,16 +283,32 @@ extension AnalyticsEvent {
     /// by `settings_snapshot` / `repeat_mode_changed`, and neither has a per-score user-intent question to answer.
     public static func scorePrefs(_ prefs: ReaderPreferences, screenWidthPt: Double) -> AnalyticsEvent? {
         var params: [String: AnalyticsValue] = [:]
-        if let staffSize = prefs.staffSize { params["staff_size"] = .int(Int(staffSize.rounded())) }
-        if let honorBreaks = prefs.honorLayoutBreaks { params["honor_layout_breaks"] = .bool(honorBreaks) }
-        if let volume = prefs.masterVolume { params["master_volume_pct"] = .int(percentBucket(volume)) }
-        if let transpose = prefs.transposeSemitones { params["transpose_semitones"] = .int(transpose) }
-        if let tempo = prefs.tempoMultiplier { params["tempo_multiplier_pct"] = .int(percentBucket(tempo)) }
-        if let a4 = prefs.a4ReferenceHz { params["a4_reference_hz"] = .int(Int(a4.rounded())) }
+        if let staffSize = prefs.staffSize {
+            params["staff_size"] = .int(Int(staffSize.rounded()))
+        }
+        if let honorBreaks = prefs.honorLayoutBreaks {
+            params["honor_layout_breaks"] = .bool(honorBreaks)
+        }
+        if let volume = prefs.masterVolume {
+            params["master_volume_pct"] = .int(percentBucket(volume))
+        }
+        if let transpose = prefs.transposeSemitones {
+            params["transpose_semitones"] = .int(transpose)
+        }
+        if let tempo = prefs.tempoMultiplier {
+            params["tempo_multiplier_pct"] = .int(percentBucket(tempo))
+        }
+        if let a4 = prefs.a4ReferenceHz {
+            params["a4_reference_hz"] = .int(Int(a4.rounded()))
+        }
         let userHidden = prefs.hiddenStaves.subtracting(prefs.authoredHiddenStaves)
-        if !userHidden.isEmpty { params["hidden_staff_count"] = .int(userHidden.count) }
+        if !userHidden.isEmpty {
+            params["hidden_staff_count"] = .int(userHidden.count)
+        }
         let userRevealed = prefs.authoredHiddenStaves.subtracting(prefs.hiddenStaves)
-        if !userRevealed.isEmpty { params["revealed_staff_count"] = .int(userRevealed.count) }
+        if !userRevealed.isEmpty {
+            params["revealed_staff_count"] = .int(userRevealed.count)
+        }
         if !prefs.stripProgramOverrides.isEmpty {
             params["program_override_count"] = .int(prefs.stripProgramOverrides.count)
         }

@@ -7,6 +7,7 @@ import ImportExport
 import Library
 import LicenseList
 import Reader
+import ScoreFiles
 import Settings
 import StoreKit
 import SwiftUI
@@ -180,6 +181,11 @@ private struct ReadyShell: View {
                 gateway: gateway,
                 shareService: shareService,
                 metadataReader: metadataReader,
+                creator: LiveScoreFileCreator(
+                    gateway: gateway,
+                    repository: repository,
+                    scoresDirectory: scoresDirectory,
+                ),
                 vocalTunerHandoff: vocalTunerHandoff,
                 analytics: bootstrap.analytics ?? NoopAnalytics(),
                 crashReporter: bootstrap.crashReporter ?? NoopCrashReporter(),
@@ -341,7 +347,9 @@ private struct ReadyShell: View {
                 // a plain launch should not yank the user into a score they asked for days ago.
                 guard let coordinator = bootstrap.incomingScoreCoordinator else { return }
                 let openAfter = bootstrap.consumePendingOpenScoreToken()?.1 ?? false
-                if openAfter { resetNavigationForIncomingURL() }
+                if openAfter {
+                    resetNavigationForIncomingURL()
+                }
                 await runOpenScoreDrain(coordinator: coordinator, openAfter: openAfter)
             }
             .onChange(of: bootstrap.pendingOpenScoreToken) { _, newValue in
@@ -356,18 +364,24 @@ private struct ReadyShell: View {
             .onChange(of: detailScoreItem?.id) { _, _ in saveNavSnapshot() }
             .onAppear {
                 // Seed the committed layout while active, before any backgrounding can spuriously flip the live value.
-                if committedSizeClass == nil { committedSizeClass = horizontalSizeClass }
+                if committedSizeClass == nil {
+                    committedSizeClass = horizontalSizeClass
+                }
             }
             .onChange(of: horizontalSizeClass) { _, new in
                 // Commit only while active: ignore the transient `.compact` iPadOS reports while backgrounding +
                 // resizing the scene for PiP, which would otherwise tear down the split view and the live PiP
                 // session.
-                if scenePhase == .active { committedSizeClass = new }
+                if scenePhase == .active {
+                    committedSizeClass = new
+                }
             }
             .onChange(of: scenePhase) { _, phase in
                 // Catch up on a real size-class change that landed while away (e.g. Stage Manager resize while
                 // backgrounded).
-                if phase == .active { committedSizeClass = horizontalSizeClass }
+                if phase == .active {
+                    committedSizeClass = horizontalSizeClass
+                }
             }
             .overlay {
                 if libraryVM.isImporting {

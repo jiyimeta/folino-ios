@@ -13,6 +13,7 @@ public final class LibraryViewModel {
     let gateway: any ScoreFileGateway
     let shareService: any ScoreShareService
     let metadataReader: any ScoreMetadataReading
+    let creator: any ScoreFileCreator
     let vocalTunerHandoff: any VocalTunerHandoff
     /// Analytics sink. Read by the Screens that mutate the repository directly (playlist/tag rename, reorder, single
     /// add/remove) so those view-layer bypass paths log against the same instance as the VM-owned actions.
@@ -32,9 +33,12 @@ public final class LibraryViewModel {
 
     var currentError: Error?
 
-    /// Set when an import succeeds; the App composition root watches this and pushes the Reader. Cleared by the watcher
-    /// after handling.
+    /// Set when an import succeeds; the App watches this and pushes the Reader. Cleared by the watcher after handling.
     public var pendingScoreToOpen: ScoreItem?
+
+    var isNewScoreSheetPresented = false
+    /// Read together with `pendingScoreToOpen`: when true, the App opens the pushed Reader in an edit session.
+    public private(set) var pendingOpenInEditSession = false
 
     /// Drives the `.fileImporter` sheet.
     var isFileImporterPresented = false
@@ -64,6 +68,7 @@ public final class LibraryViewModel {
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService,
         metadataReader: any ScoreMetadataReading,
+        creator: any ScoreFileCreator,
         vocalTunerHandoff: any VocalTunerHandoff = NoopVocalTunerHandoff(),
         analytics: any Analytics = NoopAnalytics(),
         crashReporter: any CrashReporter = NoopCrashReporter(),
@@ -74,6 +79,7 @@ public final class LibraryViewModel {
         self.gateway = gateway
         self.shareService = shareService
         self.metadataReader = metadataReader
+        self.creator = creator
         self.vocalTunerHandoff = vocalTunerHandoff
         self.analytics = analytics
         self.crashReporter = crashReporter
@@ -311,7 +317,9 @@ public final class LibraryViewModel {
         defer { isImporting = false }
         let scoped = sourceURL.startAccessingSecurityScopedResource()
         defer {
-            if scoped { sourceURL.stopAccessingSecurityScopedResource() }
+            if scoped {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
         }
         let plan: ImportPlan
         do {
@@ -345,6 +353,27 @@ public final class LibraryViewModel {
             currentError = error
             logImportFailed(format: plan.format.analyticsValue, error: error)
         }
+    }
+
+    /// Builds a blank score from `form`'s template and hands it to `creator`, queuing it on `pendingScoreToOpen`
+    /// (the same App watcher `startImport` uses) with `pendingOpenInEditSession` armed. An untitled form no-ops.
+    func createScore(from form: NewScoreForm) async {
+        guard let template = form.template() else { return }
+        do {
+            let item = try await creator.createScore(Score.blank(template))
+            analytics.log(.scoreCreated())
+            pendingOpenInEditSession = true
+            pendingScoreToOpen = item
+            isNewScoreSheetPresented = false
+        } catch {
+            currentError = ScoreCreationFailed()
+        }
+    }
+
+    /// The App calls this when it consumes `pendingScoreToOpen`, so a later import doesn't inherit a stale arm.
+    public func consumePendingOpenInEditSession() -> Bool {
+        defer { pendingOpenInEditSession = false }
+        return pendingOpenInEditSession
     }
 
     /// Record an import failure as both an analytics event and a Crashlytics non-fatal. The `reason` is bucketed to a

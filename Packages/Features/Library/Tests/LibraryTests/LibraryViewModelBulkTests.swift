@@ -31,6 +31,7 @@ struct LibraryViewModelBulkTests {
             gateway: FakeScoreFileGateway(),
             shareService: FakeScoreShareService(),
             metadataReader: FakeScoreMetadataReading(),
+            creator: FakeScoreFileCreator(),
         )
         return VMFixture(vm: vm, repo: repo)
     }

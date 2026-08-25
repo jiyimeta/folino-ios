@@ -28,6 +28,7 @@ struct LibraryViewModelRevertTests {
             gateway: FakeScoreFileGateway(),
             shareService: FakeScoreShareService(),
             metadataReader: FakeScoreMetadataReading(),
+            creator: FakeScoreFileCreator(),
         )
     }
 
