@@ -55,6 +55,11 @@ struct NoteEditingScene: View {
 
     private let repository: FixtureScoreRepository
 
+    /// One instance for the process, not one per `body`. `ProcessScoreEditHistoryStore` installs a `.default`
+    /// NotificationCenter observer it never removes — correct only for the process-lifetime singleton the app
+    /// composes in `AppBootstrap`, and a leak per body evaluation if built inline here.
+    @MainActor private static let historyStore = ProcessScoreEditHistoryStore()
+
     init() {
         ScreenshotSetup.ensure()
         // Vertical for the same reason as `ReaderScene`: the notation also renders in `#Preview`, which page mode's
@@ -108,6 +113,7 @@ struct NoteEditingScene: View {
                     gateway: FixtureGateway(),
                     repository: repository,
                     originalStore: FixtureOriginalStore(),
+                    historyStore: Self.historyStore,
                     playbackController: nil,
                 ) { host, chrome, topBar, cutoutTier in
                     ReaderRootScreen(

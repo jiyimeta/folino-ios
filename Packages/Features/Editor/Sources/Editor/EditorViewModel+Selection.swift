@@ -20,8 +20,8 @@ extension EditorViewModel {
     /// what was just sharpened. Whichever one wasn't aimed at keeps its own slot; when the two already share a slot —
     /// the ordinary case, and every case before the first note of a run — both follow.
     func rederiveSelection() {
-        guard let editor, let location = editor.lastAffectedLocation else { return }
-        let score = editor.score
+        guard let session, let location = session.lastAffectedLocation else { return }
+        let score = session.score
         let affected = SelectionRederivation.item(
             at: location, in: score, preferringNoteIndex: previousNoteIndex(at: location),
         )

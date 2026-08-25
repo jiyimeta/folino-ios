@@ -17,6 +17,7 @@ struct MeasureAccidentalsTests {
             gateway: FakeScoreFileGateway(),
             repository: FakeScoreLibraryRepository(),
             originalStore: FakeScoreOriginalStore(),
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
     }

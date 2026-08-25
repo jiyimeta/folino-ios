@@ -40,7 +40,14 @@ public struct EditorDiscardButton: View {
             if viewModel.sessionHasEdits {
                 viewModel.isConfirmingDiscard = true
             } else {
-                onExit()
+                // Still through `discardSessionEdits()`, not straight out: a session with nothing to throw away can
+                // still be carrying history — edit a note, undo it, and both stacks are full at depth zero — and ✕
+                // ends all retained history for the score unconditionally. It has nothing to unwind and writes
+                // nothing, so there is still no confirmation to ask for (review Minor 7).
+                Task {
+                    await viewModel.discardSessionEdits()
+                    onExit()
+                }
             }
         } label: {
             label

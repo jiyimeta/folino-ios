@@ -98,15 +98,24 @@ public struct EditorChromeView: View {
 
             editingCluster
         }
-        // Task 16: bridges ScoreEditor's undo/redo stacks to the system UndoManager so three-finger swipe gestures
-        // work. Triggers off `appliedEditCount` — NOT `generation` — because `generation` also bumps on undo/redo;
-        // re-registering here on every undo/redo would double up with `registerSystemUndo`'s own symmetric
-        // re-registration and drift the system stack from `ScoreEditor`'s real depth (Task 16 review fix). Only a
-        // genuinely new applied edit should arm a fresh trampoline. [Task 17 verify] confirm the three-finger swipe
-        // reaches this view's UndoManager through the glass overlay hierarchy on device — if it doesn't, the
-        // on-screen undo/redo buttons remain the primary path.
+        // Task 16: bridges ScoreEditSession's undo/redo stacks to the system UndoManager so three-finger swipe
+        // gestures work. Triggers off `appliedEditCount` — NOT `generation` — because `generation` also bumps on
+        // undo/redo; re-registering here on every undo/redo would double up with `registerSystemUndo`'s own
+        // symmetric re-registration and drift the system stack from `ScoreEditSession`'s real depth (Task 16 review
+        // fix). Only a genuinely new applied edit should arm a fresh trampoline. [Task 17 verify] confirm the
+        // three-finger swipe reaches this view's UndoManager through the glass overlay hierarchy on device — if it
+        // doesn't, the on-screen undo/redo buttons remain the primary path.
         .onChange(of: viewModel.appliedEditCount) { _, _ in
             viewModel.registerSystemUndo(with: undoManager)
+        }
+        // An adopted history is reachable from the strip's undo button the moment the session opens, but the
+        // three-finger gesture goes through the system UndoManager, which only learns about edits when a
+        // trampoline is registered — and that happens per NEWLY applied edit. Arm one initial trampoline when the
+        // session already has history; `registerSystemUndo`'s symmetric re-registration handles everything after.
+        .onAppear {
+            if viewModel.canUndo {
+                viewModel.registerSystemUndo(with: undoManager)
+            }
         }
         .onDisappear {
             undoManager?.removeAllActions(withTarget: viewModel)

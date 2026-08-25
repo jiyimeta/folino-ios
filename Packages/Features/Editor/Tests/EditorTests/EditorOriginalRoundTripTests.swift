@@ -24,6 +24,7 @@ struct EditorOriginalRoundTripTests {
             gateway: FakeScoreFileGateway(),
             repository: repository,
             originalStore: store,
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
         firstSession.beginSession(score: EditorFixtures.fourQuarterRests())
@@ -41,6 +42,7 @@ struct EditorOriginalRoundTripTests {
             gateway: FakeScoreFileGateway(),
             repository: repository,
             originalStore: store,
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
         secondSession.beginSession(score: EditorFixtures.fourQuarterRests())
@@ -68,6 +70,7 @@ struct EditorOriginalRoundTripTests {
             gateway: FakeScoreFileGateway(),
             repository: repository,
             originalStore: store,
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
         #expect(viewModel.sessionEndMode == .commitUnchanged, "before reconciling, the row is all it has to go on")
