@@ -79,19 +79,22 @@ public struct EditorTopBarView: View {
                 Spacer(minLength: 0)
                 voiceButton
                 padButton
+                measureMenu
+                    .interactiveGlassCompat()
             }
-        } else if viewModel.sessionEndMode == .revert {
+        } else {
             // `Spacer(minLength: 0)` inside `row(collapse:)` is what lets `ViewThatFits` fold at all — a greedy
             // spacer would make every candidate report that it fits, and the fold would silently never trigger.
+            //
+            // Every `sessionEndMode` goes through the fold now, not only `.revert`: `.expanded` carries the
+            // measure-actions menu ADDITIONALLY to the session-end control, while `.folded` merges both into the
+            // one `⋯` (`overflowMenu`) — so `.expanded` is unconditionally wider than `.folded` by that menu's own
+            // width, in every mode, unlike before this menu existed (see review Important 2's note on `Collapse`,
+            // which was about a fold that used to tie in the checkmark states).
             ViewThatFits(in: .horizontal) {
                 row(collapse: .expanded)
                 row(collapse: .folded)
             }
-        } else {
-            // Only `.revert` is wide enough for the fold to buy anything: in both checkmark states the session-end
-            // control is a 44pt glyph and `⋯` is another one, so `.folded` would measure the same as `.expanded` and
-            // `ViewThatFits` could never select it. A rung that cannot be selected is not a fold level.
-            row(collapse: .expanded)
         }
     }
 
@@ -107,7 +110,11 @@ public struct EditorTopBarView: View {
             padButton
             switch collapse {
             case .expanded:
-                endGroup
+                HStack(spacing: 12) {
+                    measureMenu
+                        .interactiveGlassCompat()
+                    endGroup
+                }
             case .folded:
                 overflowMenu
                     .interactiveGlassCompat()
@@ -149,9 +156,10 @@ public struct EditorTopBarView: View {
         )
     }
 
-    /// Narrow-width stand-in for revert (if available) and 完了 once they've folded together.
+    /// Narrow-width stand-in for the measure actions, revert (if available), and 完了 once they've folded together.
     private var overflowMenu: some View {
         Menu {
+            measureActionRows
             if viewModel.canRevertToOriginal {
                 revertMenuRow
             }
@@ -161,6 +169,55 @@ public struct EditorTopBarView: View {
         }
         .tint(.primary)
         .accessibilityLabel(L10n.Common.more)
+    }
+
+    /// Stand-in for the measure actions in the layouts that don't fold `overflowMenu`'s revert/done rows in with
+    /// them — the cutout-tier row (no `ViewThatFits` at all) and `row(collapse: .expanded)` (where the session-end
+    /// control keeps its own dedicated space). Both need somewhere for these three rows to live that isn't already
+    /// spoken for.
+    private var measureMenu: some View {
+        Menu {
+            measureActionRows
+        } label: {
+            topBarIcon("ellipsis")
+        }
+        .tint(.primary)
+        .accessibilityLabel(L10n.Common.more)
+    }
+
+    /// Add / insert-before / delete a measure — shared by `overflowMenu` and `measureMenu`, which each host these
+    /// rows alongside different neighbours.
+    @ViewBuilder
+    private var measureActionRows: some View {
+        Button {
+            viewModel.appendMeasure()
+        } label: {
+            Label {
+                Text("editor.measure.append", bundle: .module)
+            } icon: {
+                Image(systemName: "plus.rectangle")
+            }
+        }
+        Button {
+            viewModel.insertMeasureBeforeTarget()
+        } label: {
+            Label {
+                Text("editor.measure.insertBefore", bundle: .module)
+            } icon: {
+                Image(systemName: "plus.rectangle.on.rectangle")
+            }
+        }
+        .disabled(viewModel.targetMeasureIndex == nil)
+        Button(role: .destructive) {
+            viewModel.deleteTargetMeasure()
+        } label: {
+            Label {
+                Text("editor.measure.delete", bundle: .module)
+            } icon: {
+                Image(systemName: "minus.rectangle")
+            }
+        }
+        .disabled(viewModel.targetMeasureIndex == nil || viewModel.measureCount <= 1)
     }
 
     // MARK: - Voice / pad toggle
@@ -303,7 +360,9 @@ public struct EditorTopBarView: View {
         Binding(
             get: { viewModel.revertError != nil },
             set: { isPresented in
-                if !isPresented { viewModel.revertError = nil }
+                if !isPresented {
+                    viewModel.revertError = nil
+                }
             },
         )
     }
