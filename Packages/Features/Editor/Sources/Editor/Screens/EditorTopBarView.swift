@@ -39,8 +39,9 @@ public struct EditorTopBarView: View {
     /// Only two rungs, not three: a `.revert`-only middle rung (revert alone folded into `⋯`, 完了 still a
     /// standalone text button) measures IDENTICAL to `.expanded` whenever revert is showing — swapping one 44×44
     /// icon (`revertButton`) for another (the `⋯` menu) saves nothing, so `ViewThatFits` could never actually pick
-    /// it (review Important 2). `doneButton`'s `minWidth: 60` is what makes `.folded` unconditionally narrower than
-    /// `.expanded` — see the comment there.
+    /// it. `.expanded` carries `measureMenu` (44×44) ALONGSIDE the session-end control (`endGroup`), while
+    /// `.folded` merges both into the one `⋯` (`overflowMenu`) — so `.folded` is unconditionally narrower than
+    /// `.expanded`, by 12pt of spacing plus `endGroup`'s own width, in every `sessionEndMode`, not only `.revert`.
     enum Collapse {
         case expanded
         case folded
@@ -72,8 +73,9 @@ public struct EditorTopBarView: View {
     @ViewBuilder
     private var controlTierRow: some View {
         if hasCutoutTier {
-            // ✕ and the session-end control live in the cutout tier; four controls never risk running out of room,
-            // so no fold.
+            // ✕ and the session-end control live in the cutout tier; the five controls left here (undo, redo,
+            // voice, pad, and now the measure-actions menu) still sit comfortably under this row's width on the
+            // narrowest supported device, so no fold is needed.
             HStack(spacing: 12) {
                 undoRedoGroup
                 Spacer(minLength: 0)
@@ -88,9 +90,9 @@ public struct EditorTopBarView: View {
             //
             // Every `sessionEndMode` goes through the fold now, not only `.revert`: `.expanded` carries the
             // measure-actions menu ADDITIONALLY to the session-end control, while `.folded` merges both into the
-            // one `⋯` (`overflowMenu`) — so `.expanded` is unconditionally wider than `.folded` by that menu's own
-            // width, in every mode, unlike before this menu existed (see review Important 2's note on `Collapse`,
-            // which was about a fold that used to tie in the checkmark states).
+            // one `⋯` (`overflowMenu`) — so `.expanded` is unconditionally wider than `.folded` in every mode (see
+            // `Collapse`'s own doc comment for the exact margin). Before this menu existed, the checkmark states
+            // measured identically and the fold there was dead code; it is reachable now.
             ViewThatFits(in: .horizontal) {
                 row(collapse: .expanded)
                 row(collapse: .folded)

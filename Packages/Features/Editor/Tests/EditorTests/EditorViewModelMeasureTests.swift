@@ -21,13 +21,18 @@ struct EditorViewModelMeasureTests {
     }
 
     @Test
-    func `appendMeasure grows the score by one bar`() {
+    func `appendMeasure grows the score by one bar without moving the caret or selection`() {
         let viewModel = makeViewModel()
         viewModel.beginSession(score: EditorFixtures.twoMeasuresOfQuarterRests())
+        viewModel.select(.rest(EditorFixtures.restID(element: 2))) // bar 0, untouched by an append at the end
+        let selectedBefore = viewModel.selectedItem
+        let caretBefore = viewModel.caretItem
 
         viewModel.appendMeasure()
 
         #expect(viewModel.measureCount == 3)
+        #expect(viewModel.selectedItem == selectedBefore)
+        #expect(viewModel.caretItem == caretBefore)
     }
 
     @Test
