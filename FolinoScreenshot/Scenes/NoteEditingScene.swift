@@ -115,7 +115,9 @@ struct NoteEditingScene: View {
                     originalStore: FixtureOriginalStore(),
                     historyStore: Self.historyStore,
                     playbackController: nil,
-                ) { host, chrome, topBar, cutoutTier in
+                    // `startInEditMode` is unused here: this scene enters edit mode via
+                    // `ReaderScreenshotEditing.requestedMeasure` instead, so it's picked up with a selected note.
+                ) { host, chrome, topBar, cutoutTier, _ in
                     ReaderRootScreen(
                         scoreItem: Fixture.items[0],
                         repository: repository,

@@ -24,14 +24,21 @@ struct EditableReaderScreen: View {
     @State private var editorViewModel: EditorViewModel
     @State private var isWired = false
     @Environment(\.scenePhase) private var scenePhase
-    /// Second `ChromeBuilder` is the top-strip row; the first is the pad overlay. `CutoutTierBuilder` is last.
+    /// Second `ChromeBuilder` is the top-strip row; the first is the pad overlay. `CutoutTierBuilder` is next, and the
+    /// trailing `Bool` is `startInEditMode`, forwarded straight through to whatever `ReaderRootScreen` the closure
+    /// builds — `ReadyShell.makeReader` is the only writer of that closure, and it owns the actual `ReaderRootScreen`
+    /// construction, so this instance's own `startInEditMode` has to ride along as an argument rather than being
+    /// something this type could apply itself.
     private let readerBuilder: (
-        ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder,
+        ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder, Bool,
     ) -> ReaderRootScreen
     /// Kept only so `wireOnce()` can re-read this instance's row before every edit session (Critical 1 review fix)
     /// — see the comment there. The same instance the App handed to `readerBuilder`'s `ReaderRootScreen`, so its
     /// live cache already carries whatever that Reader (or the Library, via the same shared repository) last wrote.
     private let repository: any ScoreLibraryRepository
+    /// One-shot: opens straight into an edit session for a score that was just created (spec: a scratch score should
+    /// land on the editing surface, not the score view). Forwarded into `readerBuilder`; see its doc comment.
+    private let startInEditMode: Bool
 
     init(
         item: ScoreItem,
@@ -41,8 +48,9 @@ struct EditableReaderScreen: View {
         originalStore: any ScoreOriginalStore,
         historyStore: any ScoreEditHistoryStore,
         playbackController: (any PlaybackController)?,
+        startInEditMode: Bool = false,
         readerBuilder: @escaping (
-            ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder,
+            ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder, Bool,
         ) -> ReaderRootScreen,
     ) {
         _editorViewModel = State(wrappedValue: EditorViewModel(
@@ -55,6 +63,7 @@ struct EditableReaderScreen: View {
             playback: playbackController,
         ))
         self.repository = repository
+        self.startInEditMode = startInEditMode
         self.readerBuilder = readerBuilder
     }
 
@@ -94,20 +103,20 @@ struct EditableReaderScreen: View {
                     inCutoutBand: true,
                 )),
             )
-        })
-        .onAppear { wireOnce() }
-        // The Reader owns the transport; the Editor only needs to know whether it's running, so the pad can go inert
-        // while the cursor moves. Mirrored here because neither feature imports the other.
-        .onChange(of: editingHost.isPlaying, initial: true) { _, isPlaying in
-            editorViewModel.isPlaybackActive = isPlaying
-        }
-        .onChange(of: scenePhase) { _, phase in
-            // Autosave survives app backgrounding mid-edit (spec §8): flush whenever the scene leaves .active,
-            // regardless of whether an edit session is currently open (flushPendingSave() is a no-op otherwise).
-            if phase != .active {
-                Task { await editorViewModel.flushPendingSave() }
+        }, startInEditMode)
+            .onAppear { wireOnce() }
+            // The Reader owns the transport; the Editor only needs to know whether it's running, so the pad can go
+            // inert while the cursor moves. Mirrored here because neither feature imports the other.
+            .onChange(of: editingHost.isPlaying, initial: true) { _, isPlaying in
+                editorViewModel.isPlaybackActive = isPlaying
             }
-        }
+            .onChange(of: scenePhase) { _, phase in
+                // Autosave survives app backgrounding mid-edit (spec §8): flush whenever the scene leaves .active,
+                // regardless of whether an edit session is currently open (flushPendingSave() is a no-op otherwise).
+                if phase != .active {
+                    Task { await editorViewModel.flushPendingSave() }
+                }
+            }
     }
 
     /// Connects the host (Reader → App) to the view model (App → Editor) exactly once per instance. `.onAppear` can

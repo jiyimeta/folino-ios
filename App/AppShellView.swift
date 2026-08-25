@@ -1,6 +1,8 @@
 // swiftlint:disable file_length
+// swiftlint:disable type_body_length
 // AppShellView is the composition root that wires every Feature's root screen, navigation state, and incoming-URL /
-// share-drain handling for both compact and regular layouts; its breadth keeps it just over the file_length budget.
+// share-drain handling for both compact and regular layouts; its breadth keeps it just over the file_length and
+// type_body_length budgets.
 
 import Domain
 import ImportExport
@@ -143,6 +145,13 @@ private struct ReadyShell: View {
     /// comment on `ReaderRootScreen`. The Reader hands back `false` on disappear, so a pop can't strand the app
     /// without a clock.
     @State private var readerHidesStatusBar = false
+    /// One-shot: the id of a score whose next `makeReader` push should open straight into an edit session (a score
+    /// just created via `LibraryViewModel.consumePendingOpenInEditSession()`). Set from the `pendingScoreToOpen`
+    /// watcher at push time; `navigationDestination` closures only carry a `ScoreItem`, so this is the `@State`
+    /// fallback the flag rides in from there to `makeReader`. Cleared from the produced Reader's `.onAppear` (not
+    /// synchronously in `makeReader`, which runs during body evaluation) so a later, unrelated reopen of the same
+    /// score never inherits a stale arm.
+    @State private var startInEditModeScoreID: ScoreItem.ID?
     #if DEBUG
     @State private var isDebugMenuPresented = false
     #endif
@@ -293,6 +302,9 @@ private struct ReadyShell: View {
                       let item = libraryVM.pendingScoreToOpen,
                       item.id == newID else { return }
                 libraryVM.pendingScoreToOpen = nil
+                if libraryVM.consumePendingOpenInEditSession() {
+                    startInEditModeScoreID = item.id
+                }
                 if layoutIsRegular {
                     sidebarPath = NavigationPath()
                     detailPlaylistID = nil
@@ -458,7 +470,11 @@ private struct ReadyShell: View {
         onBack: (@MainActor () -> Void)? = nil,
         onToggleSidebar: (@MainActor () -> Void)? = nil,
     ) -> some View {
-        EditableReaderScreen(
+        // One-shot consume: read now (this render decides `startInEditMode` for the Reader about to be built), but
+        // clear from `.onAppear` below rather than here — `makeReader` runs during body evaluation, and mutating
+        // `@State` synchronously mid-update is undefined behavior in SwiftUI.
+        let openInEditSession = startInEditModeScoreID == item.id
+        return EditableReaderScreen(
             item: item,
             scoresDirectory: scoresDirectory,
             gateway: gateway,
@@ -466,7 +482,8 @@ private struct ReadyShell: View {
             originalStore: originalStore,
             historyStore: editHistoryStore,
             playbackController: bootstrap.playbackController,
-        ) { host, chrome, topBar, cutoutTier in
+            startInEditMode: openInEditSession,
+        ) { host, chrome, topBar, cutoutTier, startInEditMode in
             ReaderRootScreen(
                 scoreItem: item,
                 repository: repository,
@@ -494,7 +511,13 @@ private struct ReadyShell: View {
                 editingChrome: chrome,
                 editingTopBar: topBar,
                 editingCutoutTier: cutoutTier,
+                startInEditMode: startInEditMode,
             )
+        }
+        .onAppear {
+            if openInEditSession {
+                startInEditModeScoreID = nil
+            }
         }
     }
 
@@ -581,3 +604,5 @@ private struct ReadyShell: View {
         }
     }
 }
+
+// swiftlint:enable type_body_length

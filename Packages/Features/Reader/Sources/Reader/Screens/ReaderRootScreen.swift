@@ -35,6 +35,10 @@ public struct ReaderRootScreen: View {
     /// `ReaderCutoutTier` rather than by whatever `editingTopBar` returns — see the `.overlay` below and review
     /// Important 4. `nil` alongside `editingTopBar` in a Reader with no editing seam.
     private let editingCutoutTier: ((ReaderEditingChromeContext) -> ReaderEditingCutoutTierContent)?
+    /// One-shot: enters edit mode as soon as the score finishes loading (see the `.task` in `body`), for a score that
+    /// was just created and should open straight into an editing session rather than at the score view. Mirrors
+    /// `startScreenshotEditingIfRequested`'s call site; init-immutable, so it fires exactly once per screen instance.
+    private let startInEditMode: Bool
     /// Pops back to the library. Supplied only by the compact stack; `nil` elsewhere, which hides the chevron.
     private let onBack: (@MainActor () -> Void)?
     /// Reveals or collapses the library sidebar. Supplied only in the regular split view; `nil` elsewhere.
@@ -203,6 +207,7 @@ public struct ReaderRootScreen: View {
         editingChrome: ((ReaderEditingChromeContext) -> AnyView)? = nil,
         editingTopBar: ((ReaderEditingChromeContext) -> AnyView)? = nil,
         editingCutoutTier: ((ReaderEditingChromeContext) -> ReaderEditingCutoutTierContent)? = nil,
+        startInEditMode: Bool = false,
     ) {
         // Seed the device-class defaults at construction time. The view model only uses these if no persisted record
         // exists — a stored value, including one equal to the default, always wins.
@@ -235,6 +240,7 @@ public struct ReaderRootScreen: View {
         self.editingChrome = editingChrome
         self.editingTopBar = editingTopBar
         self.editingCutoutTier = editingCutoutTier
+        self.startInEditMode = startInEditMode
         self.onBack = onBack
         self.onToggleSidebar = onToggleSidebar
         self.onStatusBarHiddenChange = onStatusBarHiddenChange
@@ -268,9 +274,13 @@ public struct ReaderRootScreen: View {
             if !isCaptureMode, ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: topSafeAreaInset) {
                 let editingCutoutContent = isEditing ? editingCutoutTier?(topBarEditingContext) : nil
                 ReaderCutoutTier(topSafeAreaInset: topSafeAreaInset) {
-                    if let editingCutoutContent { editingCutoutContent.leading }
+                    if let editingCutoutContent {
+                        editingCutoutContent.leading
+                    }
                 } trailing: {
-                    if let editingCutoutContent { editingCutoutContent.trailing }
+                    if let editingCutoutContent {
+                        editingCutoutContent.trailing
+                    }
                 }
                 .ignoresSafeArea(edges: .top)
             }
@@ -393,6 +403,9 @@ public struct ReaderRootScreen: View {
             // Initial sync: the engine starts up unaware of persisted state, so seed it from the @AppStorage value at
             // view start.
             await viewModel.tempoModel.setMetronomeEnabled(isMetronomeEnabled)
+            if startInEditMode {
+                startEditing()
+            }
             startScreenshotEditingIfRequested()
         }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = keepScreenAwake }
@@ -473,7 +486,9 @@ public struct ReaderRootScreen: View {
         .onChange(of: editingHost?.isExitRequested ?? false) { _, requested in
             // The editing chrome's 完了 button lives in App-injected code and can't call `finishEditing()` directly
             // (the Reader never exposes it), so it signals exit through the host instead.
-            if requested { finishEditing() }
+            if requested {
+                finishEditing()
+            }
         }
     }
 
@@ -651,7 +666,9 @@ public struct ReaderRootScreen: View {
         guard let host = editingHost else { return }
         Task {
             host.onEndEditing()
-            if let edited = host.editedScore { await viewModel.adoptEditedScore(edited) }
+            if let edited = host.editedScore {
+                await viewModel.adoptEditedScore(edited)
+            }
             host.isEditing = false
             host.selection = .none
             host.caretItem = nil
