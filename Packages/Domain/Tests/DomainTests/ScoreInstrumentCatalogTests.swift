@@ -12,6 +12,15 @@ struct ScoreInstrumentCatalogTests {
         }
     }
 
+    /// Every entry needs a staff abbreviation, not just a name: the layout engine labels systems 2+ with
+    /// `shortName ?? ""`, so an entry without one engraves an unlabeled staff on every system after the first.
+    @Test func `every entry carries a staff abbreviation`() {
+        for instrument in ScoreInstrument.all {
+            #expect(!instrument.englishAbbreviation.isEmpty, "\(instrument.id) has no abbreviation")
+            #expect(instrument.partPlan().shortName == instrument.englishAbbreviation)
+        }
+    }
+
     @Test func `transposing entries carry the right intervals`() {
         #expect(ScoreInstrument.instrument(id: "clarinet-bb").map {
             ($0.transposeDiatonic, $0.transposeChromatic) == (-1, -2)
@@ -45,6 +54,7 @@ struct ScoreInstrumentCatalogTests {
 
         #expect(plan.instrumentID == "clarinet-bb")
         #expect(plan.longName == clarinet.englishName)
+        #expect(plan.shortName == clarinet.englishAbbreviation)
         #expect(plan.staves == clarinet.staves)
         #expect(plan.transposeDiatonic == clarinet.transposeDiatonic)
         #expect(plan.transposeChromatic == clarinet.transposeChromatic)

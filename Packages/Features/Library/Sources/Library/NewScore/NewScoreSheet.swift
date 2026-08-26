@@ -15,14 +15,20 @@ struct NewScoreSheet: View {
     let viewModel: LibraryViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var form: NewScoreForm
-    /// Which catalog sheet is up, if any. `.replace` swaps the whole instrumentation for one instrument ("start
-    /// from an instrument"); `.append` adds a part to the list.
-    @State private var catalogPick: CatalogPick?
-    @State private var isSourceScorePickerPresented = false
+    /// Which picker is up, if any. One piece of state for all three because they share one `.sheet(item:)`:
+    /// two `.sheet` modifiers on the same view is a long-standing source of SwiftUI presentation races, where
+    /// dismissing one and presenting the other in the same runloop turn drops the second.
+    @State private var picker: PickerSheet?
 
-    private enum CatalogPick: Identifiable {
+    /// `.replace` swaps the whole instrumentation for one instrument ("start from an instrument"); `.append`
+    /// adds a part to the list; `.sourceScore` copies an existing score's ensemble wholesale.
+    ///
+    /// Named `PickerSheet`, not `Picker`: a nested type called `Picker` shadows SwiftUI's inside this view, and
+    /// the key/time `Picker`s below stop resolving.
+    private enum PickerSheet: Identifiable {
         case replace
         case append
+        case sourceScore
 
         var id: Self {
             self
@@ -48,11 +54,12 @@ struct NewScoreSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
         }
-        .sheet(item: $catalogPick) { pick in
-            catalogSheet(for: pick)
-        }
-        .sheet(isPresented: $isSourceScorePickerPresented) {
-            sourceScoreSheet
+        .sheet(item: $picker) { picker in
+            switch picker {
+            case .replace: catalogSheet(replacing: true)
+            case .append: catalogSheet(replacing: false)
+            case .sourceScore: sourceScoreSheet
+            }
         }
         .alert(
             Text("library.title", bundle: .module),
@@ -106,7 +113,7 @@ struct NewScoreSheet: View {
             .onDelete { offsets in
                 form.removeInstruments(at: offsets)
             }
-            Button { catalogPick = .append } label: {
+            Button { picker = .append } label: {
                 Label {
                     Text("library.newScore.addInstrument", bundle: .module)
                 } icon: {
@@ -134,10 +141,10 @@ struct NewScoreSheet: View {
                 }
             }
             Divider()
-            Button { isSourceScorePickerPresented = true } label: {
+            Button { picker = .sourceScore } label: {
                 Text("library.newScore.sameAsExisting", bundle: .module)
             }
-            Button { catalogPick = .replace } label: {
+            Button { picker = .replace } label: {
                 Text("library.newScore.chooseInstruments", bundle: .module)
             }
         } label: {
@@ -166,23 +173,26 @@ struct NewScoreSheet: View {
         }
     }
 
-    private func catalogSheet(for pick: CatalogPick) -> some View {
+    /// The catalog picker, in either of its two modes. Takes a `Bool` rather than the case so there is no
+    /// `.sourceScore` branch here to leave unhandled — that case never reaches this function.
+    private func catalogSheet(replacing: Bool) -> some View {
         NavigationStack {
             InstrumentCatalogPicker { instrument in
-                switch pick {
-                case .replace: form.replaceInstrumentation(with: instrument)
-                case .append: form.addInstrument(instrument)
+                if replacing {
+                    form.replaceInstrumentation(with: instrument)
+                } else {
+                    form.addInstrument(instrument)
                 }
-                catalogPick = nil
+                picker = nil
             }
             .navigationTitle(Text(
-                pick == .replace ? "library.newScore.chooseInstruments" : "library.newScore.addInstrument",
+                replacing ? "library.newScore.chooseInstruments" : "library.newScore.addInstrument",
                 bundle: .module,
             ))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { catalogPick = nil } label: { L10n.Common.cancel }
+                    Button { picker = nil } label: { L10n.Common.cancel }
                 }
             }
         }
@@ -214,7 +224,7 @@ struct NewScoreSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { isSourceScorePickerPresented = false } label: { L10n.Common.cancel }
+                    Button { picker = nil } label: { L10n.Common.cancel }
                 }
             }
         }
@@ -223,7 +233,7 @@ struct NewScoreSheet: View {
     /// Dismisses the picker BEFORE awaiting the parse: a load failure lands on `viewModel.currentError`, and the
     /// alert that presents it belongs to this sheet — it cannot reach the screen while the picker covers it.
     private func copyInstrumentation(from item: ScoreItem) {
-        isSourceScorePickerPresented = false
+        picker = nil
         Task {
             guard let score = await viewModel.instrumentation(of: item) else { return }
             form.applyInstrumentation(of: score)

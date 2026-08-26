@@ -8,6 +8,9 @@ import Testing
 @Suite("New score creation")
 struct NewScoreTests {
     private static let base = Date(timeIntervalSince1970: 1_700_000_000)
+    /// Never touched — every gateway in this suite is a fake. It exists so the URL a caller builds from it can
+    /// be asserted against.
+    private static let scoresDirectory = URL(filePath: "/tmp/folino-tests")
 
     private static func makeItem(title: String = "Sonata") -> ScoreItem {
         ScoreItem(
@@ -47,7 +50,7 @@ struct NewScoreTests {
             shareService: FakeScoreShareService(),
             metadataReader: FakeScoreMetadataReading(),
             creator: creator,
-            scoresDirectory: URL(filePath: "/tmp/folino-tests"),
+            scoresDirectory: scoresDirectory,
             crashReporter: crashReporter,
         )
     }
@@ -117,6 +120,34 @@ struct NewScoreTests {
         #expect(form.instrumentation.map(\.displayName) == expected)
         let template = try #require(form.template())
         #expect(template.parts.map(\.longName) == expected)
+    }
+
+    /// The staff abbreviation is numbered too, not just the long name — systems 2+ are labeled from
+    /// `shortName`, so two unnumbered "Vln." rows would be indistinguishable on every system after the first.
+    @Test
+    func `duplicate numbering reaches the staff abbreviation`() throws {
+        var form = NewScoreForm()
+        form.title = "Q"
+        try form.applyTemplate(Self.template("string-quartet"))
+        let violin = try Self.instrument("violin")
+        let template = try #require(form.template())
+        #expect(template.parts[0].shortName == "\(violin.englishAbbreviation) 1")
+        #expect(template.parts[1].shortName == "\(violin.englishAbbreviation) 2")
+        // The unique rows keep their bare abbreviation.
+        #expect(try template.parts[2].shortName == Self.instrument("viola").englishAbbreviation)
+    }
+
+    /// A catalog pick must carry an abbreviation even when nothing is duplicated: a nil `shortName` engraves an
+    /// empty staff label from the second system on.
+    @Test
+    func `a lone catalog part still carries a staff abbreviation`() throws {
+        var form = NewScoreForm()
+        form.title = "T"
+        let flute = try Self.instrument("flute")
+        form.replaceInstrumentation(with: flute)
+        let template = try #require(form.template())
+        #expect(template.parts.count == 1)
+        #expect(template.parts[0].shortName == flute.englishAbbreviation)
     }
 
     @Test
@@ -241,8 +272,11 @@ struct NewScoreTests {
             gateway: gateway,
             creator: FakeScoreFileCreator(result: .success(Self.makeItem())),
         )
-        let loaded = await viewModel.instrumentation(of: Self.makeItem())
+        let item = Self.makeItem()
+        let loaded = await viewModel.instrumentation(of: item)
         #expect(loaded == nil)
         #expect(viewModel.currentError != nil)
+        // The item's file is resolved against the injected scores directory, not the process's cwd.
+        #expect(gateway.lastLoadedURL == Self.scoresDirectory.appending(path: item.localFileName))
     }
 }

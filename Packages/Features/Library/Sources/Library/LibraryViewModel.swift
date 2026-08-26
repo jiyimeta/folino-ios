@@ -17,7 +17,7 @@ public final class LibraryViewModel {
     /// Where `ScoreItem.localFileName` resolves against. Needed by the creation wizard's "same instrumentation as
     /// an existing score" step, which is the only Library flow that parses a score file itself — every other one
     /// hands the `ScoreItem` to an adapter (`shareService`, `metadataReader`) that owns the resolution.
-    @ObservationIgnored let scoresDirectory: URL
+    let scoresDirectory: URL
     let vocalTunerHandoff: any VocalTunerHandoff
     /// Analytics sink. Read by the Screens that mutate the repository directly (playlist/tag rename, reorder, single
     /// add/remove) so those view-layer bypass paths log against the same instance as the VM-owned actions.

@@ -19,8 +19,12 @@ struct NewScoreForm: Equatable {
         /// The name before duplicate numbering. The localized catalog name for a catalog pick, the part's own
         /// name for a cloned part.
         var baseName: String
-        /// The cloned part's short (staff-label) name, before numbering. `nil` for a catalog pick — the catalog
-        /// carries no abbreviations, and `Score.blank(_:)` falls back to the long name.
+        /// The short (staff-label) name before numbering — `ScoreInstrument.englishAbbreviation` for a catalog
+        /// pick, the source part's own `shortName` for a cloned one.
+        ///
+        /// Only `nil` when cloning a part that carries no abbreviation. It is worth setting wherever we can:
+        /// the layout engine labels systems 2+ with `shortName ?? ""`, so a part without one engraves an
+        /// unlabeled staff on every system after the first.
         var baseShortName: String?
         /// `baseName` plus the numbering suffix, when the list holds more than one row with this base name.
         /// Maintained by `NewScoreForm.renumber()`; never assigned from outside.
@@ -31,9 +35,18 @@ struct NewScoreForm: Equatable {
         /// A catalog instrument as a new row, named in the reader's language.
         static func fromCatalog(_ instrument: ScoreInstrument) -> PartDraft {
             let name = localizedInstrumentName(instrument)
+            // English, deliberately, while `name` is localized: staff abbreviations are engraving conventions
+            // ("Vln.", "Cl."), not prose, and every language folino ships uses the Latin-alphabet forms on the
+            // page. `ScoreUI` has no abbreviation catalog to resolve them against, and inventing one is a
+            // separate change — see the note in task-8-report.md.
+            let abbreviation = instrument.englishAbbreviation
             var plan = instrument.partPlan()
             plan.longName = name
-            return PartDraft(id: UUID(), baseName: name, baseShortName: nil, displayName: name, plan: plan)
+            plan.shortName = abbreviation
+            return PartDraft(
+                id: UUID(), baseName: name, baseShortName: abbreviation,
+                displayName: name, plan: plan,
+            )
         }
 
         /// A part of an existing score as a new row, copying its structure verbatim: per-staff opening clef,
@@ -90,9 +103,13 @@ struct NewScoreForm: Equatable {
     /// `renumber()`, which is what keeps the renumbering pass from re-entering itself.
     private var parts: [PartDraft] = NewScoreForm.seedInstrumentation()
 
-    /// The parts to create, in score order. Every write — a wholesale assignment, an `append`, an
-    /// `onMove` — renumbers duplicates; the mutating helpers below are what the UI drives, and they
-    /// additionally clear `bracketGroups`.
+    /// The parts to create, in score order. Every write — a wholesale assignment, an `append`, an `onMove` —
+    /// renumbers duplicates and drops `bracketGroups`, so no caller can edit the list and forget to invalidate
+    /// the grouping. `applyTemplate` is the one flow that keeps a grouping, and it assigns `bracketGroups`
+    /// *after* the list for exactly that reason.
+    ///
+    /// The clearing is gated on the list's structure actually changing — the drafts' ids in order. Renumbering
+    /// rewrites `displayName`/`plan` in place, and a rewrite alone must not count as an edit.
     ///
     /// Computed over `parts` rather than stored with a `didSet`: a `didSet` that calls a mutating method
     /// which writes back into the same property DOES re-enter the observer (only a direct assignment in the
@@ -100,8 +117,12 @@ struct NewScoreForm: Equatable {
     var instrumentation: [PartDraft] {
         get { parts }
         set {
+            let structureChanged = newValue.map(\.id) != parts.map(\.id)
             parts = newValue
             renumber()
+            if structureChanged {
+                bracketGroups = []
+            }
         }
     }
 
@@ -118,7 +139,8 @@ struct NewScoreForm: Equatable {
 
     // MARK: - Instrumentation edits
 
-    /// Replaces the list with `template`'s expansion and adopts its bracket grouping.
+    /// Replaces the list with `template`'s expansion and adopts its bracket grouping. The assignment order is
+    /// load-bearing: setting `instrumentation` clears `bracketGroups`, so the template's grouping goes on after.
     mutating func applyTemplate(_ template: ScoreCreationTemplate) {
         instrumentation = template.instruments.map(PartDraft.fromCatalog)
         bracketGroups = template.bracketGroups
@@ -130,28 +152,23 @@ struct NewScoreForm: Equatable {
         instrumentation = score.parts.enumerated().map { index, part in
             PartDraft.fromExistingPart(part, at: index, in: score)
         }
-        bracketGroups = []
     }
 
     /// Replaces the whole list with a single catalog instrument — the "start from an instrument" entry point.
     mutating func replaceInstrumentation(with instrument: ScoreInstrument) {
         instrumentation = [.fromCatalog(instrument)]
-        bracketGroups = []
     }
 
     mutating func addInstrument(_ instrument: ScoreInstrument) {
         instrumentation.append(.fromCatalog(instrument))
-        bracketGroups = []
     }
 
     mutating func removeInstruments(at offsets: IndexSet) {
         instrumentation.remove(atOffsets: offsets)
-        bracketGroups = []
     }
 
     mutating func moveInstruments(fromOffsets source: IndexSet, toOffset destination: Int) {
         instrumentation.move(fromOffsets: source, toOffset: destination)
-        bracketGroups = []
     }
 
     // MARK: - Template
