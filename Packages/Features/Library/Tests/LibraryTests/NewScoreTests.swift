@@ -81,4 +81,31 @@ struct NewScoreTests {
         #expect(!viewModel.consumePendingOpenInEditSession()) // one-shot
         #expect(!viewModel.isNewScoreSheetPresented)
     }
+
+    @Test
+    func `createScore failure surfaces the error, records it, and keeps the sheet presented`() async {
+        let creator = FakeScoreFileCreator(result: .failure(DomainError.persistenceFailed(reason: "disk full")))
+        let crashReporter = SpyCrashReporter()
+        let viewModel = LibraryViewModel(
+            repository: FakeScoreLibraryRepository(),
+            originalStore: FakeScoreOriginalStore(),
+            importer: FakeScoreFileImporter(),
+            gateway: FakeScoreFileGateway(),
+            shareService: FakeScoreShareService(),
+            metadataReader: FakeScoreMetadataReading(),
+            creator: creator,
+            crashReporter: crashReporter,
+        )
+        // Mirrors the real flow: the sheet is already presented (the user tapped Create from within it).
+        viewModel.isNewScoreSheetPresented = true
+        var form = NewScoreForm()
+        form.title = "Sonata"
+        await viewModel.createScore(from: form)
+        #expect(creator.created.count == 1)
+        #expect(viewModel.currentError is ScoreCreationFailed)
+        #expect(viewModel.isNewScoreSheetPresented) // stays up — the sheet's own alert surfaces the error
+        #expect(viewModel.pendingScoreToOpen == nil)
+        #expect(!viewModel.consumePendingOpenInEditSession())
+        #expect(crashReporter.recordedErrors.count == 1)
+    }
 }

@@ -5,8 +5,10 @@ import UtilityUI
 
 /// The M1 "New score" form: a plain `Form` collecting the fields `NewScoreForm` maps to a `BlankScoreTemplate`.
 /// Presented as a sheet from `LibraryRootPresentations`; Create hands the built form to
-/// `LibraryViewModel.createScore(from:)`, which owns dismissal on success and surfaces failure through the Library's
-/// shared error alert.
+/// `LibraryViewModel.createScore(from:)`, which owns dismissal on success. On failure the sheet stays up (the typed
+/// form isn't lost) and `currentError` is surfaced by this view's own alert — `LibraryRootPresentations`'
+/// `ImportErrorAlert` is attached to the screen underneath this sheet, and SwiftUI won't present an alert from a view
+/// that is already presenting a sheet, so the shared alert can't be reused here.
 @MainActor
 struct NewScoreSheet: View {
     let viewModel: LibraryViewModel
@@ -24,6 +26,29 @@ struct NewScoreSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
         }
+        .alert(
+            Text("library.title", bundle: .module),
+            isPresented: errorPresentationBinding,
+            presenting: viewModel.currentError,
+        ) { _ in
+            Button { viewModel.currentError = nil } label: {
+                L10n.Common.ok
+            }
+        } message: { error in
+            Text(describeLibraryError(error))
+        }
+    }
+
+    /// Mirrors `LibraryRootPresentations.ImportErrorAlert.presentationBinding` — same shared `currentError`, its own
+    /// presentation site so the alert actually reaches the screen while this sheet covers the root.
+    private var errorPresentationBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.currentError != nil },
+            set: { isPresented in
+                guard !isPresented else { return }
+                viewModel.currentError = nil
+            },
+        )
     }
 
     private var titleSection: some View {

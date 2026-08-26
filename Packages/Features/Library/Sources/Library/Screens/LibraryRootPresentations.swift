@@ -67,9 +67,12 @@ private struct ImportErrorAlert: ViewModifier {
         }
     }
 
+    /// Gated on `!isNewScoreSheetPresented`: while `NewScoreSheet` is up it owns presenting `currentError` itself
+    /// (SwiftUI won't surface an alert from a view already presenting a sheet), so this root-level alert stays
+    /// suppressed rather than racing the sheet's own alert over the same shared error.
     private var presentationBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.currentError != nil },
+            get: { viewModel.currentError != nil && !viewModel.isNewScoreSheetPresented },
             set: { isPresented in
                 guard !isPresented else { return }
                 viewModel.currentError = nil

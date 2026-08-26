@@ -18,7 +18,7 @@ public final class LibraryViewModel {
     /// Analytics sink. Read by the Screens that mutate the repository directly (playlist/tag rename, reorder, single
     /// add/remove) so those view-layer bypass paths log against the same instance as the VM-owned actions.
     let analytics: any Analytics
-    private let crashReporter: any CrashReporter
+    let crashReporter: any CrashReporter
 
     /// Logical origin label for every import that flows through the Library's in-app file picker.
     private static let importSource = "file_picker"
@@ -366,6 +366,7 @@ public final class LibraryViewModel {
             pendingScoreToOpen = item
             isNewScoreSheetPresented = false
         } catch {
+            crashReporter.record(error: error)
             currentError = ScoreCreationFailed()
         }
     }
@@ -374,26 +375,6 @@ public final class LibraryViewModel {
     public func consumePendingOpenInEditSession() -> Bool {
         defer { pendingOpenInEditSession = false }
         return pendingOpenInEditSession
-    }
-
-    /// Record an import failure as both an analytics event and a Crashlytics non-fatal. The `reason` is bucketed to a
-    /// stable low-cardinality label so analytics never carries a raw error string.
-    private func logImportFailed(format: String, error: Error) {
-        crashReporter.record(error: error)
-        analytics.log(.scoreImportFailed(format: format, reason: Self.importFailureReason(error)))
-    }
-
-    private static func importFailureReason(_ error: Error) -> String {
-        guard let domain = error as? DomainError else { return "other" }
-        switch domain {
-        case .scoreFileNotFound: return "file_not_found"
-        case .unsupportedFormat: return "unsupported_format"
-        case .scoreParseFailed: return "parse_failed"
-        case .scoreWriteFailed: return "write_failed"
-        case .persistenceFailed: return "persistence_failed"
-        case .syncFailed: return "sync_failed"
-        case .audioEngineFailed: return "audio_engine_failed"
-        }
     }
 }
 
