@@ -76,8 +76,14 @@ public struct EditorTopBarView: View {
         if hasCutoutTier {
             // ✕ and the session-end control live in the cutout tier; the six controls left here (undo, redo,
             // voice, pad, the instruments sheet, and the measure-actions menu) still sit under this row's width on
-            // the narrowest device that HAS a cutout tier — 393pt, against ≈336pt of controls — so no fold is
-            // needed. A device narrow enough to need one has no cutout tier and takes the branch below.
+            // the narrowest device that HAS a cutout tier — so no fold is needed here.
+            //
+            // That device is a 375pt notched phone (12/13 mini, 11 Pro, XS), NOT the 393pt modern class:
+            // `ReaderTopBarLayout.hasCutoutTier` keys off the top safe-area inset, which those reach. The budget is
+            // 6×44 + 5×12 = 324pt of controls against 375 − 32 (the strip's own horizontal padding) = 343pt — about
+            // 19pt of slack before whatever `glassEffect` adds around each pill, which is thin enough that the
+            // 375-wide preview below is the check, not the arithmetic. A device narrower than that has no cutout
+            // tier and takes the folding branch below.
             HStack(spacing: 12) {
                 undoRedoGroup
                 Spacer(minLength: 0)
@@ -297,8 +303,10 @@ public struct EditorTopBarView: View {
         }
     }
 
-    private func topBarButton(
-        system: String, label: LocalizedStringKey, enabled: Bool, action: @escaping () -> Void,
+    /// Internal rather than private so `EditorTopBarView+Instruments.swift` builds its button out of the same
+    /// pieces as undo and redo instead of restating them.
+    func topBarButton(
+        system: String, label: LocalizedStringKey, enabled: Bool = true, action: @escaping () -> Void,
     ) -> some View {
         Button(action: action) {
             topBarIcon(system)
@@ -309,9 +317,8 @@ public struct EditorTopBarView: View {
     }
 
     /// The 44×44 tappable glyph shared by the strip's icon buttons — every button keeps this fixed frame so what a
-    /// `ViewThatFits` candidate needs is a function of how many buttons it has, not of their content. Internal
-    /// rather than private so `EditorTopBarView+Instruments.swift` can draw its button the same way.
-    func topBarIcon(_ systemImage: String) -> some View {
+    /// `ViewThatFits` candidate needs is a function of how many buttons it has, not of their content.
+    private func topBarIcon(_ systemImage: String) -> some View {
         Image(systemName: systemImage)
             .font(.system(size: 20, weight: .medium))
             .frame(width: 44, height: 44)

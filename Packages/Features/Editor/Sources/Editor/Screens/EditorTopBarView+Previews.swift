@@ -32,8 +32,17 @@ private func previewViewModel(canRevert: Bool) -> EditorViewModel {
     return controlTier()
 }
 
+// The narrow end of the cutout-tier range, which is NOT the modern 393pt class: `hasCutoutTier` keys off the top
+// safe-area inset, and the 375pt notched phones (12/13 mini, 11 Pro, XS) clear it. Six 44pt controls plus five 12pt
+// gaps is 324pt against ≈343pt of usable row — the tightest layout that has no fold to fall back on, so this is the
+// one to look at whenever a control is added to that branch.
+#Preview("Cutout-tier device · 375pt") {
+    UserDefaults.standard.set(false, forKey: "editorPadVisible")
+    return controlTier(width: 375)
+}
+
 @MainActor
-private func controlTier() -> some View {
+private func controlTier(width: CGFloat = 440) -> some View {
     EditorTopBarView(
         viewModel: previewViewModel(canRevert: true),
         hasMusicalAnnotations: false,
@@ -41,7 +50,7 @@ private func controlTier() -> some View {
         onDone: {},
         onNoteInputAnchorFrameChange: { _ in },
     )
-    .frame(width: 440, height: 52)
+    .frame(width: width, height: 52)
     .border(.red)
     .padding(.vertical, 40)
     .background(Color(white: 0.97))

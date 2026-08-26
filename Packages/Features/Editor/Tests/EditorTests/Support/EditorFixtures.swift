@@ -168,6 +168,15 @@ enum EditorFixtures {
         return Score(division: 480, parts: parts)
     }
 
+    /// `parts(named:)` with one extra staff spliced onto the part at `index` — a piano-shaped row, which is what
+    /// the instruments sheet lays out differently from the single-staff majority.
+    static func parts(named names: [String], twoStavesAt index: Int) -> Score {
+        var score = parts(named: names)
+        guard score.parts.indices.contains(index), let staff = score.parts[index].staves.first else { return score }
+        score.parts[index].staves.append(staff)
+        return score
+    }
+
     /// A one-staff catalog-style plan, as `ScoreInstrument.partPlan()` produces one.
     static func partPlan(named name: String, clef: String = "G") -> BlankScoreTemplate.PartPlan {
         BlankScoreTemplate.PartPlan(
@@ -178,8 +187,13 @@ enum EditorFixtures {
         )
     }
 
-    static func restID(measure: Int = 0, element: Int) -> RestID {
-        RestID(staff: staff0, measureIndex: measure, voiceIndex: 0, elementIndex: element)
+    /// `part` defaults to 0, so every single-part fixture's call site reads as it always did; the part-list tests
+    /// pass it to name a rest on a specific instrument.
+    static func restID(part: Int = 0, measure: Int = 0, element: Int) -> RestID {
+        RestID(
+            staff: StaffAddress(partIndex: part, staffIndexInPart: 0),
+            measureIndex: measure, voiceIndex: 0, elementIndex: element,
+        )
     }
 
     static func noteID(measure: Int = 0, element: Int, noteIndex: Int = 0) -> NoteID {

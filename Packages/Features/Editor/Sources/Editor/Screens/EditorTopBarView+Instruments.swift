@@ -10,13 +10,9 @@ extension EditorTopBarView {
     /// symbol (`music.note.list`) rather than a custom one: nothing about a list of instruments needs a glyph the
     /// system doesn't already have, and it reads distinctly against the pad toggle's note-with-a-plus next door.
     var instrumentsButton: some View {
-        Button {
+        topBarButton(system: "music.note.list", label: "editor.instruments.title") {
             viewModel.isInstrumentsSheetPresented = true
-        } label: {
-            topBarIcon("music.note.list")
         }
-        .tint(.primary)
-        .accessibilityLabel(Text("editor.instruments.title", bundle: .module))
         .interactiveGlassCompat()
     }
 

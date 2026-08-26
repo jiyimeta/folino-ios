@@ -387,8 +387,11 @@ public struct ReaderRootScreen: View {
                 viewModel?.layoutModel.hiddenStaves ?? []
             }
             // The write side of the same store, for the Editor's instruments sheet — it lists the score's parts and
-            // offers a visibility switch per staff, and this is the one the inspector's own switches call.
+            // offers a visibility switch per staff, and this is the one the inspector's own switches call. The hint
+            // is retired here for the same reason `StaffVisibilityButton` retires it: the coach mark teaches
+            // show/hide-parts, and someone who has just used it from the sheet has plainly found the feature.
             editingHost?.onToggleStaffVisibility = { [weak viewModel] address in
+                ReaderHintCoordinator.shared.markUsed(.staffVisibility)
                 Task { await viewModel?.layoutModel.toggleStaff(address) }
             }
             // Split out (`ReaderRootScreen+RevertWiring.swift`) to keep this closure — and the struct's primary

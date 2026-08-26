@@ -63,7 +63,12 @@ struct EditorInstrumentsSheet: View {
             presenting: partPendingRemoval,
         ) { row in
             Button(role: .destructive) {
-                viewModel.removePart(at: row.index)
+                // Re-resolved by `Part.id`, not by the index the swipe captured: the dialog is modal to this sheet
+                // but not to the score, and a three-finger undo or a mirrored edit landing under it would leave that
+                // index naming a different part. Missing entirely means the part is already gone — nothing to do.
+                if let index = viewModel.partRows.first(where: { $0.id == row.id })?.index {
+                    viewModel.removePart(at: index)
+                }
                 partPendingRemoval = nil
             } label: {
                 L10n.Common.delete
