@@ -11,11 +11,21 @@ final class ReaderPreferencesStore {
 
     private let repository: any ScoreLibraryRepository
     private let scoreItemID: ScoreItem.ID
-    /// Handle to the most recent persistence write. Every mutation awaits its own write before returning, so this is
-    /// only ever non-`nil`-and-running for a write some OTHER task started — which is exactly what a caller about to
-    /// re-read the row (`flushPendingWrites()` then `loadOrSeed`) has to let land first, or it would read a value the
-    /// in-flight write is about to overwrite.
-    private var pendingWrite: Task<Void, Never>?
+    /// Handles for persistence writes that have not finished. Every mutation awaits its own write before returning, so
+    /// these are only ever writes some OTHER task started — which is exactly what a caller about to re-read the row
+    /// (`flushPendingWrites()` then `loadOrSeed`) has to let land first, or it would read a value an in-flight write
+    /// is about to overwrite. A LIST rather than one handle: joining only the latest would let an earlier, still
+    /// running write land after the re-read (review Minor 2).
+    private var pendingWrites: [Task<Void, Never>] = []
+
+    /// Answers whether the Editor currently has a part edit whose preferences migration has not settled — the window
+    /// in which this store must not write, because the row and this process disagree about what a part index means.
+    /// Wired by `ReaderViewModel`; the default (never held) is right for a Reader with no editing host behind it.
+    var isMigrationPending: @MainActor () -> Bool = { false }
+
+    /// Mutations held back while `isMigrationPending()` was true, in the order they arrived. Re-run against the
+    /// reloaded row once the hold lifts — see `applyDeferredMutations()`.
+    private var deferredMutations: [(inout ReaderPreferences) -> Void] = []
 
     init(
         scoreItemID: ScoreItem.ID,
@@ -44,11 +54,19 @@ final class ReaderPreferencesStore {
     /// notation score whose parse failed or is incomplete would permanently reclassify its authored-hidden staves as
     /// user-hidden. Callers with no notation score at all (PDFs) pass the empty default legitimately. See the caller
     /// contract on `ReaderPreferences.reconcilingAuthoredHidden`.
+    /// Returns `nil` when the LOAD ITSELF FAILED, which is not the same as there being no row: a failed load must
+    /// not mint a fresh value, because the caller would then distribute defaults over whatever the sub-models are
+    /// holding — and on the part-remap reload path that means wiping a row the Editor has just migrated on the
+    /// strength of one unlucky read (review Minor 3). "No row" is still `nil` from the repository and still seeds.
     @discardableResult
-    func loadOrSeed(authoredHiddenStaves: Set<StaffAddress> = []) async -> ReaderPreferences {
-        // A persistence error is non-fatal — `try?` collapses "no row" and "load failed" alike into
-        // the no-stored-value seed path. `reconcilingAuthoredHidden` is the shared iOS/Android rule.
-        let stored = await (try? repository.loadReaderPreferences(for: scoreItemID))
+    func loadOrSeed(authoredHiddenStaves: Set<StaffAddress> = []) async -> ReaderPreferences? {
+        let stored: ReaderPreferences?
+        do {
+            stored = try await repository.loadReaderPreferences(for: scoreItemID)
+        } catch {
+            return nil
+        }
+        // `reconcilingAuthoredHidden` is the shared iOS/Android rule.
         let (resolved, shouldPersist) = ReaderPreferences.reconcilingAuthoredHidden(
             stored: stored,
             authoredHiddenStaves: authoredHiddenStaves,
@@ -61,10 +79,20 @@ final class ReaderPreferencesStore {
         return resolved
     }
 
-    /// Waits for a write started elsewhere to land. Call it before re-reading the row from the repository — see
-    /// `pendingWrite`.
+    /// Waits for every write started elsewhere to land. Call it before re-reading the row from the repository — see
+    /// `pendingWrites`.
+    ///
+    /// Loops rather than joining once: a write can start while this is awaiting an earlier one (the awaits are real
+    /// suspension points and other tasks run in them), and a handle added after the join would land after the
+    /// re-read — exactly the interleaving the flush exists to rule out.
     func flushPendingWrites() async {
-        await pendingWrite?.value
+        while !pendingWrites.isEmpty {
+            let inFlight = pendingWrites
+            pendingWrites = []
+            for write in inFlight {
+                await write.value
+            }
+        }
     }
 
     /// Writes through the repository, leaving the handle behind so `flushPendingWrites()` can join it.
@@ -79,13 +107,43 @@ final class ReaderPreferencesStore {
                 try await repository.saveReaderPreferences(preferences)
             } catch {}
         }
-        pendingWrite = write
+        pendingWrites.append(write)
         await write.value
+        pendingWrites.removeAll { $0 == write }
+    }
+
+    /// Re-runs whatever `mutate` held back while a part-index migration was in flight, against the row as it stands
+    /// NOW — which on the normal path is the migrated row, already redistributed into the sub-models the held
+    /// closures read from.
+    ///
+    /// That redistribution is what makes this safe rather than clever. A change made inside the hold window was
+    /// stamped in a numbering the row had not reached, and there is no honest way to tell which of the addresses the
+    /// sub-model is holding are old and which are new — so the migrated row wins and the in-window change is
+    /// superseded rather than guessed at. What this call guarantees is that the row and the sub-models agree
+    /// afterwards, and that nothing is ever written in a numbering that no longer applies.
+    func applyDeferredMutations() async {
+        guard !deferredMutations.isEmpty else { return }
+        let held = deferredMutations
+        deferredMutations = []
+        for apply in held {
+            await mutate(apply)
+        }
     }
 
     /// Applies `apply` to a working copy, then re-seats through `ReaderPreferences.init` so clamping rules
     /// always run. The normalized value lands in `preferences` and is persisted.
-    func mutate(_ apply: (inout ReaderPreferences) -> Void) async {
+    ///
+    /// **Held while a part-index migration is in flight.** This is the one choke point every Reader-side write of
+    /// the row goes through, which is what makes the hold total: the sub-models' `onChange` hooks, the inspector,
+    /// the instruments sheet's visibility switch and the PDF re-read path all arrive here. During the window the
+    /// closure is queued instead of run — not run-and-not-persisted — so `preferences` never takes on a value the
+    /// row will not be given, and `applyDeferredMutations()` re-runs it against the reloaded row afterwards.
+    /// `@escaping` because a held mutation outlives this call — it is queued and re-run later.
+    func mutate(_ apply: @escaping (inout ReaderPreferences) -> Void) async {
+        guard !isMigrationPending() else {
+            deferredMutations.append(apply)
+            return
+        }
         var copy = preferences
         apply(&copy)
         let normalized = ReaderPreferences(

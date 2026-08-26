@@ -178,6 +178,19 @@ public final class EditorViewModel {
     /// plain `async` method with two call sites, neither of which is itself a `Task`, so this is the one handle
     /// common to both (Critical 2 review fix).
     @ObservationIgnored var inFlightSaveTask: Task<Void, Never>?
+    /// What the most recent `migratePartIndexedPreferences` actually wrote, or `nil` when it wrote nothing. Read once
+    /// by the part op's own commit, which reports it through `onPartIndicesRemapped` and clears it — a stored relay
+    /// rather than a return value because the save that performs the migration is not the call that has to report it
+    /// (a debounce tick or a `flushPendingSave` from anywhere can be the one that runs it).
+    @ObservationIgnored var lastAppliedPartMapping: [Int: Int?]?
+    /// How many part edits have been applied but not yet had their save settle. A count, not a flag, because each op
+    /// flushes its own save and an op applied while an earlier flush is still running would otherwise see that
+    /// earlier settle lift the host's hold while its own numbering is still unreconciled.
+    @ObservationIgnored var unsettledPartEdits = 0
+    /// The part op's own commit — its immediate flush plus the settle that follows. Fire-and-forget in production;
+    /// stored for the same reason `auditionTask` is, so a test can `await vm.partEditCommitTask?.value` instead of
+    /// racing it. Chained onto the previous one so overlapping ops settle in the order they were applied.
+    @ObservationIgnored var partEditCommitTask: Task<Void, Never>?
     /// True once a non-MSCX/MSCZ source has been rewritten as a sibling `.mscz` file. One-way: never reset, since
     /// it drives the Task 16 one-time "saved as .mscz" notice.
     public internal(set) var didSaveAsSiblingMSCZ = false
@@ -224,16 +237,33 @@ public final class EditorViewModel {
     /// Fired after a successful revert with the rebuilt row. The App mirrors it into the Reader, which reloads the
     /// score from disk — the Editor cannot reach the Reader directly.
     public var onRevertCompleted: @MainActor (ScoreItem) -> Void = { _ in }
-    /// Fired after a save has migrated the persisted `ReaderPreferences` row through a part add / remove / reorder,
-    /// carrying the same `[oldPartIndex: newPartIndex?]` map that was applied (`nil` = the part is gone).
+    /// `true` from the instant a part add / remove / reorder is applied until the save that reconciles the persisted
+    /// `ReaderPreferences` row with it has settled — the window in which the score and the row disagree about what a
+    /// part index means.
     ///
-    /// The row on disk is only half of it: the Reader holds the very same part-indexed state IN MEMORY
+    /// BOTH directions of that disagreement corrupt the row, which is why the host has to stop writing it rather
+    /// than merely re-read it afterwards. A Reader write stamped in the NEW numbering that lands before the
+    /// migration reads gets remapped a second time and ends up pointing at a different part; one stamped in the OLD
+    /// numbering that lands after it clobbers the migrated row — and the map has been consumed by then, so nothing
+    /// ever retries and the row is wrong for good.
+    ///
+    /// Edge-balanced: `true` on the first unsettled part edit, `false` when the last one settles, so overlapping
+    /// edits hold the line rather than the first one to finish lifting it. It always reaches `false` — the settle
+    /// runs whatever the save did, including the cases where `performSave` declined to run at all.
+    public var onPartMappingPendingChanged: @MainActor (Bool) -> Void = { _ in }
+    /// Fired when the persisted `ReaderPreferences` row may have moved under the host: once per part edit as its
+    /// save settles, and again from `endSession`'s retry if that is what finally lands the migration.
+    ///
+    /// `mapping` is the `[oldPartIndex: newPartIndex?]` map the row was rewritten through (`nil` at a key = the part
+    /// is gone), or `nil` when nothing was written — the edit renumbered nothing, there was no row, or the write
+    /// failed. It fires either way, because the host has to be told to let go of whatever it held even when there is
+    /// nothing new to read.
+    ///
+    /// The row on disk is only half of the problem: the Reader holds the very same part-indexed state IN MEMORY
     /// (`LayoutSettingsModel.hiddenStaves` / `staffClefOverrides`, the mixer's strip overlays) for the length of the
-    /// session, and that copy is what the next preference write persists. Without this notification the migrated row
-    /// would be clobbered by the stale in-memory one the moment the reader touched any setting. The App mirrors it
-    /// into the Reader, which re-seeds those models from the migrated row — the Editor cannot reach the Reader
-    /// directly.
-    public var onPartIndicesRemapped: @MainActor ([Int: Int?]) -> Void = { _ in }
+    /// session, and that copy is what the next preference write persists. The App mirrors this into the Reader,
+    /// which re-seeds those models from the row — the Editor cannot reach the Reader directly.
+    public var onPartIndicesRemapped: @MainActor ([Int: Int?]?) -> Void = { _ in }
     /// Set when a revert failed, for the chrome to surface. Cleared at the start of each attempt.
     public internal(set) var revertError: String?
     /// Drives the revert confirmation dialog. On the view model, not view-local `@State`, so `EditorRevertButton`

@@ -166,12 +166,7 @@ struct EditableReaderScreen: View {
         vm.onRevertCompleted = { [weak host] item in
             host?.requestReloadAfterRevert(item)
         }
-        // The other half of a part add / remove / reorder: the save has migrated the persisted `ReaderPreferences`
-        // row onto the new part numbering, but the Reader is still holding the pre-migration copy of the very same
-        // state in memory — and that copy is what its next preference write would persist.
-        vm.onPartIndicesRemapped = { [weak host] _ in
-            host?.requestReloadAfterPartRemap()
-        }
+        wirePartEditSeams(host: host, vm: vm)
         // Straight from the Reader's overlay into the view model, with no SwiftUI body in between: this fires on every
         // scroll and zoom frame, and anything that read it in a body would re-render the score at that rate.
         host.onSelectionAnchorChanged = { [weak vm] anchor in
@@ -208,6 +203,24 @@ struct EditableReaderScreen: View {
             guard let host else { return }
             host.selection = selection
             host.caretItem = caret
+        }
+    }
+
+    /// The part add / remove / reorder half of the seam, split out of `wireOnce()` to keep it inside SwiftLint's
+    /// `function_body_length` budget.
+    ///
+    /// The Editor migrates the persisted `ReaderPreferences` row onto the new part numbering, but the Reader is
+    /// holding the very same state in memory — and that copy is what its next preference write would persist. Two
+    /// seams, because the window between the edit and the migration is one the Reader must not write in at all, not
+    /// merely one it has to re-read after: a write stamped in the new numbering that beats the migration is remapped
+    /// a second time onto a different part, and one stamped in the old numbering that follows it overwrites the
+    /// migrated row after the map has been consumed, so nothing ever retries.
+    private func wirePartEditSeams(host: ReaderEditingHost, vm: EditorViewModel) {
+        vm.onPartMappingPendingChanged = { [weak host] pending in
+            host?.setPartMappingPending(pending)
+        }
+        vm.onPartIndicesRemapped = { [weak host] _ in
+            host?.requestReloadAfterPartRemap()
         }
     }
 }

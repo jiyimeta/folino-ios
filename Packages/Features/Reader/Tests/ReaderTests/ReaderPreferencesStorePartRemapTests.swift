@@ -4,18 +4,34 @@ import Foundation
 import SheetMusicCore
 import Testing
 
-/// The Reader half of the part-index migration: the Editor's save rewrites the persisted row, and the Reader has to
-/// drop the copy it is still holding in memory and re-read. `ReaderViewModel.reloadPreferencesAfterPartRemap` is that
-/// path; these cover its two moving parts at the store, which is where they are reachable without standing up a whole
-/// Reader session.
+/// The Reader half of the part-index migration. The Editor's save rewrites the persisted row; the Reader has to stop
+/// writing that row while the two disagree about what a part index means, then drop the copy it is holding and
+/// re-read. `ReaderViewModel.reloadPreferencesAfterPartRemap` is that path; these cover its moving parts at the
+/// store, which is where they are reachable without standing up a whole Reader session.
 @MainActor
 struct ReaderPreferencesStorePartRemapTests {
     private let itemID = ScoreItemID(rawValue: UUID())
     private let pianoLower = StaffAddress(partIndex: 2, staffIndexInPart: 1)
+    /// Where the piano's lower staff lands once the part above it is gone.
+    private let pianoLowerAfterRemoval = StaffAddress(partIndex: 1, staffIndexInPart: 1)
 
     private func makeStore(_ repo: FakeScoreLibraryRepository) -> ReaderPreferencesStore {
         ReaderPreferencesStore(scoreItemID: itemID, repository: repo)
     }
+
+    /// Stands in for `LayoutSettingsModel`: the in-memory copy the Reader holds and writes back from. A class so a
+    /// deferred mutation closure reads whatever it holds AT THE MOMENT IT RUNS, exactly as the real one does.
+    private final class HiddenStavesModel {
+        var hiddenStaves: Set<StaffAddress> = []
+    }
+
+    /// What the Editor's save does to the row: part 0 removed, so the piano that was part 2 is now part 1.
+    private func migrateRowExternally(_ repo: FakeScoreLibraryRepository) throws {
+        let stored = try #require(repo.storedReaderPreferences[itemID])
+        repo.storedReaderPreferences[itemID] = stored.remappingParts([0: nil, 1: 0, 2: 1])
+    }
+
+    // MARK: - Reload
 
     @Test func `a row migrated under the store is picked up by the reload`() async throws {
         let repo = FakeScoreLibraryRepository()
@@ -24,17 +40,13 @@ struct ReaderPreferencesStorePartRemapTests {
         await store.mutate { $0.hiddenStaves = [pianoLower] }
         #expect(store.preferences.hiddenStaves == [pianoLower])
 
-        // What the Editor's save does while this store holds the pre-migration copy: part 0 removed, so the piano
-        // that was part 2 is now part 1.
-        let stored = try #require(repo.storedReaderPreferences[itemID])
-        repo.storedReaderPreferences[itemID] = stored.remappingParts([0: nil, 1: 0, 2: 1])
+        try migrateRowExternally(repo)
 
         await store.flushPendingWrites()
         let reloaded = await store.loadOrSeed(authoredHiddenStaves: [])
 
-        let expected: Set<StaffAddress> = [StaffAddress(partIndex: 1, staffIndexInPart: 1)]
-        #expect(reloaded.hiddenStaves == expected)
-        #expect(store.preferences.hiddenStaves == expected)
+        #expect(reloaded?.hiddenStaves == [pianoLowerAfterRemoval])
+        #expect(store.preferences.hiddenStaves == [pianoLowerAfterRemoval])
     }
 
     /// Without the flush, a write still in the air would land on top of the row the reload is about to read — and the
@@ -56,5 +68,120 @@ struct ReaderPreferencesStorePartRemapTests {
         await store.flushPendingWrites()
 
         #expect(repo.storedReaderPreferences[itemID]?.hiddenStaves == [pianoLower])
+    }
+
+    // MARK: - The hold (review Critical 1)
+
+    /// Scenario (a): the user deletes a part and, inside the window before the migration reads the row, toggles a
+    /// staff. That toggle is stamped in the POST-edit numbering — persisting it would hand the migration a row it
+    /// then remaps a SECOND time, landing the setting on a different part. Held instead, and the row ends fully in
+    /// the post-edit numbering with nothing double-remapped.
+    @Test func `a post-edit-numbered write inside the window is never double-remapped`() async throws {
+        let repo = FakeScoreLibraryRepository()
+        let store = makeStore(repo)
+        let model = HiddenStavesModel()
+        await store.loadOrSeed(authoredHiddenStaves: [])
+        model.hiddenStaves = [pianoLower]
+        await store.mutate { $0.hiddenStaves = model.hiddenStaves }
+
+        // The part op lands: the hold goes up, and the user toggles a staff in the sheet straight away. The toggle
+        // is written against the parts as they are NOW — the piano has moved to index 1.
+        var isPending = true
+        store.isMigrationPending = { isPending }
+        model.hiddenStaves = [pianoLowerAfterRemoval, StaffAddress(partIndex: 0, staffIndexInPart: 0)]
+        await store.mutate { $0.hiddenStaves = model.hiddenStaves }
+
+        // Held: the row the migration is about to read still says what it said.
+        #expect(repo.storedReaderPreferences[itemID]?.hiddenStaves == [pianoLower])
+
+        // The Editor migrates and the hold lifts; the reload re-seeds the model from the migrated row, then lets the
+        // held write go.
+        try migrateRowExternally(repo)
+        isPending = false
+        await store.flushPendingWrites()
+        let reloaded = try #require(await store.loadOrSeed(authoredHiddenStaves: []))
+        model.hiddenStaves = reloaded.hiddenStaves
+        await store.applyDeferredMutations()
+
+        let final = try #require(repo.storedReaderPreferences[itemID])
+        #expect(final.hiddenStaves == [pianoLowerAfterRemoval])
+        // Double-remapping would have moved the piano's staff a second time, to part 0.
+        #expect(!final.hiddenStaves.contains { $0.partIndex == 0 })
+    }
+
+    /// Scenario (b): a write stamped in the OLD numbering that lands AFTER the migration would clobber the migrated
+    /// row — and the Editor has consumed the map by then, so nothing ever retries and the row is wrong for good.
+    /// Held, the migrated row survives, and the held write re-applies from the reloaded state.
+    @Test func `a stale-numbered write held through the window cannot clobber the migrated row`() async throws {
+        let repo = FakeScoreLibraryRepository()
+        let store = makeStore(repo)
+        let model = HiddenStavesModel()
+        await store.loadOrSeed(authoredHiddenStaves: [])
+        model.hiddenStaves = [pianoLower]
+        await store.mutate { $0.hiddenStaves = model.hiddenStaves }
+
+        var isPending = true
+        store.isMigrationPending = { isPending }
+        // A sub-model still holding the PRE-edit numbering asks to persist itself.
+        await store.mutate { $0.hiddenStaves = model.hiddenStaves }
+
+        try migrateRowExternally(repo)
+        #expect(repo.storedReaderPreferences[itemID]?.hiddenStaves == [pianoLowerAfterRemoval])
+
+        isPending = false
+        await store.flushPendingWrites()
+        let reloaded = try #require(await store.loadOrSeed(authoredHiddenStaves: []))
+        model.hiddenStaves = reloaded.hiddenStaves
+        await store.applyDeferredMutations()
+
+        // The migrated row survived, and the held write re-applied from the reloaded state rather than the stale one.
+        #expect(repo.storedReaderPreferences[itemID]?.hiddenStaves == [pianoLowerAfterRemoval])
+        #expect(store.preferences.hiddenStaves == [pianoLowerAfterRemoval])
+    }
+
+    @Test func `a held write is queued, not dropped`() async {
+        let repo = FakeScoreLibraryRepository()
+        let store = makeStore(repo)
+        await store.loadOrSeed(authoredHiddenStaves: [])
+        var isPending = true
+        store.isMigrationPending = { isPending }
+
+        await store.mutate { $0.masterVolume = 2 }
+        // Nothing written, and the in-memory value is untouched too — it must never hold a value the row will not
+        // be given.
+        #expect(repo.savedReaderPreferences.isEmpty)
+        #expect(store.preferences.masterVolume == nil)
+
+        isPending = false
+        await store.applyDeferredMutations()
+
+        #expect(store.preferences.masterVolume == 2)
+        #expect(repo.storedReaderPreferences[itemID]?.masterVolume == 2)
+    }
+
+    // MARK: - A failed load is not an empty one (review Minor 3)
+
+    @Test func `a throwing load reports failure instead of minting a fresh row`() async {
+        let repo = FakeScoreLibraryRepository()
+        let store = makeStore(repo)
+        repo.storedReaderPreferences[itemID] = ReaderPreferences(
+            scoreItemID: itemID, hiddenStaves: [pianoLowerAfterRemoval],
+        )
+        await store.loadOrSeed(authoredHiddenStaves: [])
+
+        repo.loadError = DomainError.persistenceFailed(reason: "boom")
+        let result = await store.loadOrSeed(authoredHiddenStaves: [])
+
+        #expect(result == nil)
+        // The in-memory copy is left exactly as it was — a failed read must not wipe a just-migrated row.
+        #expect(store.preferences.hiddenStaves == [pianoLowerAfterRemoval])
+        #expect(repo.savedReaderPreferences.isEmpty)
+    }
+
+    @Test func `no row is still a seed, not a failure`() async {
+        let repo = FakeScoreLibraryRepository()
+        let store = makeStore(repo)
+        let result = await store.loadOrSeed(authoredHiddenStaves: [pianoLower])
+        #expect(result?.hiddenStaves == [pianoLower])
     }
 }

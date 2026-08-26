@@ -2,8 +2,9 @@ import Domain
 import SheetMusicCore
 
 extension ReaderViewModel {
-    /// Re-seats every in-memory per-score preference from the row the Editor has just migrated through a part
-    /// add / remove / reorder (`EditorViewModel.onPartIndicesRemapped`).
+    /// Re-seats every in-memory per-score preference from the row the Editor has just reconciled with a part
+    /// add / remove / reorder (`EditorViewModel.onPartIndicesRemapped`), then lets go of whatever the store held
+    /// while that was in flight.
     ///
     /// Migrating the persisted row is only half the fix. `LayoutSettingsModel` (hidden staves, per-staff clef
     /// overrides) and `PlaybackMixerModel` (the strip program / volume overlays) hold the same part-indexed state
@@ -11,19 +12,35 @@ extension ReaderViewModel {
     /// this the migrated row is clobbered by the stale one the moment the reader touches any setting, and until then
     /// the reader is looking at the wrong staff hidden.
     ///
-    /// The order matters. A write started elsewhere is joined FIRST (`flushPendingWrites`), because a write still in
-    /// the air would land on top of the row we are about to read. Only then is the row re-read and redistributed —
-    /// deliberately through the normal `loadOrSeedPreferences` path, so the authored-visibility reconcile and every
-    /// sub-model's `sync(from:)` run exactly as they do on open, rather than a second copy of that logic drifting
-    /// from it.
+    /// The order is the whole design:
+    ///
+    /// 1. **Join writes already in the air.** One that lands after the re-read would put the row back to what it was
+    ///    before the migration, and the Editor has consumed the map by then, so nothing would ever retry.
+    /// 2. **Re-read and redistribute**, deliberately through the normal `loadOrSeedPreferences` path, so the
+    ///    authored-visibility reconcile and every sub-model's `sync(from:)` run exactly as they do on open rather
+    ///    than a second copy of that logic drifting from it. A load that FAILS re-seeds nothing — better to keep
+    ///    holding the pre-migration values than to distribute defaults over them.
+    /// 3. **Lift the hold**, and only then
+    /// 4. **let the deferred writes go** — in that order, or each held write would simply be held again by its own
+    ///    release.
     ///
     /// `authoredHiddenStaves` must come from the POST-edit score (the editing host's `editedScore`), not from
     /// `loadState.score` — the latter is still the score the session opened on, whose part numbering is the one that
     /// just went away. See the caller contract on `ReaderPreferences.reconcilingAuthoredHidden`: handing this the
     /// wrong set silently rewrites the provenance.
-    func reloadPreferencesAfterPartRemap(authoredHiddenStaves: Set<StaffAddress>) async {
+    ///
+    /// - Parameter liftHold: performs the release and answers whether the hold is now fully lifted. It can be
+    ///   `false` when a second part edit is still unsettled, in which case the deferred writes stay held for that
+    ///   edit's own release.
+    func reloadPreferencesAfterPartRemap(
+        authoredHiddenStaves: Set<StaffAddress>,
+        liftHold: @MainActor () -> Bool,
+    ) async {
         await flushPendingPreferenceWrites()
         await loadOrSeedPreferences(authoredHiddenStaves: authoredHiddenStaves)
+        if liftHold() {
+            await applyDeferredPreferenceWrites()
+        }
         // The same two side effects `layoutModel.onHiddenStavesChanged` fires, because the hidden set may well have
         // moved: the cursor's staff translation is derived from it, and a live PiP renderer was built against the
         // old one. The rendered editing surface needs no nudge — it reads `layoutModel` through observation.

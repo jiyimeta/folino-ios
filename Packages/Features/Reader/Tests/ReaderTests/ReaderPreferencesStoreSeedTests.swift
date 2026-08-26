@@ -20,8 +20,8 @@ struct ReaderPreferencesStoreSeedTests {
     @Test func `seeds authored hidden when no row exists`() async {
         let repo = FakeScoreLibraryRepository()
         let result = await makeStore(repo).loadOrSeed(authoredHiddenStaves: [authored])
-        #expect(result.hiddenStaves == [authored])
-        #expect(result.hasSeededAuthoredVisibility)
+        #expect(result?.hiddenStaves == [authored])
+        #expect(result?.hasSeededAuthoredVisibility == true)
         #expect(repo.savedReaderPreferences.count == 1)
     }
 
@@ -41,8 +41,8 @@ struct ReaderPreferencesStoreSeedTests {
             hasSeededAuthoredVisibility: false,
         )
         let result = await makeStore(repo).loadOrSeed(authoredHiddenStaves: [authored])
-        #expect(result.hiddenStaves == [authored])
-        #expect(result.hasSeededAuthoredVisibility)
+        #expect(result?.hiddenStaves == [authored])
+        #expect(result?.hasSeededAuthoredVisibility == true)
         #expect(repo.savedReaderPreferences.count == 1)
     }
 
@@ -53,7 +53,7 @@ struct ReaderPreferencesStoreSeedTests {
             hasSeededAuthoredVisibility: false,
         )
         let result = await makeStore(repo).loadOrSeed(authoredHiddenStaves: [authored])
-        #expect(result.hiddenStaves == [userHidden, authored])
+        #expect(result?.hiddenStaves == [userHidden, authored])
     }
 
     /// `mutate` re-runs `ReaderPreferences.init` to re-apply clamping, so every field has to be forwarded. Provenance
@@ -83,7 +83,7 @@ struct ReaderPreferencesStoreSeedTests {
             hasSeededAuthoredVisibility: true,
         )
         let result = await makeStore(repo).loadOrSeed(authoredHiddenStaves: [authored])
-        #expect(result.hiddenStaves.isEmpty)
+        #expect(result?.hiddenStaves.isEmpty == true)
         // The row predates `authoredHiddenStaves`, so its recorded (empty) provenance differs from what the score
         // authors. The refresh rule writes the provenance back — and only the provenance: what the user revealed
         // stays revealed.

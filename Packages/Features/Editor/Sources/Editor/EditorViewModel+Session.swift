@@ -58,6 +58,16 @@ extension EditorViewModel {
     public func endSession() async {
         guard let ending = session else { return }
         await flushPendingSave()
+        // Last chance at the preferences migration. A failed prefs write inside `performSave` leaves the map
+        // unconsumed on the deliberate assumption that a later save will retry it — but the score write itself
+        // succeeded, so `isDirty` is `false` and there may never BE a later save. Once this session is dropped the
+        // map goes with it and the row is stranded in the old numbering for good, which is the corruption the whole
+        // migration exists to prevent. One extra attempt costs a single load on the only path that has to care
+        // (review Important 3); if it fails too, nothing is worse off than before.
+        if !ending.isPartMappingIdentity {
+            let mapping = await migratePartIndexedPreferences(in: ending, for: scoreItem.id)
+            onPartIndicesRemapped(mapping)
+        }
         depositIfWorthKeeping(ending)
         guard session === ending else { return }
         session = nil

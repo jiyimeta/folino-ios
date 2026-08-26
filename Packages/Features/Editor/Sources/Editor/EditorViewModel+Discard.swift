@@ -29,7 +29,9 @@ extension EditorViewModel {
     /// code read it unguarded.
     public var sessionHasEdits: Bool {
         guard isSessionActive else { return false }
-        if sessionEditDepth != 0 { return true }
+        if sessionEditDepth != 0 {
+            return true
+        }
         return !isAtSessionOpenScore
     }
 
@@ -40,8 +42,12 @@ extension EditorViewModel {
     /// respond the instant you change a note, which is the point — `sessionEditDepth` moves on the edit itself,
     /// whereas the revert offer can only appear once a save has captured the original.
     public var sessionEndMode: EditorSessionEndMode {
-        if sessionHasEdits { return .commitEdited }
-        if canRevertToOriginal { return .revert }
+        if sessionHasEdits {
+            return .commitEdited
+        }
+        if canRevertToOriginal {
+            return .revert
+        }
         return .commitUnchanged
     }
 }
@@ -72,7 +78,7 @@ extension EditorViewModel {
     /// What must NOT happen is zeroing a depth the loops did not consume: that turns "the score is not at session
     /// start" into a silent success, and the discard path then writes those bytes to disk (review Critical 1).
     /// With no snapshot to land on, the residual depth is left standing as the signal that this failed.
-    func unwindSessionEdits() {
+    func unwindSessionEdits() async {
         guard let session else { return }
         while sessionEditDepth > 0, session.undo() {
             sessionEditDepth -= 1
@@ -81,8 +87,18 @@ extension EditorViewModel {
             sessionEditDepth += 1
         }
         if let sessionOpenScore, sessionEditDepth != 0 || session.score != sessionOpenScore {
+            // The snapshot gear throws this session away, and its part-id baseline with it. A mapping still standing
+            // at that moment is the row's ONLY route back: the score is about to jump to the session-open parts
+            // while the row sits in whatever numbering the last consume left it in, and the fresh session below
+            // baselines on the post-jump parts — so it would read identity forever and nothing would ever reconcile
+            // them (review Important 1). Reachable whenever a part edit was saved and then discarded: the save
+            // re-baselined, the discard puts the removed part back, and the row still names the parts without it.
+            // Migrating here writes the row into the numbering the restored score has, which is what the file is
+            // about to be rewritten to hold.
+            let migrated = await migratePartIndexedPreferences(in: session, for: scoreItem.id)
             self.session = ScoreEditSession(score: sessionOpenScore)
             sessionEditDepth = 0
+            onPartIndicesRemapped(migrated)
         }
         generation += 1
         rederiveSelection()
@@ -162,7 +178,7 @@ extension EditorViewModel {
         inFlightSaveTask = nil
         await pendingSave?.value
 
-        unwindSessionEdits()
+        await unwindSessionEdits()
 
         // Refuse to write a score the unwind could not land. With a snapshot to fall back on this cannot fail, and
         // the guard is here for the case where it can — the file keeps this session's edits, which is recoverable,

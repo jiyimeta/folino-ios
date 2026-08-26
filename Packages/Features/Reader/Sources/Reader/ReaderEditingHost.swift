@@ -153,14 +153,32 @@ public final class ReaderEditingHost {
     /// editing session, stops playback and reloads the score from disk.
     public var requestReloadAfterRevert: @MainActor (ScoreItem) -> Void = { _ in }
 
-    /// Filled by the Reader. The App calls it once a save has migrated the persisted `ReaderPreferences` row through
-    /// a part add / remove / reorder; the Reader re-seats the same state it holds in memory (hidden staves, clef
-    /// overrides, mixer strip overlays) from the migrated row.
+    /// Filled by the Reader. The App calls it once the save following a part add / remove / reorder has settled; the
+    /// Reader re-seats the same state it holds in memory (hidden staves, clef overrides, mixer strip overlays) from
+    /// the row, and releases the preference writes it held meanwhile.
     ///
     /// It carries no mapping on purpose. The Reader re-reads the row the Editor has already rewritten rather than
     /// applying the permutation a second time — one migration, one place it can be wrong, and no way for the two
     /// copies to disagree about how far through the mapping they are.
     public var requestReloadAfterPartRemap: @MainActor () -> Void = {}
+
+    /// Written by the App, mirroring the Editor: `true` while a part edit's preferences migration has not settled.
+    ///
+    /// While it is up the Reader does not write the per-score preferences row at all — it queues the change and
+    /// re-runs it once this drops. Reading is unaffected; only persistence is held. The window is short by
+    /// construction (a part op flushes its save immediately rather than riding the two-second debounce), but it is
+    /// not empty, and a write landing inside it corrupts the row in one of two ways: stamped in the NEW numbering it
+    /// gets migrated a second time, stamped in the OLD numbering it overwrites the migrated row after the map has
+    /// been consumed. Neither is recoverable, so the conservative move is not to write.
+    ///
+    /// The Editor owns the counting (part edits can overlap); this is the flag that counting produces.
+    public internal(set) var isPartMappingPending = false
+
+    /// The App's write side of `isPartMappingPending` — a method rather than a settable property so the Reader's own
+    /// code can't drift into flipping it.
+    public func setPartMappingPending(_ pending: Bool) {
+        isPartMappingPending = pending
+    }
 
     /// Written by the App (measured from the editing chrome), read by the Reader: how much vertical room the editing
     /// cluster occupies at the top and bottom of the screen. The score containers turn these into SCROLL PADDING, not

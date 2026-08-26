@@ -49,7 +49,12 @@ extension EditorViewModel {
     /// nothing to save (`isDirty == false`) or once a revert has started (`isReverting`) — so a stray flush after a
     /// prior successful save, or one that lands mid-revert, costs nothing.
     private func performSave() async {
-        guard let score, isDirty, !isReverting else { return }
+        // `session` is pinned here alongside `score`, and everything below acts on THAT object. The method suspends
+        // twice before the migration runs, and `beginSession` can legitimately land in either window — re-reading
+        // `self.session` at the migration would then hand it a FRESH session whose part-id baseline is the post-edit
+        // order, so the map would read identity and the row would keep the numbering the file has just left
+        // (review Important 1).
+        guard let score, let session, isDirty, !isReverting else { return }
         let destination = Self.saveDestination(for: scoreItem, scoresDirectory: scoresDirectory)
         // BEFORE the write, and only here: this is the last moment the file still holds the bytes the score was
         // imported with. Editing metadata does not touch the file, so nothing earlier can have moved them. A capture
@@ -106,7 +111,7 @@ extension EditorViewModel {
             if destination.isSiblingCopy {
                 didSaveAsSiblingMSCZ = true
             }
-            await migratePartIndexedPreferences(for: newItem.id)
+            lastAppliedPartMapping = await migratePartIndexedPreferences(in: session, for: newItem.id)
             isDirty = false
         } catch {
             // Keep isDirty true so the next debounce tick or flush retries the write.
@@ -114,31 +119,46 @@ extension EditorViewModel {
     }
 
     /// Rewrites the score's per-score `ReaderPreferences` row so its part-indexed keys still name the same parts
-    /// after this session's add / remove / reorder, then tells the host to re-seat its in-memory copy.
+    /// after this session's add / remove / reorder. Returns the map it wrote through, or `nil` when it wrote nothing
+    /// (the edit renumbered nothing, or the write failed).
     ///
-    /// Runs here — inside `performSave`, right after the score itself is on disk — because that is the only moment
-    /// the two are consistent: the file now has the new part order, so a row migrated now describes the file that
-    /// exists. `ScoreEditSession` accumulates the map since the last consume point, so a save that lands three part
-    /// operations later still gets one map from the state the row was last written in, and undo / redo need no
+    /// Runs here — inside `performSave`, right after the score itself is on disk — because that is the closest the
+    /// two ever are: the file has just been given the new part order, so a row migrated now describes the file that
+    /// was written. `ScoreEditSession` accumulates the map since the last consume point, so a save that lands three
+    /// part operations later still gets one map from the state the row was last written in, and undo / redo need no
     /// special handling (the map is derived by diffing `Part.id`s, so an undone removal simply maps back to itself).
     ///
-    /// The mapping is consumed ONLY after the write succeeds. A failed write leaves it accumulating so the next save
-    /// retries the same migration; consuming first would re-baseline over a row that never moved and leave it
-    /// permanently pointing at the old numbering.
+    /// **The score can move under the awaits, and that is accounted for rather than prevented.** `performSave` writes
+    /// the score it pinned at entry, and by the time this runs the user may have applied further part edits to the
+    /// live session — so what the map describes can already be ahead of what the file holds. That is safe because the
+    /// map and the baseline move together: consuming re-baselines to the session's CURRENT parts, so the row is put
+    /// into the numbering the session is in, and the next save writes the file that matches it. The two are only ever
+    /// out of step between this call and that save, and `isDirty` is still `true` throughout, so that save is
+    /// guaranteed to come. What is NOT covered is a crash inside that window: the row would then describe a part
+    /// order the file on disk never received. Closing that needs the row and the file to be written in one
+    /// transaction, which this layering cannot express — it is the known cost of the two-writer arrangement.
     ///
-    /// No stored row (`nil`) still consumes and still notifies: there is nothing to migrate, and leaving the map
-    /// unconsumed would make the next part operation report a stale cumulative map against a row written since.
-    private func migratePartIndexedPreferences(for id: ScoreItemID) async {
-        guard let session, !session.isPartMappingIdentity else { return }
+    /// The mapping is consumed ONLY after the write succeeds. A failed write leaves it accumulating so the next save
+    /// (or `endSession`'s retry) attempts the same migration; consuming first would re-baseline over a row that never
+    /// moved and leave it permanently pointing at the old numbering.
+    ///
+    /// No stored row (`nil`) still consumes: there is nothing to migrate, and leaving the map unconsumed would make
+    /// the next part operation report a stale cumulative map against a row written since. It reports `nil` all the
+    /// same — nothing was written, so the host has nothing to re-read.
+    @discardableResult
+    func migratePartIndexedPreferences(in session: ScoreEditSession, for id: ScoreItemID) async -> [Int: Int?]? {
+        guard !session.isPartMappingIdentity else { return nil }
         let mapping = session.partIndexMapping
         do {
-            if let stored = try await repository.loadReaderPreferences(for: id) {
+            let stored = try await repository.loadReaderPreferences(for: id)
+            if let stored {
                 try await repository.saveReaderPreferences(stored.remappingParts(mapping))
             }
             session.consumePartIndexMapping()
-            onPartIndicesRemapped(mapping)
+            return stored == nil ? nil : mapping
         } catch {
             // Leave the mapping unconsumed: the next save retries the migration with the same cumulative map.
+            return nil
         }
     }
 

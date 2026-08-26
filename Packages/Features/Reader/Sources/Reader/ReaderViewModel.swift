@@ -112,14 +112,26 @@ final class ReaderViewModel {
 
     /// Forwards to the preferences store for the extensions that live in other files (`preferencesStore` itself stays
     /// private so the sub-models keep going through their own wiring).
-    func mutatePreferences(_ apply: (inout ReaderPreferences) -> Void) async {
+    func mutatePreferences(_ apply: @escaping (inout ReaderPreferences) -> Void) async {
         await preferencesStore.mutate(apply)
     }
 
     /// Same forwarding as `mutatePreferences`, for the part-remap reload in `ReaderViewModel+PartRemap.swift`: joins
-    /// a preference write started elsewhere, so re-reading the row can't race one that is still in the air.
+    /// every preference write started elsewhere, so re-reading the row can't race one that is still in the air.
     func flushPendingPreferenceWrites() async {
         await preferencesStore.flushPendingWrites()
+    }
+
+    /// Lets the writes the store held while a part-index migration was in flight go through, against the row as it
+    /// stands after the reload. See `ReaderPreferencesStore.applyDeferredMutations`.
+    func applyDeferredPreferenceWrites() async {
+        await preferencesStore.applyDeferredMutations()
+    }
+
+    /// Wires the store's hold to whatever the caller knows about the Editor's unsettled part edits. Called by the
+    /// editing-seam wiring, once; a Reader with no editing host never holds.
+    func setPreferenceMigrationPendingProvider(_ provider: @escaping @MainActor () -> Bool) {
+        preferencesStore.isMigrationPending = provider
     }
 
     /// Whether the inspector should show the playlist-continuation control. True only when opened from a playlist.
@@ -474,8 +486,15 @@ final class ReaderViewModel {
     }
 
     /// Reachable from both load paths; `authoredHiddenStaves` (empty for PDFs) are seeded in `loadOrSeed`.
-    func loadOrSeedPreferences(authoredHiddenStaves: Set<StaffAddress> = []) async {
-        let prefs = await preferencesStore.loadOrSeed(authoredHiddenStaves: authoredHiddenStaves)
+    ///
+    /// A `nil` answer means the LOAD failed (not that there is no row): the sub-models keep whatever they hold
+    /// rather than being re-seeded from a value that was never read. On the part-remap reload path that is what
+    /// stops one unlucky read from distributing defaults over a just-migrated row.
+    @discardableResult
+    func loadOrSeedPreferences(authoredHiddenStaves: Set<StaffAddress> = []) async -> Bool {
+        guard let prefs = await preferencesStore.loadOrSeed(
+            authoredHiddenStaves: authoredHiddenStaves,
+        ) else { return false }
         repeatModel.sync(from: prefs)
         tempoModel.sync(from: prefs)
         masterVolumeModel.sync(from: prefs)
@@ -487,6 +506,7 @@ final class ReaderViewModel {
         // (and the sync itself logs nothing — `sync(from:)` bypasses the models' `onChange`).
         lastTempoMultiplier = tempoModel.effectiveMultiplier
         lastTransposeSemitones = transposeModel.effectiveSemitones
+        return true
     }
 
     func updateLastOpenedAtOnce() async {

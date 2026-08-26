@@ -63,6 +63,7 @@ extension EditorViewModel {
         let caret = caretItem
         guard apply(.addPart(plan: plan, at: score.parts.count)) else { return }
         place(selection: selection, caret: caret)
+        commitPartEdit()
     }
 
     /// Removes the part at `index`, with its music. A no-op on a score's only part (see `canRemovePart`).
@@ -78,6 +79,7 @@ extension EditorViewModel {
             selection: Self.item(selection, afterRemovingPart: index),
             caret: Self.item(caret, afterRemovingPart: index),
         )
+        commitPartEdit()
     }
 
     /// `List.onMove`'s offsets as a single `(from, to)` part move.
@@ -102,6 +104,43 @@ extension EditorViewModel {
             selection: Self.item(selection, afterMovingPart: from, to: to),
             caret: Self.item(caret, afterMovingPart: from, to: to),
         )
+        commitPartEdit()
+    }
+
+    // MARK: - Settling a part edit against the preferences row
+
+    /// What every part op does once its intent has landed: raise the host's hold, write NOW rather than in two
+    /// seconds, and lower the hold again with whatever the migration managed to do.
+    ///
+    /// The immediate write is the point. On the debounce, the two seconds between a part op and the save that
+    /// migrates the row are two seconds in which the score and the row disagree about what a part index means — and
+    /// the instruments sheet is still open, one tap away from a staff-visibility toggle that would be written in the
+    /// numbering the row has not reached yet. Flushing here shrinks that to the length of one save.
+    ///
+    /// The hold covers what is left, and is raised and lowered in the SAME call so the two can never come apart: the
+    /// settle runs after `flushPendingSave()` whatever that save did — including the cases where `performSave()`
+    /// declined to run at all (nothing dirty, a revert in progress) — so a hold can never be left standing.
+    /// Overlapping part ops nest, because each op contributes exactly one raise and one lower.
+    private func commitPartEdit() {
+        unsettledPartEdits += 1
+        if unsettledPartEdits == 1 {
+            onPartMappingPendingChanged(true)
+        }
+        let previous = partEditCommitTask
+        partEditCommitTask = Task {
+            await previous?.value
+            lastAppliedPartMapping = nil
+            await flushPendingSave()
+            let applied = lastAppliedPartMapping
+            lastAppliedPartMapping = nil
+            unsettledPartEdits = max(0, unsettledPartEdits - 1)
+            // Order is load-bearing: the hold lifts BEFORE the host is asked to re-read, so the writes it deferred
+            // are free to go through on the same pass rather than being held a second time by their own release.
+            if unsettledPartEdits == 0 {
+                onPartMappingPendingChanged(false)
+            }
+            onPartIndicesRemapped(applied)
+        }
     }
 
     // MARK: - Following a marker through a part-index change
