@@ -4,8 +4,9 @@ import Foundation
 /// score order, and which of them a group bracket spans.
 ///
 /// Static data in Domain for the same reason `ScoreInstrument` is — Android offers the same templates over JNI
-/// rather than keeping a second list. The user-facing name is resolved in the UI layers from the key
-/// `"scoreTemplate.<id>"`; nothing user-readable is stored here.
+/// rather than keeping a second list. The user-facing name is resolved in the UI layer that offers the templates
+/// — on iOS the Library module's catalog, from the key `"library.newScore.template.<id>"`; nothing user-readable
+/// is stored here.
 public struct ScoreCreationTemplate: Sendable, Equatable, Identifiable {
     /// Stable and persisted only in analytics — a template is expanded into parts at creation time, so a score
     /// does not remember which template built it.

@@ -14,6 +14,10 @@ public final class LibraryViewModel {
     let shareService: any ScoreShareService
     let metadataReader: any ScoreMetadataReading
     let creator: any ScoreFileCreator
+    /// Where `ScoreItem.localFileName` resolves against. Needed by the creation wizard's "same instrumentation as
+    /// an existing score" step, which is the only Library flow that parses a score file itself — every other one
+    /// hands the `ScoreItem` to an adapter (`shareService`, `metadataReader`) that owns the resolution.
+    @ObservationIgnored let scoresDirectory: URL
     let vocalTunerHandoff: any VocalTunerHandoff
     /// Analytics sink. Read by the Screens that mutate the repository directly (playlist/tag rename, reorder, single
     /// add/remove) so those view-layer bypass paths log against the same instance as the VM-owned actions.
@@ -69,6 +73,7 @@ public final class LibraryViewModel {
         shareService: any ScoreShareService,
         metadataReader: any ScoreMetadataReading,
         creator: any ScoreFileCreator,
+        scoresDirectory: URL,
         vocalTunerHandoff: any VocalTunerHandoff = NoopVocalTunerHandoff(),
         analytics: any Analytics = NoopAnalytics(),
         crashReporter: any CrashReporter = NoopCrashReporter(),
@@ -80,6 +85,7 @@ public final class LibraryViewModel {
         self.shareService = shareService
         self.metadataReader = metadataReader
         self.creator = creator
+        self.scoresDirectory = scoresDirectory
         self.vocalTunerHandoff = vocalTunerHandoff
         self.analytics = analytics
         self.crashReporter = crashReporter
@@ -356,7 +362,11 @@ public final class LibraryViewModel {
     }
 
     /// Builds a blank score from `form`'s template and hands it to `creator`, queuing it on `pendingScoreToOpen`
-    /// (the same App watcher `startImport` uses) with `pendingOpenInEditSession` armed. An untitled form no-ops.
+    /// (the same App watcher `startImport` uses) with `pendingOpenInEditSession` armed. An untitled form — or one
+    /// whose instrumentation the user emptied — no-ops.
+    ///
+    /// Lives here rather than in `LibraryViewModel+NewScore.swift` because `pendingOpenInEditSession` is
+    /// `private(set)`: only this file can arm it.
     func createScore(from form: NewScoreForm) async {
         guard let template = form.template() else { return }
         do {

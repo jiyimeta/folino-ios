@@ -1,9 +1,10 @@
 import Domain
 import Observation
+import ScoreUI
 import SwiftUI
 import UtilityUI
 
-/// The M1 "New score" form: a plain `Form` collecting the fields `NewScoreForm` maps to a `BlankScoreTemplate`.
+/// The "New score" wizard: a plain `Form` collecting the fields `NewScoreForm` maps to a `BlankScoreTemplate`.
 /// Presented as a sheet from `LibraryRootPresentations`; Create hands the built form to
 /// `LibraryViewModel.createScore(from:)`, which owns dismissal on success. On failure the sheet stays up (the typed
 /// form isn't lost) and `currentError` is surfaced by this view's own alert — `LibraryRootPresentations`'
@@ -13,18 +14,45 @@ import UtilityUI
 struct NewScoreSheet: View {
     let viewModel: LibraryViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var form = NewScoreForm()
+    @State private var form: NewScoreForm
+    /// Which catalog sheet is up, if any. `.replace` swaps the whole instrumentation for one instrument ("start
+    /// from an instrument"); `.append` adds a part to the list.
+    @State private var catalogPick: CatalogPick?
+    @State private var isSourceScorePickerPresented = false
+
+    private enum CatalogPick: Identifiable {
+        case replace
+        case append
+
+        var id: Self {
+            self
+        }
+    }
+
+    /// `form` is injectable so previews can render the wizard with an ensemble already applied; the app always
+    /// opens on a fresh form.
+    init(viewModel: LibraryViewModel, form: NewScoreForm = NewScoreForm()) {
+        self.viewModel = viewModel
+        _form = State(initialValue: form)
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 titleSection
+                instrumentationSection
                 layoutSection
                 lengthSection
             }
             .navigationTitle(Text("library.newScore.title", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
+        }
+        .sheet(item: $catalogPick) { pick in
+            catalogSheet(for: pick)
+        }
+        .sheet(isPresented: $isSourceScorePickerPresented) {
+            sourceScoreSheet
         }
         .alert(
             Text("library.title", bundle: .module),
@@ -62,16 +90,151 @@ struct NewScoreSheet: View {
         }
     }
 
-    /// Preset (staff layout), key signature, and time signature — the fields that shape the blank score's layout.
+    // MARK: - Instrumentation
+
+    /// The parts the new score is built from: a seeding menu (ready-made templates, an existing score's ensemble,
+    /// or a single instrument) over the editable list itself.
+    private var instrumentationSection: some View {
+        Section {
+            templateMenu
+            ForEach(form.instrumentation) { draft in
+                partRow(draft)
+            }
+            .onMove { source, destination in
+                form.moveInstruments(fromOffsets: source, toOffset: destination)
+            }
+            .onDelete { offsets in
+                form.removeInstruments(at: offsets)
+            }
+            Button { catalogPick = .append } label: {
+                Label {
+                    Text("library.newScore.addInstrument", bundle: .module)
+                } icon: {
+                    Image(systemName: "plus")
+                }
+            }
+        } header: {
+            HStack {
+                Text("library.newScore.section.instrumentation", bundle: .module)
+                Spacer()
+                // Reordering needs edit mode, and this sheet has no other reason to enter it — so the button
+                // lives on the one section it affects rather than in the toolbar, where it would read as
+                // applying to the whole form.
+                EditButton()
+                    .textCase(nil)
+            }
+        }
+    }
+
+    private var templateMenu: some View {
+        Menu {
+            ForEach(ScoreCreationTemplate.all) { template in
+                Button { form.applyTemplate(template) } label: {
+                    Text(Self.templateNameKey(template.id), bundle: .module)
+                }
+            }
+            Divider()
+            Button { isSourceScorePickerPresented = true } label: {
+                Text("library.newScore.sameAsExisting", bundle: .module)
+            }
+            Button { catalogPick = .replace } label: {
+                Text("library.newScore.chooseInstruments", bundle: .module)
+            }
+        } label: {
+            HStack {
+                Text("library.newScore.template", bundle: .module)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(.rect)
+        }
+    }
+
+    private func partRow(_ draft: NewScoreForm.PartDraft) -> some View {
+        HStack {
+            Text(draft.displayName)
+            Spacer()
+            // Only worth saying for a multi-staff part: a single staff is what every row is assumed to be.
+            if draft.plan.staves.count > 1 {
+                Text("library.newScore.staffCount \(draft.plan.staves.count)", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func catalogSheet(for pick: CatalogPick) -> some View {
+        NavigationStack {
+            InstrumentCatalogPicker { instrument in
+                switch pick {
+                case .replace: form.replaceInstrumentation(with: instrument)
+                case .append: form.addInstrument(instrument)
+                }
+                catalogPick = nil
+            }
+            .navigationTitle(Text(
+                pick == .replace ? "library.newScore.chooseInstruments" : "library.newScore.addInstrument",
+                bundle: .module,
+            ))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { catalogPick = nil } label: { L10n.Common.cancel }
+                }
+            }
+        }
+    }
+
+    /// Pick an existing score to copy the instrumentation from. Soft-deleted rows are already out of
+    /// `repository.scoreItems`, so nothing extra filters them here.
+    private var sourceScoreSheet: some View {
+        NavigationStack {
+            List(viewModel.repository.scoreItems) { item in
+                Button { copyInstrumentation(from: item) } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.title).foregroundStyle(.primary)
+                        if let summary = item.instrumentationSummary, !summary.isEmpty {
+                            Text(summary).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+                }
+            }
+            .overlay {
+                if viewModel.repository.scoreItems.isEmpty {
+                    Text("library.newScore.noScoresToCopy", bundle: .module)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle(Text("library.newScore.chooseSourceScore", bundle: .module))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { isSourceScorePickerPresented = false } label: { L10n.Common.cancel }
+                }
+            }
+        }
+    }
+
+    /// Dismisses the picker BEFORE awaiting the parse: a load failure lands on `viewModel.currentError`, and the
+    /// alert that presents it belongs to this sheet — it cannot reach the screen while the picker covers it.
+    private func copyInstrumentation(from item: ScoreItem) {
+        isSourceScorePickerPresented = false
+        Task {
+            guard let score = await viewModel.instrumentation(of: item) else { return }
+            form.applyInstrumentation(of: score)
+        }
+    }
+
+    // MARK: - Layout / length
+
+    /// Key signature and time signature — the fields that shape the blank score's layout.
     private var layoutSection: some View {
         Section {
-            Picker(selection: presetIndex) {
-                ForEach(Array(NewScoreForm.Preset.allCases.enumerated()), id: \.offset) { index, preset in
-                    Text(Self.presetTitle(preset), bundle: .module).tag(index)
-                }
-            } label: {
-                Text("library.newScore.field.preset", bundle: .module)
-            }
             Picker(selection: $form.concertKey) {
                 ForEach(NewScoreForm.keyChoices, id: \.self) { key in
                     Text(Self.keyLabel(key)).tag(key)
@@ -123,19 +286,6 @@ struct NewScoreSheet: View {
         }
     }
 
-    /// `Preset` is intentionally not `Hashable` (only `CaseIterable`/`Equatable`, per its Domain-visible shape), so the
-    /// picker binds by index into `Preset.allCases` rather than by the case itself.
-    private var presetIndex: Binding<Int> {
-        Binding(
-            get: { Array(NewScoreForm.Preset.allCases).firstIndex(of: form.preset) ?? 0 },
-            set: { newIndex in
-                let cases = Array(NewScoreForm.Preset.allCases)
-                guard cases.indices.contains(newIndex) else { return }
-                form.preset = cases[newIndex]
-            },
-        )
-    }
-
     /// `(Int, Int)` tuples aren't `Hashable`, so the time-signature picker binds by index into `timeChoices` and
     /// writes both `timeNumerator`/`timeDenominator` back on selection.
     private var timeChoiceIndex: Binding<Int> {
@@ -152,11 +302,16 @@ struct NewScoreSheet: View {
         )
     }
 
-    private static func presetTitle(_ preset: NewScoreForm.Preset) -> LocalizedStringKey {
-        switch preset {
-        case .piano: "library.newScore.preset.piano"
-        case .trebleStaff: "library.newScore.preset.treble"
-        case .bassStaff: "library.newScore.preset.bass"
+    /// Template names live in this module's catalog, not in Domain — `ScoreCreationTemplate` stores nothing a user
+    /// reads. The switch (rather than string interpolation into a key) keeps the catalog's keys greppable and makes
+    /// a template added to Domain without a name a compile-time miss instead of a runtime raw key.
+    private static func templateNameKey(_ id: String) -> LocalizedStringKey {
+        switch id {
+        case "solo-piano": "library.newScore.template.solo-piano"
+        case "voice-piano": "library.newScore.template.voice-piano"
+        case "satb": "library.newScore.template.satb"
+        case "string-quartet": "library.newScore.template.string-quartet"
+        default: LocalizedStringKey(id)
         }
     }
 
@@ -181,117 +336,3 @@ struct NewScoreSheet: View {
         }
     }
 }
-
-#if DEBUG
-/// Minimal in-memory doubles so the preview is self-contained (no App composition root needed). None of these are
-/// exercised by rendering the sheet — `NewScoreSheet` only calls into `viewModel.createScore(from:)` when Create is
-/// tapped, which a preview never drives — so every method is a stub.
-@MainActor
-@Observable
-private final class PreviewScoreLibraryRepository: ScoreLibraryRepository {
-    var scoreItems: [ScoreItem] = []
-    var deletedScoreItems: [ScoreItem] = []
-    var tags: [Tag] = []
-    var playlists: [Playlist] = []
-
-    func refresh() {}
-    func saveScoreItem(_: ScoreItem) {}
-    func deleteScoreItem(id _: ScoreItemID) {}
-    func softDeleteScoreItem(id _: ScoreItemID) {}
-    func restoreScoreItem(id _: ScoreItemID) {}
-    func permanentlyDeleteScoreItem(id _: ScoreItemID) {}
-    func pruneScoreItemsDeleted(before _: Date) {}
-    func saveTag(_: Tag) {}
-    func deleteTag(id _: TagID) {}
-    func savePlaylist(_: Playlist) {}
-    func deletePlaylist(id _: PlaylistID) {}
-    func scoreItems(matchingContentHash _: String) -> [ScoreItem] {
-        []
-    }
-
-    func loadReaderPreferences(for _: ScoreItemID) -> ReaderPreferences? {
-        nil
-    }
-
-    func saveReaderPreferences(_: ReaderPreferences) {}
-    func allReaderPreferences() -> [ReaderPreferences] {
-        []
-    }
-}
-
-private struct PreviewScoreOriginalStore: ScoreOriginalStore {
-    func captureOriginalIfNeeded(for item: ScoreItem) -> ScoreItem {
-        item
-    }
-
-    func revertToOriginal(_ item: ScoreItem, restoringScoreInfo _: Bool) -> ScoreItem {
-        item
-    }
-
-    func discardOriginal(for item: ScoreItem) -> ScoreItem {
-        item
-    }
-}
-
-private struct PreviewScoreFileImporter: ScoreFileImporter {
-    func prepareImport(sourceURL _: URL) throws -> ImportPlan {
-        throw DomainError.unsupportedFormat("preview")
-    }
-
-    func commitImport(_: ImportPlan, decision _: ImportDecision) throws -> ScoreItem {
-        throw DomainError.unsupportedFormat("preview")
-    }
-}
-
-private struct PreviewScoreFileGateway: ScoreFileGateway {
-    func detectFormat(fileName _: String) -> ScoreFormat? {
-        nil
-    }
-
-    func loadFileMetadata(fileURL _: URL) throws -> ScoreFileSummary {
-        throw DomainError.unsupportedFormat("preview")
-    }
-
-    func loadScore(fileURL _: URL) throws -> (score: Score, summary: ScoreFileSummary) {
-        throw DomainError.unsupportedFormat("preview")
-    }
-
-    func saveScore(_: Score, fileURL _: URL, format: ScoreFormat) throws {
-        throw DomainError.unsupportedFormat(format.canonicalExtension)
-    }
-}
-
-private struct PreviewScoreShareService: ScoreShareService {
-    func availableFormats(for _: ScoreItem) -> [ScoreShareFormatOption] {
-        []
-    }
-
-    func prepareShare(item _: ScoreItem, format: ScoreShareFormat) throws -> URL {
-        throw DomainError.unsupportedFormat(format.canonicalExtension)
-    }
-}
-
-private struct PreviewScoreMetadataReading: ScoreMetadataReading {
-    func readMetadata(for _: ScoreItem) throws -> ScoreFileMetadata {
-        throw DomainError.unsupportedFormat("preview")
-    }
-}
-
-private struct PreviewScoreFileCreator: ScoreFileCreator {
-    func createScore(_: Score) throws -> ScoreItem {
-        throw DomainError.unsupportedFormat("preview")
-    }
-}
-
-#Preview {
-    NewScoreSheet(viewModel: LibraryViewModel(
-        repository: PreviewScoreLibraryRepository(),
-        originalStore: PreviewScoreOriginalStore(),
-        importer: PreviewScoreFileImporter(),
-        gateway: PreviewScoreFileGateway(),
-        shareService: PreviewScoreShareService(),
-        metadataReader: PreviewScoreMetadataReading(),
-        creator: PreviewScoreFileCreator(),
-    ))
-}
-#endif

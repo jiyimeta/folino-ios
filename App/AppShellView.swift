@@ -195,6 +195,7 @@ private struct ReadyShell: View {
                     repository: repository,
                     scoresDirectory: scoresDirectory,
                 ),
+                scoresDirectory: scoresDirectory,
                 vocalTunerHandoff: vocalTunerHandoff,
                 analytics: bootstrap.analytics ?? NoopAnalytics(),
                 crashReporter: bootstrap.crashReporter ?? NoopCrashReporter(),

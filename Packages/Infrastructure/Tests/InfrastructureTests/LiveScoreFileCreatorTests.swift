@@ -62,8 +62,9 @@ struct LiveScoreFileCreatorTests {
         )
 
         let score = Score.blank(BlankScoreTemplate(
-            title: "Test Piece", composer: "Someone", instrumentID: "piano",
-            staves: [.init(clefType: "G")], tempoBPM: 90, measureCount: 8,
+            title: "Test Piece", composer: "Someone",
+            parts: [.init(instrumentID: "piano", longName: "Piano", staves: [.init(clefType: "G")])],
+            tempoBPM: 90, measureCount: 8,
         ))
         let item = try await creator.createScore(score)
 
@@ -91,7 +92,8 @@ struct LiveScoreFileCreatorTests {
         )
 
         let score = Score.blank(BlankScoreTemplate(
-            title: "Test Piece", instrumentID: "piano", staves: [.init(clefType: "G")],
+            title: "Test Piece",
+            parts: [.init(instrumentID: "piano", longName: "Piano", staves: [.init(clefType: "G")])],
         ))
         do {
             _ = try await creator.createScore(score)

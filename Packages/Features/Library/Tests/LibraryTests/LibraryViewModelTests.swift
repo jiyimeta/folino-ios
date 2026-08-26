@@ -39,6 +39,7 @@ struct LibraryViewModelTests {
         let vm = LibraryViewModel(
             repository: repo, originalStore: originalStore, importer: importer, gateway: gateway,
             shareService: share, metadataReader: metadataReader, creator: FakeScoreFileCreator(),
+            scoresDirectory: URL(filePath: "/tmp/folino-tests"),
         )
         return VMFixture(
             vm: vm, repo: repo, importer: importer, gateway: gateway,

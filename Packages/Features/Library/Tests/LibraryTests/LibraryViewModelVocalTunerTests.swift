@@ -29,6 +29,7 @@ struct LibraryViewModelVocalTunerTests {
             shareService: share,
             metadataReader: FakeScoreMetadataReading(),
             creator: FakeScoreFileCreator(),
+            scoresDirectory: URL(filePath: "/tmp/folino-tests"),
             vocalTunerHandoff: handoff,
             analytics: analytics,
         )
