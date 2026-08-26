@@ -678,7 +678,7 @@ public struct ReaderRootScreen: View {
 
     /// The score being edited, or `nil` when not editing.
     ///
-    /// Two display transforms survive into an edit session:
+    /// Three display transforms survive into an edit session:
     ///
     /// * **clef overrides**, because `applying(clefOverrides:)` only REPLACES a staff's opening clef element (or sets
     ///   `defaultClefType`) — it never inserts or removes elements, so every index the editor holds still points at
@@ -688,9 +688,15 @@ public struct ReaderRootScreen: View {
     ///   re-engraved (and, in page mode, re-paginated) on entering edit mode purely to show staves they had chosen
     ///   not to see. This one DOES renumber `StaffAddress`, so it is confined to what is rendered: the Editor keeps
     ///   working on the unfiltered score and `ReaderEditingHost` re-stamps every ID that crosses between the two.
+    /// * the **written-pitch view**, because a transposing part is engraved at written pitch — dropping it would flip
+    ///   a clarinet's staff back to concert pitch (notes AND key signature) the moment editing started. Like clef
+    ///   overrides it only rewrites values in place, never inserting or removing an element, so every index the
+    ///   editor holds still points at the same note. It is display-only: the Editor keeps writing into
+    ///   `host.editedScore`, which stays concert, and that is what `finishEditing()` adopts and saves.
     ///
-    /// Applied in the same order as `ReaderViewModel.recomputeVisibleScore` — clef overrides are keyed by full-score
-    /// address, so they have to land before the filter renumbers anything.
+    /// Runs through the same `ReaderDisplayTransforms.display` chain as `ReaderViewModel.recomputeVisibleScore`, with
+    /// the global transpose pinned to 0 — clef overrides are keyed by full-score address, so they have to land before
+    /// the filter renumbers anything.
     ///
     /// Transpose and multi-measure-rest collapse stay off: those renumber ELEMENTS within a staff, which no staff
     /// remap can undo.
@@ -698,9 +704,12 @@ public struct ReaderRootScreen: View {
     /// Computed here rather than in `ScoreContentView` so it's rebuilt per edit, not per playback tick.
     private var editingScore: Score? {
         guard let host = editingHost, host.isEditing, let editScore = host.editedScore else { return nil }
-        return editScore
-            .applying(clefOverrides: viewModel.layoutModel.staffClefOverrides)
-            .filtered(hidingStaves: viewModel.layoutModel.hiddenStaves)
+        return ReaderDisplayTransforms.display(
+            editScore,
+            clefOverrides: viewModel.layoutModel.staffClefOverrides,
+            transposeSemitones: 0,
+            hiddenStaves: viewModel.layoutModel.hiddenStaves,
+        )
     }
 
     /// Which edit `editingScore` is — the containers' relayout key, read HERE so the two always travel together.

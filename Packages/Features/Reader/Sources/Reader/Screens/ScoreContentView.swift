@@ -28,8 +28,10 @@ struct ScoreContentView: View {
     let autoFollowEnabled: Bool
     let pageTurnButtonsVisible: Bool
     let bottomControlContentHeight: CGFloat
-    /// Non-nil only while note editing. Already clef-applied by the caller; raw in every other respect (no transpose,
-    /// no hidden staves, no collapsed multi-measure rests) so the element indices the Editor tracks stay valid.
+    /// Non-nil only while note editing. The caller has already applied the transforms that rewrite values in place —
+    /// clef overrides and the written-pitch view — plus the hidden-staves filter, whose renumbering
+    /// `ReaderEditingHost` re-stamps. Raw in every other respect (no global transpose, no collapsed multi-measure
+    /// rests) so the element indices the Editor tracks stay valid.
     let editingScore: Score?
     /// Which edit `editingScore` is. Travels WITH the score (see `ReaderRootScreen.editingScoreVersion`) so a
     /// container's relayout key can never advance ahead of the score it is keyed to.
@@ -41,7 +43,9 @@ struct ScoreContentView: View {
         editingScore ?? viewModel.visibleScore
     }
 
-    /// Display transforms are suppressed while editing — they'd renumber the very elements being edited.
+    /// The element-renumbering display transforms are suppressed while editing — they'd renumber the very elements
+    /// being edited. The value-rewriting ones (clef overrides, the written-pitch view) stay live and are already
+    /// baked into `editingScore` by `ReaderRootScreen`.
     private var isEditing: Bool {
         editingScore != nil
     }

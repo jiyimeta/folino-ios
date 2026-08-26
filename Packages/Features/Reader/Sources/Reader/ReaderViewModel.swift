@@ -22,7 +22,9 @@ final class ReaderViewModel {
         case failed(error: Error)
 
         var score: Score? {
-            if case let .loaded(score) = self { return score }
+            if case let .loaded(score) = self {
+                return score
+            }
             return nil
         }
     }
@@ -441,11 +443,14 @@ final class ReaderViewModel {
             visibleScore = nil
             return
         }
-        let withClefs = score.applying(clefOverrides: layoutModel.staffClefOverrides)
-        // Transpose sits between clef overrides and the hidden-staves filter. It preserves note IDs and ticks, so the
-        // playback cursor translation downstream is unaffected.
-        let transposed = withClefs.transposed(bySemitones: transposeModel.effectiveSemitones)
-        visibleScore = transposed.filtered(hidingStaves: layoutModel.hiddenStaves)
+        // Clef overrides → written-pitch view → transpose → hidden staves. The order and why every step is safe for
+        // the playback cursor are documented on `ReaderDisplayTransforms`, which PiP and the editing page share.
+        visibleScore = ReaderDisplayTransforms.display(
+            score,
+            clefOverrides: layoutModel.staffClefOverrides,
+            transposeSemitones: transposeModel.effectiveSemitones,
+            hiddenStaves: layoutModel.hiddenStaves,
+        )
     }
 
     /// Rebuild `seekTimeline` from the score the transport drives — the loaded score, or a playable PDF's parsed
