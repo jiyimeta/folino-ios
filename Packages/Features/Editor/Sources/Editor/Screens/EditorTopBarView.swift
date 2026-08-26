@@ -2,10 +2,11 @@ import Domain
 import SwiftUI
 import UtilityUI
 
-/// The editing session's control tier (`ReaderRootScreen.editingTopBar`) — voice picker, pad toggle, undo, redo,
-/// and, where there is no cutout tier, 完了 and revert too. Ported from `EditorChromeView+Toolbar.swift`'s
-/// navigation-bar items and `EditorChromeView+Revert.swift`'s revert control, now drawn as plain views instead of
-/// `ToolbarContent` — the Reader's own strip replaced the navigation bar these used to fill.
+/// The editing session's control tier (`ReaderRootScreen.editingTopBar`) — voice picker, undo, redo, and, where
+/// there is no cutout tier, 完了 and revert too. Ported from `EditorChromeView+Toolbar.swift`'s navigation-bar items
+/// and `EditorChromeView+Revert.swift`'s revert control, now drawn as plain views instead of `ToolbarContent` — the
+/// Reader's own strip replaced the navigation bar these used to fill. (The pad show / hide toggle that used to lead
+/// here is gone: the pad is dismissed and recalled in place, PiP-style — see `EditorChromeView`.)
 ///
 /// **The cutout tier is NOT drawn here.** Where one exists, 完了 and revert are mounted by the Reader's own
 /// `ReaderCutoutTier` instead (`ReaderRootScreen.editingCutoutTier`, using the shared `EditorDoneButton` /
@@ -14,9 +15,9 @@ import UtilityUI
 /// left two independently-positioned mechanisms both claiming the same band, exactly what the design spec warns
 /// against. Reusing the Reader's real layout code makes that structurally impossible instead of merely unlikely.
 ///
-/// **Control tier**: the voice picker and pad toggle lead, undo and redo trail. Where there is no cutout tier, 完了
-/// and revert join this row — five controls wide — and the whole thing folds with `ViewThatFits`, the same ladder
-/// shape the Reader's own row uses (`Collapse`, `Spacer(minLength: 0)`, fixed icon frames).
+/// **Control tier**: the voice picker leads, undo and redo trail. Where there is no cutout tier, 完了 and revert
+/// join this row and the whole thing folds with `ViewThatFits`, the same ladder shape the Reader's own row uses
+/// (`Collapse`, `Spacer(minLength: 0)`, fixed icon frames).
 public struct EditorTopBarView: View {
     @Bindable var viewModel: EditorViewModel
     let hasMusicalAnnotations: Bool
@@ -25,14 +26,6 @@ public struct EditorTopBarView: View {
     /// (this package cannot import `Reader` to read `ReaderTopBarLayout` itself).
     let hasCutoutTier: Bool
     let onDone: () -> Void
-    /// Reports the pad-toggle button's window frame — the coach-mark anchor `ReaderEditingHost.noteInputAnchorFrame`
-    /// points at — or `nil` once the button leaves the screen.
-    let onNoteInputAnchorFrameChange: (CGRect?) -> Void
-
-    /// Mirrors `EditorChromeView.isPadVisible` through the same `UserDefaults` key. The pad toggle lives here now;
-    /// the pad itself still lives in `EditorChromeView`. `@AppStorage` keeps two declarations of the same key in
-    /// sync without either view needing to see the other's state.
-    @AppStorage("editorPadVisible") private var isPadVisible = false
 
     /// How much the control tier gives up as width tightens, when 完了 and revert are IN it (no cutout tier).
     ///
@@ -51,13 +44,11 @@ public struct EditorTopBarView: View {
         hasMusicalAnnotations: Bool,
         hasCutoutTier: Bool,
         onDone: @escaping () -> Void,
-        onNoteInputAnchorFrameChange: @escaping (CGRect?) -> Void,
     ) {
         self.viewModel = viewModel
         self.hasMusicalAnnotations = hasMusicalAnnotations
         self.hasCutoutTier = hasCutoutTier
         self.onDone = onDone
-        self.onNoteInputAnchorFrameChange = onNoteInputAnchorFrameChange
     }
 
     public var body: some View {
@@ -72,13 +63,12 @@ public struct EditorTopBarView: View {
     @ViewBuilder
     private var controlTierRow: some View {
         if hasCutoutTier {
-            // ✕ and the session-end control live in the cutout tier; four controls never risk running out of room,
+            // ✕ and the session-end control live in the cutout tier; three controls never risk running out of room,
             // so no fold.
             HStack(spacing: 12) {
                 undoRedoGroup
                 Spacer(minLength: 0)
                 voiceButton
-                padButton
             }
         } else if viewModel.sessionEndMode == .revert {
             // `Spacer(minLength: 0)` inside `row(collapse:)` is what lets `ViewThatFits` fold at all — a greedy
@@ -104,7 +94,6 @@ public struct EditorTopBarView: View {
             undoRedoGroup
             Spacer(minLength: 0)
             voiceButton
-            padButton
             switch collapse {
             case .expanded:
                 endGroup
@@ -125,17 +114,10 @@ public struct EditorTopBarView: View {
         .interactiveGlassCompat()
     }
 
-    /// The voice picker and the pad toggle trail, and each carries its own pill rather than sharing one: they are
-    /// unrelated — which voice you are writing into, and whether the keyboard is up — and a shared surface said they
-    /// were a pair. Bare glyphs still need something behind them to stay legible over arbitrary score content
-    /// (review Important 2), so each gets glass of its own.
+    /// Bare glyphs need something behind them to stay legible over arbitrary score content (review Important 2), so
+    /// the voice picker gets glass of its own.
     private var voiceButton: some View {
         voiceMenu
-            .interactiveGlassCompat()
-    }
-
-    private var padButton: some View {
-        padToggleButton
             .interactiveGlassCompat()
     }
 
@@ -163,7 +145,7 @@ public struct EditorTopBarView: View {
         .accessibilityLabel(L10n.Common.more)
     }
 
-    // MARK: - Voice / pad toggle
+    // MARK: - Voice
 
     private var voiceMenu: some View {
         Menu {
@@ -181,37 +163,6 @@ public struct EditorTopBarView: View {
         }
         .tint(.primary)
         .accessibilityLabel(Text("editor.voice.label", bundle: .module))
-    }
-
-    /// Shows and hides the pad. Same fixed-frame glyph as the old toolbar item — see that file's history for why the
-    /// disc is inverted ink rather than the accent tint, and why the glyph frame never changes size.
-    private var padToggleButton: some View {
-        Button {
-            withAnimation(.snappy(duration: 0.28)) { isPadVisible.toggle() }
-        } label: {
-            Image("custom.music.note.badge.plus", bundle: .module)
-                .font(.system(size: 21, weight: .medium))
-                .foregroundStyle(isPadVisible ? Color(uiColor: .systemBackground) : Color.primary)
-                .offset(x: -1.5)
-                // The disc is the active-state background and stays a fixed 32pt so the glyph never changes size
-                // between states; the 44pt frame around it is the control's own, so the pill matches its neighbours
-                // instead of shrink-wrapping a 30pt glyph.
-                .frame(width: 32, height: 32)
-                .background {
-                    if isPadVisible {
-                        Circle().fill(Color.primary)
-                    }
-                }
-                .frame(width: 44, height: 44)
-        }
-        .tint(.primary)
-        .accessibilityLabel(Text(
-            isPadVisible ? "editor.chrome.hidePad" : "editor.chrome.showPad", bundle: .module,
-        ))
-        // The chrome is rendered inside the Reader's own view tree now, so both sides share a window coordinate
-        // space and this can simply report where it is — see `ReaderEditingHost.noteInputAnchorFrame`.
-        .onWindowFrameChange { onNoteInputAnchorFrameChange($0) }
-        .onDisappear { onNoteInputAnchorFrameChange(nil) }
     }
 
     // MARK: - Undo / redo
@@ -303,7 +254,9 @@ public struct EditorTopBarView: View {
         Binding(
             get: { viewModel.revertError != nil },
             set: { isPresented in
-                if !isPresented { viewModel.revertError = nil }
+                if !isPresented {
+                    viewModel.revertError = nil
+                }
             },
         )
     }

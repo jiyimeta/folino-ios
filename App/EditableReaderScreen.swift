@@ -11,8 +11,8 @@ import UtilityUI
 @MainActor
 struct EditableReaderScreen: View {
     /// Builds the Editor feature's chrome overlay from the current seam context (score-info bar, keyboard, 完了),
-    /// or its top-strip row (voice, pad toggle, undo / redo, and — where there is no cutout tier — 完了 / revert
-    /// too) — same context type, two different slots in the Reader's tree.
+    /// or its top-strip row (voice, undo / redo, and — where there is no cutout tier — 完了 / revert too) — same
+    /// context type, two different slots in the Reader's tree.
     typealias ChromeBuilder = (ReaderEditingChromeContext) -> AnyView
     /// Builds the cutout tier's editing-session content (完了 leading, revert trailing) for the Reader's OWN
     /// `ReaderCutoutTier` to draw — see `ReaderRootScreen.editingCutoutTier` and review Important 4. A distinct
@@ -74,7 +74,6 @@ struct EditableReaderScreen: View {
                 hasMusicalAnnotations: editingHost.hasMusicalAnnotationsProvider(),
                 hasCutoutTier: context.hasCutoutTier,
                 onDone: { editingHost.requestExit() },
-                onNoteInputAnchorFrameChange: { editingHost.noteInputAnchorFrame = $0 },
             ))
         }, { [editingHost] _ in
             // `inCutoutBand` rather than a glass modifier applied out here: each control carries exactly one surface
@@ -137,9 +136,6 @@ struct EditableReaderScreen: View {
             // Carry the reader's last tap into the session: the note under the playhead is almost always the one the
             // user came here to change.
             vm.selectItem(host?.pendingSelection)
-        }
-        host.onRevealNoteInputPad = { [weak vm] in
-            vm?.requestPadReveal()
         }
         host.onEndEditing = { [weak vm] in
             guard let vm else { return }

@@ -28,9 +28,8 @@ final class ReaderHintCoordinator {
     private var anchors: [ReaderHintTarget: CGRect] = [:]
 
     @ObservationIgnored private let defaults: UserDefaults
-    /// The per-launch budget: one rotation hint, plus (independently) one note-pad hint.
+    /// The per-launch budget: one rotation hint.
     @ObservationIgnored private var didOfferRotationHintThisLaunch = false
-    @ObservationIgnored private var didOfferNotePadHintThisLaunch = false
     /// Pending "the transport just went compact" offer (see `scheduleTransportExpandHint`).
     @ObservationIgnored private var transportExpandOfferTask: Task<Void, Never>?
     /// Mirrored from the editing seam. Edit mode forces the transport compact and declines mode swipes, so the
@@ -45,7 +44,9 @@ final class ReaderHintCoordinator {
         isEditing = editing
         guard editing else { return }
         transportExpandOfferTask?.cancel()
-        if presentedHint == .transportExpand { dismiss() }
+        if presentedHint == .transportExpand {
+            dismiss()
+        }
     }
 
     // MARK: - Anchors
@@ -68,15 +69,21 @@ final class ReaderHintCoordinator {
         anchors[target] = rect
         // The compact transport appearing IS the trigger for its own hint — on opening a Reader that is already
         // compact, and on the swipe (or bubble tap) that just shrank it.
-        if isFirstReport, target == .transportCompact { scheduleTransportExpandHint() }
+        if isFirstReport, target == .transportCompact {
+            scheduleTransportExpandHint()
+        }
     }
 
     /// Forgets a control that has left the screen, and takes any hint pointing at it down with it — a bubble whose
     /// caret points at nothing is worse than no bubble.
     func clearAnchor(for target: ReaderHintTarget) {
         guard anchors.removeValue(forKey: target) != nil else { return }
-        if target == .transportCompact { transportExpandOfferTask?.cancel() }
-        if presentedHint?.target == target { dismiss() }
+        if target == .transportCompact {
+            transportExpandOfferTask?.cancel()
+        }
+        if presentedHint?.target == target {
+            dismiss()
+        }
     }
 
     /// Drops every anchor, for when the Reader itself goes away. Anchors are reported by the controls that draw them,
@@ -97,8 +104,12 @@ final class ReaderHintCoordinator {
     /// Records that the user has actually used the feature — the hint retires permanently — and takes its bubble down
     /// if it happens to be the one showing (they clearly didn't need it).
     func markUsed(_ hint: ReaderFeatureHint) {
-        if !hasUsed(hint) { defaults.set(true, forKey: Self.usedKey(hint)) }
-        if presentedHint == hint { dismiss() }
+        if !hasUsed(hint) {
+            defaults.set(true, forKey: Self.usedKey(hint))
+        }
+        if presentedHint == hint {
+            dismiss()
+        }
     }
 
     // MARK: - Offering
@@ -145,16 +156,6 @@ final class ReaderHintCoordinator {
         }
     }
 
-    /// Offer the note-input pad hint. Independent of the rotation and of its per-launch budget (the pad is the one
-    /// affordance that is useless until explained, and the user has just walked into it), but still at most once per
-    /// launch and never once the pad has been used.
-    func offerNotePadHint() {
-        guard ignoresPerLaunchBudget || !didOfferNotePadHintThisLaunch, !hasUsed(.notePad) else { return }
-        guard anchors[ReaderFeatureHint.notePad.target] != nil else { return }
-        didOfferNotePadHintThisLaunch = true
-        present(.notePad)
-    }
-
     /// Fill the slot. Replaces whatever was showing — a rotation hint pointing at the toolbar has no business staying
     /// up over an edit session that just began.
     func present(_ hint: ReaderFeatureHint) {
@@ -178,7 +179,6 @@ final class ReaderHintCoordinator {
         }
         defaults.removeObject(forKey: Keys.cursor)
         didOfferRotationHintThisLaunch = false
-        didOfferNotePadHintThisLaunch = false
     }
 
     // MARK: - Rotation
@@ -194,7 +194,9 @@ final class ReaderHintCoordinator {
         let start = ((cursor % order.count) + order.count) % order.count
         for offset in 0 ..< order.count {
             let hint = order[(start + offset) % order.count]
-            if isEligible(hint) { return hint }
+            if isEligible(hint) {
+                return hint
+            }
         }
         return nil
     }

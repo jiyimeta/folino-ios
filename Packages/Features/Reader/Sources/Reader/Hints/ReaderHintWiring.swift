@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Everything the Reader's coach marks need attached to its root, folded into one modifier: the bubble overlay, what
-/// tapping a bubble does, the seam-relayed note-input anchor, when a hint is offered, and when the pad's hint retires.
+/// tapping a bubble does, and when a hint is offered.
 ///
 /// One modifier rather than six on `ReaderRootScreen.body` for a concrete reason: that body is a single expression
 /// long enough that adding modifiers to it directly tipped the type-checker into "unable to type-check this expression
@@ -37,31 +37,8 @@ struct ReaderHintWiring: ViewModifier {
             // `blocksOffer` here rather than inside the task is what makes the retry see current state — this closure
             // is rebuilt along with the modifier on every render.
             .onChange(of: blocksOffer) { _, _ in attemptOffer() }
-            // The note-input coach mark points at a button the Editor draws, so its frame arrives through the seam
-            // rather than from a `readerHintAnchor` this feature could attach itself.
-            .onChange(of: editingHost?.noteInputAnchorFrame, initial: true) { _, frame in
-                if let frame {
-                    hints.setAnchor(frame, for: .noteInputToggle)
-                } else {
-                    hints.clearAnchor(for: .noteInputToggle)
-                }
-            }
-            // Entering edit mode always offers the pad hint (once per launch, until the pad has actually been used) —
-            // independent of the rotation's own per-launch budget. Deferred a beat so the chrome has laid out and
-            // reported the anchor this hangs off.
             .onChange(of: editingHost?.isEditing ?? false, initial: true) { _, isEditing in
                 hints.setEditing(isEditing)
-                guard isEditing else { return }
-                Task {
-                    try? await Task.sleep(for: .seconds(0.5))
-                    guard editingHost?.isEditing == true else { return }
-                    hints.offerNotePadHint()
-                }
-            }
-            // A bumped edit generation means a note was written — the pad has been used, so its hint retires.
-            .onChange(of: editingHost?.editGeneration ?? 0) { _, _ in
-                guard editingHost?.isEditing == true else { return }
-                hints.markUsed(.notePad)
             }
     }
 
@@ -84,8 +61,6 @@ struct ReaderHintWiring: ViewModifier {
             viewModel.isVisualInspectorPresented = true
         case .metronome, .repeatPlayback, .mixer:
             viewModel.isPlaybackInspectorPresented = true
-        case .notePad:
-            editingHost?.onRevealNoteInputPad()
         }
     }
 

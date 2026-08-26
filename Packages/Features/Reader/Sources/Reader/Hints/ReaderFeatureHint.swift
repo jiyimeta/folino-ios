@@ -5,9 +5,9 @@ import Foundation
 ///
 /// Ported from synclick's `FeatureHint` (same one-slot, round-robin, retire-on-use model), with two differences. The
 /// Reader's hints point at controls that only exist in some states (a PDF has no note-editing button), so selection
-/// also filters on what is on screen right now. And two hints sit OUTSIDE the rotation and its one-per-launch budget,
-/// because both fire at the moment the user has walked into the thing they explain: `notePad` on entering edit mode,
-/// and `transportExpand` whenever the transport is compact (see `ReaderHintCoordinator`).
+/// also filters on what is on screen right now. And one hint sits OUTSIDE the rotation and its one-per-launch budget,
+/// because it fires at the moment the user has walked into the thing it explains: `transportExpand`, whenever the
+/// transport is compact (see `ReaderHintCoordinator`).
 enum ReaderFeatureHint: String, CaseIterable {
     /// Swipe the expanded transport right to shrink it to the compact pill. In the rotation.
     case transportCollapse
@@ -29,10 +29,6 @@ enum ReaderFeatureHint: String, CaseIterable {
     case repeatPlayback
     /// Per-part volume, mute and solo — lives in the playback inspector.
     case mixer
-    /// The note-input pad. Offered on entering edit mode, because a pad you don't know about is the one thing that
-    /// makes edit mode look like it does nothing. Points at the pad's open/close button rather than the pad, since the
-    /// pad starts hidden (`editorPadVisible` defaults to `false`).
-    case notePad
 
     /// Round-robin order. Every hint here is equal: surfaced until its own feature is used, then retired. The transport
     /// swipe leads because it is the one affordance with no icon at all — nothing on screen suggests it exists.
@@ -56,15 +52,13 @@ enum ReaderFeatureHint: String, CaseIterable {
         case .annotation: .annotationButton
         case .staffVisibility: .visualInspectorButton
         case .metronome, .repeatPlayback, .mixer: .playbackInspectorButton
-        case .notePad: .noteInputToggle
         }
     }
 }
 
-/// A control a hint can be anchored to. Reported in WINDOW coordinates rather than through `anchorPreference`: the
-/// note-input toggle is drawn by App-injected Editor code, so SwiftUI preferences never reach the Reader's own view
-/// tree — and neither does SwiftUI's `.global`, which is resolved per hosting context. The window is the one
-/// coordinate space both sides genuinely share (`onWindowFrameChange`).
+/// A control a hint can be anchored to. Reported in WINDOW coordinates rather than through `anchorPreference` —
+/// window frames are what `onWindowFrameChange` hands out, and they survive being read across hosting contexts where
+/// SwiftUI's `.global` space does not.
 ///
 /// The transport is two targets rather than one because each of its two states teaches a different swipe, and the
 /// state a hint's copy describes has to be the state the user is looking at. Only one of the two is ever anchored.
@@ -75,9 +69,6 @@ enum ReaderHintTarget: String, Hashable {
     case annotationButton
     case visualInspectorButton
     case playbackInspectorButton
-    /// The editing chrome's pad open/close button. Lives in App-injected Editor code, so its frame is relayed through
-    /// `ReaderEditingHost.noteInputAnchorFrame` instead of a `readerHintAnchor` the Reader attaches itself.
-    case noteInputToggle
 
     /// Where the bubble sits relative to its anchor. Top-of-screen controls drop below (caret up); the bottom-docked
     /// transport floats above (caret down).
@@ -85,7 +76,7 @@ enum ReaderHintTarget: String, Hashable {
         switch self {
         case .transportExpanded, .transportCompact:
             .above
-        case .noteEditingButton, .annotationButton, .visualInspectorButton, .playbackInspectorButton, .noteInputToggle:
+        case .noteEditingButton, .annotationButton, .visualInspectorButton, .playbackInspectorButton:
             .below
         }
     }
