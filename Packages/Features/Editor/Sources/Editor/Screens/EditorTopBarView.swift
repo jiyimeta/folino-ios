@@ -248,19 +248,23 @@ public struct EditorTopBarView: View {
         Button {
             withAnimation(.snappy(duration: 0.28)) { isPadVisible.toggle() }
         } label: {
-            Image("custom.music.note.badge.plus", bundle: .module)
-                .font(.system(size: 21, weight: .medium))
-                .foregroundStyle(isPadVisible ? Color(uiColor: .systemBackground) : Color.primary)
-                .offset(x: -1.5)
-                // The disc is the active-state background and stays a fixed 32pt so the glyph never changes size
-                // between states; the 44pt frame around it is the control's own, so the pill matches its neighbours
-                // instead of shrink-wrapping a 30pt glyph.
-                .frame(width: 32, height: 32)
-                .background {
-                    if isPadVisible {
-                        Circle().fill(Color.primary)
-                    }
-                }
+            // Mode-on is the FILLED variant of the same glyph, exactly like the annotation pen button
+            // (`pencil.tip.crop.circle.fill`): the disc is symbol ink, which glass renders at full strength,
+            // where a `Circle().fill` drawn in the label — background OR content — comes out washed into the
+            // material. The knocked-out note/plus show the glass through, the system's own fill-variant look.
+            Image(
+                isPadVisible ? "custom.music.note.badge.plus.fill" : "custom.music.note.badge.plus",
+                bundle: .module,
+            )
+            // The outline symbolset marks its note layer hierarchical:secondary; under the glass chrome iOS
+            // renders hierarchically by default, dimming that layer even when the control is enabled. Monochrome
+            // keeps the whole glyph at full foreground strength, matching the SF Symbol neighbours.
+            .symbolRenderingMode(.monochrome)
+                .font(.system(size: isPadVisible ? 26 : 21, weight: .medium))
+                .foregroundStyle(Color.primary)
+                .offset(x: isPadVisible ? 0 : -1.5)
+                // The 44pt frame is the control's own, so the pill matches its neighbours instead of shrink-wrapping
+                // the glyph.
                 .frame(width: 44, height: 44)
         }
         .tint(.primary)
