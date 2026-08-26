@@ -215,9 +215,15 @@ struct EditableReaderScreen: View {
     /// merely one it has to re-read after: a write stamped in the new numbering that beats the migration is remapped
     /// a second time onto a different part, and one stamped in the old numbering that follows it overwrites the
     /// migrated row after the map has been consumed, so nothing ever retries.
+    /// The hold is raised from the Editor and released by the Reader, deliberately asymmetrically: the Editor knows
+    /// when the row stops being trustworthy, but only the Reader knows when its own in-memory copy has caught up.
+    /// `isPartMappingSettled` is how the release asks the Editor whether a LATER part edit has since raised it again.
     private func wirePartEditSeams(host: ReaderEditingHost, vm: EditorViewModel) {
-        vm.onPartMappingPendingChanged = { [weak host] pending in
-            host?.setPartMappingPending(pending)
+        vm.onPartEditApplied = { [weak host] in
+            host?.raisePartMappingHold()
+        }
+        host.isPartMappingSettled = { [weak vm] in
+            vm?.hasUnsettledPartEdits != true
         }
         vm.onPartIndicesRemapped = { [weak host] _ in
             host?.requestReloadAfterPartRemap()

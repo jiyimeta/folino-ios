@@ -102,6 +102,12 @@ final class ReaderPreferencesStore {
     /// error is swallowed either way, exactly as it was before: preferences are a convenience, not data the user
     /// typed.
     private func persist(_ preferences: ReaderPreferences) async {
+        // Every writer respects the hold, this one included. `loadOrSeed`'s authored-visibility refresh reaches here
+        // without going through `mutate`, and it is a part-indexed write like any other — a `hiddenStaves` /
+        // `authoredHiddenStaves` rewrite — so letting it through would have been the one hole left in the hold.
+        // Skipped rather than queued: `reconcilingAuthoredHidden` re-derives the refresh from the score every time
+        // it runs, so a skipped one is simply re-attempted on the next open or reload, with no state to carry.
+        guard !isMigrationPending() else { return }
         let write = Task { [repository] in
             do {
                 try await repository.saveReaderPreferences(preferences)
@@ -112,15 +118,22 @@ final class ReaderPreferencesStore {
         pendingWrites.removeAll { $0 == write }
     }
 
-    /// Re-runs whatever `mutate` held back while a part-index migration was in flight, against the row as it stands
-    /// NOW — which on the normal path is the migrated row, already redistributed into the sub-models the held
-    /// closures read from.
+    /// Re-runs whatever `mutate` held back, against the row as it stands NOW — which on the normal path is the
+    /// migrated row, already redistributed into the sub-models the held closures read from.
     ///
     /// That redistribution is what makes this safe rather than clever. A change made inside the hold window was
     /// stamped in a numbering the row had not reached, and there is no honest way to tell which of the addresses the
     /// sub-model is holding are old and which are new — so the migrated row wins and the in-window change is
     /// superseded rather than guessed at. What this call guarantees is that the row and the sub-models agree
     /// afterwards, and that nothing is ever written in a numbering that no longer applies.
+    ///
+    /// **The user sees that supersession.** The sub-model drove the UI the moment they touched the control — the
+    /// staff they revealed is already back on screen — and the re-seed puts it where the migrated row says, so the
+    /// toggle visibly snaps back a moment later. That is the honest outcome of the two-writer arrangement rather
+    /// than a glitch to paper over, and it is the concrete thing the single-writer refactor would remove.
+    ///
+    /// The queue is bounded by **the next release**, not by one hold window: overlapping part edits keep the hold up
+    /// (`releasePartMappingHoldIfSettled`), so writes held across several of them all come out together here.
     func applyDeferredMutations() async {
         guard !deferredMutations.isEmpty else { return }
         let held = deferredMutations
@@ -128,6 +141,14 @@ final class ReaderPreferencesStore {
         for apply in held {
             await mutate(apply)
         }
+    }
+
+    /// Throws the held writes away without running them, for the one path that has no migrated row to re-run them
+    /// against — see `ReaderRootScreen.wirePartRemapReload`'s no-score bail. Keeping them would mean writing a
+    /// numbering nothing has reconciled; running them later against a score that has since been reloaded from disk
+    /// would be worse still.
+    func discardDeferredMutations() {
+        deferredMutations = []
     }
 
     /// Applies `apply` to a working copy, then re-seats through `ReaderPreferences.init` so clamping rules

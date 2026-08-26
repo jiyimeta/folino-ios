@@ -93,14 +93,25 @@ extension EditorViewModel {
             // baselines on the post-jump parts — so it would read identity forever and nothing would ever reconcile
             // them (review Important 1). Reachable whenever a part edit was saved and then discarded: the save
             // re-baselined, the discard puts the removed part back, and the row still names the parts without it.
-            // Migrating here writes the row into the numbering the restored score has, which is what the file is
-            // about to be rewritten to hold.
-            let migrated = await migratePartIndexedPreferences(in: session, for: scoreItem.id)
+            //
+            // The destination is the SNAPSHOT's parts, not the session's current ones. The session's own map ends at
+            // wherever this session happens to have left the score, and the gear only runs when that is NOT the
+            // snapshot — so migrating with it alone would land the row in an intermediate numbering that no file
+            // ever has. Composing it with "where the current parts sit in the snapshot" puts the row into the
+            // numbering the restored score has, which is what the file is about to be rewritten to hold. A part this
+            // session removed and the snapshot still carries is dropped rather than restored: its id is gone from
+            // the current score, so nothing here can name it.
+            let restore = Self.partIndexMapping(from: session.score, to: sessionOpenScore)
+            let mapping = Self.composing(session.partIndexMapping, restore)
+            let migrated = mapping.allSatisfy { $0.value == $0.key }
+                ? nil
+                : await migratePartIndexedPreferences(mapping, in: session, for: scoreItem.id)
             self.session = ScoreEditSession(score: sessionOpenScore)
             sessionEditDepth = 0
             onPartIndicesRemapped(migrated)
         }
         generation += 1
+        mutationTicket += 1
         rederiveSelection()
         if let current = self.session {
             onScoreChanged(current.score)

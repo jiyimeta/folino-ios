@@ -171,13 +171,29 @@ public final class ReaderEditingHost {
     /// gets migrated a second time, stamped in the OLD numbering it overwrites the migrated row after the map has
     /// been consumed. Neither is recoverable, so the conservative move is not to write.
     ///
-    /// The Editor owns the counting (part edits can overlap); this is the flag that counting produces.
+    /// It comes down only on the far side of the Reader's re-read (see `releasePartMappingHoldIfSettled`), never
+    /// when the Editor's save finishes: between those two the row is migrated but this process is still holding the
+    /// pre-migration addresses, which is precisely the state a write must not escape from.
     public internal(set) var isPartMappingPending = false
 
-    /// The App's write side of `isPartMappingPending` — a method rather than a settable property so the Reader's own
-    /// code can't drift into flipping it.
-    public func setPartMappingPending(_ pending: Bool) {
-        isPartMappingPending = pending
+    /// Raised by the App the instant the Editor applies a part edit. Raise only — see
+    /// `releasePartMappingHoldIfSettled` for the other end.
+    public func raisePartMappingHold() {
+        isPartMappingPending = true
+    }
+
+    /// Wired by the App to the Editor's `hasUnsettledPartEdits`: `true` when every part edit's save has finished, so
+    /// the hold may come down. The default suits a Reader with no editing host behind it.
+    public var isPartMappingSettled: @MainActor () -> Bool = { true }
+
+    /// Drops the hold, but only if the Editor has nothing further outstanding — a second part edit applied while the
+    /// first one's reload was running has raised the flag again, and that edit's own reload is what will release it.
+    /// Returns whether the hold actually came down, which is what tells the caller it may let its queued writes go.
+    @discardableResult
+    func releasePartMappingHoldIfSettled() -> Bool {
+        guard isPartMappingSettled() else { return false }
+        isPartMappingPending = false
+        return true
     }
 
     /// Written by the App (measured from the editing chrome), read by the Reader: how much vertical room the editing

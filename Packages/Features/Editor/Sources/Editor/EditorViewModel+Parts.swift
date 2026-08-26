@@ -109,23 +109,29 @@ extension EditorViewModel {
 
     // MARK: - Settling a part edit against the preferences row
 
-    /// What every part op does once its intent has landed: raise the host's hold, write NOW rather than in two
-    /// seconds, and lower the hold again with whatever the migration managed to do.
+    /// What every part edit does once its intent has landed: raise the host's hold, and write NOW rather than in two
+    /// seconds.
     ///
     /// The immediate write is the point. On the debounce, the two seconds between a part op and the save that
     /// migrates the row are two seconds in which the score and the row disagree about what a part index means — and
     /// the instruments sheet is still open, one tap away from a staff-visibility toggle that would be written in the
     /// numbering the row has not reached yet. Flushing here shrinks that to the length of one save.
     ///
-    /// The hold covers what is left, and is raised and lowered in the SAME call so the two can never come apart: the
-    /// settle runs after `flushPendingSave()` whatever that save did — including the cases where `performSave()`
-    /// declined to run at all (nothing dirty, a revert in progress) — so a hold can never be left standing.
-    /// Overlapping part ops nest, because each op contributes exactly one raise and one lower.
-    private func commitPartEdit() {
+    /// **The hold is raised here and released by the host, not here.** The row is settled when the save returns, but
+    /// the host's own copy of the same state is not settled until it has re-read that row — and dropping the flag in
+    /// between leaves it holding pre-migration addresses with nothing stopping it from writing them, which is the
+    /// second half of the very corruption the hold exists to prevent. So this fires `onPartIndicesRemapped` and
+    /// stops; the release rides on the far side of the host's reload, and consults `hasUnsettledPartEdits` so a
+    /// later edit that has raised the flag again keeps it up.
+    ///
+    /// `unsettledPartEdits` is still decremented here, because it counts SAVES outstanding, not holds: the reload
+    /// asking "may I release?" is asking whether any part edit still owes a migration.
+    ///
+    /// The notification is unconditional — it runs whatever the save did, including the cases where `performSave()`
+    /// declined to run at all (nothing dirty, a revert in progress) — so the release can never be stranded.
+    func commitPartEdit() {
         unsettledPartEdits += 1
-        if unsettledPartEdits == 1 {
-            onPartMappingPendingChanged(true)
-        }
+        onPartEditApplied()
         let previous = partEditCommitTask
         partEditCommitTask = Task {
             await previous?.value
@@ -134,11 +140,6 @@ extension EditorViewModel {
             let applied = lastAppliedPartMapping
             lastAppliedPartMapping = nil
             unsettledPartEdits = max(0, unsettledPartEdits - 1)
-            // Order is load-bearing: the hold lifts BEFORE the host is asked to re-read, so the writes it deferred
-            // are free to go through on the same pass rather than being held a second time by their own release.
-            if unsettledPartEdits == 0 {
-                onPartMappingPendingChanged(false)
-            }
             onPartIndicesRemapped(applied)
         }
     }

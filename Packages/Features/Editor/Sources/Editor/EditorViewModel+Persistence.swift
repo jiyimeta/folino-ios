@@ -55,6 +55,12 @@ extension EditorViewModel {
         // order, so the map would read identity and the row would keep the numbering the file has just left
         // (review Important 1).
         guard let score, let session, isDirty, !isReverting else { return }
+        // What this save is writing. `score` is a value copy taken here, so an edit applied while the method is
+        // suspended goes into the LIVE session and not into the bytes below — clearing `isDirty` at the end would
+        // then declare that edit saved and it would never reach the file. `mutationTicket` bumps on every apply /
+        // undo / redo and is never reset, so comparing it at completion is an exact test of "did anything land while
+        // we were away" that a re-entrant `beginSession` cannot spoof (see `mutationTicket`).
+        let ticketAtEntry = mutationTicket
         let destination = Self.saveDestination(for: scoreItem, scoresDirectory: scoresDirectory)
         // BEFORE the write, and only here: this is the last moment the file still holds the bytes the score was
         // imported with. Editing metadata does not touch the file, so nothing earlier can have moved them. A capture
@@ -112,7 +118,14 @@ extension EditorViewModel {
                 didSaveAsSiblingMSCZ = true
             }
             lastAppliedPartMapping = await migratePartIndexedPreferences(in: session, for: newItem.id)
-            isDirty = false
+            // Only when nothing landed while this call was suspended. An edit that arrived in one of the awaits
+            // above is not in the bytes just written, and every trigger site schedules its own save — so leaving
+            // `isDirty` standing is what lets that already-scheduled save actually run instead of finding a clean
+            // view model and doing nothing. Clearing it unconditionally silently dropped such an edit, and for a
+            // part edit it dropped the FILE half while the row half had already been migrated.
+            if mutationTicket == ticketAtEntry {
+                isDirty = false
+            }
         } catch {
             // Keep isDirty true so the next debounce tick or flush retries the write.
         }
@@ -130,13 +143,18 @@ extension EditorViewModel {
     ///
     /// **The score can move under the awaits, and that is accounted for rather than prevented.** `performSave` writes
     /// the score it pinned at entry, and by the time this runs the user may have applied further part edits to the
-    /// live session — so what the map describes can already be ahead of what the file holds. That is safe because the
-    /// map and the baseline move together: consuming re-baselines to the session's CURRENT parts, so the row is put
-    /// into the numbering the session is in, and the next save writes the file that matches it. The two are only ever
-    /// out of step between this call and that save, and `isDirty` is still `true` throughout, so that save is
-    /// guaranteed to come. What is NOT covered is a crash inside that window: the row would then describe a part
-    /// order the file on disk never received. Closing that needs the row and the file to be written in one
-    /// transaction, which this layering cannot express — it is the known cost of the two-writer arrangement.
+    /// live session — so what the map describes can already be ahead of what the file holds. The map and the baseline
+    /// at least move together: consuming re-baselines to the session's CURRENT parts, so the row is put into the
+    /// numbering the session is in, and it is the NEXT save that writes the matching file.
+    ///
+    /// That next save is only guaranteed because `performSave` refuses to clear `isDirty` when `mutationTicket` moved
+    /// while it was suspended (see there). It is worth being precise about this: clearing it unconditionally was a
+    /// bug, not a subtlety — the edit that arrived in the awaits would have been declared saved, so the row would
+    /// have been migrated onto a part order the file was never given and nothing would ever have written it.
+    ///
+    /// What is NOT covered is a crash inside that window: the row would then describe a part order the file on disk
+    /// never received. Closing that needs the row and the file to be written in one transaction, which this layering
+    /// cannot express — it is the known cost of the two-writer arrangement.
     ///
     /// The mapping is consumed ONLY after the write succeeds. A failed write leaves it accumulating so the next save
     /// (or `endSession`'s retry) attempts the same migration; consuming first would re-baseline over a row that never
@@ -148,7 +166,19 @@ extension EditorViewModel {
     @discardableResult
     func migratePartIndexedPreferences(in session: ScoreEditSession, for id: ScoreItemID) async -> [Int: Int?]? {
         guard !session.isPartMappingIdentity else { return nil }
-        let mapping = session.partIndexMapping
+        return await migratePartIndexedPreferences(session.partIndexMapping, in: session, for: id)
+    }
+
+    /// The same migration against an EXPLICIT map, for the one caller whose destination is not the session's current
+    /// parts: `unwindSessionEdits`'s snapshot gear, which is about to restore a different score entirely.
+    ///
+    /// Consuming still re-baselines onto the session's current parts, which is correct even there — the session is
+    /// thrown away immediately afterwards, and the replacement baselines on the restored score, which is exactly the
+    /// numbering `mapping` has just put the row into.
+    @discardableResult
+    func migratePartIndexedPreferences(
+        _ mapping: [Int: Int?], in session: ScoreEditSession, for id: ScoreItemID,
+    ) async -> [Int: Int?]? {
         do {
             let stored = try await repository.loadReaderPreferences(for: id)
             if let stored {
@@ -159,6 +189,36 @@ extension EditorViewModel {
         } catch {
             // Leave the mapping unconsumed: the next save retries the migration with the same cumulative map.
             return nil
+        }
+    }
+
+    /// Where each of `from`'s parts sits in `to`, by `Part.id`; `nil` = `to` does not have it. The same shape
+    /// `ScoreEditSession.partIndexMapping` produces, computed between two scores the caller holds rather than
+    /// against the session's own baseline.
+    ///
+    /// Duplicate ids on either side yield the identity map, for the reason `ScoreEditSession` documents: a
+    /// `firstIndex(of:)` answer over duplicates is a plausible-looking lie, and moving one part's preferences onto
+    /// another is worse than not migrating.
+    static func partIndexMapping(from: Score, to: Score) -> [Int: Int?] {
+        let source = from.parts.map(\.id)
+        let destination = to.parts.map(\.id)
+        guard Set(source).count == source.count, Set(destination).count == destination.count else {
+            return Dictionary(uniqueKeysWithValues: source.indices.map { ($0, Optional($0)) })
+        }
+        return Dictionary(
+            uniqueKeysWithValues: source.enumerated().map { ($0.offset, destination.firstIndex(of: $0.element)) },
+        )
+    }
+
+    /// `first` followed by `second`, as one map. A key `first` sends to `nil` stays `nil`; so does one whose
+    /// destination `second` does not know about.
+    static func composing(_ first: [Int: Int?], _ second: [Int: Int?]) -> [Int: Int?] {
+        first.mapValues { intermediate -> Int? in
+            // Two unwraps, two different questions: did `first` keep this part, and does `second` know where the
+            // index it landed on goes. Written as one `guard` because a `?? nil` reads as redundant and SwiftLint
+            // strips it.
+            guard let intermediate, let destination = second[intermediate] else { return nil }
+            return destination
         }
     }
 

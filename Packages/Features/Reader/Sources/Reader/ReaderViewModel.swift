@@ -128,6 +128,11 @@ final class ReaderViewModel {
         await preferencesStore.applyDeferredMutations()
     }
 
+    /// Drops them instead, for the reload path that has no migrated row to re-run them against.
+    func discardDeferredPreferenceWrites() {
+        preferencesStore.discardDeferredMutations()
+    }
+
     /// Wires the store's hold to whatever the caller knows about the Editor's unsettled part edits. Called by the
     /// editing-seam wiring, once; a Reader with no editing host never holds.
     func setPreferenceMigrationPendingProvider(_ provider: @escaping @MainActor () -> Bool) {

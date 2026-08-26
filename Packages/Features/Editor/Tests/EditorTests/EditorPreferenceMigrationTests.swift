@@ -134,55 +134,68 @@ struct EditorPreferenceMigrationTests {
         ])
     }
 
-    @Test func `the hold is raised at the op and lowered when its save settles`() async {
+    /// The Editor only ever RAISES. The release lives on the far side of the host's re-read, because until then the
+    /// host is still holding the pre-migration addresses — so `hasUnsettledPartEdits` (which is what the host asks)
+    /// is the thing that has to have come back down by the time the settle fires.
+    @Test func `the hold is raised at the op and the Editor reports settled once its save lands`() async {
         let dir = makeTempScoresDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
         let repository = FakeScoreLibraryRepository()
         let item = EditorFixtures.sampleItem()
         repository.readerPreferences[item.id] = pianoPreferences(for: item.id)
         let vm = makeViewModel(item: item, directory: dir, repository: repository)
-        var holds: [Bool] = []
-        vm.onPartMappingPendingChanged = { holds.append($0) }
+        var raises = 0
+        var settledWhileUnsettled: [Bool] = []
+        vm.onPartEditApplied = { raises += 1 }
+        vm.onPartIndicesRemapped = { _ in settledWhileUnsettled.append(vm.hasUnsettledPartEdits) }
         vm.beginSession(score: EditorFixtures.parts(named: ["Flute", "Violin", "Piano"], twoStavesAt: 2))
 
         vm.removePart(at: 0)
-        #expect(holds == [true])
+        #expect(raises == 1)
+        #expect(vm.hasUnsettledPartEdits)
         await vm.partEditCommitTask?.value
 
-        #expect(holds == [true, false])
+        #expect(vm.hasUnsettledPartEdits == false)
+        // The settle fires with the counter already back at zero, so the host's release is allowed to go through.
+        #expect(settledWhileUnsettled == [false])
     }
 
-    /// Overlapping part ops nest. The first op's settle must not lift the hold while a second op's numbering is
-    /// still unreconciled — hence a count rather than a flag.
-    @Test func `overlapping part ops keep the hold up until the last one settles`() async {
+    /// Overlapping part ops nest. The first op's settle must not let the host release while a second op's numbering
+    /// is still unreconciled — hence a count rather than a flag.
+    @Test func `overlapping part ops keep the Editor unsettled until the last one lands`() async {
         let dir = makeTempScoresDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
         let repository = FakeScoreLibraryRepository()
         let item = EditorFixtures.sampleItem()
         let vm = makeViewModel(item: item, directory: dir, repository: repository)
-        var holds: [Bool] = []
-        vm.onPartMappingPendingChanged = { holds.append($0) }
+        var raises = 0
+        var unsettledAtSettle: [Bool] = []
+        vm.onPartEditApplied = { raises += 1 }
+        vm.onPartIndicesRemapped = { _ in unsettledAtSettle.append(vm.hasUnsettledPartEdits) }
         vm.beginSession(score: EditorFixtures.parts(named: ["Flute", "Violin", "Piano"]))
 
         vm.removePart(at: 0)
         vm.removePart(at: 0)
-        // Exactly one raise for the two edits, and nothing lowered yet.
-        #expect(holds == [true])
+        #expect(raises == 2)
 
         await vm.partEditCommitTask?.value
 
-        #expect(holds == [true, false])
+        // The first settle still reports an outstanding edit, so the host keeps the hold up; only the second
+        // releases it.
+        #expect(unsettledAtSettle == [true, false])
+        #expect(vm.hasUnsettledPartEdits == false)
     }
 
-    /// The hold has to come down even when the save did nothing at all, or the Reader would never write again.
-    @Test func `the hold is lowered even when the save declines to run`() async {
+    /// The settle has to fire even when the save did nothing at all, or the host's hold would never come down and
+    /// the Reader would never write the row again.
+    @Test func `the settle fires even when the save declines to run`() async {
         let dir = makeTempScoresDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
         let repository = FakeScoreLibraryRepository()
         let vm = makeViewModel(item: EditorFixtures.sampleItem(), directory: dir, repository: repository)
-        var holds: [Bool] = []
+        var raises = 0
         var settled: [Bool] = []
-        vm.onPartMappingPendingChanged = { holds.append($0) }
+        vm.onPartEditApplied = { raises += 1 }
         vm.onPartIndicesRemapped = { settled.append($0 != nil) }
         vm.beginSession(score: EditorFixtures.parts(named: ["Flute", "Violin"]))
         // A revert in progress makes `performSave` return at its entry guard — the save runs, writes nothing, and
@@ -192,8 +205,92 @@ struct EditorPreferenceMigrationTests {
         vm.removePart(at: 0)
         await vm.partEditCommitTask?.value
 
-        #expect(holds == [true, false])
+        #expect(raises == 1)
         #expect(settled == [false])
+        #expect(vm.hasUnsettledPartEdits == false)
+    }
+
+    /// Undo and redo move the PARTS too. Once a save has consumed a mapping, undoing that removal owes exactly the
+    /// inverse migration — and riding the debounce for it would leave two unheld seconds in which the score and the
+    /// row disagree (review Important B).
+    @Test func `undoing a saved part removal settles immediately under a hold`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let repository = FakeScoreLibraryRepository()
+        let item = EditorFixtures.sampleItem()
+        repository.readerPreferences[item.id] = pianoPreferences(for: item.id)
+        let vm = makeViewModel(item: item, directory: dir, repository: repository)
+        var raises = 0
+        vm.onPartEditApplied = { raises += 1 }
+        vm.beginSession(score: EditorFixtures.parts(named: ["Flute", "Violin", "Piano"], twoStavesAt: 2))
+
+        vm.removePart(at: 0)
+        await vm.partEditCommitTask?.value
+        #expect(repository.readerPreferences[item.id]?.hiddenStaves == [
+            StaffAddress(partIndex: 1, staffIndexInPart: 1),
+        ])
+        #expect(raises == 1)
+
+        vm.undo()
+        // The hold went up on the undo itself, not two seconds later.
+        #expect(raises == 2)
+        #expect(vm.hasUnsettledPartEdits)
+        await vm.partEditCommitTask?.value
+
+        // And the row is back in the three-part numbering, with no debounce window in between.
+        let restored = try #require(repository.readerPreferences[item.id])
+        #expect(restored.hiddenStaves == [StaffAddress(partIndex: 2, staffIndexInPart: 1)])
+        #expect(vm.hasUnsettledPartEdits == false)
+    }
+
+    /// Undoing a NOTE edit leaves the parts exactly where the baseline has them, so it must not pay for any of this.
+    @Test func `undoing a note edit raises no hold`() {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let repository = FakeScoreLibraryRepository()
+        let vm = makeViewModel(item: EditorFixtures.sampleItem(), directory: dir, repository: repository)
+        var raises = 0
+        vm.onPartEditApplied = { raises += 1 }
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
+        vm.undo()
+
+        #expect(raises == 0)
+        #expect(vm.hasUnsettledPartEdits == false)
+    }
+
+    // MARK: - isDirty across the save's suspension points (review Important C)
+
+    /// An edit applied while a save is suspended is NOT in the bytes that save wrote. Clearing `isDirty` at
+    /// completion declared it saved, and it never reached the file — and for a part edit that dropped the file half
+    /// while the row half had already been migrated.
+    @Test func `an edit applied during a save leaves the view model dirty`() async {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let repository = FakeScoreLibraryRepository()
+        let originalStore = FakeScoreOriginalStore()
+        let gate = CaptureGate()
+        originalStore.captureGate = gate
+        let vm = makeViewModel(
+            item: EditorFixtures.sampleItem(), directory: dir,
+            repository: repository, originalStore: originalStore,
+        )
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
+
+        let flush = Task { await vm.flushPendingSave() }
+        await gate.waitUntilEntered()
+        // Lands in the save's suspension window — the pinned score copy cannot contain it.
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 2), pitch: 62, tpc: 16, duration: nil))
+        await gate.open()
+        await flush.value
+
+        #expect(vm.isDirty)
+        // And the still-dirty state is what lets the next save actually write it.
+        await vm.flushPendingSave()
+        #expect(vm.isDirty == false)
+        #expect(repository.savedScoreItems.count == 2)
     }
 
     // MARK: - When the migration must NOT run
@@ -209,7 +306,7 @@ struct EditorPreferenceMigrationTests {
         var notified = 0
         var holds = 0
         vm.onPartIndicesRemapped = { _ in notified += 1 }
-        vm.onPartMappingPendingChanged = { _ in holds += 1 }
+        vm.onPartEditApplied = { holds += 1 }
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
 
         vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
@@ -232,9 +329,9 @@ struct EditorPreferenceMigrationTests {
         repository.readerPreferences[item.id] = pianoPreferences(for: item.id)
         let vm = makeViewModel(item: item, directory: dir, repository: repository)
         var settled: [Bool] = []
-        var holds: [Bool] = []
+        var raises = 0
         vm.onPartIndicesRemapped = { settled.append($0 != nil) }
-        vm.onPartMappingPendingChanged = { holds.append($0) }
+        vm.onPartEditApplied = { raises += 1 }
         vm.beginSession(score: EditorFixtures.parts(named: ["Flute", "Violin", "Piano"], twoStavesAt: 2))
 
         vm.addPart(EditorFixtures.partPlan(named: "Cello"))
@@ -242,7 +339,8 @@ struct EditorPreferenceMigrationTests {
 
         #expect(repository.savedReaderPreferences.isEmpty)
         #expect(settled == [false])
-        #expect(holds == [true, false])
+        #expect(raises == 1)
+        #expect(vm.hasUnsettledPartEdits == false)
     }
 
     /// A part removed and put back by undo maps to itself, because the map is derived by diffing `Part.id`s.
@@ -399,9 +497,13 @@ struct EditorPreferenceMigrationTests {
 
     /// `unwindSessionEdits`'s snapshot gear throws the session away and starts a fresh one over the session-open
     /// score. A mapping still standing at that moment is the row's only route back: the fresh session baselines on
-    /// the restored parts, so it reads identity forever. Migrating before the swap is what keeps the row and the
-    /// restored file in the same numbering (review Important 1).
-    @Test func `the snapshot gear migrates before it replaces the session`() async throws {
+    /// the restored parts, so it reads identity forever (review Important 1).
+    ///
+    /// And the destination has to be the SNAPSHOT's parts, not the session's current ones. The gear only runs when
+    /// those two differ, so the session's own map ends somewhere no file ever is — here at the two-part
+    /// intermediate, where the piano's staff would land on index 1 instead of the 2 the restored score gives it
+    /// (round-2 minor).
+    @Test func `the snapshot gear migrates to the restored parts, not the intermediate ones`() async throws {
         let dir = makeTempScoresDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
         let repository = FakeScoreLibraryRepository()
@@ -410,22 +512,48 @@ struct EditorPreferenceMigrationTests {
         let vm = makeViewModel(item: item, directory: dir, repository: repository)
         vm.beginSession(score: EditorFixtures.parts(named: ["Flute", "Violin", "Piano"], twoStavesAt: 2))
 
-        // Remove and save: the row moves to the two-part numbering and the session re-baselines onto it.
+        // Two removals, each saved: the row walks 2 → 1 → 0 and the session re-baselines onto the single part.
+        vm.removePart(at: 0)
+        await vm.partEditCommitTask?.value
         vm.removePart(at: 0)
         await vm.partEditCommitTask?.value
         #expect(repository.readerPreferences[item.id]?.hiddenStaves == [
-            StaffAddress(partIndex: 1, staffIndexInPart: 1),
+            StaffAddress(partIndex: 0, staffIndexInPart: 1),
         ])
 
-        // Put the part back and leave a depth the undo stack can no longer consume — the one state the snapshot
-        // gear exists for.
-        vm.undo()
+        // Leave a depth with one undo left in the stack: the loop restores the Violin and stops there, so the
+        // score lands on [Violin, Piano] — NOT the snapshot — and the gear takes over.
         vm.previewSeedSessionEdit()
         await vm.unwindSessionEdits()
 
-        // The row is back in the three-part numbering the restored score has.
+        // The row is in the three-part numbering the restored score has. The un-composed map would have said 1.
         let restored = try #require(repository.readerPreferences[item.id])
         #expect(restored.hiddenStaves == [StaffAddress(partIndex: 2, staffIndexInPart: 1)])
         #expect(vm.session?.isPartMappingIdentity == true)
+    }
+
+    // MARK: - The map between two scores (round-2 minor)
+
+    @Test func `partIndexMapping locates each part by id`() {
+        let from = EditorFixtures.parts(named: ["Flute", "Violin", "Piano"])
+        var to = from
+        to.parts.removeFirst()
+        #expect(EditorViewModel.partIndexMapping(from: from, to: to) == [0: nil, 1: 0, 2: 1])
+        #expect(EditorViewModel.partIndexMapping(from: to, to: from) == [0: 1, 1: 2])
+    }
+
+    @Test func `partIndexMapping falls back to identity on duplicate ids`() {
+        var from = EditorFixtures.parts(named: ["Flute", "Violin"])
+        from.parts[1].id = from.parts[0].id
+        #expect(EditorViewModel.partIndexMapping(from: from, to: from) == [0: 0, 1: 1])
+    }
+
+    @Test func `composing chains two maps and keeps removals removed`() {
+        // baseline → intermediate → snapshot, the shape the snapshot gear composes.
+        let first: [Int: Int?] = [0: nil, 1: 0, 2: 1]
+        let second: [Int: Int?] = [0: 1, 1: 2]
+        #expect(EditorViewModel.composing(first, second) == [0: nil, 1: 1, 2: 2])
+        // A destination the second map does not mention drops, rather than being passed through.
+        #expect(EditorViewModel.composing([0: 5], second) == [0: nil])
     }
 }

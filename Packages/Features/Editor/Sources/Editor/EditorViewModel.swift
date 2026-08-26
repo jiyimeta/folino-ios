@@ -35,6 +35,14 @@ public final class EditorViewModel {
         return session?.score
     }
 
+    /// Bumped on every applied / undone / redone command, for the life of this view model, and NEVER reset.
+    ///
+    /// `generation` and `appliedEditCount` both go back to zero at `beginSession`, which makes them useless as the
+    /// "did anything land while I was suspended?" sentinel `performSave` needs: a `beginSession` arriving in one of
+    /// its awaits would move the counter backwards and read as a mutation. This one only ever goes up, so comparing
+    /// it across a suspension answers exactly the question asked.
+    @ObservationIgnored var mutationTicket = 0
+
     /// Bumped on every applied / undone / redone command. The Reader includes it in its layout task key so the
     /// score re-lays-out after edits that don't change the structural score signature.
     ///
@@ -191,6 +199,22 @@ public final class EditorViewModel {
     /// stored for the same reason `auditionTask` is, so a test can `await vm.partEditCommitTask?.value` instead of
     /// racing it. Chained onto the previous one so overlapping ops settle in the order they were applied.
     @ObservationIgnored var partEditCommitTask: Task<Void, Never>?
+
+    /// Whether any part edit's save is still outstanding. Read by the host when it is about to release its
+    /// preference-write hold: the edit that asked for the release may not be the last one, and lowering the flag
+    /// with a later edit's numbering still unreconciled reopens exactly the window the hold exists to close.
+    public var hasUnsettledPartEdits: Bool {
+        unsettledPartEdits > 0
+    }
+
+    /// Whether the live session's parts have moved away from the baseline the preferences row was last written
+    /// against — i.e. a migration is owed. `false` outside a session, and `false` for an append (which renumbers
+    /// nothing the baseline knew about).
+    var isPartMigrationOwed: Bool {
+        guard let session else { return false }
+        return !session.isPartMappingIdentity
+    }
+
     /// True once a non-MSCX/MSCZ source has been rewritten as a sibling `.mscz` file. One-way: never reset, since
     /// it drives the Task 16 one-time "saved as .mscz" notice.
     public internal(set) var didSaveAsSiblingMSCZ = false
@@ -208,14 +232,6 @@ public final class EditorViewModel {
     /// Asks the chrome to bring the input pad up. Safe to call whether or not the pad is already showing.
     public func requestPadReveal() {
         padRevealRequests += 1
-    }
-
-    public var canUndo: Bool {
-        session?.canUndo ?? false
-    }
-
-    public var canRedo: Bool {
-        session?.canRedo ?? false
     }
 
     /// Wired by the App composition root.
@@ -237,9 +253,9 @@ public final class EditorViewModel {
     /// Fired after a successful revert with the rebuilt row. The App mirrors it into the Reader, which reloads the
     /// score from disk — the Editor cannot reach the Reader directly.
     public var onRevertCompleted: @MainActor (ScoreItem) -> Void = { _ in }
-    /// `true` from the instant a part add / remove / reorder is applied until the save that reconciles the persisted
-    /// `ReaderPreferences` row with it has settled — the window in which the score and the row disagree about what a
-    /// part index means.
+    /// Raised the instant a part add / remove / reorder is applied (or an undo / redo puts the parts somewhere the
+    /// preferences row has not been told about) — the start of the window in which the score and the row disagree
+    /// about what a part index means.
     ///
     /// BOTH directions of that disagreement corrupt the row, which is why the host has to stop writing it rather
     /// than merely re-read it afterwards. A Reader write stamped in the NEW numbering that lands before the
@@ -247,10 +263,11 @@ public final class EditorViewModel {
     /// numbering that lands after it clobbers the migrated row — and the map has been consumed by then, so nothing
     /// ever retries and the row is wrong for good.
     ///
-    /// Edge-balanced: `true` on the first unsettled part edit, `false` when the last one settles, so overlapping
-    /// edits hold the line rather than the first one to finish lifting it. It always reaches `false` — the settle
-    /// runs whatever the save did, including the cases where `performSave` declined to run at all.
-    public var onPartMappingPendingChanged: @MainActor (Bool) -> Void = { _ in }
+    /// **Raise only.** The Editor cannot say when it is safe to lower it: the row is settled at the end of the save,
+    /// but the host's own in-memory copy is not settled until it has re-read that row, and between the two it is
+    /// still holding the pre-migration addresses. So the release belongs to whoever performs the re-read — see
+    /// `hasUnsettledPartEdits`, which is how it asks whether a LATER part edit has since raised it again.
+    public var onPartEditApplied: @MainActor () -> Void = {}
     /// Fired when the persisted `ReaderPreferences` row may have moved under the host: once per part edit as its
     /// save settles, and again from `endSession`'s retry if that is what finally lands the migration.
     ///
@@ -318,42 +335,6 @@ public final class EditorViewModel {
         hasCapturedOriginal = scoreItem.canRevertToOriginal
     }
 
-    public func undo() {
-        // `session.undo()` guards `canUndo` and reports an engine failure as `false`, preserving the old contract:
-        // a swallowed failure must not fire a false generation bump / onSelectionChanged / onScoreChanged.
-        guard let session, session.undo() else { return }
-        sessionEditDepth -= 1
-        generation += 1
-        rederiveSelection()
-        onScoreChanged(session.score)
-        isDirty = true
-        scheduleAutosave()
-    }
-
-    public func redo() {
-        guard let session, session.redo() else { return }
-        sessionEditDepth += 1
-        generation += 1
-        rederiveSelection()
-        onScoreChanged(session.score)
-        isDirty = true
-        scheduleAutosave()
-    }
-
-    /// Bridges ScoreEditSession's own stacks to the system UndoManager so three-finger swipe gestures work. Each
-    /// mutation registers one undo action; performing it re-registers the redo symmetrically. The ScoreEditSession
-    /// remains the source of truth — the UndoManager holds only trampolines.
-    func registerSystemUndo(with manager: UndoManager?) {
-        guard let manager else { return }
-        manager.registerUndo(withTarget: self) { vm in
-            vm.undo()
-            manager.registerUndo(withTarget: vm) { vm2 in
-                vm2.redo()
-                vm2.registerSystemUndo(with: manager)
-            }
-        }
-    }
-
     /// Central apply choke point: every edit goes through here so selection re-derivation, generation bump,
     /// `onScoreChanged`, and autosave scheduling can never be skipped. Internal — ops extensions call it. Returns
     /// `false` when the session refused the intent; the engine's contract leaves the score untouched, so no side
@@ -367,6 +348,7 @@ public final class EditorViewModel {
         #endif
         guard let session, session.apply(intent) else { return false }
         generation += 1
+        mutationTicket += 1
         appliedEditCount += 1
         sessionEditDepth += 1
         rederiveSelection()

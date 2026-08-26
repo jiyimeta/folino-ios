@@ -15,13 +15,17 @@ extension ReaderViewModel {
     /// The order is the whole design:
     ///
     /// 1. **Join writes already in the air.** One that lands after the re-read would put the row back to what it was
-    ///    before the migration, and the Editor has consumed the map by then, so nothing would ever retry.
+    ///    before the migration, and the Editor has consumed the map by then, so nothing would ever retry. The hold
+    ///    is still up here, so no NEW write can be started behind it — which is also what makes the flush terminate
+    ///    rather than chase writes it keeps admitting.
     /// 2. **Re-read and redistribute**, deliberately through the normal `loadOrSeedPreferences` path, so the
     ///    authored-visibility reconcile and every sub-model's `sync(from:)` run exactly as they do on open rather
     ///    than a second copy of that logic drifting from it. A load that FAILS re-seeds nothing — better to keep
     ///    holding the pre-migration values than to distribute defaults over them.
-    /// 3. **Lift the hold**, and only then
-    /// 4. **let the deferred writes go** — in that order, or each held write would simply be held again by its own
+    /// 3. **Lift the hold — HERE, not when the Editor's save finished.** Until this line the sub-models were still
+    ///    holding pre-migration addresses; dropping the flag any earlier would leave a window in which a write could
+    ///    escape carrying exactly those, which is the second half of the corruption the hold exists to prevent.
+    /// 4. **Let the deferred writes go** — after the lift, or each held write would simply be held again by its own
     ///    release.
     ///
     /// `authoredHiddenStaves` must come from the POST-edit score (the editing host's `editedScore`), not from
@@ -29,7 +33,7 @@ extension ReaderViewModel {
     /// just went away. See the caller contract on `ReaderPreferences.reconcilingAuthoredHidden`: handing this the
     /// wrong set silently rewrites the provenance.
     ///
-    /// - Parameter liftHold: performs the release and answers whether the hold is now fully lifted. It can be
+    /// - Parameter liftHold: performs the release and answers whether the hold actually came down. It answers
     ///   `false` when a second part edit is still unsettled, in which case the deferred writes stay held for that
     ///   edit's own release.
     func reloadPreferencesAfterPartRemap(

@@ -6,7 +6,7 @@ extension ReaderRootScreen {
     /// to keep `ReaderRootScreen`'s primary declaration under SwiftLint's `type_body_length` budget.
     ///
     /// Two halves. The store is taught to hold its writes while the host says a migration is unsettled, and the
-    /// reload is wired to re-read the row and release what was held once it settles.
+    /// reload is wired to re-read the row, release the hold, and let what was held go — in that order.
     func wirePartRemapReload(host: ReaderEditingHost, viewModel: ReaderViewModel) {
         viewModel.setPreferenceMigrationPendingProvider { [weak host] in
             host?.isPartMappingPending ?? false
@@ -16,16 +16,24 @@ extension ReaderRootScreen {
             // The POST-edit score — the one whose part numbering the row now describes. `loadState.score` is still
             // the score the session opened on and would name staves that no longer exist, which
             // `reconcilingAuthoredHidden` would then write into the row as provenance. There is no safe fallback to
-            // it, so no score means nothing to do (review Minor 1).
-            guard let score = host?.editedScore else { return }
+            // it (review Minor 1, round 1).
+            guard let score = host?.editedScore else {
+                // Nothing to reconcile against — but the hold MUST still come down, or this Reader would never
+                // write the row again for the rest of the session. The queued writes go with it: they were stamped
+                // against a score this process no longer has, and the only path that empties `editedScore` is the
+                // revert, which reloads everything from disk immediately afterwards.
+                if host?.releasePartMappingHoldIfSettled() == true {
+                    viewModel.discardDeferredPreferenceWrites()
+                }
+                return
+            }
             Task {
                 await viewModel.reloadPreferencesAfterPartRemap(
                     authoredHiddenStaves: score.authoredHiddenStaffAddresses,
-                    // The App has already lowered the flag by the time this runs — the Editor drops it before it
-                    // asks for the reload, precisely so the deferred writes are not held again by their own
-                    // release. Reading it here rather than assuming keeps a second, still-unsettled part edit in
-                    // charge of when they actually go.
-                    liftHold: { [weak host] in !(host?.isPartMappingPending ?? false) },
+                    // The release happens HERE, on the far side of the re-read — never when the Editor's save
+                    // finished. It answers `false` if a later part edit has raised the flag again, and that edit's
+                    // own reload is then the one that releases.
+                    liftHold: { [weak host] in host?.releasePartMappingHoldIfSettled() ?? false },
                 )
             }
         }

@@ -159,6 +159,72 @@ struct ReaderPreferencesStorePartRemapTests {
         #expect(repo.storedReaderPreferences[itemID]?.masterVolume == 2)
     }
 
+    /// The release is on the far side of the re-read, so a write arriving between the reload starting and the hold
+    /// coming down is still inside the window — the sub-models have not been re-seeded yet, so it would carry
+    /// pre-migration addresses. It must be queued like any other (round-2 Important A).
+    @Test func `a write arriving mid-reload is still held`() async throws {
+        let repo = FakeScoreLibraryRepository()
+        let store = makeStore(repo)
+        let model = HiddenStavesModel()
+        await store.loadOrSeed(authoredHiddenStaves: [])
+        model.hiddenStaves = [pianoLower]
+        await store.mutate { $0.hiddenStaves = model.hiddenStaves }
+
+        var isPending = true
+        store.isMigrationPending = { isPending }
+        try migrateRowExternally(repo)
+
+        // The reload's own steps, in order. The hold is still up through both of them.
+        await store.flushPendingWrites()
+        let reloaded = try #require(await store.loadOrSeed(authoredHiddenStaves: []))
+        // …and a write lands right here, after the re-read but before the release.
+        await store.mutate { $0.masterVolume = 3 }
+        #expect(repo.storedReaderPreferences[itemID]?.masterVolume == nil)
+
+        // Only now does the hold come down, and only then does the queued write go.
+        model.hiddenStaves = reloaded.hiddenStaves
+        isPending = false
+        await store.applyDeferredMutations()
+
+        #expect(repo.storedReaderPreferences[itemID]?.masterVolume == 3)
+        #expect(repo.storedReaderPreferences[itemID]?.hiddenStaves == [pianoLowerAfterRemoval])
+    }
+
+    /// `loadOrSeed`'s authored-visibility refresh reaches `persist` without going through `mutate`, and it rewrites
+    /// `hiddenStaves` / `authoredHiddenStaves` — part-indexed state like any other. It has to respect the hold too
+    /// (round-2 minor). Skipped rather than queued: the refresh is re-derived from the score every time, so the next
+    /// open re-attempts it.
+    @Test func `the authored-visibility refresh does not escape the hold`() async {
+        let repo = FakeScoreLibraryRepository()
+        let store = makeStore(repo)
+        // A stored row whose recorded provenance disagrees with the score, so the reconcile wants to write.
+        repo.storedReaderPreferences[itemID] = ReaderPreferences(
+            scoreItemID: itemID, hiddenStaves: [], hasSeededAuthoredVisibility: true,
+        )
+        store.isMigrationPending = { true }
+
+        await store.loadOrSeed(authoredHiddenStaves: [pianoLowerAfterRemoval])
+
+        #expect(repo.savedReaderPreferences.isEmpty)
+    }
+
+    /// The no-score bail has no migrated row to re-run the queue against, so it drops it — and must, or the hold
+    /// would be released with writes still queued behind it.
+    @Test func `discarding the queue leaves nothing to replay`() async {
+        let repo = FakeScoreLibraryRepository()
+        let store = makeStore(repo)
+        await store.loadOrSeed(authoredHiddenStaves: [])
+        store.isMigrationPending = { true }
+        await store.mutate { $0.masterVolume = 2 }
+
+        store.discardDeferredMutations()
+        store.isMigrationPending = { false }
+        await store.applyDeferredMutations()
+
+        #expect(repo.savedReaderPreferences.isEmpty)
+        #expect(store.preferences.masterVolume == nil)
+    }
+
     // MARK: - A failed load is not an empty one (review Minor 3)
 
     @Test func `a throwing load reports failure instead of minting a fresh row`() async {
