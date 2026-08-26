@@ -228,6 +228,15 @@ public final class EditorViewModel {
     /// Drives the discard confirmation ✕ raises when the session has edits. Same reasoning as `isConfirmingRevert`:
     /// the button and the dialog live in different tiers, so the flag cannot be view-local.
     public var isConfirmingDiscard = false
+    /// Drives the instruments sheet. On the view model for the same reason as `isConfirmingRevert`: the button that
+    /// opens it folds into the overflow `Menu` at narrow widths, and a `@State` flag owned by a control that can
+    /// disappear takes the open sheet with it.
+    public var isInstrumentsSheetPresented = false
+    /// Whether the Reader is SHOWING this staff, and the flip for it — wired by the App to the Reader's per-score
+    /// layout settings, the same store its own inspector toggles. Visibility is a reading preference, not a property
+    /// of the file, and this package cannot import Reader; the defaults suit an Editor with no Reader behind it.
+    public var isStaffVisible: @MainActor (StaffAddress) -> Bool = { _ in true }
+    public var onToggleStaffVisibility: @MainActor (StaffAddress) -> Void = { _ in }
     /// `true` when THIS session's first save is what captured the original sidecar — i.e. before this session the
     /// score had never been edited. Discarding such a session has to take the sidecar back out, or the score would
     /// keep offering "revert to original" while being byte-identical to it.

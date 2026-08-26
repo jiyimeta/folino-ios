@@ -24,7 +24,9 @@ public final class ReaderEditingHost {
     public var editGeneration = 0
     public var selection: ScoreSelection = .none {
         didSet {
-            if case .single = selection { onSelectionMade() }
+            if case .single = selection {
+                onSelectionMade()
+            }
         }
     }
 
@@ -80,6 +82,20 @@ public final class ReaderEditingHost {
         else { return nil }
         return Self.restamping(id, onto: staff)
     }
+
+    /// Whether the reader is currently SHOWING that staff — the same per-score visibility the two re-stamping
+    /// functions above filter against, asked one address at a time.
+    ///
+    /// `public` because the Editor's instruments sheet lists the score's parts with a visibility switch beside each
+    /// staff, and visibility is the Reader's to own: it changes what this device draws, not what the file says. The
+    /// App wires this and `onToggleStaffVisibility` into the Editor's view model, which cannot import Reader.
+    public func isStaffVisible(_ address: StaffAddress) -> Bool {
+        !hiddenStavesProvider().contains(address)
+    }
+
+    /// Flips one staff's visibility in the Reader's layout settings — the very store the Reader's own inspector
+    /// toggles, so the sheet and the inspector can never disagree about what is hidden. Wired by the Reader.
+    public var onToggleStaffVisibility: @MainActor (StaffAddress) -> Void = { _ in }
 
     /// The selection in display addressing — what `ScoreView` and the caret overlay tint. A selection on a hidden
     /// staff collapses to `.none` rather than tinting whatever staff happens to sit at that index now.

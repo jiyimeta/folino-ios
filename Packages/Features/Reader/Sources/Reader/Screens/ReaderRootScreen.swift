@@ -386,6 +386,11 @@ public struct ReaderRootScreen: View {
             editingHost?.hiddenStavesProvider = { [weak viewModel] in
                 viewModel?.layoutModel.hiddenStaves ?? []
             }
+            // The write side of the same store, for the Editor's instruments sheet — it lists the score's parts and
+            // offers a visibility switch per staff, and this is the one the inspector's own switches call.
+            editingHost?.onToggleStaffVisibility = { [weak viewModel] address in
+                Task { await viewModel?.layoutModel.toggleStaff(address) }
+            }
             // Split out (`ReaderRootScreen+RevertWiring.swift`) to keep this closure — and the struct's primary
             // declaration — under SwiftLint's body-length budgets.
             if let editingHost {

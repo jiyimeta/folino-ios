@@ -39,9 +39,10 @@ public struct EditorTopBarView: View {
     /// Only two rungs, not three: a `.revert`-only middle rung (revert alone folded into `⋯`, 完了 still a
     /// standalone text button) measures IDENTICAL to `.expanded` whenever revert is showing — swapping one 44×44
     /// icon (`revertButton`) for another (the `⋯` menu) saves nothing, so `ViewThatFits` could never actually pick
-    /// it. `.expanded` carries `measureMenu` (44×44) ALONGSIDE the session-end control (`endGroup`), while
-    /// `.folded` merges both into the one `⋯` (`overflowMenu`) — so `.folded` is unconditionally narrower than
-    /// `.expanded`, by 12pt of spacing plus `endGroup`'s own width, in every `sessionEndMode`, not only `.revert`.
+    /// it. `.expanded` carries the instruments button and `measureMenu` (44×44 each) ALONGSIDE the session-end
+    /// control (`endGroup`), while `.folded` merges all three into the one `⋯` (`overflowMenu`) — so `.folded` is
+    /// unconditionally narrower than `.expanded`, by two 44pt controls plus 24pt of spacing, in every
+    /// `sessionEndMode`, not only `.revert`.
     enum Collapse {
         case expanded
         case folded
@@ -64,7 +65,7 @@ public struct EditorTopBarView: View {
     public var body: some View {
         // The shadow matches `ReaderTopBarControls`' so the reading and editing strips read as the same physical
         // surface — see review Important 2.
-        revertFailureAlert(on: controlTierRow)
+        instrumentsSheet(on: revertFailureAlert(on: controlTierRow))
             .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
     }
 
@@ -73,14 +74,16 @@ public struct EditorTopBarView: View {
     @ViewBuilder
     private var controlTierRow: some View {
         if hasCutoutTier {
-            // ✕ and the session-end control live in the cutout tier; the five controls left here (undo, redo,
-            // voice, pad, and now the measure-actions menu) still sit comfortably under this row's width on the
-            // narrowest supported device, so no fold is needed.
+            // ✕ and the session-end control live in the cutout tier; the six controls left here (undo, redo,
+            // voice, pad, the instruments sheet, and the measure-actions menu) still sit under this row's width on
+            // the narrowest device that HAS a cutout tier — 393pt, against ≈336pt of controls — so no fold is
+            // needed. A device narrow enough to need one has no cutout tier and takes the branch below.
             HStack(spacing: 12) {
                 undoRedoGroup
                 Spacer(minLength: 0)
                 voiceButton
                 padButton
+                instrumentsButton
                 measureMenu
                     .interactiveGlassCompat()
             }
@@ -113,6 +116,7 @@ public struct EditorTopBarView: View {
             switch collapse {
             case .expanded:
                 HStack(spacing: 12) {
+                    instrumentsButton
                     measureMenu
                         .interactiveGlassCompat()
                     endGroup
@@ -158,9 +162,11 @@ public struct EditorTopBarView: View {
         )
     }
 
-    /// Narrow-width stand-in for the measure actions, revert (if available), and 完了 once they've folded together.
+    /// Narrow-width stand-in for the instruments sheet, the measure actions, revert (if available), and 完了 once
+    /// they've folded together.
     private var overflowMenu: some View {
         Menu {
+            instrumentsMenuRow
             measureActionRows
             if viewModel.canRevertToOriginal {
                 revertMenuRow
@@ -303,8 +309,9 @@ public struct EditorTopBarView: View {
     }
 
     /// The 44×44 tappable glyph shared by the strip's icon buttons — every button keeps this fixed frame so what a
-    /// `ViewThatFits` candidate needs is a function of how many buttons it has, not of their content.
-    private func topBarIcon(_ systemImage: String) -> some View {
+    /// `ViewThatFits` candidate needs is a function of how many buttons it has, not of their content. Internal
+    /// rather than private so `EditorTopBarView+Instruments.swift` can draw its button the same way.
+    func topBarIcon(_ systemImage: String) -> some View {
         Image(systemName: systemImage)
             .font(.system(size: 20, weight: .medium))
             .frame(width: 44, height: 44)

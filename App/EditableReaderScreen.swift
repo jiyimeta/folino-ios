@@ -182,6 +182,15 @@ struct EditableReaderScreen: View {
             guard let host else { return item }
             return host.sourceItem(for: item)
         }
+        // The instruments sheet lists the score's parts (the Editor's business) with a visibility switch per staff
+        // (the Reader's). Both halves land in one list, so the two seams meet here — the same place the addressing
+        // conversion above does, and for the same reason: neither feature can see the other.
+        vm.isStaffVisible = { [weak host] address in
+            host?.isStaffVisible(address) ?? true
+        }
+        vm.onToggleStaffVisibility = { [weak host] address in
+            host?.onToggleStaffVisibility(address)
+        }
         vm.onScoreChanged = { [weak host] score in
             guard let host else { return }
             host.editedScore = score

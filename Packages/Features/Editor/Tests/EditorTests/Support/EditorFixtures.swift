@@ -146,6 +146,38 @@ enum EditorFixtures {
         return score
     }
 
+    /// `names.count` parts, each one staff of one 4/4 bar of quarter rests, named by `names` — the shape the
+    /// instruments sheet lists. Part ids are the numeric strings a real score carries ("1", "2", …), which is what
+    /// `AddPart.nextPartID` continues from.
+    static func parts(named names: [String]) -> Score {
+        let voice = Voice(elements: [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+        ])
+        let bar = Measure(voices: [voice])
+        let parts = names.enumerated().map { index, name in
+            Part(
+                id: String(index + 1),
+                instrument: Instrument(id: "instrument-\(index)", longName: name),
+                staves: [Staff(measures: [bar])],
+            )
+        }
+        return Score(division: 480, parts: parts)
+    }
+
+    /// A one-staff catalog-style plan, as `ScoreInstrument.partPlan()` produces one.
+    static func partPlan(named name: String, clef: String = "G") -> BlankScoreTemplate.PartPlan {
+        BlankScoreTemplate.PartPlan(
+            instrumentID: "added",
+            longName: name,
+            shortName: nil,
+            staves: [BlankScoreTemplate.StaffPlan(clefType: clef)],
+        )
+    }
+
     static func restID(measure: Int = 0, element: Int) -> RestID {
         RestID(staff: staff0, measureIndex: measure, voiceIndex: 0, elementIndex: element)
     }

@@ -617,6 +617,181 @@
         }
       }
     },
+    "editor.instruments.add": {
+      "comment": "Adds a part to the score, from the instrument catalog.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Instrument"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "楽器を追加"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "악기 추가"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加乐器"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加入樂器"
+          }
+        }
+      }
+    },
+    "editor.instruments.delete.message": {
+      "comment": "Body of the part-removal confirmation: the part's music goes with it, and it is undoable.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The notes written for this instrument are deleted too. You can bring them back with undo."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この楽器の音符も削除されます。取り消すには元に戻すを使えます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 악기에 입력한 음표도 함께 삭제됩니다. 실행 취소로 되돌릴 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "为该乐器写的音符也会一并删除。可以通过撤销恢复。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "為該樂器寫的音符也會一併刪除。可以透過還原復原。"
+          }
+        }
+      }
+    },
+    "editor.instruments.delete.title %@": {
+      "comment": "Confirmation title before removing a part. %@ is the instrument's name.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete %@?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@を削除しますか？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@을(를) 삭제하시겠습니까?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要删除%@吗？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要刪除%@嗎？"
+          }
+        }
+      }
+    },
+    "editor.instruments.showStaff %lld": {
+      "comment": "Per-staff visibility switch on a multi-staff part (a piano's two staves). %lld is 1-based.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show staff %lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第%lld譜表を表示"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld번째 보표 표시"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示第%lld谱表"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顯示第%lld譜表"
+          }
+        }
+      }
+    },
+    "editor.instruments.title": {
+      "comment": "Title of the sheet listing the score's parts, and the label of the control that opens it.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instruments"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "楽器"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "악기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "乐器"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "樂器"
+          }
+        }
+      }
+    },
     "editor.measure.append": {
       "comment": "Menu row that appends one blank measure to the end of the score.",
       "localizations": {
