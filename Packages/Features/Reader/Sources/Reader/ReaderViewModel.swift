@@ -116,6 +116,12 @@ final class ReaderViewModel {
         await preferencesStore.mutate(apply)
     }
 
+    /// Same forwarding as `mutatePreferences`, for the part-remap reload in `ReaderViewModel+PartRemap.swift`: joins
+    /// a preference write started elsewhere, so re-reading the row can't race one that is still in the air.
+    func flushPendingPreferenceWrites() async {
+        await preferencesStore.flushPendingWrites()
+    }
+
     /// Whether the inspector should show the playlist-continuation control. True only when opened from a playlist.
     var isInPlaylist: Bool {
         playlistID != nil

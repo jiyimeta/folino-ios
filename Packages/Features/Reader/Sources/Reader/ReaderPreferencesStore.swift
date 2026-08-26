@@ -11,6 +11,11 @@ final class ReaderPreferencesStore {
 
     private let repository: any ScoreLibraryRepository
     private let scoreItemID: ScoreItem.ID
+    /// Handle to the most recent persistence write. Every mutation awaits its own write before returning, so this is
+    /// only ever non-`nil`-and-running for a write some OTHER task started — which is exactly what a caller about to
+    /// re-read the row (`flushPendingWrites()` then `loadOrSeed`) has to let land first, or it would read a value the
+    /// in-flight write is about to overwrite.
+    private var pendingWrite: Task<Void, Never>?
 
     init(
         scoreItemID: ScoreItem.ID,
@@ -51,9 +56,31 @@ final class ReaderPreferencesStore {
         )
         preferences = resolved
         if shouldPersist {
-            try? await repository.saveReaderPreferences(resolved)
+            await persist(resolved)
         }
         return resolved
+    }
+
+    /// Waits for a write started elsewhere to land. Call it before re-reading the row from the repository — see
+    /// `pendingWrite`.
+    func flushPendingWrites() async {
+        await pendingWrite?.value
+    }
+
+    /// Writes through the repository, leaving the handle behind so `flushPendingWrites()` can join it.
+    ///
+    /// `do` / `catch` rather than `try?` so the closure's result type is `Void` and the handle is a
+    /// `Task<Void, Never>` — `try?` on a `Void`-returning call makes the single-expression body return `Void?`. The
+    /// error is swallowed either way, exactly as it was before: preferences are a convenience, not data the user
+    /// typed.
+    private func persist(_ preferences: ReaderPreferences) async {
+        let write = Task { [repository] in
+            do {
+                try await repository.saveReaderPreferences(preferences)
+            } catch {}
+        }
+        pendingWrite = write
+        await write.value
     }
 
     /// Applies `apply` to a working copy, then re-seats through `ReaderPreferences.init` so clamping rules
@@ -80,6 +107,6 @@ final class ReaderPreferencesStore {
             hasSeededAuthoredVisibility: copy.hasSeededAuthoredVisibility,
         )
         preferences = normalized
-        try? await repository.saveReaderPreferences(normalized)
+        await persist(normalized)
     }
 }

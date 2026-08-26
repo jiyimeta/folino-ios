@@ -153,6 +153,15 @@ public final class ReaderEditingHost {
     /// editing session, stops playback and reloads the score from disk.
     public var requestReloadAfterRevert: @MainActor (ScoreItem) -> Void = { _ in }
 
+    /// Filled by the Reader. The App calls it once a save has migrated the persisted `ReaderPreferences` row through
+    /// a part add / remove / reorder; the Reader re-seats the same state it holds in memory (hidden staves, clef
+    /// overrides, mixer strip overlays) from the migrated row.
+    ///
+    /// It carries no mapping on purpose. The Reader re-reads the row the Editor has already rewritten rather than
+    /// applying the permutation a second time — one migration, one place it can be wrong, and no way for the two
+    /// copies to disagree about how far through the mapping they are.
+    public var requestReloadAfterPartRemap: @MainActor () -> Void = {}
+
     /// Written by the App (measured from the editing chrome), read by the Reader: how much vertical room the editing
     /// cluster occupies at the top and bottom of the screen. The score containers turn these into SCROLL PADDING, not
     /// layout width — so the last system can be scrolled clear of the pad without the score being re-engraved. Page

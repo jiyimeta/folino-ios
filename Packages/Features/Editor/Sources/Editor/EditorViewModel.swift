@@ -224,6 +224,16 @@ public final class EditorViewModel {
     /// Fired after a successful revert with the rebuilt row. The App mirrors it into the Reader, which reloads the
     /// score from disk — the Editor cannot reach the Reader directly.
     public var onRevertCompleted: @MainActor (ScoreItem) -> Void = { _ in }
+    /// Fired after a save has migrated the persisted `ReaderPreferences` row through a part add / remove / reorder,
+    /// carrying the same `[oldPartIndex: newPartIndex?]` map that was applied (`nil` = the part is gone).
+    ///
+    /// The row on disk is only half of it: the Reader holds the very same part-indexed state IN MEMORY
+    /// (`LayoutSettingsModel.hiddenStaves` / `staffClefOverrides`, the mixer's strip overlays) for the length of the
+    /// session, and that copy is what the next preference write persists. Without this notification the migrated row
+    /// would be clobbered by the stale in-memory one the moment the reader touched any setting. The App mirrors it
+    /// into the Reader, which re-seeds those models from the migrated row — the Editor cannot reach the Reader
+    /// directly.
+    public var onPartIndicesRemapped: @MainActor ([Int: Int?]) -> Void = { _ in }
     /// Set when a revert failed, for the chrome to surface. Cleared at the start of each attempt.
     public internal(set) var revertError: String?
     /// Drives the revert confirmation dialog. On the view model, not view-local `@State`, so `EditorRevertButton`

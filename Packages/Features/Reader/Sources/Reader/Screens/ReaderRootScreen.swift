@@ -398,6 +398,7 @@ public struct ReaderRootScreen: View {
             // declaration — under SwiftLint's body-length budgets.
             if let editingHost {
                 wireRevertReload(host: editingHost, viewModel: viewModel)
+                wirePartRemapReload(host: editingHost, viewModel: viewModel)
             }
             viewModel.playbackSession.startCursorProvider = { [weak editingHost] in
                 guard let host = editingHost, host.isEditing,

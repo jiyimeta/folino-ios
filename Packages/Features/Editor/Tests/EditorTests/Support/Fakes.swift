@@ -31,7 +31,9 @@ final class FakeScoreFileGateway: ScoreFileGateway, @unchecked Sendable {
     }
 
     func saveScore(_ score: Score, fileURL: URL, format: ScoreFormat) throws {
-        if let saveError { throw saveError }
+        if let saveError {
+            throw saveError
+        }
         eventLog?.record("save")
         savedCalls.append((score, fileURL, format))
         // Write real bytes so callers that hash the saved file (Task 10's EditorFileFacts) see deterministic content.
@@ -54,7 +56,9 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     func refresh() throws {}
 
     func saveScoreItem(_ item: ScoreItem) throws {
-        if let saveError { throw saveError }
+        if let saveError {
+            throw saveError
+        }
         savedScoreItems.append(item)
         if let idx = scoreItems.firstIndex(where: { $0.id == item.id }) {
             scoreItems[idx] = item
@@ -76,16 +80,27 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
         []
     }
 
+    /// Per-score preference rows, keyed the way the live store keys them. Seeded directly by a test that needs a row
+    /// to exist; otherwise empty, which is the "score never opened in the Reader" case.
+    var readerPreferences: [ScoreItemID: ReaderPreferences] = [:]
+    var savedReaderPreferences: [ReaderPreferences] = []
+    /// When set, `saveReaderPreferences` throws this — exercises the migration's retry-next-save path.
+    var readerPreferencesSaveError: Error?
+
     func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? {
-        nil
+        readerPreferences[scoreItemID]
     }
 
-    func saveReaderPreferences(_ preferences: ReaderPreferences) throws {}
+    func saveReaderPreferences(_ preferences: ReaderPreferences) throws {
+        if let readerPreferencesSaveError {
+            throw readerPreferencesSaveError
+        }
+        savedReaderPreferences.append(preferences)
+        readerPreferences[preferences.scoreItemID] = preferences
+    }
 
-    /// This fake never stores preferences (`loadReaderPreferences` is a `nil` stub), so an empty snapshot is the
-    /// honest answer rather than a placeholder.
     func allReaderPreferences() throws -> [ReaderPreferences] {
-        []
+        Array(readerPreferences.values)
     }
 }
 
@@ -132,7 +147,9 @@ final class FakeScoreOriginalStore: ScoreOriginalStore, @unchecked Sendable {
 
     func revertToOriginal(_ item: ScoreItem, restoringScoreInfo: Bool) throws -> ScoreItem {
         revertCalls.append((item, restoringScoreInfo))
-        if let revertError { throw revertError }
+        if let revertError {
+            throw revertError
+        }
         var cleared = item
         cleared.originalFileName = nil
         cleared.originalContentHash = nil

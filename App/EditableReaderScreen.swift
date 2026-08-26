@@ -166,6 +166,12 @@ struct EditableReaderScreen: View {
         vm.onRevertCompleted = { [weak host] item in
             host?.requestReloadAfterRevert(item)
         }
+        // The other half of a part add / remove / reorder: the save has migrated the persisted `ReaderPreferences`
+        // row onto the new part numbering, but the Reader is still holding the pre-migration copy of the very same
+        // state in memory — and that copy is what its next preference write would persist.
+        vm.onPartIndicesRemapped = { [weak host] _ in
+            host?.requestReloadAfterPartRemap()
+        }
         // Straight from the Reader's overlay into the view model, with no SwiftUI body in between: this fires on every
         // scroll and zoom frame, and anything that read it in a body would re-render the score at that rate.
         host.onSelectionAnchorChanged = { [weak vm] anchor in

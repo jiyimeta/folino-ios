@@ -10,7 +10,9 @@ extension EditorViewModel {
         autosaveTask?.cancel()
         autosaveTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
-            if Task.isCancelled { return }
+            if Task.isCancelled {
+                return
+            }
             await self?.runSave()
         }
     }
@@ -104,9 +106,39 @@ extension EditorViewModel {
             if destination.isSiblingCopy {
                 didSaveAsSiblingMSCZ = true
             }
+            await migratePartIndexedPreferences(for: newItem.id)
             isDirty = false
         } catch {
             // Keep isDirty true so the next debounce tick or flush retries the write.
+        }
+    }
+
+    /// Rewrites the score's per-score `ReaderPreferences` row so its part-indexed keys still name the same parts
+    /// after this session's add / remove / reorder, then tells the host to re-seat its in-memory copy.
+    ///
+    /// Runs here — inside `performSave`, right after the score itself is on disk — because that is the only moment
+    /// the two are consistent: the file now has the new part order, so a row migrated now describes the file that
+    /// exists. `ScoreEditSession` accumulates the map since the last consume point, so a save that lands three part
+    /// operations later still gets one map from the state the row was last written in, and undo / redo need no
+    /// special handling (the map is derived by diffing `Part.id`s, so an undone removal simply maps back to itself).
+    ///
+    /// The mapping is consumed ONLY after the write succeeds. A failed write leaves it accumulating so the next save
+    /// retries the same migration; consuming first would re-baseline over a row that never moved and leave it
+    /// permanently pointing at the old numbering.
+    ///
+    /// No stored row (`nil`) still consumes and still notifies: there is nothing to migrate, and leaving the map
+    /// unconsumed would make the next part operation report a stale cumulative map against a row written since.
+    private func migratePartIndexedPreferences(for id: ScoreItemID) async {
+        guard let session, !session.isPartMappingIdentity else { return }
+        let mapping = session.partIndexMapping
+        do {
+            if let stored = try await repository.loadReaderPreferences(for: id) {
+                try await repository.saveReaderPreferences(stored.remappingParts(mapping))
+            }
+            session.consumePartIndexMapping()
+            onPartIndicesRemapped(mapping)
+        } catch {
+            // Leave the mapping unconsumed: the next save retries the migration with the same cumulative map.
         }
     }
 
