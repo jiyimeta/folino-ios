@@ -67,7 +67,7 @@ struct NewScoreSheet: View {
         Section {
             Picker(selection: presetIndex) {
                 ForEach(Array(NewScoreForm.Preset.allCases.enumerated()), id: \.offset) { index, preset in
-                    Text(Self.presetTitle(preset)).tag(index)
+                    Text(Self.presetTitle(preset), bundle: .module).tag(index)
                 }
             } label: {
                 Text("library.newScore.field.preset", bundle: .module)
