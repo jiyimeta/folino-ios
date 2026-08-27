@@ -100,8 +100,19 @@ if isAndroid {
     // Android cross-compile path: the self-contained `FolinoSoundfontJNI` JNI target. It pins the same
     // swift-wirelet revision as the Library and Reader JNI .so files (`ba1b8e33`), so the three agree on the
     // generated wire format. `FolinoSettingsJNI` is the odd one out — Settings pins `cd0d148e` (v0.2.2)
-    // unconditionally, because `SettingsLogic` links Wirelet on the host side too. All four .so files load into
-    // one process, so keep that skew in mind before assuming a wire change reaches every module.
+    // unconditionally, because `SettingsLogic` links Wirelet on the host side too.
+    //
+    // That skew is deliberate and safe, because the wire format only has to agree **within one module's JNI pair**,
+    // not across the app: each `.so` links its own copy of the runtime statically and exchanges bytes solely with
+    // the Kotlin codecs its own Gradle module generates. Settings is 0.2.2 on both sides (`FolinoSettingsAndroid`
+    // applies the 0.2.2 plugin), Library and Reader are 0.3.2 on both sides, and no `@WireFormat` type crosses
+    // between them — Settings' live in `SettingsLogic` (`GMDrumKitWire`, `VersionHistoryWire`) and are read by
+    // nothing else. The one place the versions do meet is `wirelet-runtime` on the Kotlin classpath, where Gradle
+    // resolves the app's conflicting 0.2.2 / 0.3.2 requests up to 0.3.2 — so the 0.2.2-generated Settings codecs
+    // already compile and run against the newer runtime in every shipped build.
+    //
+    // Align them anyway when the Android note-editing branch lands, since it moves Infrastructure and Reader to
+    // `exact: "0.5.0"` and re-pinning Settings in the same pass keeps one revision to reason about.
     // Domain (already a path dependency above) provides the shared `SoundfontDownloadReducer` / state / preset
     // types so download behavior matches iOS exactly.
     packageDependencies += [
