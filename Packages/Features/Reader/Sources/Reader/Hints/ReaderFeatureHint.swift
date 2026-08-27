@@ -29,6 +29,17 @@ enum ReaderFeatureHint: String, CaseIterable {
     case repeatPlayback
     /// Per-part volume, mute and solo — lives in the playback inspector.
     case mixer
+    /// The note-input pad tucks past a side edge with a sideways swipe — the gesture that replaced the old top-bar
+    /// show / hide toggle. Offered on entering edit mode (see `offerPadHideHint`), outside the rotation, because
+    /// the moment the pad is in the way is the moment this matters. First step of the pad chain: tucking it offers
+    /// `padRestore`, restoring offers `padMove` — the transport pair's teach-by-consequence shape, one longer.
+    case padHide
+    /// The tab a tucked pad leaves brings it back — tap it or pull it out. Offered off the tab's appearance (the
+    /// consequence of the tuck `padHide` just taught), the way `transportExpand` rides the compact pill's.
+    case padRestore
+    /// The note-input pad re-docks top / bottom with a vertical drag. Offered after a restore — and never if the
+    /// user has already moved it on their own.
+    case padMove
 
     /// Round-robin order. Every hint here is equal: surfaced until its own feature is used, then retired. The transport
     /// swipe leads because it is the one affordance with no icon at all — nothing on screen suggests it exists.
@@ -52,6 +63,8 @@ enum ReaderFeatureHint: String, CaseIterable {
         case .annotation: .annotationButton
         case .staffVisibility: .visualInspectorButton
         case .metronome, .repeatPlayback, .mixer: .playbackInspectorButton
+        case .padHide, .padMove: .noteInputPad
+        case .padRestore: .noteInputPadHandle
         }
     }
 }
@@ -69,15 +82,24 @@ enum ReaderHintTarget: String, Hashable {
     case annotationButton
     case visualInspectorButton
     case playbackInspectorButton
+    /// The note-input pad itself. Its frame is relayed through `ReaderEditingHost.noteInputPadFrame` — the pad is
+    /// App-injected Editor code, so a `readerHintAnchor` this feature attaches itself never sees it.
+    case noteInputPad
+    /// The pull tab a tucked pad leaves at the screen edge — relayed the same way
+    /// (`ReaderEditingHost.noteInputPadHandleFrame`).
+    case noteInputPadHandle
 
-    /// Where the bubble sits relative to its anchor. Top-of-screen controls drop below (caret up); the bottom-docked
-    /// transport floats above (caret down).
-    var placement: ReaderHintPlacement {
+    /// Where the bubble sits relative to its anchor. Fixed chrome answers statically: top-of-screen controls drop
+    /// below (caret up), the bottom-docked transport floats above (caret down). The pad and its tab are the targets
+    /// that can rest at either edge, so they answer by where their anchor actually is.
+    func placement(anchorMidY: CGFloat = 0, viewportHeight: CGFloat = .infinity) -> ReaderHintPlacement {
         switch self {
         case .transportExpanded, .transportCompact:
             .above
         case .noteEditingButton, .annotationButton, .visualInspectorButton, .playbackInspectorButton:
             .below
+        case .noteInputPad, .noteInputPadHandle:
+            anchorMidY < viewportHeight / 2 ? .below : .above
         }
     }
 }

@@ -14,6 +14,9 @@ enum ReaderHintCopy {
         case .metronome: Text("reader.hint.metronome.title", bundle: .module)
         case .repeatPlayback: Text("reader.hint.repeatPlayback.title", bundle: .module)
         case .mixer: Text("reader.hint.mixer.title", bundle: .module)
+        case .padHide: Text("reader.hint.padHide.title", bundle: .module)
+        case .padRestore: Text("reader.hint.padRestore.title", bundle: .module)
+        case .padMove: Text("reader.hint.padMove.title", bundle: .module)
         }
     }
 
@@ -27,6 +30,9 @@ enum ReaderHintCopy {
         case .metronome: Text("reader.hint.metronome.message", bundle: .module)
         case .repeatPlayback: Text("reader.hint.repeatPlayback.message", bundle: .module)
         case .mixer: Text("reader.hint.mixer.message", bundle: .module)
+        case .padHide: Text("reader.hint.padHide.message", bundle: .module)
+        case .padRestore: Text("reader.hint.padRestore.message", bundle: .module)
+        case .padMove: Text("reader.hint.padMove.message", bundle: .module)
         }
     }
 

@@ -147,6 +147,35 @@ public final class ReaderEditingHost {
     public var editingChromeTopInset: CGFloat = 0
     public var editingChromeBottomInset: CGFloat = 0
 
+    /// Where the note-input pad is on screen, in WINDOW coordinates, or `nil` while it is tucked away (or the chrome
+    /// isn't up). Written by the App from the Editor's chrome, read by the Reader's coach-mark overlay — which has to
+    /// point at a surface it does not draw. Window coordinates because the two sides may live in different hosting
+    /// contexts, and the window is the one space they genuinely share (`onWindowFrameChange`).
+    public var noteInputPadFrame: CGRect?
+
+    /// The pull tab a tucked pad leaves at the screen edge, in the same WINDOW coordinates — the "bring it back"
+    /// coach mark's anchor. `nil` while the pad is out.
+    public var noteInputPadHandleFrame: CGRect?
+
+    /// Bumped when the user actually moves the pad to the other vertical dock / tucks it past a side edge / brings
+    /// it back out. The coach marks teaching those gestures watch these and retire (and the restore chains the next
+    /// hint — see `PadHintWiring`).
+    public private(set) var padDockMoveUses = 0
+    public private(set) var padTuckUses = 0
+    public private(set) var padRestoreUses = 0
+
+    public func notePadDockMoved() {
+        padDockMoveUses += 1
+    }
+
+    public func notePadTucked() {
+        padTuckUses += 1
+    }
+
+    public func notePadRestored() {
+        padRestoreUses += 1
+    }
+
     // App-wired callbacks:
     public var onBeginEditing: @MainActor (Score) -> Void = { _ in }
     public var onEndEditing: @MainActor () -> Void = {}

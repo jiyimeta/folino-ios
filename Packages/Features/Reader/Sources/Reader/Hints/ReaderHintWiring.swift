@@ -37,9 +37,7 @@ struct ReaderHintWiring: ViewModifier {
             // `blocksOffer` here rather than inside the task is what makes the retry see current state — this closure
             // is rebuilt along with the modifier on every render.
             .onChange(of: blocksOffer) { _, _ in attemptOffer() }
-            .onChange(of: editingHost?.isEditing ?? false, initial: true) { _, isEditing in
-                hints.setEditing(isEditing)
-            }
+            .modifier(PadHintWiring(hints: hints, editingHost: editingHost))
     }
 
     // MARK: - Activation
@@ -61,6 +59,9 @@ struct ReaderHintWiring: ViewModifier {
             viewModel.isVisualInspectorPresented = true
         case .metronome, .repeatPlayback, .mixer:
             viewModel.isPlaybackInspectorPresented = true
+        case .padHide, .padRestore, .padMove:
+            // Gesture hints have no button to press for the user; the tap just acknowledges (the dismiss above).
+            break
         }
     }
 
@@ -115,5 +116,60 @@ struct ReaderHintWiring: ViewModifier {
             || viewModel.isVisualInspectorPresented
             || viewModel.isAnnotating
             || editingHost?.isEditing == true
+    }
+}
+
+/// The pad-gesture coach marks' wiring, split out of `ReaderHintWiring.body` — that chain was already at the
+/// type-checker's limit (see its own doc comment), and these four modifiers pushed it over.
+private struct PadHintWiring: ViewModifier {
+    let hints: ReaderHintCoordinator
+    let editingHost: ReaderEditingHost?
+
+    func body(content: Content) -> some View {
+        anchors(content)
+            // Entering edit mode offers the chain's opener (once per launch, until a tuck has been performed).
+            // Deferred a beat so the chrome has laid out and reported the anchor this hangs off.
+                .onChange(of: editingHost?.isEditing ?? false, initial: true) { _, isEditing in
+                    hints.setEditing(isEditing)
+                    guard isEditing else { return }
+                    Task {
+                        try? await Task.sleep(for: .seconds(0.5))
+                        guard editingHost?.isEditing == true else { return }
+                        hints.offerPadGestureHint()
+                    }
+                }
+                // The gestures themselves retire their hints: an actual dock move, an actual tuck, an actual restore —
+                // and the restore chains the last hint (skipped inside if the move was already performed).
+                .onChange(of: editingHost?.padDockMoveUses ?? 0) { _, _ in
+                    hints.markUsed(.padMove)
+                }
+                .onChange(of: editingHost?.padTuckUses ?? 0) { _, _ in
+                    hints.markUsed(.padHide)
+                }
+                .onChange(of: editingHost?.padRestoreUses ?? 0) { _, _ in
+                    hints.markUsed(.padRestore)
+                    hints.schedulePadMoveHint()
+                }
+    }
+
+    /// The pad-chain coach marks point at surfaces the Editor draws, so their frames arrive through the seam rather
+    /// than from a `readerHintAnchor` this feature could attach itself. (The `padRestore` offer itself rides the
+    /// handle anchor's first report — see `ReaderHintCoordinator.setAnchor`.)
+    private func anchors(_ content: Content) -> some View {
+        content
+            .onChange(of: editingHost?.noteInputPadFrame, initial: true) { _, frame in
+                if let frame {
+                    hints.setAnchor(frame, for: .noteInputPad)
+                } else {
+                    hints.clearAnchor(for: .noteInputPad)
+                }
+            }
+            .onChange(of: editingHost?.noteInputPadHandleFrame, initial: true) { _, frame in
+                if let frame {
+                    hints.setAnchor(frame, for: .noteInputPadHandle)
+                } else {
+                    hints.clearAnchor(for: .noteInputPadHandle)
+                }
+            }
     }
 }

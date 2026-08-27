@@ -67,6 +67,11 @@ struct EditableReaderScreen: View {
                     editingHost.editingChromeTopInset = top
                     editingHost.editingChromeBottomInset = bottom
                 },
+                onPadAnchorFrameChange: { editingHost.noteInputPadFrame = $0 },
+                onPadHandleAnchorFrameChange: { editingHost.noteInputPadHandleFrame = $0 },
+                onPadDockMoved: { editingHost.notePadDockMoved() },
+                onPadTucked: { editingHost.notePadTucked() },
+                onPadRestored: { editingHost.notePadRestored() },
             ))
         }, { [editingHost] context in
             AnyView(EditorTopBarView(
