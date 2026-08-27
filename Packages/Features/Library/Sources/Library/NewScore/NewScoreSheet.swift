@@ -260,8 +260,9 @@ struct NewScoreSheet: View {
         }
     }
 
-    /// The opening bar's length, or none. Rebuilt from the current meter on every change, so it never offers a
-    /// pickup longer than the bar it opens; `NewScoreForm` retires a stale selection at the same moment.
+    /// The opening bar's length, or none. The rows are rebuilt from the current meter, so the list never offers
+    /// a pickup longer than the bar it opens, and `NewScoreForm.pickup` answers `nil` for a chosen value the
+    /// current meter does not offer — the selection can never point at a row that is not there.
     private var pickupRow: some View {
         Picker(selection: $form.pickup) {
             Text("library.newScore.field.pickup.none", bundle: .module).tag(Fraction?.none)

@@ -67,6 +67,10 @@ public struct TimeSignaturePicker: View {
         .scrollIndicators(.hidden)
     }
 
+    /// A chip necessarily writes the two bindings one after the other — they are two `Binding<Int>`s, and this
+    /// view has no way to set them as a pair. So a caller that derives anything from the meter is briefly asked
+    /// about the transient pair (new numerator, old denominator), and must answer without destroying state: the
+    /// creation wizard's pickup is validated on read rather than cleared on write for exactly this reason.
     private func chip(_ preset: (Int, Int)) -> some View {
         let isSelected = numerator == preset.0 && denominator == preset.1
         return Button {

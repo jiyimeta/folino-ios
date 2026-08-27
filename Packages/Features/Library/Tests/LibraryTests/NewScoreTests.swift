@@ -389,6 +389,76 @@ struct NewScoreTests {
         #expect(form.pickup == Fraction(numerator: 1, denominator: 8))
     }
 
+    /// Tapping a preset chip writes the numerator and then the denominator, so the form is briefly asked about a
+    /// meter that never existed — here 3/8, between 7/8 and 3/4. A 5/8 pickup does not fit that transient bar but
+    /// fits 3/4 exactly, and must survive the jump.
+    @Test
+    func `a preset jump through a shorter transient bar keeps a fitting pickup`() {
+        let pickup = Fraction(numerator: 5, denominator: 8)
+        var form = NewScoreForm()
+        form.title = "Anacrusis"
+        form.timeNumerator = 7
+        form.timeDenominator = 8
+        form.pickup = pickup
+        #expect(form.pickup == pickup)
+        // The trap, pinned: judged against the half-written meter, this pickup looks unavailable.
+        #expect(!NewScoreForm.pickupChoices(numerator: 3, denominator: 8).contains(pickup))
+        // The chip's own write order.
+        form.timeNumerator = 3
+        form.timeDenominator = 4
+        #expect(form.pickup == pickup)
+    }
+
+    /// The same in the other write order, so neither field is special.
+    @Test
+    func `a preset jump keeps a fitting pickup whichever field moves first`() {
+        let pickup = Fraction(numerator: 5, denominator: 8)
+        var form = NewScoreForm()
+        form.title = "Anacrusis"
+        form.timeNumerator = 7
+        form.timeDenominator = 8
+        form.pickup = pickup
+        form.timeDenominator = 4
+        form.timeNumerator = 3
+        #expect(form.pickup == pickup)
+    }
+
+    /// A meter the user passes through does not cost them the pickup: it stops being offered while it does not
+    /// fit, and comes back when the meter accommodates it again.
+    @Test
+    func `a pickup hidden by one meter returns when the meter fits it again`() {
+        let pickup = Fraction(numerator: 5, denominator: 8)
+        var form = NewScoreForm()
+        form.title = "Anacrusis"
+        form.timeNumerator = 7
+        form.timeDenominator = 8
+        form.pickup = pickup
+        form.timeNumerator = 1
+        #expect(form.pickup == nil)
+        #expect(form.template()?.pickup == nil)
+        form.timeNumerator = 7
+        #expect(form.pickup == pickup)
+    }
+
+    /// The one-value check the `pickup` property reads through must answer exactly what the offered list holds —
+    /// they are two spellings of one rule, and a drift between them would show as a picker row with no selection.
+    @Test
+    func `pickup availability agrees with the offered choices`() {
+        let meters = [(4, 4), (3, 4), (7, 8), (6, 8), (3, 16), (2, 2), (1, 8), (5, 32)]
+        let candidates = [(1, 16), (1, 8), (1, 4), (3, 8), (1, 2), (5, 8), (3, 4), (7, 8), (1, 1), (3, 2), (1, 32)]
+        for (numerator, denominator) in meters {
+            let choices = NewScoreForm.pickupChoices(numerator: numerator, denominator: denominator)
+            for candidate in candidates {
+                let fraction = Fraction(numerator: candidate.0, denominator: candidate.1)
+                #expect(
+                    NewScoreForm.isPickupAvailable(fraction, numerator: numerator, denominator: denominator)
+                        == choices.contains(fraction),
+                    "\(candidate.0)/\(candidate.1) in \(numerator)/\(denominator)",
+                )
+            }
+        }
+    }
+
     @Test
     func `an empty instrumentation disables create`() {
         var form = NewScoreForm()

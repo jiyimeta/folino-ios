@@ -142,20 +142,37 @@ struct NewScoreForm: Equatable {
     /// (`Part.init(blankPlan:id:measures:)` adds them) and are unaffected by this.
     var bracketGroups: [Range<Int>] = []
     var concertKey = 0
-    // Two Ints, not a tuple: Equatable synthesis rejects tuple stored properties. Both observe themselves so a
-    // meter change can retire a pickup the new bar can no longer hold — the picker is bound straight to them,
-    // so there is no other choke point a rewrite would pass through.
-    var timeNumerator = 4 {
-        didSet { dropPickupIfUnavailable() }
-    }
+    // Two Ints, not a tuple: Equatable synthesis rejects tuple stored properties.
+    var timeNumerator = 4
+    var timeDenominator = 4
 
-    var timeDenominator = 4 {
-        didSet { dropPickupIfUnavailable() }
-    }
+    /// Backing storage for `pickup`. Written only through the property below, and never read directly — the
+    /// stored value can be one the current meter does not offer.
+    private var chosenPickup: Fraction?
 
     /// The opening bar's own length when the score starts on an anacrusis, `nil` (the default) when it does not.
-    /// Always one of `pickupChoices(numerator:denominator:)` for the current meter.
-    var pickup: Fraction?
+    /// Always one of `pickupChoices(numerator:denominator:)` for the current meter, or `nil`.
+    ///
+    /// The invariant is enforced on READ rather than by clearing the stored value when the meter changes, and
+    /// the distinction is load-bearing: the two meter fields are written one at a time, so any check that ran
+    /// on assignment would judge the pickup against a meter that pairs one field's new value with the other's
+    /// old one. `TimeSignaturePicker`'s preset chips do exactly that — jumping from 7/8 to 3/4 sets the
+    /// numerator first, and a clear-on-write check saw the transient 3/8, where a 5/8 pickup does not fit,
+    /// destroying a pickup that 3/4 accommodates perfectly well.
+    ///
+    /// Validating on read makes that transient invisible, and gives the user the better behavior besides: a
+    /// meter passed through on the way to another one costs them nothing. The pickup stops being offered while
+    /// it does not fit and comes back if the meter does.
+    var pickup: Fraction? {
+        get {
+            guard let chosenPickup,
+                  Self.isPickupAvailable(chosenPickup, numerator: timeNumerator, denominator: timeDenominator)
+            else { return nil }
+            return chosenPickup
+        }
+        set { chosenPickup = newValue }
+    }
+
     var tempoBPM = 120
     /// Total bars INCLUDING the pickup, matching `BlankScoreTemplate.measureCount` — a 32-bar score with a
     /// pickup is the pickup plus 31 full bars.
@@ -275,6 +292,9 @@ struct NewScoreForm: Equatable {
     /// The unit is an eighth note, or the meter's own denominator when that is finer — 3/16 can start on a
     /// sixteenth, while 3/4 offers eighths rather than the sixteenths nobody starts a piece on. Strictly
     /// shorter, because a first bar as long as the meter is simply a full bar.
+    ///
+    /// `isPickupAvailable(_:numerator:denominator:)` decides the same question one value at a time; the two are
+    /// held in step by `pickup availability agrees with the offered choices` in `NewScoreTests`.
     static func pickupChoices(numerator: Int, denominator: Int) -> [Fraction] {
         guard numerator > 0, denominator > 0 else { return [] }
         let unit = max(8, denominator)
@@ -288,15 +308,19 @@ struct NewScoreForm: Equatable {
         return choices
     }
 
-    /// Retires a pickup the current meter no longer offers. Membership rather than a length comparison: a meter
-    /// change can also coarsen the unit (3/16's sixteenth-note pickup has no place in 3/4), and a pickup the
-    /// picker cannot show is a row with no selection.
-    private mutating func dropPickupIfUnavailable() {
-        guard let pickup else { return }
-        let choices = Self.pickupChoices(numerator: timeNumerator, denominator: timeDenominator)
-        if !choices.contains(pickup) {
-            self.pickup = nil
-        }
+    /// Whether a meter offers `pickup` — that is, whether `pickupChoices(numerator:denominator:)` would contain
+    /// it. Answered arithmetically rather than by building and searching that list, because the `pickup`
+    /// property asks on every read: a fraction is a multiple of the beat unit exactly when its (reduced)
+    /// denominator divides the unit, and it is a pickup only while it is shorter than a full bar.
+    ///
+    /// Membership, not just a length comparison: a meter change can coarsen the unit as well as shorten the bar,
+    /// and 3/16's sixteenth-note pickup has no place in 3/4 either.
+    static func isPickupAvailable(_ pickup: Fraction, numerator: Int, denominator: Int) -> Bool {
+        guard numerator > 0, denominator > 0, pickup.numerator > 0 else { return false }
+        let unit = max(8, denominator)
+        guard unit % pickup.denominator == 0 else { return false }
+        // pickup < numerator/denominator, cross-multiplied so the comparison stays in integers.
+        return pickup.numerator * denominator < numerator * pickup.denominator
     }
 
     // MARK: - Duplicate numbering
