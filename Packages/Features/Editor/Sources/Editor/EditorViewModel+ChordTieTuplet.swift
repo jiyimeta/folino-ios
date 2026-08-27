@@ -35,11 +35,15 @@ extension EditorViewModel {
     /// The chord-armed branch of `inputPitch` (Task 5 wiring, `EditorViewModel+Input.swift`): adds `letter`'s
     /// in-key pitch, nearest the selected note, to the chord — then clears the arm and selects the added note.
     /// Never auto-advances (spec §5.4).
+    ///
+    /// It plans through the same `plannedConcertPitch` the two `inputPitch` sites do: the letter is a letter on
+    /// the page either way, so on a transposing staff it has to be resolved in the written space and stored as
+    /// the concert pitch that engraves back to it.
     func addLetterToChord(_ letter: Character, at noteID: NoteID, in score: Score) {
         isAddToChordArmed = false
         guard let note = score[noteID],
-              let target = MeasureAccidentals.plannedPitch(
-                  forLetter: letter, nearestTo: note.pitch, at: VoiceElementID(noteID), in: score,
+              let target = MeasureAccidentals.plannedConcertPitch(
+                  forWrittenLetter: letter, nearestTo: note.pitch, at: VoiceElementID(noteID), in: score,
               )
         else { return }
         addNoteToChord(

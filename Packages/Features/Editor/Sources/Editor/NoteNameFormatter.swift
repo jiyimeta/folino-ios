@@ -8,6 +8,10 @@ import SheetMusicCore
 /// - Accidental glyph comes from the tpc's alteration relative to its natural letter.
 /// - Octave comes from the MIDI pitch, bucketed against the letter's natural pitch so enharmonic spellings land in
 ///   the letter's octave (B♯3 and C♭4 spell correctly, not B♯4 / C♭5). Octave 4 contains middle C (MIDI 60).
+///
+/// The readout names the note the user is LOOKING at, so a note on a transposing staff is spelled from its written
+/// pair (`Score.writtenSpelling(of:)`), not from the concert one it is stored as: a B♭ clarinet's written C5 is
+/// stored as concert B♭4, and a readout saying B♭4 next to a C on the page is just wrong.
 enum NoteNameFormatter {
     /// Scientific-pitch letter for each diatonic index, `C D E F G A B` order.
     private static let letterNames = ["C", "D", "E", "F", "G", "A", "B"]
@@ -21,13 +25,20 @@ enum NoteNameFormatter {
         return "\(letterNames[letter])\(glyph)\(octave(pitch: pitch, letter: letter))"
     }
 
+    /// The WRITTEN name of `noteID` — what the staff reads. Identical to the stored concert spelling everywhere
+    /// but a transposing part. `nil` when the id names no note.
+    static func name(of noteID: NoteID, in score: Score) -> String? {
+        guard let written = score.writtenSpelling(of: noteID) else { return nil }
+        return name(pitch: written.pitch, tpc: written.tpc)
+    }
+
     /// `"E♭4 · 4分音符 · m.12 · 声部 1"`. The note-name segment is present only for `.note` selections (a rest carries
     /// no pitch); duration / measure / voice segments follow. Segments that can't be resolved are dropped, so the
     /// separator never dangles.
     static func readout(for item: SheetMusicCore.ScoreItemID, in score: Score) -> String {
         var segments: [String] = []
-        if case let .note(noteID) = item, let note = score[noteID] {
-            segments.append(name(pitch: note.pitch, tpc: note.tpc))
+        if case let .note(noteID) = item, let written = name(of: noteID, in: score) {
+            segments.append(written)
         }
         if let duration = duration(for: item, in: score), let durationName = localizedDurationName(duration) {
             segments.append(durationName)

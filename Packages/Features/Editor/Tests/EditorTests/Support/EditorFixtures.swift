@@ -45,6 +45,32 @@ enum EditorFixtures {
         return Score(division: 480, parts: [part])
     }
 
+    /// One B♭ clarinet staff — `transposeChromatic -2` / `transposeDiatonic -1`, so `writtenPitchOffset` and
+    /// `writtenFifthsOffset` are both +2 — over one 4/4 bar of quarter rests under `concertKey`. At the default
+    /// concert C major the staff READS D major, where C and F are sharp.
+    ///
+    /// Element layout matches `twoMeasuresOfQuarterRests(key:)`'s first bar: [0] keySignature, [1]
+    /// timeSignature(4/4), [2...5] rest(quarter). The key signature is spelled out rather than left implicit
+    /// because the written view shifts key signature ELEMENTS — a bar with none reads C major on both staves and
+    /// the transposition would be invisible.
+    static func clarinetQuarterRests(key concertKey: Int = 0) -> Score {
+        let voice = Voice(elements: [
+            .keySignature(KeySignature(concertKey: concertKey)),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+        ])
+        let staff = Staff(measures: [Measure(voices: [voice])])
+        let part = Part(
+            id: "1",
+            instrument: Instrument(id: "clarinet", transposeDiatonic: -1, transposeChromatic: -2),
+            staves: [staff],
+        )
+        return Score(division: 480, parts: [part])
+    }
+
     /// Same, but element index 1 is a quarter chord on C4 (pitch 60, tpc 14).
     static func chordAtIndex1() -> Score {
         var score = fourQuarterRests()

@@ -10,10 +10,12 @@ extension EditorViewModel {
     /// barline) takes `.writeNote`, which re-pitches AND re-times in one step, while a caret on an upper notehead
     /// of an existing chord (added via ＋音, then typed over) takes a narrower `.setNotePitch` — composited with
     /// `.setChordDuration` when a length is armed too, since `.setNotePitch` alone never re-times. Either way the
-    /// pitch is the letter's spelling AS THE BAR READS IT (`MeasureAccidentals.plannedPitch`) nearest the previous
-    /// note: the key signature's, unless an accidental earlier in the same measure has already respelled that staff
-    /// line. Add-to-chord armed is the one exception: it stacks onto the SELECTED chord (`.addNoteToChord`, Task 7),
-    /// since what it means is "another note in the one I just wrote".
+    /// pitch is the letter's spelling AS THE BAR READS IT (`MeasureAccidentals.plannedConcertPitch`) nearest the
+    /// previous note: the key signature's, unless an accidental earlier in the same measure has already respelled
+    /// that staff line — and on a transposing staff, the bar that reads it is the WRITTEN one, so C on a B♭
+    /// clarinet in concert C major means the C♯ its D-major signature spells, stored as a concert B♮. Add-to-chord
+    /// armed is the one exception: it stacks onto the SELECTED chord (`.addNoteToChord`, Task 7), since what it
+    /// means is "another note in the one I just wrote".
     ///
     /// Afterwards the selection lands on the note that was written and the caret moves on to the next timed element
     /// (spec §11-5: advance on after keys), so ♯ / ♭ / ⌫ keep addressing the note rather than the empty slot ahead.
@@ -96,7 +98,9 @@ extension EditorViewModel {
         guard case let .chord(current)? = score[location] else { return }
         let isNote = !current.notes.isEmpty
         guard let armed = armedInputDuration, current.duration != armed, !isInsideTuplet(location) else {
-            if isNote { deleteSelection() }
+            if isNote {
+                deleteSelection()
+            }
             return
         }
         apply(.writeRest(at: location, duration: armed))
@@ -212,8 +216,8 @@ extension EditorViewModel {
     private func inputPitch(letter: Character, onRest restID: RestID, in score: Score) {
         let veID = VoiceElementID(restID)
         guard let rest = score[restID],
-              let planned = MeasureAccidentals.plannedPitch(
-                  forLetter: letter,
+              let planned = MeasureAccidentals.plannedConcertPitch(
+                  forWrittenLetter: letter,
                   nearestTo: referencePitch(before: veID),
                   at: veID,
                   in: score,
@@ -224,7 +228,9 @@ extension EditorViewModel {
         // mirroring the old guard exactly: ssm's `.inputNote` does not skip a same-length re-time on its own, and a
         // no-op `SetRestDuration` must not ride along in the undo step.
         var duration: NoteDuration?
-        if let armed = armedInputDuration, rest.duration != armed { duration = armed }
+        if let armed = armedInputDuration, rest.duration != armed {
+            duration = armed
+        }
         // Decided BEFORE the apply, against the pre-edit score: after a chain write the caret belongs past the
         // chain's tail, but after an in-bar write it belongs one slot on even if the slot's note is (or becomes)
         // tied to something else — walking the chain unconditionally would overshoot there.
@@ -265,8 +271,8 @@ extension EditorViewModel {
     private func inputPitch(letter: Character, onNote noteID: NoteID, in score: Score) {
         let veID = VoiceElementID(noteID)
         guard let note = score[noteID],
-              let target = MeasureAccidentals.plannedPitch(
-                  forLetter: letter, nearestTo: note.pitch, at: veID, in: score,
+              let target = MeasureAccidentals.plannedConcertPitch(
+                  forWrittenLetter: letter, nearestTo: note.pitch, at: veID, in: score,
               )
         else { return }
         var duration: NoteDuration?
