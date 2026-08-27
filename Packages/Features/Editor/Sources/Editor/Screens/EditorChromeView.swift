@@ -25,10 +25,25 @@ import UtilityUI
 /// remains in the callout is ♯ / ♭ — see `EditorCalloutView` for why those two belong beside the note rather than in
 /// a row of keys aimed at the caret.
 public struct EditorChromeView: View {
-    @Bindable private var viewModel: EditorViewModel
+    @Bindable var viewModel: EditorViewModel
     /// Room the reader's bottom transport occupies, so a bottom-docked pad parks above it instead of over it.
-    private let bottomTransportClearance: CGFloat
-    private let onClusterInsetsChange: (_ top: CGFloat, _ bottom: CGFloat) -> Void
+    let bottomTransportClearance: CGFloat
+    let onClusterInsetsChange: (_ top: CGFloat, _ bottom: CGFloat) -> Void
+    /// The pad's WINDOW frame while it is out, `nil` while it is tucked or gone — the anchor the host's coach marks
+    /// point at. Window coordinates for the same reason the old toggle's anchor used them: the two sides of the seam
+    /// may live in different hosting contexts, and the window is the space they genuinely share.
+    let onPadAnchorFrameChange: (CGRect?) -> Void
+    /// The pull tab's WINDOW frame while the pad is tucked, `nil` while it is out — the anchor for the "bring it
+    /// back" coach mark, which points at the tab the pad left behind.
+    let onPadHandleAnchorFrameChange: (CGRect?) -> Void
+    /// Fired when a snap lands the pad on the OTHER vertical dock — the "drag it up / down" coach mark retires on it.
+    let onPadDockMoved: () -> Void
+    /// Fired when a snap tucks the pad past a side edge — the "swipe it away" coach mark retires on it (and the
+    /// "bring it back" one is offered off the tab's appearance).
+    let onPadTucked: () -> Void
+    /// Fired when a snap brings a tucked pad back out — the "bring it back" coach mark retires on it, and the
+    /// "drag it up / down" one takes its turn.
+    let onPadRestored: () -> Void
     @Environment(\.undoManager) private var undoManager
 
     /// Remembered across sessions: someone who moves the pad out of the way once means it for every score they open.
@@ -66,6 +81,21 @@ public struct EditorChromeView: View {
     /// stays where the user put it. Same persistence split as the placement.
     @AppStorage("editorPadTuckSide") var storedTuckSide = EditorPadTuckSide.trailing.rawValue
     @State var tuckSide: EditorPadTuckSide = .trailing
+    /// True while a tucked pad's live drag is past the restore threshold — the pad's rest base sits at the
+    /// finger-compensated preview position (`restorePreviewRestOffsetX`) so its inner edge rides the handle's.
+    ///
+    /// Real state flipped with an EXPLICIT `withAnimation` from the drag's `onChanged`, not a value derived from
+    /// `dragTranslation` behind an implicit `.animation(value:)`: the implicit animation was cancelled by the very
+    /// next drag frame's unanimated update to the same offset, so the swing only survived when the finger was nearly
+    /// still. Explicit animations run additively and keep going under continued dragging. Reset by every `snap`, and
+    /// by the cancellation guard in `padBranch` (a cancelled drag skips `onEnded` entirely).
+    @State var isRestorePreviewActive = false
+
+    /// THE spring for every pad motion that isn't the finger itself: the mid-drag threshold swing, the handle's
+    /// fade, the tuck and restore snaps, and the dock moves. One curve on purpose — the choreography reads as one
+    /// material. 0.4 / 0.2 was hand-tuned on device against 0.45/0.1 (imperceptible) and 0.5/0.15 (sluggish); it
+    /// replaced a velocity-matched, overshoot-free settle — the uniform spring won on feel.
+    static let tuckSpring: Animation = .spring(duration: 0.4, bounce: 0.2)
 
     /// One-time "saved as .mscz" notice (Task 16, spec §11-2) — shown at most once per install.
     @AppStorage("editorSiblingMSCZNoticeShown") private var siblingMSCZNoticeShown = false
@@ -75,10 +105,20 @@ public struct EditorChromeView: View {
         viewModel: EditorViewModel,
         bottomTransportClearance: CGFloat,
         onClusterInsetsChange: @escaping (_ top: CGFloat, _ bottom: CGFloat) -> Void = { _, _ in },
+        onPadAnchorFrameChange: @escaping (CGRect?) -> Void = { _ in },
+        onPadHandleAnchorFrameChange: @escaping (CGRect?) -> Void = { _ in },
+        onPadDockMoved: @escaping () -> Void = {},
+        onPadTucked: @escaping () -> Void = {},
+        onPadRestored: @escaping () -> Void = {},
     ) {
         self.viewModel = viewModel
         self.bottomTransportClearance = bottomTransportClearance
         self.onClusterInsetsChange = onClusterInsetsChange
+        self.onPadAnchorFrameChange = onPadAnchorFrameChange
+        self.onPadHandleAnchorFrameChange = onPadHandleAnchorFrameChange
+        self.onPadDockMoved = onPadDockMoved
+        self.onPadTucked = onPadTucked
+        self.onPadRestored = onPadRestored
     }
 
     public var body: some View {
@@ -156,100 +196,6 @@ public struct EditorChromeView: View {
             .transition(.move(edge: .top).combined(with: .opacity))
     }
 
-    // MARK: The editing cluster (transport + pad)
-
-    /// The pad, docked to `placement` and draggable to the other edge by its grabber, the way `PKToolPicker` can be
-    /// moved off whatever it is covering. The reader's transport stays anchored to the bottom edge and is NOT part of
-    /// this cluster — when the pad is docked at the bottom it simply parks above it.
-    ///
-    /// Dismissal is PiP's, not a toolbar toggle's: dragging the pad far enough toward a side edge tucks it past that
-    /// edge, leaving only `EditorPadTuckHandle` showing, and the handle drags (or taps) it back out. The handle is an
-    /// overlay hanging off the pad's inner edge and every motion is one shared offset, so the pad visibly converges
-    /// onto — and re-emerges from — its own tab instead of animating somewhere unrelated.
-    ///
-    /// The cluster floats over the score — it never re-engraves it. What it does instead is report its height, which
-    /// the scrolling layouts turn into scroll padding so the last (or first) system can still be brought into view.
-    private var editingCluster: some View {
-        GeometryReader { proxy in
-            // While a tucked pad is being pulled, the handle previews the release the way the PiP tab does: it stays
-            // up while letting go would snap back, and vanishes once the drag has travelled far enough to stick.
-            // While the pad is out it is gone entirely — including during the dismissing drag itself; it only fades
-            // in with the tuck snap.
-            let handleVisible = !isPadExpanded && EditorPadTuckGeometry.handleVisible(
-                side: tuckSide,
-                translationX: dragTranslation.width,
-                threshold: EditorPadTuckGeometry.threshold(in: proxy.size),
-            )
-            EditorPadView(viewModel: viewModel)
-                .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
-                    clusterSize = size
-                    publishInsets(height: size.height)
-                }
-                // The measurement only fires when the pad's own size changes, so tucking it has to re-publish too —
-                // otherwise the score keeps scroll padding for a pad that isn't there.
-                .onChange(of: isPadExpanded) { _, _ in publishInsets(height: clusterSize.height) }
-                .overlay(alignment: tuckSide.handleAlignment) {
-                    EditorPadTuckHandle(side: tuckSide) {
-                        snap(expanded: true, animation: .snappy(duration: 0.3))
-                    }
-                    // Hung fully outside the pad's inner edge, so the tucked rest position leaves exactly the tab on
-                    // screen.
-                    .offset(x: tuckSide == .trailing ? -EditorPadTuckHandle.width : EditorPadTuckHandle.width)
-                    .opacity(handleVisible ? 1 : 0)
-                    // Opacity 0 alone still hit-tests — and while the pad is out this sits invisibly over the score.
-                    .allowsHitTesting(handleVisible)
-                    // The mid-drag threshold crossings fade on their own quick curve; the snap transactions carry
-                    // their own spring for everything else.
-                    .animation(.easeOut(duration: 0.15), value: handleVisible)
-                }
-                // Before the first measurement a tucked pad's offscreen offset can't be computed yet — hold it
-                // invisible for that frame rather than flashing it across the score.
-                .opacity(clusterSize == .zero && !isPadExpanded ? 0 : 1)
-                .offset(
-                    x: tuckRestOffsetX(viewportWidth: proxy.size.width)
-                        + dragTranslation.width + releasedTranslation.width,
-                    y: dragTranslation.height + releasedTranslation.height,
-                )
-                // Anywhere on the pad moves it — no grabber to aim at. `highPriorityGesture` is what makes that
-                // possible without stealing the keys (or the handle's tap): a plain tap never travels the minimum
-                // distance, so the drag stays unrecognized and the control underneath gets it; once the finger does
-                // travel, the drag wins outright and the control it started on is cancelled rather than fired on
-                // release.
-                .highPriorityGesture(dragGesture(viewport: proxy.size))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: placement.alignment)
-                // The chrome is already laid out inside the safe area, so the transport's content height is the whole
-                // clearance a bottom-docked pad needs.
-                .padding(.bottom, placement == .bottom ? bottomTransportClearance + 4 : 0)
-                // Docked at the top, the pad hangs just under the navigation bar — the same way it sits above the
-                // transport when docked at the bottom. The chrome is laid out inside the safe area and the bar
-                // contributes its own inset, so there is no header height left to subtract here.
-                .padding(.top, placement == .top ? 4 : 0)
-                .accessibilityAction(named: Text("editor.pad.move", bundle: .module)) {
-                    // No finger to take a velocity from, so this one is a plain, calm move.
-                    dock(to: placement == .bottom ? .top : .bottom, animation: .smooth(duration: 0.35))
-                }
-                .accessibilityAction(named: Text(
-                    isPadExpanded ? "editor.chrome.hidePad" : "editor.chrome.showPad", bundle: .module,
-                )) {
-                    snap(expanded: !isPadExpanded, animation: .smooth(duration: 0.35))
-                }
-        }
-        .onAppear {
-            placement = EditorPadPlacement(rawValue: storedPlacement) ?? .bottom
-            isPadExpanded = storedPadVisible
-            tuckSide = EditorPadTuckSide(rawValue: storedTuckSide) ?? .trailing
-        }
-    }
-
-    /// The cluster's resting horizontal offset: centered while the pad is out, parked past `tuckSide`'s edge while it
-    /// is tucked.
-    private func tuckRestOffsetX(viewportWidth: CGFloat) -> CGFloat {
-        guard !isPadExpanded else { return 0 }
-        return EditorPadTuckGeometry.restOffsetX(
-            side: tuckSide, viewportWidth: viewportWidth, padWidth: clusterSize.width,
-        )
-    }
-
     // MARK: Selection stepping
 
     /// ← / → as their own pill at the bottom-left, level with the reader's compact transport.
@@ -277,16 +223,5 @@ public struct EditorChromeView: View {
         .disabled(viewModel.isPlaybackActive)
         .interactiveGlassCompat()
         .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
-    }
-
-    /// Reports the cluster's footprint to the Reader (via the App) so the scrolling layouts can pad their scroll
-    /// content by it. Only the docked edge reserves room; the other end is clear.
-    private func publishInsets(height: CGFloat) {
-        // A tucked pad reserves nothing: that room goes back to the score.
-        let height = isPadExpanded ? height : 0
-        switch placement {
-        case .top: onClusterInsetsChange(height > 0 ? height + 4 : 0, 0)
-        case .bottom: onClusterInsetsChange(0, height)
-        }
     }
 }

@@ -10,6 +10,19 @@ extension EditorChromeView {
         // the next frame's translation and the pad juddered instead of tracking the finger.
         DragGesture(minimumDistance: 12, coordinateSpace: .global)
             .updating($dragTranslation) { value, state, _ in state = value.translation }
+            // The restore-preview swing (see `isRestorePreviewActive`) is driven from here with an explicit
+            // `withAnimation`, so it keeps animating while the drag continues to stream unanimated frames.
+            .onChanged { value in
+                guard !isPadExpanded else { return }
+                let crossed = !EditorPadTuckGeometry.handleVisible(
+                    side: tuckSide,
+                    translationX: value.translation.width,
+                    threshold: EditorPadTuckGeometry.threshold(in: viewport),
+                )
+                if crossed != isRestorePreviewActive {
+                    withAnimation(Self.tuckSpring) { isRestorePreviewActive = crossed }
+                }
+            }
             .onEnded { value in
                 // Hand the finger's travel over to state for one frame so the pad doesn't blink back to its old edge
                 // as the gesture state evaporates; the animation below then unwinds it.
@@ -34,15 +47,27 @@ extension EditorChromeView {
         placement: EditorPadPlacement? = nil,
         animation: Animation,
     ) {
+        // Captured before the mutations: the gesture coach marks retire on the TRANSITIONS (a dock actually
+        // changing, the pad actually going from out to tucked and back), not on every release.
+        let didTuck = isPadExpanded && !expanded
+        let didRestore = !isPadExpanded && expanded
+        let didMoveDock = placement.map { $0 != self.placement } ?? false
+        // The side flips BEFORE the transaction, unanimated: it only ever changes while the pad is out — when the
+        // tab is parked offscreen past the OLD side's edge — and animating the flip would sail the tab across the
+        // whole screen. Teleporting it to the new side's park first means the transaction below only ever slides it
+        // in from the edge it belongs to.
+        if let side {
+            tuckSide = side
+        }
         withAnimation(animation) {
             isPadExpanded = expanded
-            if let side {
-                tuckSide = side
-            }
             if let placement {
                 self.placement = placement
             }
             releasedTranslation = .zero
+            // Every release resolves the preview: expanded makes it moot, tucked re-parks the base — either way the
+            // return to rest has to ride this same transaction.
+            isRestorePreviewActive = false
         }
         storedPadVisible = expanded
         if let side {
@@ -50,6 +75,15 @@ extension EditorChromeView {
         }
         if let placement {
             storedPlacement = placement.rawValue
+        }
+        if didTuck {
+            onPadTucked()
+        }
+        if didRestore {
+            onPadRestored()
+        }
+        if didMoveDock {
+            onPadDockMoved()
         }
     }
 
@@ -61,29 +95,26 @@ extension EditorChromeView {
         let projectedX = value.predictedEndTranslation.width
         if isPadExpanded {
             if let side = EditorPadTuckGeometry.tuckDestination(
-                projectedTranslationX: projectedX, threshold: threshold,
+                translationX: value.translation.width,
+                projectedTranslationX: projectedX,
+                velocity: value.velocity,
+                threshold: threshold,
             ) {
                 // Far enough toward a side edge: tuck past it. The snap and the handle's fade-in share one
-                // transaction, so the tab is arriving exactly as the pad converges onto it.
-                let restX = EditorPadTuckGeometry.restOffsetX(
-                    side: side, viewportWidth: viewport.width, padWidth: clusterSize.width,
-                )
-                snap(expanded: false, side: side, animation: Self.snapAnimation(
-                    from: value.translation.width, to: restX, releaseVelocity: value.velocity.width,
-                ))
-            } else {
-                // A reposition, not a dismissal: re-dock top or bottom by where the pad ENDED UP, not by how far the
-                // finger moved — a short flick near an edge shouldn't launch it across the screen.
-                let releasedCenter = parkedCenterY(of: placement, viewportHeight: viewport.height)
-                    + value.translation.height
+                // transaction, so the tab is arriving exactly as the pad converges onto it. The vertical dock
+                // re-derives from where the drag landed — a pull from the bottom toward the top-right corner means
+                // "hide it up there", not "hide it at the dock it happened to be visible on".
                 let landedCenter = parkedCenterY(of: placement, viewportHeight: viewport.height)
                     + value.predictedEndTranslation.height
                 let destination = EditorPadPlacement.nearest(toCenterY: landedCenter, in: viewport.height)
-                dock(to: destination, animation: Self.snapAnimation(
-                    from: releasedCenter,
-                    to: parkedCenterY(of: destination, viewportHeight: viewport.height),
-                    releaseVelocity: value.velocity.height,
-                ))
+                snap(expanded: false, side: side, placement: destination, animation: Self.tuckSpring)
+            } else {
+                // A reposition, not a dismissal: re-dock top or bottom by where the pad ENDED UP, not by how far the
+                // finger moved — a short flick near an edge shouldn't launch it across the screen.
+                let landedCenter = parkedCenterY(of: placement, viewportHeight: viewport.height)
+                    + value.predictedEndTranslation.height
+                let destination = EditorPadPlacement.nearest(toCenterY: landedCenter, in: viewport.height)
+                dock(to: destination, animation: Self.tuckSpring)
             }
         } else {
             // The tab can be slid along its edge while staying hidden, so the vertical dock re-derives either way.
@@ -93,55 +124,12 @@ extension EditorChromeView {
             let restores = EditorPadTuckGeometry.restoresFromTuck(
                 side: tuckSide, projectedTranslationX: projectedX, threshold: threshold,
             )
-            snap(expanded: restores, placement: destination, animation: Self.snapAnimation(
-                from: value.translation.width,
-                to: restores
-                    ? -EditorPadTuckGeometry.restOffsetX(
-                        side: tuckSide, viewportWidth: viewport.width, padWidth: clusterSize.width,
-                    )
-                    : 0,
-                releaseVelocity: value.velocity.width,
-            ))
+            snap(expanded: restores, placement: destination, animation: Self.tuckSpring)
         }
     }
 
     /// The cluster's resting y-center at a dock — the reference both dock decisions measure landings against.
     private func parkedCenterY(of placement: EditorPadPlacement, viewportHeight: CGFloat) -> CGFloat {
         placement == .bottom ? viewportHeight - clusterSize.height / 2 : clusterSize.height / 2
-    }
-
-    /// The settle animation for a released pad, scaled to the job it has to do.
-    ///
-    /// A single fixed spring can't serve both cases: the same curve that feels crisp nudging the pad 20 pt back to
-    /// the edge it already sat on overshoots wildly when it has to carry it the ~700 pt from one end of the screen to
-    /// the other. So the duration grows with the distance left to travel, and the finger's release velocity is handed
-    /// to the spring as its initial velocity — a flick continues at the speed it was thrown instead of stopping dead
-    /// and restarting.
-    ///
-    /// `bounce: 0` (critically damped) is deliberate: the pad is a slab of controls settling against an edge, not a
-    /// playful element, and any overshoot at all read as wobble on device.
-    ///
-    /// Axis-agnostic — the vertical re-dock and the horizontal tuck / restore snaps all come through here; only the
-    /// travel and the release velocity on the axis being settled matter.
-    private static func snapAnimation(
-        from releasedCenter: CGFloat, to destinationCenter: CGFloat, releaseVelocity: CGFloat,
-    ) -> Animation {
-        let travel = destinationCenter - releasedCenter
-        let distance = abs(travel)
-        let duration = min(0.42, max(0.18, 0.16 + distance / 2400))
-        return .interpolatingSpring(
-            duration: duration, bounce: 0,
-            initialVelocity: normalizedVelocity(releaseVelocity, travel: travel),
-        )
-    }
-
-    /// A spring's initial velocity is expressed in fractions of the REMAINING DISTANCE per second, so raw pt/s has to
-    /// be divided by that distance — which is what made a gentle release bounce: let go a few points from the target
-    /// and even a slow drift becomes a huge multiple of what little travel is left, catapulting the pad past it.
-    /// Hence the dead band (a release this slow is a release, not a throw) and the tight ceiling.
-    private static func normalizedVelocity(_ velocity: CGFloat, travel: CGFloat) -> CGFloat {
-        let deadBand: CGFloat = 80 // pt/s
-        guard abs(travel) >= 1, abs(velocity) > deadBand else { return 0 }
-        return min(3, max(-1, velocity / travel))
     }
 }

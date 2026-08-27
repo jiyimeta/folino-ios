@@ -26,8 +26,15 @@ struct EditorPadTuckHandle: View {
             }
             .foregroundStyle(.primary)
             .frame(width: Self.width, height: 68)
+            // The whole tab is the touch target, not the glyphs' opaque pixels. Without this the tab was
+            // untouchable in practice: `glassEffect` is an effect, not content, so it contributes no hit-testable
+            // geometry, and a bare `.frame`'s empty space doesn't hit-test either — on device every tap and drag
+            // fell through the tab onto the score while the glass shimmered. (`.buttonStyle(.plain)` made it worse
+            // by shrinking the button's own region the same way; the default style + tint matches the other chrome
+            // controls and takes the full label.)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .tint(.primary)
         .interactiveGlassCompat(in: shape)
         .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
         .accessibilityLabel(Text("editor.chrome.showPad", bundle: .module))

@@ -7,15 +7,6 @@ enum EditorPadTuckSide: String {
     case leading
     case trailing
 
-    /// The pad edge the handle hangs off — the edge still facing the screen once the pad is offscreen. A pad tucked
-    /// past the trailing edge shows its leading edge, and vice versa.
-    var handleAlignment: Alignment {
-        switch self {
-        case .leading: .trailing
-        case .trailing: .leading
-        }
-    }
-
     /// Points the way the pad will come out — inward, mirroring the PiP tab.
     var chevronSystemName: String {
         switch self {
@@ -34,18 +25,34 @@ enum EditorPadTuckGeometry {
         min(viewport.width, viewport.height) * 0.2
     }
 
-    /// Horizontal offset from the pad's centered rest position that parks it fully past `side`'s screen edge, so the
-    /// only thing left on screen is the handle hanging off its inner edge.
-    static func restOffsetX(side: EditorPadTuckSide, viewportWidth: CGFloat, padWidth: CGFloat) -> CGFloat {
-        let travel = (viewportWidth + padWidth) / 2
+    /// Horizontal offset from the pad's centered rest position that parks its CARD flush past `side`'s screen edge.
+    /// `margin` is the layout frame's breathing room around the visible card (`EditorPadView.horizontalMargin`):
+    /// the tuck aligns the card, not the frame — parking the frame left a margin-wide sliver of card showing, and a
+    /// margin-wide gap between the card and the pull tab.
+    static func restOffsetX(
+        side: EditorPadTuckSide, viewportWidth: CGFloat, padWidth: CGFloat, margin: CGFloat,
+    ) -> CGFloat {
+        let travel = (viewportWidth + padWidth) / 2 - margin
         return side == .trailing ? travel : -travel
     }
 
     /// Where an expanded pad's release lands it. Judged on the drag's projected travel so a flick toward an edge
     /// tucks without the finger covering the whole distance; a release inside the threshold is a reposition, not a
     /// dismissal, and returns `nil`.
-    static func tuckDestination(projectedTranslationX: CGFloat, threshold: CGFloat) -> EditorPadTuckSide? {
+    ///
+    /// Projection alone over-triggered: a fast, mostly-vertical dock flick amplifies its small sideways drift into a
+    /// projected travel past the threshold, and the pad hid when the user meant to move it. So a tuck also needs the
+    /// gesture to have been sideways in substance — either the finger ACTUALLY covered the threshold sideways (the
+    /// deliberate drag toward an edge or corner), or the release velocity itself points more sideways than
+    /// vertically (the quick short hide-flick, which never covers much distance).
+    static func tuckDestination(
+        translationX: CGFloat,
+        projectedTranslationX: CGFloat,
+        velocity: CGSize,
+        threshold: CGFloat,
+    ) -> EditorPadTuckSide? {
         guard abs(projectedTranslationX) >= threshold else { return nil }
+        guard abs(translationX) >= threshold || abs(velocity.width) > abs(velocity.height) else { return nil }
         return projectedTranslationX > 0 ? .trailing : .leading
     }
 
@@ -65,5 +72,17 @@ enum EditorPadTuckGeometry {
     /// out" territory — cross back and it returns, exactly the PiP tab's behavior.
     static func handleVisible(side: EditorPadTuckSide, translationX: CGFloat, threshold: CGFloat) -> Bool {
         inwardTravel(side: side, translationX: translationX) < threshold
+    }
+
+    /// The rest base for a tucked drag that has crossed the restore threshold: the tucked park shifted inward by
+    /// exactly the handle's width, so the CARD's inner edge lands where the handle's inner edge is — the pad slides
+    /// into the tab's own footprint and keeps tracking the finger from there, which is the PiP "the window attaches
+    /// at the tab" impression. (Both edges move with the same live translation, so the alignment holds for the whole
+    /// crossed stretch of the drag, not just the crossing instant.)
+    static func restorePreviewRestOffsetX(
+        side: EditorPadTuckSide, viewportWidth: CGFloat, padWidth: CGFloat, handleWidth: CGFloat, margin: CGFloat,
+    ) -> CGFloat {
+        let rest = restOffsetX(side: side, viewportWidth: viewportWidth, padWidth: padWidth, margin: margin)
+        return side == .trailing ? rest - handleWidth : rest + handleWidth
     }
 }
