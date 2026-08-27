@@ -12,18 +12,21 @@ extension ReaderRootScreen {
             host?.isPartMappingPending ?? false
         }
         host.requestReloadAfterPartRemap = { [weak viewModel, weak host] in
-            guard let viewModel else { return }
-            // The POST-edit score — the one whose part numbering the row now describes. `loadState.score` is still
-            // the score the session opened on and would name staves that no longer exist, which
-            // `reconcilingAuthoredHidden` would then write into the row as provenance. There is no safe fallback to
-            // it (review Minor 1, round 1).
-            guard let score = host?.editedScore else {
-                // Nothing to reconcile against — but the hold MUST still come down, or this Reader would never
-                // write the row again for the rest of the session. The queued writes go with it: they were stamped
-                // against a score this process no longer has, and the only path that empties `editedScore` is the
-                // revert, which reloads everything from disk immediately afterwards.
+            // Two ways there is nothing to reload — this Reader is already gone, or the editing session no longer
+            // has a score — and BOTH have to release. This closure is the only thing that ever lowers the flag, so
+            // a bail that returns without it leaves a surviving host stuck at `isPartMappingPending == true` and
+            // the next Reader on it never persists its preferences row again (round-3 Important). Hence one guard
+            // covering both, with the release above everything.
+            //
+            // `editedScore` is the POST-edit score, and there is no safe fallback to `loadState.score`: that one is
+            // still the score the session opened on and would name staves that no longer exist, which
+            // `reconcilingAuthoredHidden` would then write into the row as provenance (review Minor 1, round 1).
+            guard let viewModel, let score = host?.editedScore else {
+                // The queued writes go with the release: they were stamped against a score this process no longer
+                // has, and the only path that empties `editedScore` is the revert, which reloads everything from
+                // disk immediately afterwards.
                 if host?.releasePartMappingHoldIfSettled() == true {
-                    viewModel.discardDeferredPreferenceWrites()
+                    viewModel?.discardDeferredPreferenceWrites()
                 }
                 return
             }
@@ -37,5 +40,12 @@ extension ReaderRootScreen {
                 )
             }
         }
+        // Catch a hold raised before this closure existed. The App wires `onPartEditApplied` at `.onAppear`, this
+        // runs from `.task`, and until it does the settle calls the default no-op — so a part edit landing in
+        // between would raise a flag nothing could ever lower. Reaching that window needs the instruments sheet
+        // before the screen's own `.task` has run, which the editing chrome's lifecycle makes hard rather than
+        // impossible; one line here removes the question. It is a no-op in the normal case (nothing raised), and
+        // correctly declines while a part edit really is outstanding.
+        host.releasePartMappingHoldIfSettled()
     }
 }

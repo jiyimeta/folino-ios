@@ -532,6 +532,36 @@ struct EditorPreferenceMigrationTests {
         #expect(vm.session?.isPartMappingIdentity == true)
     }
 
+    /// The host reads the restored score back out of `onScoreChanged` to answer "which staves does it author
+    /// hidden?" for the reload. Asking it to reload BEFORE that arrives makes it reconcile a snapshot-numbered row
+    /// against the intermediate-numbered score it is still holding, and write the mismatch back as provenance —
+    /// self-healing, but exactly what `reconcilingAuthoredHidden`'s caller contract warns against (round-3 minor).
+    @Test func `the snapshot gear publishes the restored score before asking for a reload`() async {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let repository = FakeScoreLibraryRepository()
+        let item = EditorFixtures.sampleItem()
+        repository.readerPreferences[item.id] = pianoPreferences(for: item.id)
+        let vm = makeViewModel(item: item, directory: dir, repository: repository)
+        var events: [String] = []
+        vm.onScoreChanged = { events.append("score(\($0.parts.count))") }
+        vm.onPartIndicesRemapped = { _ in events.append("reload") }
+        vm.beginSession(score: EditorFixtures.parts(named: ["Flute", "Violin", "Piano"], twoStavesAt: 2))
+
+        vm.removePart(at: 0)
+        await vm.partEditCommitTask?.value
+        vm.removePart(at: 0)
+        await vm.partEditCommitTask?.value
+        events.removeAll()
+
+        vm.previewSeedSessionEdit()
+        await vm.unwindSessionEdits()
+
+        // The gear lands on the snapshot — all three parts back — and publishes it BEFORE asking for the reload,
+        // so the host answers the reload's authored-hidden question against the score the row now matches.
+        #expect(events == ["score(3)", "reload"])
+    }
+
     // MARK: - The map between two scores (round-2 minor)
 
     @Test func `partIndexMapping locates each part by id`() {

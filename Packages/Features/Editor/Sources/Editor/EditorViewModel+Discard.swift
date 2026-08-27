@@ -86,6 +86,9 @@ extension EditorViewModel {
         while sessionEditDepth < 0, session.redo() {
             sessionEditDepth += 1
         }
+        // Held back until after `onScoreChanged` below — see the note at the tail.
+        var didRunSnapshotGear = false
+        var restoreMigration: [Int: Int?]?
         if let sessionOpenScore, sessionEditDepth != 0 || session.score != sessionOpenScore {
             // The snapshot gear throws this session away, and its part-id baseline with it. A mapping still standing
             // at that moment is the row's ONLY route back: the score is about to jump to the session-open parts
@@ -103,18 +106,26 @@ extension EditorViewModel {
             // the current score, so nothing here can name it.
             let restore = Self.partIndexMapping(from: session.score, to: sessionOpenScore)
             let mapping = Self.composing(session.partIndexMapping, restore)
-            let migrated = mapping.allSatisfy { $0.value == $0.key }
+            restoreMigration = mapping.allSatisfy { $0.value == $0.key }
                 ? nil
                 : await migratePartIndexedPreferences(mapping, in: session, for: scoreItem.id)
+            didRunSnapshotGear = true
             self.session = ScoreEditSession(score: sessionOpenScore)
             sessionEditDepth = 0
-            onPartIndicesRemapped(migrated)
         }
         generation += 1
         mutationTicket += 1
         rederiveSelection()
         if let current = self.session {
             onScoreChanged(current.score)
+        }
+        // AFTER `onScoreChanged`, deliberately. The host reads the restored score back out of the seam to answer
+        // "which staves does it author hidden?" for the reload — so telling it to reload first would have it
+        // reconcile a snapshot-numbered row against the intermediate-numbered score it was still holding, and write
+        // that mismatch back as provenance. Self-healing on the next open, but exactly what
+        // `reconcilingAuthoredHidden`'s caller contract warns against (round-3 minor).
+        if didRunSnapshotGear {
+            onPartIndicesRemapped(restoreMigration)
         }
     }
 

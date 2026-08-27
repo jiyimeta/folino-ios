@@ -2,8 +2,11 @@ import Domain
 import Foundation
 
 /// Undo and redo: the session's own history controls, and the bridge that lets the system three-finger gestures
-/// drive them. Carved out of `EditorViewModel.swift` (which sits at SwiftLint's `file_length` budget) as a pure
-/// move — nothing here changed on the way across.
+/// drive them. Carved out of `EditorViewModel.swift`, which sits at SwiftLint's `file_length` budget.
+///
+/// NOT a pure move: `undo()` and `redo()` also picked up the `mutationTicket` bump (the never-reset sentinel
+/// `performSave` compares across its suspension points) and the `settleIfPartMigrationOwed()` call below, which is
+/// new here rather than carried over. `canUndo` / `canRedo` and `registerSystemUndo` did move unchanged.
 extension EditorViewModel {
     public var canUndo: Bool {
         session?.canUndo ?? false
