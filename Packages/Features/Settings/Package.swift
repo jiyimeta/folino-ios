@@ -47,7 +47,10 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/devicekit/devicekit", from: "5.8.0"),
     .package(url: "https://github.com/jpsim/Yams", from: "5.3.0"),
     .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", exact: "0.63.2"),
-    // swift-wirelet v0.2.2 (pinned by revision, not semver)
+    // swift-wirelet v0.2.2 (pinned by revision, not semver). Deliberately behind the `ba1b8e33` that Library,
+    // Reader and Infrastructure pin: this pin has to match the wirelet Gradle plugin `FolinoSettingsAndroid`
+    // applies (also 0.2.2), not the other packages, because each JNI `.so` links its own runtime and trades bytes
+    // only with the Kotlin codecs generated for its own module. See the longer note in Infrastructure's manifest.
     // swiftlint:disable:next line_length
     .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "cd0d148e9d4dddad1c6afc47d5ef0a8d6f4a4a13"),
     .package(path: "../../Domain"),

@@ -101,6 +101,7 @@ final class AppBootstrap {
                 database: database,
                 scoresDirectory: AppPaths.scoresDirectory,
                 playlistsIndexPublisher: writer,
+                crashReporter: crashReporter ?? NoopCrashReporter(),
             )
             let gateway = LiveScoreFileGateway(crashReporter: crashReporter ?? NoopCrashReporter())
             let originalStore = LiveScoreOriginalStore(scoresDirectory: AppPaths.scoresDirectory, gateway: gateway)
@@ -154,7 +155,9 @@ final class AppBootstrap {
                 before: Date().addingTimeInterval(-Self.recentlyDeletedRetention),
             )
             // Publish current playlists so the Share Extension's picker is populated on first use.
-            if let writer { writer.publish(playlists: repository.playlists) }
+            if let writer {
+                writer.publish(playlists: repository.playlists)
+            }
             // Drain any tokens queued by the Share Extension before this launch.
             _ = await incomingShareCoordinator?.drain(token: nil)
             await pushAnalyticsSnapshot(repository: repository)
