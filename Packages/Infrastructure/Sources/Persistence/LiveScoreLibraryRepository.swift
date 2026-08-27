@@ -206,8 +206,10 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
             }
             for filename in filenames {
                 let url = scoresDirectory.appending(path: filename)
-                // Best-effort: file may already be missing. TODO: log orphaned-file events to telemetry once logging
-                // infrastructure exists.
+                // Best-effort: the file may already be missing, and a row deleted with its bytes left behind is not
+                // worth failing the delete over. Nothing records it, though: `Analytics` and `CrashReporting` exist
+                // now, but Persistence has no reporting seam injected, so an orphan here is silent. Adding one means
+                // a Domain protocol and a new event, not a call from inside this loop.
                 try? FileManager.default.removeItem(at: url)
             }
         } catch {

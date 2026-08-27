@@ -23,8 +23,8 @@ struct VerticalZoomedSurface: View {
     let playbackCursor: ScoreCursor?
     @Binding var lastManualCursor: ScoreCursor?
     /// `nil` (or `isEditing == false`) keeps taps on the manual-cursor seek path and the score render byte-identical
-    /// to before Task 12. While editing, taps route to `editingHost.onTap` instead, `ScoreView` renders the host's
-    /// selection, and `EditingSelectionOverlay` draws the caret / rest tint / pitch-drag chrome on top.
+    /// to before editing existed. While editing, taps route to `editingHost.onTap` instead, `ScoreView` renders
+    /// the host's selection, and `EditingSelectionOverlay` draws the caret / rest tint / pitch-drag chrome on top.
     let editingHost: ReaderEditingHost?
 
     var body: some View {

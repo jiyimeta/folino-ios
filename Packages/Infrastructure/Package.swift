@@ -97,8 +97,11 @@ var targets: [Target] = [
 ]
 
 if isAndroid {
-    // Android cross-compile path: the self-contained `FolinoSoundfontJNI` JNI target. It pins the SAME
-    // swift-wirelet revision as the Library JNI .so so both dynamic libraries share one wirelet runtime.
+    // Android cross-compile path: the self-contained `FolinoSoundfontJNI` JNI target. It pins the same
+    // swift-wirelet revision as the Library and Reader JNI .so files (`ba1b8e33`), so the three agree on the
+    // generated wire format. `FolinoSettingsJNI` is the odd one out — Settings pins `cd0d148e` (v0.2.2)
+    // unconditionally, because `SettingsLogic` links Wirelet on the host side too. All four .so files load into
+    // one process, so keep that skew in mind before assuming a wire change reaches every module.
     // Domain (already a path dependency above) provides the shared `SoundfontDownloadReducer` / state / preset
     // types so download behavior matches iOS exactly.
     packageDependencies += [

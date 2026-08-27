@@ -29,7 +29,9 @@ extension EditorViewModel {
     /// code read it unguarded.
     public var sessionHasEdits: Bool {
         guard isSessionActive else { return false }
-        if sessionEditDepth != 0 { return true }
+        if sessionEditDepth != 0 {
+            return true
+        }
         return !isAtSessionOpenScore
     }
 
@@ -40,8 +42,12 @@ extension EditorViewModel {
     /// respond the instant you change a note, which is the point — `sessionEditDepth` moves on the edit itself,
     /// whereas the revert offer can only appear once a save has captured the original.
     public var sessionEndMode: EditorSessionEndMode {
-        if sessionHasEdits { return .commitEdited }
-        if canRevertToOriginal { return .revert }
+        if sessionHasEdits {
+            return .commitEdited
+        }
+        if canRevertToOriginal {
+            return .revert
+        }
         return .commitUnchanged
     }
 }
@@ -144,7 +150,7 @@ extension EditorViewModel {
         // ✕ is final (controller ruling over the spec's redo-survives reading), and that has to be settled BEFORE
         // the "nothing to unwind" exit below — a session that edited a note and undid it again is back at depth
         // zero with both stacks full, and letting that one out without marking it would deposit a history whose
-        // redo replays exactly what ✕ threw away (review Minor 7). Unwinding via undo populates the redo stack the
+        // redo replays exactly what ✕ threw away. Unwinding via undo populates the redo stack the
         // same way, so a ✕ ends ALL retained history for this score whatever route it took here: the deposit is
         // suppressed and any retained entry dropped — the same contract as an app kill.
         didDiscardSession = true
@@ -153,7 +159,7 @@ extension EditorViewModel {
         // Nothing of this session's own is on disk or in memory, so there is nothing to unwind — and in particular
         // nothing that would justify rewriting the file. One predicate, and deliberately the SAME one the ✕ button
         // gates its confirmation on: what ✕ throws away and what ✕ asks about have to be the same question, or a
-        // session can be discarded without the user being asked (re-review Important 1).
+        // session can be discarded without the user being asked.
         guard sessionHasEdits else { return }
 
         autosaveTask?.cancel()

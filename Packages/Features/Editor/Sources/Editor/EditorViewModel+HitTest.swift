@@ -2,9 +2,9 @@ import Foundation
 import SheetMusicCore
 import SheetMusicLayout
 
-/// Task 8: maps a tap point (in the Reader's score-surface / `LayoutDocument` coordinate space) to a selection via
-/// `LayoutDocument.editingHitTest(at:activeVoice:)`. Task 16 reuses the same resolution, unmutated, for the Pencil
-/// hover pre-highlight.
+/// Maps a tap point (in the Reader's score-surface / `LayoutDocument` coordinate space) to a selection via
+/// `LayoutDocument.editingHitTest(at:activeVoice:)`. The Pencil hover pre-highlight reuses the same resolution,
+/// unmutated.
 extension EditorViewModel {
     /// Tap in LayoutDocument coordinates (the Reader's score-surface space). Resolves via `resolvedItem(at:)` and
     /// applies it as the new selection (`nil` when nothing hit — spec §5.2: tap empty staff = deselect).
@@ -38,7 +38,7 @@ extension EditorViewModel {
         select(nil)
     }
 
-    /// Task 16 (spec §5.2, Pencil hover pre-highlight): same resolution as `handleTap(at:)` but WITHOUT mutating
+    /// Pencil hover pre-highlight (spec §5.2): same resolution as `handleTap(at:)` but WITHOUT mutating
     /// selection — the Reader overlay draws a soft highlight at the returned item's anchor while the Pencil hovers,
     /// so the target is visible before the user commits with a tap.
     public func hoverItem(at point: CGPoint) -> SheetMusicCore.ScoreItemID? {

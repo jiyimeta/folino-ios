@@ -18,9 +18,9 @@ import UtilityUI
 /// a rest, since re-timing silence is otherwise only reachable by bringing the pad up. Its keys wear rest glyphs
 /// rather than note ones: the card describes the item it is pinned to, so it has to look like that item.
 ///
-/// Positioning — converting the global selection anchor into local space and clamping it on-screen — is
-/// `EditorChromeView`'s job; this view only draws the card. It is only ever mounted while a note or a rest is
-/// selected (`EditorViewModel.hasSelectionCallout`), so it needs no empty state.
+/// Positioning — converting the global selection anchor into local space and clamping it on-screen and clear of the
+/// pad — is `SelectionCalloutLayer`'s job; this view only draws the card. It is only ever mounted while a note or a
+/// rest is selected (`EditorViewModel.hasSelectionCallout`), so it needs no empty state.
 struct EditorCalloutView: View {
     let viewModel: EditorViewModel
 

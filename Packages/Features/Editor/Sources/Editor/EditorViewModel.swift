@@ -46,7 +46,7 @@ public final class EditorViewModel {
     /// bumps on all three) because `EditorChromeView`'s system-undo bridge must re-register its `UndoManager`
     /// trampoline only on a genuinely NEW edit; re-registering after undo/redo would double up with
     /// `registerSystemUndo`'s own symmetric re-registration and drift the system stack from `ScoreEditSession`'s
-    /// real depth (Task 16 review fix).
+    /// real depth.
     public private(set) var appliedEditCount = 0
 
     /// The session's signed net offset from its starting score: incremented by `apply` and `redo()`, decremented
@@ -157,12 +157,12 @@ public final class EditorViewModel {
         }
     }
 
-    /// Stored audition state (Task 9) — declared HERE (extensions cannot add stored properties). Set synchronously
+    /// Stored audition state — declared HERE (extensions cannot add stored properties). Set synchronously
     /// by `audition(_:)` (`EditorViewModel+Audition.swift`) so tests can deterministically `await
     /// vm.auditionTask?.value` instead of racing a fire-and-forget preview.
     @ObservationIgnored var auditionTask: Task<Void, Never>?
 
-    // Stored autosave state (Task 10) — declared HERE (extensions cannot add stored properties).
+    // Stored autosave state — declared HERE (extensions cannot add stored properties).
     @ObservationIgnored var autosaveTask: Task<Void, Never>?
     @ObservationIgnored var isDirty = false
     /// True from the moment `revertToOriginal()` commits to reverting until the session ends. `performSave()`
@@ -175,7 +175,7 @@ public final class EditorViewModel {
     /// common to both (Critical 2 review fix).
     @ObservationIgnored var inFlightSaveTask: Task<Void, Never>?
     /// True once a non-MSCX/MSCZ source has been rewritten as a sibling `.mscz` file. One-way: never reset, since
-    /// it drives the Task 16 one-time "saved as .mscz" notice.
+    /// it drives the one-time "saved as .mscz" notice.
     public internal(set) var didSaveAsSiblingMSCZ = false
     /// True once this session was ended by ✕ — `discardSessionEdits()` ran. Read by `endSession()`'s deposit guard,
     /// because the ✕ exit path still runs `endSession()` (`EditorDiscardButton` → `requestExit()` → `onEndEditing`):
@@ -192,7 +192,7 @@ public final class EditorViewModel {
     }
 
     /// Wired by the App composition root.
-    /// Returns the Reader's current LayoutDocument for hit-testing (Task 8).
+    /// Returns the Reader's current LayoutDocument for hit-testing.
     public var documentProvider: @MainActor () -> LayoutDocument? = { nil }
     /// Re-addresses an item resolved against that document into the score's own addressing, or `nil` if it can't be
     /// placed there.

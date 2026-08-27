@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Folino is a universal iOS app (iPad + iPhone, Swift 6.3, iOS 26+, bundle id `com.KeyNumber.Folino`). Product specs live in `docs/product/`; the implementation strategy lives in `docs/engineering/module-architecture.md` — read the latter before making structural changes.
+Folino is a universal iOS app (iPad + iPhone, Swift 6.3, iOS 18+, bundle id `com.KeyNumber.Folino`). Product specs live in `docs/product/`; the implementation strategy lives in `docs/engineering/module-architecture.md` — read the latter before making structural changes.
+
+The deployment floor is **iOS 18.0** (`project.yml` and every `Package.swift`), so iOS 26-only API cannot be written raw — guard it behind the compat helpers in `Packages/Utility/Sources/UtilityUI/GlassEffectCompat.swift` (or add one there in the same `if #available(iOS 26, *)` shape).
 
 ## First-Time Setup
 

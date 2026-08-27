@@ -57,8 +57,8 @@ struct ReaderPreferencesStoreSeedTests {
     }
 
     /// `mutate` re-runs `ReaderPreferences.init` to re-apply clamping, so every field has to be forwarded. Provenance
-    /// is the easiest one to drop: losing it would make the next open re-record it, and would make Task 9's analytics
-    /// read every authored-hidden staff as one the user hid.
+    /// is the easiest one to drop: losing it would make the next open re-record it, and would make the score-prefs
+    /// analytics read every authored-hidden staff as one the user hid.
     @Test func `mutate preserves authored provenance and untouched fields`() async throws {
         let repo = FakeScoreLibraryRepository()
         let store = makeStore(repo)

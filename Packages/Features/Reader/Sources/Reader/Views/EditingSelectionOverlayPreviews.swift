@@ -23,7 +23,7 @@ private func editingOverlayPreviewScore() -> Score {
 
 // Standalone preview for `EditingSelectionOverlay` that needs no Reader plumbing (no `ReaderViewModel`, no fakes) —
 // it lays out the inline score directly and drives a bare `ReaderEditingHost`. Visual confirmation of the caret /
-// rest tint / selection is deferred to the Task 17 manual device checklist; this block exists so the overlay keeps
+// rest tint / selection is deferred to manual checking on device; this block exists so the overlay keeps
 // compiling as the surrounding editing feature evolves. The `return` disables the `#Preview` ViewBuilder transform,
 // so the setup statements below run as an ordinary closure body.
 #Preview("Editing overlay — caret on rest 2") {

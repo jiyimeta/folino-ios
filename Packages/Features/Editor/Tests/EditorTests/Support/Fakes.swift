@@ -31,10 +31,12 @@ final class FakeScoreFileGateway: ScoreFileGateway, @unchecked Sendable {
     }
 
     func saveScore(_ score: Score, fileURL: URL, format: ScoreFormat) throws {
-        if let saveError { throw saveError }
+        if let saveError {
+            throw saveError
+        }
         eventLog?.record("save")
         savedCalls.append((score, fileURL, format))
-        // Write real bytes so callers that hash the saved file (Task 10's EditorFileFacts) see deterministic content.
+        // Write real bytes so callers that hash the saved file (`EditorFileFacts`) see deterministic content.
         try Data("saved".utf8).write(to: fileURL)
     }
 }
@@ -54,7 +56,9 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
     func refresh() throws {}
 
     func saveScoreItem(_ item: ScoreItem) throws {
-        if let saveError { throw saveError }
+        if let saveError {
+            throw saveError
+        }
         savedScoreItems.append(item)
         if let idx = scoreItems.firstIndex(where: { $0.id == item.id }) {
             scoreItems[idx] = item
@@ -132,7 +136,9 @@ final class FakeScoreOriginalStore: ScoreOriginalStore, @unchecked Sendable {
 
     func revertToOriginal(_ item: ScoreItem, restoringScoreInfo: Bool) throws -> ScoreItem {
         revertCalls.append((item, restoringScoreInfo))
-        if let revertError { throw revertError }
+        if let revertError {
+            throw revertError
+        }
         var cleared = item
         cleared.originalFileName = nil
         cleared.originalContentHash = nil

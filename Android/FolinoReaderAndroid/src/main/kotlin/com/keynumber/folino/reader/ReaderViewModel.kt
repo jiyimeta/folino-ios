@@ -42,7 +42,7 @@ private const val RECOMPUTE_DEBOUNCE_MS = 120L
 /**
  * Inputs to the layout recompute loop, bundled so a single `combine(...)` can carry all four without a
  * generic `Quad`. [pdfPlayback] carries the SAME `PdfPlaybackState` the `pdfPlayback` StateFlow does
- * (Task 12) — not a separate derived flag — precisely so there is only one field to keep in sync; see
+ * — not a separate derived flag — precisely so there is only one field to keep in sync; see
  * [shouldSkipLayoutRecompute]'s own doc for why `Ready` must suppress this loop.
  */
 private data class RecomputeInputs(
@@ -55,7 +55,7 @@ private data class RecomputeInputs(
 /**
  * Pure predicate for [ReaderViewModel]'s layout recompute loop: true when there is nothing to compute yet
  * ([scoreHandle] or [layoutWidthMm] still null), or when [isPdfPlaybackReady] is true — a PDF's
- * background-parsed score (Task 12) flows through the SAME `scoreHandle` so the existing playback wiring
+ * background-parsed score flows through the SAME `scoreHandle` so the existing playback wiring
  * (prepare, mixer, metronome...) picks it up unchanged, but its layout must NOT be computed here: doing so
  * would overwrite `ReaderState.ReadyPdf` with a `Ready(program)`, swapping the PDF's own page pixels for
  * reconstructed notation the user never asked to see. Takes a plain `Boolean` rather than the full
@@ -123,9 +123,9 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     private val _scoreHandle = MutableStateFlow<Long?>(null)
     val scoreHandle: StateFlow<Long?> = _scoreHandle.asStateFlow()
 
-    // Background OMR-playback readiness of the current PDF (Task 12); `Idle` for a non-PDF score. See
+    // Background OMR-playback readiness of the current PDF; `Idle` for a non-PDF score. See
     // [PdfPlaybackState]'s own doc. The Reader's transport reads this (via `nativeCanPlayNow`) to
-    // decide whether it may enable, and Task 13's cursor reads a `Ready` handle's geometry.
+    // decide whether it may enable, and the PDF playback cursor reads a `Ready` handle's geometry.
     private val _pdfPlayback = MutableStateFlow<PdfPlaybackState>(PdfPlaybackState.Idle)
     internal val pdfPlayback: StateFlow<PdfPlaybackState> = _pdfPlayback.asStateFlow()
 
@@ -188,7 +188,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     @Volatile
     private var loadedScoreId: String? = null
 
-    // The active PDF's page source (Task 6), populated by [openPdf] on a `.pdf` load and closed by
+    // The active PDF's page source, populated by [openPdf] on a `.pdf` load and closed by
     // [closePdfPageSource] whenever the Reader is retargeted to a different score (see [load]) or this
     // ViewModel is cleared. Null for a non-PDF score. Tasks 7/8's render surfaces read this to fetch
     // and window bitmaps; internal (like [PdfPageSource] itself) and read-only since it is created and
@@ -198,7 +198,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     internal var pdfPageSource: PdfPageSource? = null
         private set
 
-    // The active PDF's background-parsed playback handle (Task 12; mirrors [pdfPageSource]'s shape),
+    // The active PDF's background-parsed playback handle (mirrors [pdfPageSource]'s shape),
     // set by [parsePdfForPlayback] once `_pdfPlayback` reaches `Ready` and released by
     // [closePdfPlaybackHandle] whenever the Reader is retargeted (see [load]) or this ViewModel is
     // cleared. Both the write (inside [parsePdfForPlayback]'s `Dispatchers.Main.immediate` hop) and every
@@ -247,7 +247,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
      * as-is; the horizontal/page RENDER surfaces are owned by parallel sessions.
      * This VM only produces the mode-appropriate layout program.
      *
-     * Skips entirely per [shouldSkipLayoutRecompute] (Task 12) — see that function's own doc for why a
+     * Skips entirely per [shouldSkipLayoutRecompute] — see that function's own doc for why a
      * PDF's background-parsed score must never reach the native compute call below.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -363,7 +363,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
      * `ReaderPlaybackService` (a real bound `MediaSessionService`) may still be holding it for
      * background/PiP playback after this ViewModel is retargeted or cleared, so closing the score here
      * would risk invalidating a still-live native engine out from under it. The geometry handle, in
-     * contrast, is used only by this Reader's own on-screen cursor lookups (Task 13) and its native side
+     * contrast, is used only by this Reader's own on-screen cursor lookups and its native side
      * documents unknown/already-released handles as a no-op, so releasing it unconditionally here is
      * safe. This does mean the score itself is leaked exactly like [handle] already is — an accepted,
      * bounded native leak in this codebase (see [onCleared]'s own comment), not a new one.
@@ -383,7 +383,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Parses [file] for playback off the main thread (Task 12): installs the SMuFL metrics table the
+     * Parses [file] for playback off the main thread: installs the SMuFL metrics table the
      * reconstructed score needs before playback prepares (the `.pdf` branch of [load] deliberately skips
      * this — see its own doc — so it happens here instead), then calls [PdfScoreHandle.load]. On
      * success, publishes the parsed score's raw handle into [_scoreHandle] so the existing
@@ -499,7 +499,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
      * returns WITHOUT installing SMuFL metrics or calling `ScoreHandle.load` — `_scoreHandle` stays
      * null so the layout recompute loop (which only drives the DrawProgram-based `Ready` state) stays
      * idle. Once the document is on screen, [parsePdfForPlayback] takes over in the background
-     * (Task 12) and publishes the parsed score into `_scoreHandle` once ready.
+     * and publishes the parsed score into `_scoreHandle` once ready.
      *
      * [localFileName] is the record's real on-disk file name, supplied by the caller (the App
      * layer, via the nav route or a playlist retarget) rather than looked up here — see
@@ -524,7 +524,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         // PdfRenderer + file descriptor) now rather than waiting for onCleared, so a playlist
         // auto-advance through several PDFs in a row doesn't accumulate open descriptors.
         closePdfPageSource()
-        // Same idea for a PDF's background-parsed playback (Task 12): reset readiness to Idle so the
+        // Same idea for a PDF's background-parsed playback: reset readiness to Idle so the
         // transport doesn't briefly report the OLD PDF's Ready state under the new score, cancel a still-
         // running parse for the score being left behind, and release the geometry side-car it held.
         _pdfPlayback.value = PdfPlaybackState.Idle
@@ -554,7 +554,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                     return@launch
                 }
                 _state.value = pdfState
-                // The document is already on screen; parse it for playback in the background (Task 12).
+                // The document is already on screen; parse it for playback in the background.
                 // Not awaited here: [load]'s own coroutine (this one) is done once the pixels are up, and
                 // the parse runs on its own tracked job so a later retarget can cancel it independently.
                 parsePdfForPlayback(file, scoreId)
@@ -707,13 +707,13 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     fun setAnnotationMode(on: Boolean) { _annotationMode.value = on }
 
     // Toolbar tool-state selection (pen color/width, eraser width). Plain MutableStateFlow + setter,
-    // the same shape as [layoutOptions]/[setLayoutOptions] — no persistence here; Task 9 adds a
-    // DataStore-backed restore on top. Held in the VM (not the app layer) so it survives recomposition
+    // the same shape as [layoutOptions]/[setLayoutOptions] — no persistence here; a
+    // DataStore-backed restore sits on top. Held in the VM (not the app layer) so it survives recomposition
     // but resets on process death, which is acceptable for this task.
     private val _toolState = MutableStateFlow(AnnotationToolState())
     val toolState: StateFlow<AnnotationToolState> = _toolState.asStateFlow()
 
-    /** Push a new tool-state selection in from the toolbar. No persistence (Task 9). */
+    /** Push a new tool-state selection in from the toolbar. No persistence. */
     fun setAnnotationToolState(state: AnnotationToolState) {
         _toolState.value = state
     }
@@ -877,7 +877,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         // Reader entry. `ViewModel.clear()` is internal in androidx.lifecycle, so release can't be
         // triggered from here; the fix is to scope the bridge VM via `AnnotationSaveController.factory()`
         // in the Reader nav route (mirroring `ReaderPreferencesController`). Small per-instance size;
-        // deferred as a tracked follow-up (final whole-branch review finding #1).
+        // deferred deliberately: the leak is small and per-instance, not per-frame.
         //
         // Do NOT close `handle`: the same raw Long is used by the playback
         // engine (which outlives this ViewModel via the bound service).
