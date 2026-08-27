@@ -268,9 +268,13 @@ public struct ReaderRootScreen: View {
             if !isCaptureMode, ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: topSafeAreaInset) {
                 let editingCutoutContent = isEditing ? editingCutoutTier?(topBarEditingContext) : nil
                 ReaderCutoutTier(topSafeAreaInset: topSafeAreaInset) {
-                    if let editingCutoutContent { editingCutoutContent.leading }
+                    if let editingCutoutContent {
+                        editingCutoutContent.leading
+                    }
                 } trailing: {
-                    if let editingCutoutContent { editingCutoutContent.trailing }
+                    if let editingCutoutContent {
+                        editingCutoutContent.trailing
+                    }
                 }
                 .ignoresSafeArea(edges: .top)
             }
@@ -473,7 +477,9 @@ public struct ReaderRootScreen: View {
         .onChange(of: editingHost?.isExitRequested ?? false) { _, requested in
             // The editing chrome's 完了 button lives in App-injected code and can't call `finishEditing()` directly
             // (the Reader never exposes it), so it signals exit through the host instead.
-            if requested { finishEditing() }
+            if requested {
+                finishEditing()
+            }
         }
     }
 
@@ -513,7 +519,20 @@ public struct ReaderRootScreen: View {
             ReaderTopBar(topSafeAreaInset: topSafeAreaInset, isEditing: isEditing) {
                 if isEditing {
                     if let editingTopBar {
-                        editingTopBar(topBarEditingContext)
+                        HStack(spacing: 12) {
+                            editingTopBar(topBarEditingContext)
+                            // The display inspector stays reachable mid-edit, at the row's trailing end — hiding a
+                            // staff or switching a clef is part of getting the score into a writable shape, and both
+                            // transforms are edit-compatible. It carries its own glass + shadow because the editor's
+                            // row controls each carry theirs; the pairing has to match to read as one strip.
+                            ReaderDisplayInspectorButton(
+                                viewModel: viewModel,
+                                anchorsInspectorPopovers: anchorsInspectorPopovers,
+                                onConfirmReReadPDF: { isReReadConfirmPresented = true },
+                            )
+                            .interactiveGlassCompat()
+                            .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
+                        }
                     }
                 } else {
                     ReaderTopBarControls(
@@ -651,7 +670,9 @@ public struct ReaderRootScreen: View {
         guard let host = editingHost else { return }
         Task {
             host.onEndEditing()
-            if let edited = host.editedScore { await viewModel.adoptEditedScore(edited) }
+            if let edited = host.editedScore {
+                await viewModel.adoptEditedScore(edited)
+            }
             host.isEditing = false
             host.selection = .none
             host.caretItem = nil

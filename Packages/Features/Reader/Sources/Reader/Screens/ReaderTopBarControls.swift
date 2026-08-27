@@ -63,9 +63,15 @@ struct ReaderTopBarControls: View {
     }
 
     private var trailingKind: TrailingKind? {
-        if viewModel.displaySource == .originalPDF { return .reduced }
-        if case .loaded = viewModel.loadState { return .full }
-        if case .loadedPDF = viewModel.loadState { return .reduced }
+        if viewModel.displaySource == .originalPDF {
+            return .reduced
+        }
+        if case .loaded = viewModel.loadState {
+            return .full
+        }
+        if case .loadedPDF = viewModel.loadState {
+            return .reduced
+        }
         return nil
     }
 
@@ -301,18 +307,13 @@ struct ReaderTopBarControls: View {
         ) { inspectors.playbackInspector }
     }
 
+    /// Shared with the editing strip — see `ReaderDisplayInspectorButton` for why it is a standalone view.
     private var displayInspectorButton: some View {
-        topBarButton(
-            systemImage: "text.page",
-            label: Text("reader.toolbar.showDisplaySettings", bundle: .module),
-        ) {
-            viewModel.isVisualInspectorPresented.toggle()
-        }
-        .readerHintAnchor(.visualInspectorButton)
-        .inspectorPopover(
-            isPresented: $viewModel.isVisualInspectorPresented,
-            anchored: anchorsInspectorPopovers,
-        ) { inspectors.displayInspector }
+        ReaderDisplayInspectorButton(
+            viewModel: viewModel,
+            anchorsInspectorPopovers: anchorsInspectorPopovers,
+            onConfirmReReadPDF: onConfirmReReadPDF,
+        )
     }
 
     // MARK: - Shared button shape

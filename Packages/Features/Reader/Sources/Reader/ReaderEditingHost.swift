@@ -24,7 +24,9 @@ public final class ReaderEditingHost {
     public var editGeneration = 0
     public var selection: ScoreSelection = .none {
         didSet {
-            if case .single = selection { onSelectionMade() }
+            if case .single = selection {
+                onSelectionMade()
+            }
         }
     }
 
@@ -145,19 +147,34 @@ public final class ReaderEditingHost {
     public var editingChromeTopInset: CGFloat = 0
     public var editingChromeBottomInset: CGFloat = 0
 
-    /// Where the chrome's note-input (pad open/close) button is on screen, in WINDOW coordinates, or `nil` when the
-    /// chrome isn't up. Written by the App from the Editor's chrome, read by the Reader's coach-mark overlay — which
-    /// has to point at a control it does not draw.
-    ///
-    /// A frame rather than a position in a sequence: the chrome is rendered inside the Reader's own view tree now, so
-    /// both sides share a window coordinate space and the button can simply say where it is. It could not, while the
-    /// button was hosted by the navigation bar.
-    public var noteInputAnchorFrame: CGRect?
+    /// Where the note-input pad is on screen, in WINDOW coordinates, or `nil` while it is tucked away (or the chrome
+    /// isn't up). Written by the App from the Editor's chrome, read by the Reader's coach-mark overlay — which has to
+    /// point at a surface it does not draw. Window coordinates because the two sides may live in different hosting
+    /// contexts, and the window is the one space they genuinely share (`onWindowFrameChange`).
+    public var noteInputPadFrame: CGRect?
 
-    /// Asks the editing chrome to reveal the note-input pad. Wired by the App to the Editor's view model; called when
-    /// the user taps the note-input coach mark, so the bubble opens the pad it is pointing at rather than just naming
-    /// it. The pad starts hidden, which is exactly why that hint exists.
-    public var onRevealNoteInputPad: @MainActor () -> Void = {}
+    /// The pull tab a tucked pad leaves at the screen edge, in the same WINDOW coordinates — the "bring it back"
+    /// coach mark's anchor. `nil` while the pad is out.
+    public var noteInputPadHandleFrame: CGRect?
+
+    /// Bumped when the user actually moves the pad to the other vertical dock / tucks it past a side edge / brings
+    /// it back out. The coach marks teaching those gestures watch these and retire (and the restore chains the next
+    /// hint — see `PadHintWiring`).
+    public private(set) var padDockMoveUses = 0
+    public private(set) var padTuckUses = 0
+    public private(set) var padRestoreUses = 0
+
+    public func notePadDockMoved() {
+        padDockMoveUses += 1
+    }
+
+    public func notePadTucked() {
+        padTuckUses += 1
+    }
+
+    public func notePadRestored() {
+        padRestoreUses += 1
+    }
 
     // App-wired callbacks:
     public var onBeginEditing: @MainActor (Score) -> Void = { _ in }

@@ -57,8 +57,18 @@ public struct EditorPadView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, Self.cardVerticalPadding)
         .regularGlassCompat(in: RoundedRectangle(cornerRadius: 20))
-        .padding(.horizontal, 12)
+        // The whole card is the touch surface, not just the keys: `glassEffect` is an effect, not content, so the
+        // gaps between keys (spacings, dividers, the card's own padding) hit-tested as nothing and a swipe that
+        // landed on one fell straight through the chrome and scrolled the score — intermittently, because it
+        // depended on where the finger came down. Same lesson as the pull tab's `contentShape`.
+        .contentShape(RoundedRectangle(cornerRadius: 20))
+        .padding(.horizontal, Self.horizontalMargin)
     }
+
+    /// The breathing room between the glass card and the screen edges. The chrome's tuck geometry subtracts it so
+    /// the CARD — the visible thing — is what parks flush against an edge and aligns with the pull tab; the margin
+    /// only matters while the pad rests at its centered layout position.
+    static let horizontalMargin: CGFloat = 12
 
     private static let rowSpacing: CGFloat = 3
     private static let cardVerticalPadding: CGFloat = 5
