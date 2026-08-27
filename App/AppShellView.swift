@@ -483,6 +483,7 @@ private struct ReadyShell: View {
             originalStore: originalStore,
             historyStore: editHistoryStore,
             playbackController: bootstrap.playbackController,
+            annotationStore: bootstrap.annotationStore,
             analytics: bootstrap.analytics ?? NoopAnalytics(),
             startInEditMode: openInEditSession,
         ) { host, chrome, topBar, cutoutTier, startInEditMode in

@@ -5,11 +5,18 @@ extension ReaderRootScreen {
     /// providers. Split into its own file — rather than inlined there — for the same reason `wireRevertReload` is:
     /// to keep `ReaderRootScreen`'s primary declaration under SwiftLint's `type_body_length` budget.
     ///
-    /// Two halves. The store is taught to hold its writes while the host says a migration is unsettled, and the
-    /// reload is wired to re-read the row, release the hold, and let what was held go — in that order.
+    /// Three halves now. Both part-indexed writers — the preferences row and the annotation layer — are taught to hold
+    /// while the host says a migration is unsettled; the drain is wired so whatever was already in the air lands
+    /// BEFORE the Editor's migration reads; and the reload is wired to re-read both stores, release the hold, and let
+    /// what was held go — in that order.
     func wirePartRemapReload(host: ReaderEditingHost, viewModel: ReaderViewModel) {
-        viewModel.setPreferenceMigrationPendingProvider { [weak host] in
+        viewModel.setPartMigrationPendingProvider { [weak host] in
             host?.isPartMappingPending ?? false
+        }
+        // The annotation coordinator's own debounce is the thing being drained; the preference store's writes are
+        // joined at the release instead, where `mutate` has already awaited each of them.
+        host.prepareForPartMigration = { [weak viewModel] in
+            await viewModel?.flushPendingAnnotationSave()
         }
         host.requestReloadAfterPartRemap = { [weak viewModel, weak host] in
             // Two ways there is nothing to reload — this Reader is already gone, or the editing session no longer

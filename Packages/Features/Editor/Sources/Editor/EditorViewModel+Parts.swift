@@ -146,6 +146,10 @@ extension EditorViewModel {
         let previous = partEditCommitTask
         partEditCommitTask = Task {
             await previous?.value
+            // The hold is already up (raised synchronously above), so nothing NEW can be started behind it; this is
+            // where whatever the host still has in the air is landed, before the migration reads. See
+            // `onPartMigrationWillRun`.
+            await onPartMigrationWillRun()
             lastAppliedPartMapping = nil
             await flushPendingSave()
             let applied = lastAppliedPartMapping

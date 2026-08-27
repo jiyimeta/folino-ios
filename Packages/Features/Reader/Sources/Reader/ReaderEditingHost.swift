@@ -165,6 +165,16 @@ public final class ReaderEditingHost {
     /// copies to disagree about how far through the mapping they are.
     public var requestReloadAfterPartRemap: @MainActor () -> Void = {}
 
+    /// Filled by the Reader, awaited by the App at the FRONT of a part edit — after the hold is up, before the
+    /// Editor's migration reads. The Reader lands whatever its own writers still have in the air.
+    ///
+    /// The hold alone is not enough for the ink. Annotation saves are debounced by half a second, so a capture
+    /// registered just before the part edit is still pending when the migration reads: landing after it, that write
+    /// would put the whole layer back into the old numbering with the mapping already consumed. Flushing it here puts
+    /// it on the right side of the read, where the migration rewrites it correctly — which is why this is a drain at
+    /// the front rather than another join at the release.
+    public var prepareForPartMigration: @MainActor () async -> Void = {}
+
     /// Written by the App, mirroring the Editor: `true` while a part edit's preferences migration has not settled.
     ///
     /// While it is up the Reader does not write the per-score preferences row at all — it queues the change and

@@ -4,7 +4,8 @@ import ScoreUI
 import SwiftUI
 import UtilityUI
 
-// PARITY(android): M2 instruments sheet — part add/remove/reorder UI and preference remap wiring
+// PARITY(android): M2 instruments sheet — part add/remove/reorder UI, plus the remap wiring for BOTH part-indexed
+// stores: the preferences row and the annotation layer's per-stroke anchors (`AnnotationLayers.remappingParts`, shared)
 
 /// The score's instrumentation, editable: the parts it is written for, in order, each with a switch per staff for
 /// whether that staff is currently shown.

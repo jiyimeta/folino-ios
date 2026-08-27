@@ -82,6 +82,15 @@ final class ReaderViewModel {
     /// Handle to the latest `drawingsDidChange` hop onto the coordinator, awaited by `flushPendingAnnotationSave`.
     @ObservationIgnored var annotationChangeTask: Task<Void, Never>?
 
+    /// Bumped whenever `annotationDrawings` is replaced WHOLESALE from the store rather than by the user's own ink —
+    /// today, the part-index re-seed. The score containers reproject the canvas on it.
+    ///
+    /// A ticket rather than observing `annotationDrawings` directly, which the containers deliberately do not: while
+    /// the user draws, the canvas is the source of truth, and re-seeding it with the round-tripped projection would
+    /// wipe the just-committed stroke (see the comment on `VerticalScoreContainer`'s `.onChange(of: document)`). This
+    /// fires only on the one path where the model really has moved under the canvas and the canvas is wrong.
+    var annotationReseedTicket = 0
+
     /// The display-ready score: the loaded score with clef overrides applied, transposed, and hidden staves filtered.
     /// Cached and recomputed only when its inputs change (load, clef overrides, transpose, hidden staves) via
     /// `recomputeVisibleScore()`, so the transform chain no longer rebuilds on every Reader body evaluation. Settable
@@ -133,11 +142,20 @@ final class ReaderViewModel {
         preferencesStore.discardDeferredMutations()
     }
 
-    /// Wires the store's hold to whatever the caller knows about the Editor's unsettled part edits. Called by the
-    /// editing-seam wiring, once; a Reader with no editing host never holds.
-    func setPreferenceMigrationPendingProvider(_ provider: @escaping @MainActor () -> Bool) {
+    /// Wires the hold to whatever the caller knows about the Editor's unsettled part edits. Called by the editing-seam
+    /// wiring, once; a Reader with no editing host never holds.
+    ///
+    /// It governs BOTH of this process's part-indexed writers — the preferences row and the annotation layer. They
+    /// hold for the same reason and for exactly the same window, and one provider is what keeps them from disagreeing
+    /// about whether it is up.
+    func setPartMigrationPendingProvider(_ provider: @escaping @MainActor () -> Bool) {
+        isPartMigrationPending = provider
         preferencesStore.isMigrationPending = provider
     }
+
+    /// Whether a part edit's migration is still unsettled — see `setPartMigrationPendingProvider`. Read by
+    /// `annotationDrawingsDidChange`; the preferences store holds its own copy.
+    @ObservationIgnored var isPartMigrationPending: @MainActor () -> Bool = { false }
 
     /// Whether the inspector should show the playlist-continuation control. True only when opened from a playlist.
     var isInPlaylist: Bool {

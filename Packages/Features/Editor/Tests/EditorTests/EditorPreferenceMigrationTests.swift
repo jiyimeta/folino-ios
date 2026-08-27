@@ -5,7 +5,8 @@ import Testing
 
 /// The durable half of the part-index problem: `ReaderPreferences` keys everything the reader sets per staff or per
 /// mixer strip by part INDEX, and adding / removing / reordering a part renumbers those indices in the file. The save
-/// choke point is where the two are reconciled — see `EditorViewModel.migratePartIndexedPreferences`.
+/// choke point is where the two are reconciled — see `EditorViewModel.migratePartIndexedState`, which does the same
+/// for the score's annotation anchors (`EditorAnnotationMigrationTests`).
 @MainActor
 @Suite("Editor preference migration")
 struct EditorPreferenceMigrationTests {

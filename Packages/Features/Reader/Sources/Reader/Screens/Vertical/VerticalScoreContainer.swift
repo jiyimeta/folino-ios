@@ -230,6 +230,10 @@ struct VerticalScoreContainer: View {
         // suppress it) would wipe the just-committed stroke. The user-edit path instead keeps `projectedAnnotations`
         // equal to the live drawing (see `annotationSpec`), so `applyDrawing` is a no-op for the user's own ink.
         .onChange(of: document) { _, _ in reprojectAnnotations() }
+        // The one time the MODEL moves under the canvas rather than the other way round: a part add / remove /
+        // reorder rewrites every stroke's anchor, so what is on screen is now drawn against the wrong staves. See
+        // `ReaderViewModel.annotationReseedTicket`.
+        .onChange(of: viewModel.annotationReseedTicket) { _, _ in reprojectAnnotations() }
         .onAppear { reprojectAnnotations() }
     }
 
@@ -422,7 +426,9 @@ struct VerticalScoreContainer: View {
             )
         }
 
-        if abs(newX - curX) < 0.5, abs(newY - curY) < 0.5 { return }
+        if abs(newX - curX) < 0.5, abs(newY - curY) < 0.5 {
+            return
+        }
 
         pendingScroll = .animated(CGPoint(x: newX, y: newY))
     }

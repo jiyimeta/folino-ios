@@ -49,7 +49,7 @@ struct ReaderViewModelPartRemapReloadTests {
         )
         let vm = makeVM(repo, item: item)
         await vm.loadOrSeedPreferences()
-        vm.setPreferenceMigrationPendingProvider(isPending)
+        vm.setPartMigrationPendingProvider(isPending)
         return vm
     }
 
@@ -131,7 +131,7 @@ struct ReaderViewModelPartRemapReloadTests {
 
         #expect(repo.storedReaderPreferences[item.id]?.masterVolume == nil)
         // Still queued, so the later release can land it.
-        vm.setPreferenceMigrationPendingProvider { false }
+        vm.setPartMigrationPendingProvider { false }
         await vm.applyDeferredPreferenceWrites()
         #expect(repo.storedReaderPreferences[item.id]?.masterVolume == 2)
     }

@@ -1,6 +1,26 @@
 import Domain
 import Foundation
 
+/// The decoded `{ drawings, textBoxes }` an annotation payload carries. The persisted body, not the `AnnotationLayer`
+/// domain type: the layer's `id` / `updatedAt` live in their own columns and the migration has no business minting
+/// them. Held here rather than in Domain because only this one caller decodes a payload to rewrite it.
+struct AnnotationLayerBody: Equatable {
+    var drawings: [DrawingAnchor]
+    var textBoxes: [TextBoxAnchor]
+
+    var isEmpty: Bool {
+        drawings.isEmpty && textBoxes.isEmpty
+    }
+
+    /// This body with every anchor's part index rewritten through `mapping` — see `AnnotationLayers.remappingParts`.
+    func remapped(_ mapping: [Int: Int?]) -> AnnotationLayerBody {
+        AnnotationLayerBody(
+            drawings: AnnotationLayers.remappingParts(mapping, in: drawings),
+            textBoxes: AnnotationLayers.remappingParts(mapping, in: textBoxes),
+        )
+    }
+}
+
 // MARK: - Autosave (Task 10)
 
 extension EditorViewModel {
@@ -117,7 +137,7 @@ extension EditorViewModel {
             if destination.isSiblingCopy {
                 didSaveAsSiblingMSCZ = true
             }
-            lastAppliedPartMapping = await migratePartIndexedPreferences(in: session, for: newItem.id)
+            lastAppliedPartMapping = await migratePartIndexedState(in: session, for: newItem.id)
             // Only when nothing landed while this call was suspended. An edit that arrived in one of the awaits
             // above is not in the bytes just written, and every trigger site schedules its own save — so leaving
             // `isDirty` standing is what lets that already-scheduled save actually run instead of finding a clean
@@ -131,9 +151,10 @@ extension EditorViewModel {
         }
     }
 
-    /// Rewrites the score's per-score `ReaderPreferences` row so its part-indexed keys still name the same parts
-    /// after this session's add / remove / reorder. Returns the map it wrote through, or `nil` when it wrote nothing
-    /// (the edit renumbered nothing, or the write failed).
+    /// Rewrites everything this device stores ABOUT the score by part index — the per-score `ReaderPreferences` row
+    /// and the annotation layer's per-stroke anchors — so they still name the same parts after this session's
+    /// add / remove / reorder. Returns the map it wrote through, or `nil` when it wrote nothing (the edit renumbered
+    /// nothing, or a write failed).
     ///
     /// Runs here — inside `performSave`, right after the score itself is on disk — because that is the closest the
     /// two ever are: the file has just been given the new part order, so a row migrated now describes the file that
@@ -156,17 +177,24 @@ extension EditorViewModel {
     /// never received. Closing that needs the row and the file to be written in one transaction, which this layering
     /// cannot express — it is the known cost of the two-writer arrangement.
     ///
-    /// The mapping is consumed ONLY after the write succeeds. A failed write leaves it accumulating so the next save
-    /// (or `endSession`'s retry) attempts the same migration; consuming first would re-baseline over a row that never
+    /// The mapping is consumed ONLY after BOTH writes succeed. A failure leaves it accumulating so the next save (or
+    /// `endSession`'s retry) attempts the same migration; consuming first would re-baseline over state that never
     /// moved and leave it permanently pointing at the old numbering.
     ///
-    /// No stored row (`nil`) still consumes: there is nothing to migrate, and leaving the map unconsumed would make
-    /// the next part operation report a stale cumulative map against a row written since. It reports `nil` all the
-    /// same — nothing was written, so the host has nothing to re-read.
+    /// **One map, one consume, two stores — so the two halves have to settle together.** Half-migrating and consuming
+    /// anyway strands the other half; half-migrating and NOT consuming is worse, because the retry would rewrite the
+    /// half that already moved a second time and point every setting at a third part. So the ink is written second and
+    /// a failure there ROLLS THE ROW BACK to the value it was read at, leaving the retry a clean whole. Only a second
+    /// failure — on the rollback write itself — can leave the two disagreeing, and nothing at this layer can do better
+    /// without a transaction spanning two stores.
+    ///
+    /// Nothing stored (no row, no ink) still consumes: there is nothing to migrate, and leaving the map unconsumed
+    /// would make the next part operation report a stale cumulative map against state written since. It reports `nil`
+    /// then — nothing was written, so the host has nothing to re-read.
     @discardableResult
-    func migratePartIndexedPreferences(in session: ScoreEditSession, for id: ScoreItemID) async -> [Int: Int?]? {
+    func migratePartIndexedState(in session: ScoreEditSession, for id: ScoreItemID) async -> [Int: Int?]? {
         guard !session.isPartMappingIdentity else { return nil }
-        return await migratePartIndexedPreferences(session.partIndexMapping, in: session, for: id)
+        return await migratePartIndexedState(session.partIndexMapping, in: session, for: id)
     }
 
     /// The same migration against an EXPLICIT map, for the one caller whose destination is not the session's current
@@ -176,20 +204,65 @@ extension EditorViewModel {
     /// thrown away immediately afterwards, and the replacement baselines on the restored score, which is exactly the
     /// numbering `mapping` has just put the row into.
     @discardableResult
-    func migratePartIndexedPreferences(
+    func migratePartIndexedState(
         _ mapping: [Int: Int?], in session: ScoreEditSession, for id: ScoreItemID,
     ) async -> [Int: Int?]? {
         do {
-            let stored = try await repository.loadReaderPreferences(for: id)
-            if let stored {
-                try await repository.saveReaderPreferences(stored.remappingParts(mapping))
+            // Both reads first: a read that throws must leave the stores exactly as they were, so there is nothing to
+            // undo and the retry is a clean whole.
+            let storedPreferences = try await repository.loadReaderPreferences(for: id)
+            let storedInk = try await loadAnnotationLayerBody(for: id)
+            if let storedPreferences {
+                try await repository.saveReaderPreferences(storedPreferences.remappingParts(mapping))
+            }
+            // Only when the rewrite actually moved something. An item whose ink is all page-anchored (a PDF's original
+            // rendition) is untouched by a part operation, and rewriting it anyway would bump `updated_at` — and with
+            // it the sync's idea of what changed — on every instrument added.
+            let migratedInk = storedInk.map { $0.remapped(mapping) }
+            if let storedInk, let migratedInk, migratedInk != storedInk {
+                do {
+                    try await saveAnnotationLayerBody(migratedInk, for: id)
+                } catch {
+                    // Put the row back where it was read: see the failure policy above.
+                    if let storedPreferences {
+                        try? await repository.saveReaderPreferences(storedPreferences)
+                    }
+                    throw error
+                }
             }
             session.consumePartIndexMapping()
-            return stored == nil ? nil : mapping
+            // `nil` only when there was nothing at all to migrate — either half having moved is something the host
+            // has to re-read.
+            return storedPreferences == nil && storedInk == nil ? nil : mapping
         } catch {
             // Leave the mapping unconsumed: the next save retries the migration with the same cumulative map.
             return nil
         }
+    }
+
+    /// The layer's decoded body, or `nil` when the score has no ink — which INCLUDES a payload that will not decode.
+    /// An unreadable blob is not an I/O failure and no retry fixes it; the Reader's own loader already treats it as no
+    /// ink, and blocking the mapping on it would strand the preferences row in the old numbering for good. Only a
+    /// genuine store failure throws, and that one is worth retrying.
+    private func loadAnnotationLayerBody(for id: ScoreItemID) async throws -> AnnotationLayerBody? {
+        guard let annotationStore, let data = try await annotationStore.load(scoreID: id) else { return nil }
+        guard let decoded = AnnotationLayerCodec.decode(data) else { return nil }
+        return AnnotationLayerBody(drawings: decoded.drawings, textBoxes: decoded.textBoxes)
+    }
+
+    /// Writes the migrated body back — or DELETES the layer when the migration emptied it, the same empty→delete
+    /// policy `AnnotationSaveCoordinator` applies on the Reader side (a score whose only inked part was removed must
+    /// not be left holding an empty layer that reads as "annotated").
+    private func saveAnnotationLayerBody(_ body: AnnotationLayerBody, for id: ScoreItemID) async throws {
+        guard let annotationStore else { return }
+        guard !body.isEmpty else {
+            try await annotationStore.delete(scoreID: id)
+            return
+        }
+        try await annotationStore.save(
+            scoreID: id, updatedAt: Date(),
+            payload: AnnotationLayerCodec.encode(drawings: body.drawings, textBoxes: body.textBoxes),
+        )
     }
 
     /// Where each of `from`'s parts sits in `to`, by `Part.id`; `nil` = `to` does not have it. The same shape

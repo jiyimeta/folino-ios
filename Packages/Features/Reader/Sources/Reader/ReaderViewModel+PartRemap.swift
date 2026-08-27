@@ -2,9 +2,9 @@ import Domain
 import SheetMusicCore
 
 extension ReaderViewModel {
-    /// Re-seats every in-memory per-score preference from the row the Editor has just reconciled with a part
-    /// add / remove / reorder (`EditorViewModel.onPartIndicesRemapped`), then lets go of whatever the store held
-    /// while that was in flight.
+    /// Re-seats everything this process holds in memory by part index — the per-score preferences AND the score's ink
+    /// — from the stores the Editor has just reconciled with a part add / remove / reorder
+    /// (`EditorViewModel.onPartIndicesRemapped`), then lets go of whatever was held while that was in flight.
     ///
     /// Migrating the persisted row is only half the fix. `LayoutSettingsModel` (hidden staves, per-staff clef
     /// overrides) and `PlaybackMixerModel` (the strip program / volume overlays) hold the same part-indexed state
@@ -46,6 +46,12 @@ extension ReaderViewModel {
     ) async {
         await flushPendingPreferenceWrites()
         let didReseed = await loadOrSeedPreferences(authoredHiddenStaves: authoredHiddenStaves)
+        // The ink is the same problem in a second store: every stroke names its staff by part index, the Editor has
+        // just rewritten those indices, and until this runs the containers are projecting the pre-migration anchors —
+        // drawing each stroke over whichever instrument now sits where its part used to. Re-seeded BEFORE the hold
+        // comes down, for the reason step 3 gives: until this line a capture would still be describing the old
+        // numbering. See `reseedAnnotationsAfterPartRemap`.
+        await reseedAnnotationsAfterPartRemap()
         if liftHold() {
             if didReseed {
                 await applyDeferredPreferenceWrites()

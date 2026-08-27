@@ -41,6 +41,40 @@ final class FakeScoreFileGateway: ScoreFileGateway, @unchecked Sendable {
     }
 }
 
+/// Payload-level annotation store, mirroring `LiveAnnotationStore`'s `AnnotationBlobStore` face: raw bytes keyed by
+/// score, no assembly and no policy. `saveError` covers `delete` too — both are writes, and the migration's rollback
+/// has to hold for either.
+final class FakeAnnotationBlobStore: AnnotationBlobStore, @unchecked Sendable {
+    var payloads: [ScoreItemID: Data] = [:]
+    private(set) var deleted: [ScoreItemID] = []
+    private(set) var saveCount = 0
+    var loadError: Error?
+    var saveError: Error?
+
+    func load(scoreID: ScoreItemID) throws -> Data? {
+        if let loadError {
+            throw loadError
+        }
+        return payloads[scoreID]
+    }
+
+    func save(scoreID: ScoreItemID, updatedAt: Date, payload: Data) throws {
+        if let saveError {
+            throw saveError
+        }
+        saveCount += 1
+        payloads[scoreID] = payload
+    }
+
+    func delete(scoreID: ScoreItemID) throws {
+        if let saveError {
+            throw saveError
+        }
+        deleted.append(scoreID)
+        payloads[scoreID] = nil
+    }
+}
+
 @MainActor
 @Observable
 final class FakeScoreLibraryRepository: ScoreLibraryRepository {

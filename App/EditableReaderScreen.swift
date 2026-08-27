@@ -52,6 +52,9 @@ struct EditableReaderScreen: View {
         originalStore: any ScoreOriginalStore,
         historyStore: any ScoreEditHistoryStore,
         playbackController: (any PlaybackController)?,
+        // The score's ink, for the Editor's part-index migration only — a part add / remove / reorder renumbers the
+        // staff each stroke is anchored to exactly as it renumbers the preferences row.
+        annotationStore: (any AnnotationBlobStore)? = nil,
         analytics: any Analytics = NoopAnalytics(),
         startInEditMode: Bool = false,
         readerBuilder: @escaping (
@@ -66,6 +69,7 @@ struct EditableReaderScreen: View {
             originalStore: originalStore,
             historyStore: historyStore,
             playback: playbackController,
+            annotationStore: annotationStore,
         ))
         self.repository = repository
         self.analytics = analytics
@@ -227,6 +231,12 @@ struct EditableReaderScreen: View {
     private func wirePartEditSeams(host: ReaderEditingHost, vm: EditorViewModel) {
         vm.onPartEditApplied = { [weak host] in
             host?.raisePartMappingHold()
+        }
+        // Between the hold going up and the migration reading: the Reader lands whatever its own writers still have in
+        // the air. The annotation layer needs it — its saves are debounced, so one registered just before the part
+        // edit would otherwise land on the far side of the migration and put the ink back into the old numbering.
+        vm.onPartMigrationWillRun = { [weak host] in
+            await host?.prepareForPartMigration()
         }
         // The Editor's own count of what the user changed about the instrumentation. Logged here rather than there:
         // the Editor has no analytics client, and this is the composition root that owns the one there is.

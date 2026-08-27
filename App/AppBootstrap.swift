@@ -35,6 +35,9 @@ final class AppBootstrap {
     /// The shared annotation save policy, backed by `LiveAnnotationStore` (an `AnnotationBlobStore`). Injected into
     /// every `ReaderViewModel` so iOS and Android drive the same debounce / empty→delete / assembly cadence.
     private(set) var annotationCoordinator: AnnotationSaveCoordinator?
+    /// The same store, unwrapped, for the one client that is not a Reader: the Editor's part-index migration rewrites
+    /// each stroke's anchor when the parts change, and has no business going through the save coordinator's debounce.
+    private(set) var annotationStore: LiveAnnotationStore?
     private(set) var repository: LiveScoreLibraryRepository?
     private(set) var gateway: LiveScoreFileGateway?
     private(set) var originalStore: LiveScoreOriginalStore?
@@ -126,6 +129,7 @@ final class AppBootstrap {
             incomingScoreCoordinator = makeIncomingScoreCoordinator(importer: importer)
 
             self.database = database
+            self.annotationStore = annotationStore
             annotationCoordinator = AnnotationSaveCoordinator(store: annotationStore)
             self.repository = repository
             self.gateway = gateway
@@ -154,7 +158,9 @@ final class AppBootstrap {
                 before: Date().addingTimeInterval(-Self.recentlyDeletedRetention),
             )
             // Publish current playlists so the Share Extension's picker is populated on first use.
-            if let writer { writer.publish(playlists: repository.playlists) }
+            if let writer {
+                writer.publish(playlists: repository.playlists)
+            }
             // Drain any tokens queued by the Share Extension before this launch.
             _ = await incomingShareCoordinator?.drain(token: nil)
             await pushAnalyticsSnapshot(repository: repository)

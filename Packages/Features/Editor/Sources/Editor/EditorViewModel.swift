@@ -186,7 +186,7 @@ public final class EditorViewModel {
     /// plain `async` method with two call sites, neither of which is itself a `Task`, so this is the one handle
     /// common to both (Critical 2 review fix).
     @ObservationIgnored var inFlightSaveTask: Task<Void, Never>?
-    /// What the most recent `migratePartIndexedPreferences` actually wrote, or `nil` when it wrote nothing. Read once
+    /// What the most recent `migratePartIndexedState` actually wrote, or `nil` when it wrote nothing. Read once
     /// by the part op's own commit, which reports it through `onPartIndicesRemapped` and clears it — a stored relay
     /// rather than a return value because the save that performs the migration is not the call that has to report it
     /// (a debounce tick or a `flushPendingSave` from anywhere can be the one that runs it).
@@ -268,6 +268,12 @@ public final class EditorViewModel {
     /// still holding the pre-migration addresses. So the release belongs to whoever performs the re-read — see
     /// `hasUnsettledPartEdits`, which is how it asks whether a LATER part edit has since raised it again.
     public var onPartEditApplied: @MainActor () -> Void = {}
+    /// Awaited once per part edit, after the hold is up and BEFORE the migration reads. The host uses it to land
+    /// whatever it still has in the air — the Reader's annotation saves are debounced, so a capture registered just
+    /// before the part edit can still be sitting in that debounce, and a write that lands AFTER the migration read
+    /// would overwrite the migrated layer with the old numbering, with the mapping consumed and nothing left to retry.
+    /// Draining here rather than at the release is what puts it on the right side of the read.
+    public var onPartMigrationWillRun: @MainActor () async -> Void = {}
     /// Fired for a part edit the USER asked for, with which of the three it was. Distinct from `onPartEditApplied`,
     /// which also covers an undo / redo that moved the parts — that is the same bookkeeping problem but not a new
     /// instrumentation decision, and counting it would double every edit that gets undone.
@@ -312,6 +318,10 @@ public final class EditorViewModel {
 
     @ObservationIgnored let gateway: any ScoreFileGateway
     @ObservationIgnored let repository: any ScoreLibraryRepository
+    /// The score's ink, as raw payload bytes — the same face and table the Reader's `AnnotationSaveCoordinator` writes
+    /// through. Read and rewritten by the part-index migration only; the Editor never otherwise touches ink.
+    /// `nil` for a host with no annotation storage behind it (previews, most tests), which simply has none to migrate.
+    @ObservationIgnored let annotationStore: (any AnnotationBlobStore)?
     @ObservationIgnored let playback: (any PlaybackController)?
     @ObservationIgnored let originalStore: any ScoreOriginalStore
     @ObservationIgnored let historyStore: any ScoreEditHistoryStore
@@ -331,6 +341,7 @@ public final class EditorViewModel {
         originalStore: any ScoreOriginalStore,
         historyStore: any ScoreEditHistoryStore,
         playback: (any PlaybackController)?,
+        annotationStore: (any AnnotationBlobStore)? = nil,
     ) {
         self.scoreItem = scoreItem
         self.scoresDirectory = scoresDirectory
@@ -339,6 +350,7 @@ public final class EditorViewModel {
         self.originalStore = originalStore
         self.historyStore = historyStore
         self.playback = playback
+        self.annotationStore = annotationStore
         hasCapturedOriginal = scoreItem.canRevertToOriginal
     }
 

@@ -269,9 +269,14 @@ struct PagedScoreContainer: View {
         }
         .onChange(of: pageState.pageIndex) { _, _ in reprojectCurrentPage(viewport: viewport) }
         .onChange(of: document) { _, _ in reprojectCurrentPage(viewport: viewport) }
+        // See `VerticalScoreContainer`: the part-index re-seed is the one path on which the model, not the canvas,
+        // is the thing that moved.
+        .onChange(of: viewModel.annotationReseedTicket) { _, _ in reprojectCurrentPage(viewport: viewport) }
         .onChange(of: viewModel.annotationDrawings) { _, _ in
             // Reseed on read-mode model changes; skip while drawing (the canvas is source of truth).
-            if !viewModel.isAnnotating { reprojectCurrentPage(viewport: viewport) }
+            if !viewModel.isAnnotating {
+                reprojectCurrentPage(viewport: viewport)
+            }
         }
         // Entering/leaving annotation hands the current page off between its static layer and the live canvas.
         .onChange(of: viewModel.isAnnotating) { _, _ in reprojectCurrentPage(viewport: viewport) }

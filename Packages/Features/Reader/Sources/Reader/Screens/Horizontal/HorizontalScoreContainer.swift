@@ -166,9 +166,14 @@ struct HorizontalScoreContainer: View {
         }
         // Reproject on reflow / score-swap / appear and on async annotation-load (not while annotating).
         .onChange(of: document) { _, _ in reprojectAnnotations() }
+        // See `VerticalScoreContainer`: the part-index re-seed is the one path on which the model, not the canvas,
+        // is the thing that moved.
+        .onChange(of: viewModel.annotationReseedTicket) { _, _ in reprojectAnnotations() }
         .onAppear { reprojectAnnotations() }
         .onChange(of: viewModel.annotationDrawings) { _, _ in
-            if !viewModel.isAnnotating { reprojectAnnotations() }
+            if !viewModel.isAnnotating {
+                reprojectAnnotations()
+            }
         }
     }
 
@@ -361,7 +366,9 @@ struct HorizontalScoreContainer: View {
             viewportSize: viewport.height, pad: pad,
         )
 
-        if abs(newX - curX) < 0.5, abs(newY - curY) < 0.5 { return }
+        if abs(newX - curX) < 0.5, abs(newY - curY) < 0.5 {
+            return
+        }
 
         pendingScroll = .animated(CGPoint(x: newX, y: newY))
     }

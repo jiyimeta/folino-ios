@@ -108,7 +108,7 @@ extension EditorViewModel {
             let mapping = Self.composing(session.partIndexMapping, restore)
             restoreMigration = mapping.allSatisfy { $0.value == $0.key }
                 ? nil
-                : await migratePartIndexedPreferences(mapping, in: session, for: scoreItem.id)
+                : await migratePartIndexedState(mapping, in: session, for: scoreItem.id)
             didRunSnapshotGear = true
             self.session = ScoreEditSession(score: sessionOpenScore)
             sessionEditDepth = 0
