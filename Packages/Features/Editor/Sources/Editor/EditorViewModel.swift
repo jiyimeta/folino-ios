@@ -307,14 +307,18 @@ public final class EditorViewModel {
     /// disappear takes the open sheet with it.
     public var isInstrumentsSheetPresented = false
     /// Drives the key-signature sheet, and the time-signature one. On the view model for the same reason as
-    /// `isInstrumentsSheetPresented`: the rows that raise them fold into the overflow `Menu`. Opening either clears
+    /// `isInstrumentsSheetPresented`: the rows that raise them fold into the overflow `Menu`. OPENING either clears
     /// the last refusal — that alert belongs to the attempt that raised it, not to the next visit.
+    ///
+    /// `oldValue` is what makes that "opening" rather than "is open": SwiftUI writes a presentation binding whenever
+    /// it re-reads it, and a redundant `true → true` write would otherwise wipe the refusal the sheet is at that
+    /// moment showing.
     public var isKeySignatureSheetPresented = false {
-        didSet { signatureSheetPresentationChanged(to: isKeySignatureSheetPresented) }
+        didSet { signatureSheetPresentationChanged(from: oldValue, to: isKeySignatureSheetPresented) }
     }
 
     public var isTimeSignatureSheetPresented = false {
-        didSet { signatureSheetPresentationChanged(to: isTimeSignatureSheetPresented) }
+        didSet { signatureSheetPresentationChanged(from: oldValue, to: isTimeSignatureSheetPresented) }
     }
 
     /// Why the last signature apply was refused, or `nil` when it landed — or was the quiet no-op ssm reports as

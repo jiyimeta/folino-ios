@@ -113,11 +113,34 @@ extension EditorViewModel {
         return true
     }
 
-    /// Both sheet flags' `didSet`. Opening either drops the refusal the last attempt left: that alert belongs to the
+    /// Both sheet flags' `didSet`. OPENING either drops the refusal the last attempt left: that alert belongs to the
     /// attempt that raised it, and a sheet reopened later has nothing to say about it yet.
-    func signatureSheetPresentationChanged(to isPresented: Bool) {
-        guard isPresented else { return }
+    ///
+    /// Keyed on the transition, not on the current value: a redundant `true → true` write — which SwiftUI is free to
+    /// make whenever it re-reads a presentation binding — would otherwise clear the refusal WHILE its alert is up,
+    /// emptying the message the user is reading.
+    func signatureSheetPresentationChanged(from wasPresented: Bool, to isPresented: Bool) {
+        guard isPresented, !wasPresented else { return }
         lastSignatureRefusal = nil
+    }
+
+    // MARK: - Naming a bar
+
+    /// The bar number the sheets name — ssm's own engraved numbering, so what the header says matches the number
+    /// drawn on the page. `nil` without a target, and for a bar the score draws no number for (a pickup, and any
+    /// other `irregular` bar): a sheet naming a number the score does not show would be inventing one.
+    public var targetDisplayedMeasureNumber: Int? {
+        guard let score, let targetMeasureIndex else { return nil }
+        return score.displayedMeasureNumber(at: targetMeasureIndex)
+    }
+
+    /// The same mapping for an arbitrary bar index — what a refusal's `measureIndex` goes through before it reaches
+    /// the alert, so the message points at the bar the user can see rather than at an array offset.
+    ///
+    /// Falls back to `index + 1` where the engraved numbering declines to answer: for an unnumbered bar an
+    /// approximately-placed number is still more use to someone hunting for the tuplet than no number at all.
+    public func displayedMeasureNumber(forMeasureIndex index: Int) -> Int {
+        score?.displayedMeasureNumber(at: index) ?? (index + 1)
     }
 
     // MARK: - Reading the score

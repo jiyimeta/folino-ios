@@ -40,6 +40,14 @@ struct AnalyticsEventFactoryTests {
         #expect(event.parameters["action"] == .string(action))
     }
 
+    @Test(arguments: ["key", "time"], ["set", "remove"])
+    func `score signature changed carries the kind and the action`(_ kind: String, _ action: String) {
+        let event = AnalyticsEvent.scoreSignatureChanged(kind: kind, action: action)
+        #expect(event.name == "score_signature_changed")
+        #expect(event.parameters["kind"] == .string(kind))
+        #expect(event.parameters["action"] == .string(action))
+    }
+
     @Test func `favorite toggled carries enabled source mode`() {
         let event = AnalyticsEvent.favoriteToggled(enabled: true, source: .scoreRowMenu, mode: .single)
         #expect(event.name == "favorite_toggled")

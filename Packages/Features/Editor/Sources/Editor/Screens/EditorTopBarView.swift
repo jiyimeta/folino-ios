@@ -65,7 +65,7 @@ public struct EditorTopBarView: View {
     public var body: some View {
         // The shadow matches `ReaderTopBarControls`' so the reading and editing strips read as the same physical
         // surface — see review Important 2.
-        instrumentsSheet(on: revertFailureAlert(on: controlTierRow))
+        signatureSheets(on: instrumentsSheet(on: revertFailureAlert(on: controlTierRow)))
             .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
     }
 
@@ -199,8 +199,8 @@ public struct EditorTopBarView: View {
         .accessibilityLabel(L10n.Common.more)
     }
 
-    /// Add / insert-before / delete a measure — shared by `overflowMenu` and `measureMenu`, which each host these
-    /// rows alongside different neighbours.
+    /// Add / insert-before / delete a measure, and the two signature changes — shared by `overflowMenu` and
+    /// `measureMenu`, which each host these rows alongside different neighbours.
     @ViewBuilder
     private var measureActionRows: some View {
         Button {
@@ -222,6 +222,9 @@ public struct EditorTopBarView: View {
             }
         }
         .disabled(viewModel.targetMeasureIndex == nil)
+        // Ahead of the destructive row, not after it: a `Menu` puts its destructive item last everywhere else in
+        // this app, and appending these two below Delete Measure would break that reading.
+        signatureMenuRows
         Button(role: .destructive) {
             viewModel.deleteTargetMeasure()
         } label: {

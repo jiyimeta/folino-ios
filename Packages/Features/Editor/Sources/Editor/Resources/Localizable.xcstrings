@@ -897,6 +897,76 @@
         }
       }
     },
+    "editor.measure.keySignature": {
+      "comment": "Measure-menu row that opens the key-signature sheet for the target bar.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Key Signature…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "調号…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "조표…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "调号…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "調號…"
+          }
+        }
+      }
+    },
+    "editor.measure.timeSignature": {
+      "comment": "Measure-menu row that opens the time-signature sheet for the target bar.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Time Signature…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍子…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "박자표…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍号…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍號…"
+          }
+        }
+      }
+    },
     "editor.notice.savedAsMscz": {
       "localizations": {
         "en": {
@@ -1812,6 +1882,531 @@
           "stringUnit": {
             "state": "translated",
             "value": "請再試一次。"
+          }
+        }
+      }
+    },
+    "editor.signature.apply": {
+      "comment": "Confirmation button that writes the picked signature.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "適用"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "적용"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "套用"
+          }
+        }
+      }
+    },
+    "editor.signature.header %lld %@": {
+      "comment": "Section header of a signature sheet. %lld is the bar's displayed measure number; %@ is the signature in force there, already written the way it is engraved (\"C / Am\", \"3/4\").",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Measure %lld — currently %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld小節目 — 現在は%@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld번째 마디 — 현재 %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第%lld小节 — 当前为%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第%lld小節 — 目前為%@"
+          }
+        }
+      }
+    },
+    "editor.signature.header.unnumbered %@": {
+      "comment": "Same section header for a bar the score draws no number for (a pickup). %@ is the signature in force there.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Currently %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在は%@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "현재 %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前为%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前為%@"
+          }
+        }
+      }
+    },
+    "editor.signature.key.title": {
+      "comment": "Title of the sheet that changes the key signature at one bar.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Key Signature"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "調号"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "조표"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "调号"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "調號"
+          }
+        }
+      }
+    },
+    "editor.signature.refusal.barline %lld": {
+      "comment": "Alert body when re-barring would slide a repeat sign or special barline off the barline it marks. %lld is the displayed measure number of the bar carrying it.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A repeat or barline mark in measure %lld would slide off the barline it marks, so nothing was changed."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld小節目の反復記号や特殊な小節線が本来の位置からずれてしまうため、変更できませんでした。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld번째 마디의 반복 기호나 특수 마디선이 원래 자리에서 벗어나기 때문에 변경하지 못했습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第%lld小节的反复记号或特殊小节线会偏离原来的位置，因此未做更改。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第%lld小節的反覆記號或特殊小節線會偏離原本的位置，因此未做更改。"
+          }
+        }
+      }
+    },
+    "editor.signature.refusal.generic": {
+      "comment": "Alert body for any other reason the engine refused a signature change.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The change couldn’t be applied."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この変更は適用できませんでした。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 변경을 적용하지 못했습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法应用此变更。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法套用此變更。"
+          }
+        }
+      }
+    },
+    "editor.signature.refusal.title": {
+      "comment": "Title of the alert shown when the engine refused a signature change.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t apply the change"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変更を適用できませんでした"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "변경을 적용하지 못했습니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法应用此变更"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法套用此變更"
+          }
+        }
+      }
+    },
+    "editor.signature.refusal.tuplet %lld": {
+      "comment": "Alert body when re-barring would put a barline inside a tuplet. %lld is the displayed measure number of the bar holding it.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The new barlines would fall inside the tuplet in measure %lld, so nothing was changed."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld小節目の連符が新しい小節線とぶつかるため、変更できませんでした。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld번째 마디의 잇단음표가 새 마디선과 겹쳐 변경하지 못했습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第%lld小节的连音符会被新的小节线切开，因此未做更改。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第%lld小節的連音符會被新的小節線切開，因此未做更改。"
+          }
+        }
+      }
+    },
+    "editor.signature.remove": {
+      "comment": "Destructive row that drops the signature change the target bar declares.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove Change at This Measure"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この小節の変更を削除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 마디의 변경 삭제"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除本小节的变更"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除本小節的變更"
+          }
+        }
+      }
+    },
+    "editor.signature.remove.confirm.action": {
+      "comment": "Destructive button in that dialog.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "削除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "삭제"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除"
+          }
+        }
+      }
+    },
+    "editor.signature.remove.confirm.title": {
+      "comment": "Title of the dialog confirming removal of a signature change.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove this change?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この変更を削除しますか？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 변경을 삭제하시겠습니까?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要删除此变更吗？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要刪除此變更嗎？"
+          }
+        }
+      }
+    },
+    "editor.signature.remove.message.key": {
+      "comment": "What removing a key change does — shown under the Remove row and in its confirmation.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The measures from here on go back to the key already in force."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この小節以降は、それまで有効だった調号に戻ります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 마디부터는 이전까지 적용되던 조표로 되돌아갑니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本小节及之后将恢复为此前生效的调号。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本小節及之後將恢復為先前生效的調號。"
+          }
+        }
+      }
+    },
+    "editor.signature.remove.message.time": {
+      "comment": "What removing a time change does — shown under the Remove row and in its confirmation.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The measures from here on are re-barred to the meter already in force."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この小節以降は、それまで有効だった拍子で小節が組み直されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 마디부터는 이전까지 적용되던 박자로 마디가 다시 나뉘어집니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本小节及之后将按此前生效的拍号重新划分小节。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本小節及之後將依先前生效的拍號重新劃分小節。"
+          }
+        }
+      }
+    },
+    "editor.signature.scopeHint": {
+      "comment": "Footer explaining how far a signature change reaches.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applies from this measure until the next change."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この小節から次の変更点までに適用されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 마디부터 다음 변경 지점까지 적용됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从本小节起，直到下一个变更点为止生效。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "從本小節起，直到下一個變更點為止生效。"
+          }
+        }
+      }
+    },
+    "editor.signature.time.title": {
+      "comment": "Title of the sheet that changes the time signature at one bar.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Time Signature"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍子"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "박자표"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍号"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍號"
           }
         }
       }

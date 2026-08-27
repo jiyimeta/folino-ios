@@ -247,6 +247,10 @@ struct EditableReaderScreen: View {
         vm.onPartsEdited = { [analytics] action in
             analytics.log(.scorePartsEdited(action: action.rawValue))
         }
+        // Same seam, same reason, for the key and time signature sheets.
+        vm.onSignatureChanged = { [analytics] kind, action in
+            analytics.log(.scoreSignatureChanged(kind: kind, action: action))
+        }
         host.isPartMappingSettled = { [weak vm] in
             vm?.hasUnsettledPartEdits != true
         }

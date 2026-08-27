@@ -80,6 +80,16 @@ extension AnalyticsEvent {
         AnalyticsEvent(name: "score_parts_edited", parameters: ["action": .string(action)])
     }
 
+    /// A key or time signature written or dropped from one of the signature sheets — `kind` is `"key"` or `"time"`,
+    /// `action` is `"set"` or `"remove"`. Which key, or which meter, is deliberately not carried, for the reason
+    /// `scorePartsEdited` gives: the question is whether people change signatures after creating a score, not what
+    /// they change them to.
+    public static func scoreSignatureChanged(kind: String, action: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "score_signature_changed", parameters: [
+            "kind": .string(kind), "action": .string(action),
+        ])
+    }
+
     // MARK: Playlists & tags
 
     public static func playlistCreated(source: AnalyticsSource) -> AnalyticsEvent {
