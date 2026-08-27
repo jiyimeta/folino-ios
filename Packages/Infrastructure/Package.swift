@@ -35,6 +35,7 @@ var targets: [Target] = [
         name: "Persistence",
         dependencies: [
             "Domain",
+            .product(name: "UtilityCore", package: "Utility"),
             .product(name: "GRDB", package: "GRDB.swift"),
         ],
         plugins: swiftLintPlugins,

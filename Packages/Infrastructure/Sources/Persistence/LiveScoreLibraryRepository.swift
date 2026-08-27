@@ -2,6 +2,7 @@ import Domain
 import Foundation
 import GRDB
 import Observation
+import UtilityCore
 
 /// Live, GRDB-backed implementation of `ScoreLibraryRepository`. Holds the library snapshot in `@Observable` properties
 /// refreshed by a single `ValueObservation` task started on the first `refresh()`.
@@ -20,16 +21,20 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
     @ObservationIgnored
     private let playlistsIndexPublisher: (any PlaylistsIndexPublisher)?
     @ObservationIgnored
+    private let crashReporter: any CrashReporter
+    @ObservationIgnored
     private var observationTask: Task<Void, Never>?
 
     public init(
         database: AppDatabase,
         scoresDirectory: URL,
         playlistsIndexPublisher: (any PlaylistsIndexPublisher)? = nil,
+        crashReporter: any CrashReporter = NoopCrashReporter(),
     ) {
         self.database = database
         self.scoresDirectory = scoresDirectory
         self.playlistsIndexPublisher = playlistsIndexPublisher
+        self.crashReporter = crashReporter
     }
 
     deinit {
@@ -205,12 +210,7 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
                 _ = try ScoreItemRecord.deleteOne(db, key: id.rawValue.uuidString)
             }
             for filename in filenames {
-                let url = scoresDirectory.appending(path: filename)
-                // Best-effort: the file may already be missing, and a row deleted with its bytes left behind is not
-                // worth failing the delete over. Nothing records it, though: `Analytics` and `CrashReporting` exist
-                // now, but Persistence has no reporting seam injected, so an orphan here is silent. Adding one means
-                // a Domain protocol and a new event, not a call from inside this loop.
-                try? FileManager.default.removeItem(at: url)
+                removeBackingFile(named: filename)
             }
         } catch {
             throw DomainError.persistenceFailed(reason: "\(error)")
@@ -233,11 +233,28 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
                 return names
             }
             for filename in filenames {
-                let url = scoresDirectory.appending(path: filename)
-                try? FileManager.default.removeItem(at: url)
+                removeBackingFile(named: filename)
             }
         } catch {
             throw DomainError.persistenceFailed(reason: "\(error)")
+        }
+    }
+
+    /// Deletes one file whose row is already gone.
+    ///
+    /// Best-effort by design: the row is the source of truth, so a file that cannot be removed must not fail the
+    /// delete the user asked for. But it is no longer silent — a failure other than "already missing" leaves an
+    /// orphan taking up space that nothing will ever reclaim, so it goes out as a non-fatal. The breadcrumb carries
+    /// the extension rather than the filename, which is derived from the score's title.
+    private func removeBackingFile(named filename: String) {
+        let url = scoresDirectory.appending(path: filename)
+        do {
+            try FileManager.default.removeItem(at: url)
+        } catch CocoaError.fileNoSuchFile {
+            // Nothing to reclaim — the common case for a row whose file was already swept.
+        } catch {
+            crashReporter.log("orphaned score file after row delete (.\(url.pathExtension))")
+            crashReporter.record(error: error)
         }
     }
 
