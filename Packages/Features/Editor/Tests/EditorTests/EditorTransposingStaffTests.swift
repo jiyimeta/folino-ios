@@ -166,18 +166,20 @@ struct EditorTransposingStaffTests {
         #expect(written.tpc == 21)
     }
 
-    // MARK: - Readout and audition
+    // MARK: - Written spelling and audition
 
-    @Test func `the readout names the written note`() throws {
+    /// Bare letter input on a transposing staff lands on the WRITTEN note the user asked for — a `c` typed against
+    /// a B♭ clarinet in D major is written C♯4, whatever concert pitch it is stored as.
+    @Test func `letter input lands on the written note`() throws {
         let vm = makeViewModel()
         vm.beginSession(score: EditorFixtures.clarinetQuarterRests())
         vm.select(.rest(EditorFixtures.restID(element: Self.slot)))
         vm.inputPitch(letter: "c")
 
-        let score = try #require(vm.score)
         let noteID = EditorFixtures.noteID(element: Self.slot)
-        #expect(NoteNameFormatter.name(of: noteID, in: score) == "C♯4")
-        #expect(NoteNameFormatter.readout(for: .note(noteID), in: score).hasPrefix("C♯4 · "))
+        let written = try #require(vm.score?.writtenSpelling(of: noteID))
+        #expect(written.pitch == 61) // written C♯4
+        #expect(written.tpc == 21)
     }
 
     /// Audition sounds the CONCERT pitch, because it is handed `vm.score` — the stored score, which the written
