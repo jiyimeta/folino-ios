@@ -306,6 +306,23 @@ public final class EditorViewModel {
     /// opens it folds into the overflow `Menu` at narrow widths, and a `@State` flag owned by a control that can
     /// disappear takes the open sheet with it.
     public var isInstrumentsSheetPresented = false
+    /// Drives the key-signature sheet, and the time-signature one. On the view model for the same reason as
+    /// `isInstrumentsSheetPresented`: the rows that raise them fold into the overflow `Menu`. Opening either clears
+    /// the last refusal — that alert belongs to the attempt that raised it, not to the next visit.
+    public var isKeySignatureSheetPresented = false {
+        didSet { signatureSheetPresentationChanged(to: isKeySignatureSheetPresented) }
+    }
+
+    public var isTimeSignatureSheetPresented = false {
+        didSet { signatureSheetPresentationChanged(to: isTimeSignatureSheetPresented) }
+    }
+
+    /// Why the last signature apply was refused, or `nil` when it landed — or was the quiet no-op ssm reports as
+    /// `.nothingToApply` (see `EditorViewModel+Signatures.swift`, which owns both the writes and that distinction).
+    public var lastSignatureRefusal: EditRefusal?
+    /// Fired after a signature change lands, as `("key"|"time", "set"|"remove")`. A closure rather than an analytics
+    /// client, for the reason `onPartsEdited` gives: the Editor logs nothing itself.
+    public var onSignatureChanged: ((String, String) -> Void)?
     /// Whether the Reader is SHOWING this staff, and the flip for it — wired by the App to the Reader's per-score
     /// layout settings, the same store its own inspector toggles. Visibility is a reading preference, not a property
     /// of the file, and this package cannot import Reader; the defaults suit an Editor with no Reader behind it.
