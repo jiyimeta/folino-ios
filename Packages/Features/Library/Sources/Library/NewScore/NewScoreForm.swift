@@ -88,11 +88,6 @@ struct NewScoreForm: Equatable {
         }
     }
 
-    /// The key picker's menu: circle of fifths, C-major center. Raw value is `KeySignature.concertKey`.
-    static let keyChoices: [Int] = [0, 1, 2, 3, 4, 5, 6, -1, -2, -3, -4, -5, -6]
-    /// numerator/denominator pairs offered by the time picker.
-    static let timeChoices: [(Int, Int)] = [(4, 4), (3, 4), (2, 4), (6, 8), (12, 8), (2, 2), (5, 4)]
-
     /// The template a fresh form opens on — the same solo piano the M1 form defaulted to.
     static let defaultTemplateID = "solo-piano"
 
@@ -147,10 +142,23 @@ struct NewScoreForm: Equatable {
     /// (`Part.init(blankPlan:id:measures:)` adds them) and are unaffected by this.
     var bracketGroups: [Range<Int>] = []
     var concertKey = 0
-    // Two Ints, not a tuple: Equatable synthesis rejects tuple stored properties.
-    var timeNumerator = 4
-    var timeDenominator = 4
+    // Two Ints, not a tuple: Equatable synthesis rejects tuple stored properties. Both observe themselves so a
+    // meter change can retire a pickup the new bar can no longer hold — the picker is bound straight to them,
+    // so there is no other choke point a rewrite would pass through.
+    var timeNumerator = 4 {
+        didSet { dropPickupIfUnavailable() }
+    }
+
+    var timeDenominator = 4 {
+        didSet { dropPickupIfUnavailable() }
+    }
+
+    /// The opening bar's own length when the score starts on an anacrusis, `nil` (the default) when it does not.
+    /// Always one of `pickupChoices(numerator:denominator:)` for the current meter.
+    var pickup: Fraction?
     var tempoBPM = 120
+    /// Total bars INCLUDING the pickup, matching `BlankScoreTemplate.measureCount` — a 32-bar score with a
+    /// pickup is the pickup plus 31 full bars.
     var measureCount = 32
 
     // MARK: - Instrumentation edits
@@ -255,7 +263,40 @@ struct NewScoreForm: Equatable {
             timeDenominator: timeDenominator,
             tempoBPM: Double(tempoBPM),
             measureCount: measureCount,
+            pickup: pickup,
         )
+    }
+
+    // MARK: - Pickup
+
+    /// The anacrusis lengths offered for a meter: every multiple of the beat unit that is strictly shorter than
+    /// a full bar.
+    ///
+    /// The unit is an eighth note, or the meter's own denominator when that is finer — 3/16 can start on a
+    /// sixteenth, while 3/4 offers eighths rather than the sixteenths nobody starts a piece on. Strictly
+    /// shorter, because a first bar as long as the meter is simply a full bar.
+    static func pickupChoices(numerator: Int, denominator: Int) -> [Fraction] {
+        guard numerator > 0, denominator > 0 else { return [] }
+        let unit = max(8, denominator)
+        var choices: [Fraction] = []
+        for count in 1 ... (numerator * unit) {
+            let candidate = Fraction(numerator: count, denominator: unit)
+            // candidate < numerator/denominator, cross-multiplied so the comparison stays in integers.
+            guard candidate.numerator * denominator < numerator * candidate.denominator else { break }
+            choices.append(candidate)
+        }
+        return choices
+    }
+
+    /// Retires a pickup the current meter no longer offers. Membership rather than a length comparison: a meter
+    /// change can also coarsen the unit (3/16's sixteenth-note pickup has no place in 3/4), and a pickup the
+    /// picker cannot show is a row with no selection.
+    private mutating func dropPickupIfUnavailable() {
+        guard let pickup else { return }
+        let choices = Self.pickupChoices(numerator: timeNumerator, denominator: timeDenominator)
+        if !choices.contains(pickup) {
+            self.pickup = nil
+        }
     }
 
     // MARK: - Duplicate numbering

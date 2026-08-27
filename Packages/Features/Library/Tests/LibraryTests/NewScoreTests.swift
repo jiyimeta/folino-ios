@@ -320,6 +320,75 @@ struct NewScoreTests {
         #expect(form.bracketGroups.isEmpty)
     }
 
+    // MARK: - Pickup
+
+    /// Eighth-note granularity in 4/4, stopping one unit short of the full bar: a pickup as long as the bar is
+    /// not a pickup.
+    @Test
+    func `pickup choices are eighth-note multiples shorter than the bar`() {
+        let expected = [
+            Fraction(numerator: 1, denominator: 8),
+            Fraction(numerator: 1, denominator: 4),
+            Fraction(numerator: 3, denominator: 8),
+            Fraction(numerator: 1, denominator: 2),
+            Fraction(numerator: 5, denominator: 8),
+            Fraction(numerator: 3, denominator: 4),
+            Fraction(numerator: 7, denominator: 8),
+        ]
+        #expect(NewScoreForm.pickupChoices(numerator: 4, denominator: 4) == expected)
+    }
+
+    /// A meter finer than an eighth gets its own unit, so 3/16 can start on a sixteenth.
+    @Test
+    func `a fine meter offers its own denominator as the pickup unit`() {
+        #expect(NewScoreForm.pickupChoices(numerator: 3, denominator: 16) == [
+            Fraction(numerator: 1, denominator: 16),
+            Fraction(numerator: 1, denominator: 8),
+        ])
+    }
+
+    @Test
+    func `a chosen pickup reaches the blank-score template`() throws {
+        var form = NewScoreForm()
+        form.title = "Anacrusis"
+        form.pickup = Fraction(numerator: 1, denominator: 4)
+        let template = try #require(form.template())
+        #expect(template.pickup == Fraction(numerator: 1, denominator: 4))
+    }
+
+    /// The default is no pickup at all — every bar follows the time signature, as before the option existed.
+    @Test
+    func `a form without a pickup builds a template without one`() throws {
+        var form = NewScoreForm()
+        form.title = "Plain"
+        let template = try #require(form.template())
+        #expect(template.pickup == nil)
+    }
+
+    /// Changing the meter can leave the chosen pickup longer than the bar it opens; the form drops it rather than
+    /// building a score whose first bar is longer than its time signature.
+    @Test
+    func `changing the meter clears a pickup that no longer fits`() {
+        var form = NewScoreForm()
+        form.title = "Anacrusis"
+        form.pickup = Fraction(numerator: 1, denominator: 4)
+        form.timeNumerator = 1
+        form.timeDenominator = 8
+        #expect(form.pickup == nil)
+        #expect(NewScoreForm.pickupChoices(numerator: 1, denominator: 8).isEmpty)
+    }
+
+    /// ...but a pickup the new meter still accommodates survives the change.
+    @Test
+    func `changing the meter keeps a pickup that still fits`() {
+        var form = NewScoreForm()
+        form.title = "Anacrusis"
+        form.pickup = Fraction(numerator: 1, denominator: 8)
+        form.timeNumerator = 6
+        form.timeDenominator = 8
+        #expect(form.pickup == Fraction(numerator: 1, denominator: 8))
+    }
+
     @Test
     func `an empty instrumentation disables create`() {
         var form = NewScoreForm()

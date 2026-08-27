@@ -244,23 +244,38 @@ struct NewScoreSheet: View {
 
     // MARK: - Layout / length
 
-    /// Key signature and time signature — the fields that shape the blank score's layout.
+    /// Key signature, time signature and the optional pickup — the fields that shape the blank score's layout.
+    /// The two signature controls are ScoreUI's, shared with the editor's signature-change sheets.
     private var layoutSection: some View {
         Section {
-            Picker(selection: $form.concertKey) {
-                ForEach(NewScoreForm.keyChoices, id: \.self) { key in
-                    Text(Self.keyLabel(key)).tag(key)
-                }
-            } label: {
-                Text("library.newScore.field.key", bundle: .module)
+            KeySignaturePicker(selection: $form.concertKey)
+            TimeSignaturePicker(numerator: $form.timeNumerator, denominator: $form.timeDenominator)
+            pickupRow
+        } footer: {
+            // Only once a pickup is actually chosen: the measure count is unambiguous without one, and this is
+            // the cheapest place to say what it means with one (the count lives in the next section).
+            if form.pickup != nil {
+                Text("library.newScore.field.pickup.footer", bundle: .module)
             }
-            Picker(selection: timeChoiceIndex) {
-                ForEach(Array(NewScoreForm.timeChoices.enumerated()), id: \.offset) { index, choice in
-                    Text(verbatim: "\(choice.0)/\(choice.1)").tag(index)
-                }
-            } label: {
-                Text("library.newScore.field.time", bundle: .module)
+        }
+    }
+
+    /// The opening bar's length, or none. Rebuilt from the current meter on every change, so it never offers a
+    /// pickup longer than the bar it opens; `NewScoreForm` retires a stale selection at the same moment.
+    private var pickupRow: some View {
+        Picker(selection: $form.pickup) {
+            Text("library.newScore.field.pickup.none", bundle: .module).tag(Fraction?.none)
+            ForEach(
+                NewScoreForm.pickupChoices(
+                    numerator: form.timeNumerator, denominator: form.timeDenominator,
+                ),
+                id: \.self,
+            ) { choice in
+                // Note values, not prose: "3/8" reads the same in every language folino ships.
+                Text(verbatim: "\(choice.numerator)/\(choice.denominator)").tag(Fraction?.some(choice))
             }
+        } label: {
+            Text("library.newScore.field.pickup", bundle: .module)
         }
     }
 
@@ -298,22 +313,6 @@ struct NewScoreSheet: View {
         }
     }
 
-    /// `(Int, Int)` tuples aren't `Hashable`, so the time-signature picker binds by index into `timeChoices` and
-    /// writes both `timeNumerator`/`timeDenominator` back on selection.
-    private var timeChoiceIndex: Binding<Int> {
-        Binding(
-            get: {
-                NewScoreForm.timeChoices.firstIndex { $0.0 == form.timeNumerator && $0.1 == form.timeDenominator } ?? 0
-            },
-            set: { newIndex in
-                guard NewScoreForm.timeChoices.indices.contains(newIndex) else { return }
-                let choice = NewScoreForm.timeChoices[newIndex]
-                form.timeNumerator = choice.0
-                form.timeDenominator = choice.1
-            },
-        )
-    }
-
     /// Template names live in this module's catalog, not in Domain — `ScoreCreationTemplate` stores nothing a user
     /// reads. The switch (rather than string interpolation into a key) keeps the catalog's keys greppable and makes
     /// a template added to Domain without a name a compile-time miss instead of a runtime raw key.
@@ -324,27 +323,6 @@ struct NewScoreSheet: View {
         case "satb": "library.newScore.template.satb"
         case "string-quartet": "library.newScore.template.string-quartet"
         default: LocalizedStringKey(id)
-        }
-    }
-
-    /// Key names are universal note-letter spellings, not prose — written out once here rather than through the
-    /// localization catalog. Circle of fifths, C-major center, matching `NewScoreForm.keyChoices`' order.
-    private static func keyLabel(_ concertKey: Int) -> String {
-        switch concertKey {
-        case 0: "C / Am"
-        case 1: "G / Em"
-        case 2: "D / Bm"
-        case 3: "A / F♯m"
-        case 4: "E / C♯m"
-        case 5: "B / G♯m"
-        case 6: "F♯ / D♯m"
-        case -1: "F / Dm"
-        case -2: "B♭ / Gm"
-        case -3: "E♭ / Cm"
-        case -4: "A♭ / Fm"
-        case -5: "D♭ / B♭m"
-        case -6: "G♭ / E♭m"
-        default: "\(concertKey)"
         }
     }
 }
