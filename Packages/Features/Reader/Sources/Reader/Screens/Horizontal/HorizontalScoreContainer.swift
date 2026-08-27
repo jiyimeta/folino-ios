@@ -239,7 +239,19 @@ struct HorizontalScoreContainer: View {
                 // Canvas is the source of truth while drawing: keep the projection equal to the live ink so the next
                 // render's `applyDrawing` is a no-op (echo guard). The model is still captured for persistence/reflow.
                 projectedAnnotations = drawing
-                viewModel.annotationDrawingsDidChange(AnnotationAnchoring.capture(strokes: drawing.strokes, in: doc))
+                // Only the score layer is re-captured — the same spelling the vertical container uses, and for the
+                // same reason: an item read out of a PDF also carries page-anchored ink, which this canvas can
+                // neither show nor describe, so committing the capture verbatim would delete it and the save
+                // coordinator would make that permanent. (This container used to commit the bare capture, which did
+                // exactly that.) Ink on a HIDDEN staff is the same case one level down, inside the score layer, so it
+                // is carried across by hand — see `hiddenAnchors(in:)`.
+                let staffFilter = annotationStaffFilter
+                viewModel.annotationDrawingsDidChange(AnnotationLayers.replacing(
+                    .score,
+                    in: viewModel.annotationDrawings,
+                    with: (staffFilter?.hiddenAnchors(in: viewModel.annotationDrawings) ?? [])
+                        + AnnotationAnchoring.capture(strokes: drawing.strokes, in: doc, staffFilter: staffFilter),
+                ))
             },
             state: { annotationCanvasState(viewport: viewport) },
             handle: annotationHandle,
@@ -273,7 +285,15 @@ struct HorizontalScoreContainer: View {
 
     private func reprojectAnnotations() {
         guard let doc = document else { projectedAnnotations = PKDrawing(); return }
-        projectedAnnotations = AnnotationAnchoring.display(viewModel.annotationDrawings, in: doc)
+        projectedAnnotations = AnnotationAnchoring.display(
+            viewModel.annotationDrawings, in: doc, staffFilter: annotationStaffFilter,
+        )
+    }
+
+    /// See `VerticalScoreContainer.annotationStaffFilter` — the stored anchors are in source addressing and this
+    /// document is engraved from the staff-filtered score.
+    private var annotationStaffFilter: AnnotationStaffFilter? {
+        .current(viewModel: viewModel, editingHost: editingHost)
     }
 
     /// Horizontal mode: lay out at natural content width so systems never wrap. Title frame is omitted — it'd push the

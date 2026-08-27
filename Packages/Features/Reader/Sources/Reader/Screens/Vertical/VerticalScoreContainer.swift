@@ -257,11 +257,14 @@ struct VerticalScoreContainer: View {
                 projectedAnnotations = drawing
                 // Only the score layer is re-captured. An item read out of a PDF also carries page-anchored ink, which
                 // this canvas can neither show nor describe — committing the capture verbatim would delete it, and the
-                // save coordinator would make that permanent.
+                // save coordinator would make that permanent. Ink on a HIDDEN staff is the same case one level down
+                // (inside the score layer), so it is carried across by hand — see `hiddenAnchors(in:)`.
+                let staffFilter = annotationStaffFilter
                 viewModel.annotationDrawingsDidChange(AnnotationLayers.replacing(
                     .score,
                     in: viewModel.annotationDrawings,
-                    with: AnnotationAnchoring.capture(strokes: drawing.strokes, in: doc),
+                    with: (staffFilter?.hiddenAnchors(in: viewModel.annotationDrawings) ?? [])
+                        + AnnotationAnchoring.capture(strokes: drawing.strokes, in: doc, staffFilter: staffFilter),
                 ))
             },
             state: { annotationCanvasState(viewport: viewport) },
@@ -321,7 +324,16 @@ struct VerticalScoreContainer: View {
 
     private func reprojectAnnotations() {
         guard let doc = document else { projectedAnnotations = PKDrawing(); return }
-        projectedAnnotations = AnnotationAnchoring.display(viewModel.annotationDrawings, in: doc)
+        projectedAnnotations = AnnotationAnchoring.display(
+            viewModel.annotationDrawings, in: doc, staffFilter: annotationStaffFilter,
+        )
+    }
+
+    /// The source↔display staff translation for whatever the reader is currently hiding. Read at call time (not
+    /// stored): hiding a staff relays the score out from under the ink, and the reproject that follows has to see the
+    /// new visibility. `nil` whenever nothing is hidden.
+    private var annotationStaffFilter: AnnotationStaffFilter? {
+        .current(viewModel: viewModel, editingHost: editingHost)
     }
 
     private var scoreOptions: ScoreViewOptions {

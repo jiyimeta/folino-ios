@@ -129,6 +129,8 @@ struct PagedZoomedSurface: View {
             StaticInkLayer(drawing: AnnotationAnchoring.displayPaged(
                 viewModel.annotationDrawings, in: doc,
                 pageStartY: pageStartY, pageEndY: pageEndY, contentPadding: horizontalContentPadding,
+                // Stored anchors are in source addressing; `doc` is engraved from the staff-filtered score.
+                staffFilter: .current(viewModel: viewModel, editingHost: editingHost),
             ), size: viewport)
         }
     }

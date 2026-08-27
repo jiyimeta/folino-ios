@@ -372,9 +372,11 @@ struct PagedScoreContainer: View {
                 // Re-capture THIS page's strokes; keep every other page's anchors verbatim.
                 let (_, offPage) = AnnotationAnchoring.partitionByPage(
                     viewModel.annotationDrawings, in: doc, pageStartY: band.startY, pageEndY: band.endY,
+                    staffFilter: annotationStaffFilter,
                 )
                 let captured = AnnotationAnchoring.capturePaged(
                     strokes: drawing.strokes, in: doc, pageStartY: band.startY, contentPadding: band.contentPadding,
+                    staffFilter: annotationStaffFilter,
                 )
                 // `offPage` carries everything this canvas didn't describe — other pages AND the other rendition's
                 // page-anchored ink, which `partitionByPage` never claims as on-page. That is what keeps a PDF-derived
@@ -425,7 +427,14 @@ struct PagedScoreContainer: View {
         return AnnotationAnchoring.displayPaged(
             viewModel.annotationDrawings, in: doc,
             pageStartY: band.startY, pageEndY: band.endY, contentPadding: band.contentPadding,
+            staffFilter: annotationStaffFilter,
         )
+    }
+
+    /// See `VerticalScoreContainer.annotationStaffFilter` — the stored anchors are in source addressing and this
+    /// document is engraved from the staff-filtered score.
+    private var annotationStaffFilter: AnnotationStaffFilter? {
+        .current(viewModel: viewModel, editingHost: editingHost)
     }
 
     /// Reseed the viewport-pinned live canvas to the current page synchronously at a page-turn commit. Unlike the
