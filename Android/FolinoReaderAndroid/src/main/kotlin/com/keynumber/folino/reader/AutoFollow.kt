@@ -14,7 +14,7 @@ package com.keynumber.folino.reader
  * is what brings a manual seek on screen.
  *
  * `userInteracting` is the STICKY playback-follow suspension
- * (`ReaderAudioViewModel.isPlaybackFollowSuspended`, Task 5): set the moment the reader takes manual
+ * (`ReaderAudioViewModel.isPlaybackFollowSuspended`): set the moment the reader takes manual
  * control of the viewport (scroll / pinch / page-turn) DURING playback, and cleared only when playback
  * (re)starts or the cursor is set manually — NOT when the gesture ends. So an automatic re-pin never
  * fights a reader who has scrolled ahead/back, and the page does not snap to the playhead until they play
@@ -31,8 +31,8 @@ fun shouldAutoFollow(enabled: Boolean, isPlaying: Boolean, userInteracting: Bool
     enabled && isPlaying && !userInteracting
 
 /**
- * Events that drive the sticky playback-follow suspension (`ReaderAudioViewModel.isPlaybackFollowSuspended`,
- * Task 5). See [nextPlaybackFollowSuspended] for the transition table.
+ * Events that drive the sticky playback-follow suspension (`ReaderAudioViewModel.isPlaybackFollowSuspended`).
+ * See [nextPlaybackFollowSuspended] for the transition table.
  */
 enum class PlaybackFollowEvent {
     /** A scroll / pinch / page-turn gesture BEGAN. Suspends follow only while playing. */

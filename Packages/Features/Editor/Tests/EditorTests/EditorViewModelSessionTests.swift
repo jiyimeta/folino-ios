@@ -47,7 +47,7 @@ struct EditorViewModelSessionTests {
     }
 
     @Test func `appliedEditCount bumps only on apply, never on undo or redo`() {
-        // Task 16 review fix: the system-undo bridge (EditorChromeView) must re-register its UndoManager trampoline
+        // The system-undo bridge (EditorChromeView) must re-register its UndoManager trampoline
         // only on a genuinely NEW edit. `generation` bumps on undo/redo too (the Reader's layout key needs that),
         // so the bridge needs a separate signal that stays flat across undo/redo.
         let vm = makeViewModel()

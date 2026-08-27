@@ -34,7 +34,7 @@ public struct ScoreItem: Hashable, Sendable, Codable, Identifiable {
     public var deletedAt: Date?
     /// Major version of the MuseScore wire format detected at import time (2, 3, or 4 for `.mscx`/`.mscz` files).
     /// `nil` for non-MuseScore formats (MusicXML, MIDI, PDF) and for rows imported before this field was introduced.
-    /// Analytics (Task 12) treats `nil` as v4 — the current default — so no backfill is required for existing rows.
+    /// Analytics treats `nil` as v4 — the current default — so no backfill is required for existing rows.
     public var museScoreMajorVersion: Int?
     /// The original PDF this item was read from, as `<id>.pdf` in the scores directory. Non-nil for every PDF-origin
     /// item — both one still displayed as a PDF and one that has been read into notation.

@@ -22,7 +22,7 @@ public struct ReaderRootScreen: View {
     /// The note-editing injection seam (design spec §9, Option 1). `nil` means this Reader instance never enters edit
     /// mode — the edit button in `ReaderTopBarControls` stays hidden and `startEditing()`/`finishEditing()` are
     /// no-ops.
-    /// The App composition root (Task 15) is the only caller that supplies a non-nil host; the Reader never imports or
+    /// The App composition root is the only caller that supplies a non-nil host; the Reader never imports or
     /// references the Editor feature that owns the other end of the seam.
     private let editingHost: ReaderEditingHost?
     /// Builds the Editor feature's chrome (score-info bar, keyboard, 完了 button) from the current selection. Supplied

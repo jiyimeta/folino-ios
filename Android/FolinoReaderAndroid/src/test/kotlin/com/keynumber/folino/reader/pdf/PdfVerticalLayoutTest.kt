@@ -258,7 +258,7 @@ class PdfVerticalLayoutTest {
         assertEquals(2, page)
     }
 
-    // -- pageOriginsPx (Task 11: PDF page-anchored annotation) -------------------------------------
+    // -- pageOriginsPx (PDF page-anchored annotation) -------------------------------------
 
     @Test fun pageOriginsAreColumnLocalWithNoTopPadding() {
         val heights = floatArrayOf(100f, 200f, 300f)
@@ -270,7 +270,7 @@ class PdfVerticalLayoutTest {
         assertEquals(0, PdfVerticalLayout.pageOriginsPx(FloatArray(0), gapPx = 10f).size)
     }
 
-    // -- pxPerPageMm (Task 11 fix-report: PDF pen/eraser were ~5x too thin) ------------------------
+    // -- pxPerPageMm (PDF pen/eraser were ~5x too thin) ------------------------
 
     @Test fun pxPerPageMmMatchesTheKnownA4PortraitRatio() {
         // A4 portrait is 595 x 842 pt ~= 209.9 x 297.2mm (595pt * 25.4/72). Rendered 1000px wide:

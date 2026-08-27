@@ -6,7 +6,7 @@ import SwiftUI
 
 #if DEBUG
 /// Preview-only: seed a session + selection on a `PreviewEditorFactory` VM so the callout / palette / readout render
-/// populated. Reuses the Task 13 factory (`EditorPadButtons.swift`) for the Infrastructure-free fakes.
+/// populated. Reuses the factory in `EditorPadButtons.swift` for the Infrastructure-free fakes.
 @MainActor
 private func previewChromeViewModel(select item: SheetMusicCore.ScoreItemID) -> EditorViewModel {
     let viewModel = PreviewEditorFactory.makeViewModel(armedDuration: .quarter)

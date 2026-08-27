@@ -153,7 +153,7 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    // ── Playback-follow suspension (Task 5) ──────────────────────────
+    // ── Playback-follow suspension ──────────────────────────
     // Runtime, session-scoped suspension of playback cursor auto-follow (auto-scroll / auto-page-turn).
     // SET when the user takes manual control of the viewport — scroll, pinch-zoom, or page-turn — WHILE
     // playing; CLEARED only when playback (re)starts (the pause→play transition, observed below) or the

@@ -294,7 +294,7 @@ internal object PdfVerticalLayout {
  * decided natively by the exact inverse of the cursor's own projection plus swift-sheet-music's PDF hit-test (see
  * [PdfCursorProjector.cursorForTap]). A tap that hits nothing playable does nothing.
  *
- * [annotation] (Task 11) anchors ink to a PAGE, not a musical position: page index plus geometry
+ * [annotation] anchors ink to a PAGE, not a musical position: page index plus geometry
  * normalized to a fraction of that page's own width, so the same stroke re-renders correctly at any zoom
  * (the zoom factor cancels — see `ReaderAnnotationCore.PageAnchoringCore`, the shared Swift this and iOS's
  * PDF surfaces both call through). The dry/wet overlays mount OUTSIDE the page `Column`'s own
@@ -589,7 +589,7 @@ internal fun PdfVerticalScore(
 
     // A local copy of the shared `annotation` bundle with PDF-specific `onStrokeCaptured`/`onEraseGesture`:
     // the shared ones (built once in `ReaderScreen`) resolve a musical anchor via `scoreHandle`, which is
-    // always null for a PDF (Task 12 hasn't landed a parsed score for one yet). Every other field is
+    // always null for a PDF (no parsed score is produced for one yet). Every other field is
     // forwarded unchanged EXCEPT `brushWidthWorld`/`eraserWidthWorld`, which get converted from the shared
     // bundle's mm value into THIS surface's px world space (see `pxPerPageMm`'s doc — this is also why the
     // fields aren't named `widthMm`/`eraserWidthMm`: on this surface they hold px, not mm). Rebuilt fresh

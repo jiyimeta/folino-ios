@@ -10,7 +10,7 @@ import org.junit.Test
  * flag through. `AutoFollowTest` covers the pure [shouldAutoFollow] predicate's instantaneous truth
  * table; this covers the LIFECYCLE that decides its `userInteracting` input.
  *
- * The whole point of Task 5's fix is that the suspension is STICKY (session-scoped), not a live
+ * The whole point of the fix is that the suspension is STICKY (session-scoped), not a live
  * gesture-in-progress flag: it persists after the gesture ends and clears only on play-restart or a
  * manual cursor set. Mirrors iOS `ReaderPlaybackSession`'s set/clear rules.
  */

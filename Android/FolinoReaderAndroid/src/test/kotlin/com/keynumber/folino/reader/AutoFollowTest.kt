@@ -7,7 +7,7 @@ import org.junit.Test
 /**
  * Unit tests for the pure [shouldAutoFollow] predicate — the shared gate for the vertical / horizontal
  * auto-scroll re-pin during playback. Mirrors iOS `readerAutoFollowEnabled` opt-out semantics plus the
- * Task 5 "suspend while the user pans/zooms" extension.
+ * The "suspend while the user pans/zooms" extension.
  */
 class AutoFollowTest {
     @Test fun disabled_neverFollows() {

@@ -94,7 +94,7 @@ public func nativeAnnotationDisplayTransforms(drawingsBytes: Data, refPointsByte
 }
 
 /// Cut the eraser path out of an annotation layer — the reflow-independent partial-eraser hot path. Anchor-kind
-/// agnostic (Task 11): a musical AND a page anchor both decode/encode through `AnchorKindWireCoding`, and
+/// agnostic: a musical AND a page anchor both decode/encode through `AnchorKindWireCoding`, and
 /// `AnnotationEraseCore.erase` itself never inspects `DrawingAnchorKind` beyond carrying it through to each surviving
 /// fragment unchanged (see that function's own `DrawingAnchor(kind: drawing.kind, ...)` — a fragment's kind, and for
 /// a page anchor its `pageIndex`, can never migrate or degrade to a different kind by construction).

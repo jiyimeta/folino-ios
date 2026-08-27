@@ -242,7 +242,7 @@ public final class AnalyticsBridge {
         Self.encode(.settingChanged(key: SettingKey.a4Reference.rawValue, value: String(Int(hz.rounded()))))
     }
 
-    /// Settings screen opened (the Task 18 end-to-end smoke event; iOS logs the same `settings_opened`).
+    /// Settings screen opened (the end-to-end smoke event; iOS logs the same `settings_opened`).
     @WireletExpose
     public func settingsOpened() -> AnalyticsEventWire {
         Self.encode(.settingsOpened())
@@ -317,7 +317,9 @@ public final class AnalyticsBridge {
         guard var prefs = ReaderPreferencesReducer.decode(prefsJson) else {
             return AnalyticsEventWire(name: "", params: [])
         }
-        if ReaderPreferencesReducer.isLegacyBlob(prefsJson) { prefs.staffSize = nil }
+        if ReaderPreferencesReducer.isLegacyBlob(prefsJson) {
+            prefs.staffSize = nil
+        }
         guard let event = AnalyticsEvent.scorePrefs(prefs, screenWidthPt: widthDp) else {
             return AnalyticsEventWire(name: "", params: [])
         }

@@ -12,7 +12,7 @@ extension EditorViewModel {
     /// `.setChordDuration` when a length is armed too, since `.setNotePitch` alone never re-times. Either way the
     /// pitch is the letter's spelling AS THE BAR READS IT (`MeasureAccidentals.plannedPitch`) nearest the previous
     /// note: the key signature's, unless an accidental earlier in the same measure has already respelled that staff
-    /// line. Add-to-chord armed is the one exception: it stacks onto the SELECTED chord (`.addNoteToChord`, Task 7),
+    /// line. Add-to-chord armed is the one exception: it stacks onto the SELECTED chord (`.addNoteToChord`),
     /// since what it means is "another note in the one I just wrote".
     ///
     /// Afterwards the selection lands on the note that was written and the caret moves on to the next timed element
@@ -96,7 +96,9 @@ extension EditorViewModel {
         guard case let .chord(current)? = score[location] else { return }
         let isNote = !current.notes.isEmpty
         guard let armed = armedInputDuration, current.duration != armed, !isInsideTuplet(location) else {
-            if isNote { deleteSelection() }
+            if isNote {
+                deleteSelection()
+            }
             return
         }
         apply(.writeRest(at: location, duration: armed))
@@ -224,7 +226,9 @@ extension EditorViewModel {
         // mirroring the old guard exactly: ssm's `.inputNote` does not skip a same-length re-time on its own, and a
         // no-op `SetRestDuration` must not ride along in the undo step.
         var duration: NoteDuration?
-        if let armed = armedInputDuration, rest.duration != armed { duration = armed }
+        if let armed = armedInputDuration, rest.duration != armed {
+            duration = armed
+        }
         // Decided BEFORE the apply, against the pre-edit score: after a chain write the caret belongs past the
         // chain's tail, but after an in-bar write it belongs one slot on even if the slot's note is (or becomes)
         // tied to something else — walking the chain unconditionally would overshoot there.

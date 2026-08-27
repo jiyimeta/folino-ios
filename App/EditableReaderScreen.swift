@@ -15,7 +15,7 @@ struct EditableReaderScreen: View {
     /// context type, two different slots in the Reader's tree.
     typealias ChromeBuilder = (ReaderEditingChromeContext) -> AnyView
     /// Builds the cutout tier's editing-session content (完了 leading, revert trailing) for the Reader's OWN
-    /// `ReaderCutoutTier` to draw — see `ReaderRootScreen.editingCutoutTier` and review Important 4. A distinct
+    /// `ReaderCutoutTier` to draw — see `ReaderRootScreen.editingCutoutTier`. A distinct
     /// return type from `ChromeBuilder` because `ReaderCutoutTier` needs the leading and trailing pieces kept apart,
     /// not one combined, type-erased view.
     typealias CutoutTierBuilder = (ReaderEditingChromeContext) -> ReaderEditingCutoutTierContent

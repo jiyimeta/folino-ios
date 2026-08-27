@@ -201,7 +201,7 @@ fun ReaderScreen(
     /** Sets [pdfPlaybackNoticeDismissed] — invoked by the caveat dialog's "Don't show again" action. */
     onDismissPdfPlaybackNotice: () -> Unit = {},
     /** Persisted annotation pen setup (four pen widths, eraser width, selected tool), sourced from the
-     * app module's DataStore (Task 9). The VM's live `toolState` is the source of truth for the UI
+     * app module's DataStore. The VM's live `toolState` is the source of truth for the UI
      * within a session — this value flows INTO the VM via `LaunchedEffect` below, mirroring how
      * `displayOptions` flows into `setLayoutOptions`. Undo/redo history is session-only and never
      * flows through this prop. */
@@ -336,7 +336,7 @@ fun ReaderScreen(
     val isPdf = state is ReaderState.ReadyPdf
     val capabilities = remember(isPdf) { fetchReaderCapabilities(isPdf) }
     // Whether transport should be enabled right now: scores always, PDFs only once their background OMR
-    // parse (Task 12) succeeds. Delegated to the shared rule rather than inlining
+    // parse succeeds. Delegated to the shared rule rather than inlining
     // `canPlay || isPdfPlaybackReady` — Android must not re-derive that policy in Kotlin.
     val pdfPlayback by readerVm.pdfPlayback.collectAsStateWithLifecycle()
     val canPlayNow = remember(capabilities, pdfPlayback) {
@@ -348,7 +348,7 @@ fun ReaderScreen(
     val layoutOptions by readerVm.layoutOptions.collectAsStateWithLifecycle()
 
     // Annotation (Sub-plan E, VERTICAL mode only for this MVP). `toolState` is the toolbar's live
-    // selection (Task 8: held in the VM, mirroring `layoutOptions`/`setLayoutOptions`; Task 9: the
+    // selection (held in the VM, mirroring `layoutOptions`/`setLayoutOptions`; the
     // `annotationToolState` prop above seeds it from DataStore on (re)compose, and the toolbar's
     // onSelect/onWidthChange persist back through `onAnnotationToolStateChange` — see the two call
     // sites below for the exact wiring); `drawings` is the committed layer rendered by the dry overlay
@@ -363,7 +363,7 @@ fun ReaderScreen(
     // the wet-stroke brush (ReadyScore) and the committed capture below. Falls back to swatch 0 if the
     // selected tool is the eraser (the brush is unused then; see ReadyScore's `annotationWidthMm` doc)
     // OR if the pen's colorIndex is out of range for the current palette — `getOrElse` rather than a
-    // plain index so a future persisted index (Task 9) that no longer fits `DEFAULT_COLORS` degrades to
+    // plain index so a future persisted index that no longer fits `DEFAULT_COLORS` degrades to
     // swatch 0 instead of throwing out of composition.
     val penColorRGBA = AnnotationToolbarDefaults.DEFAULT_COLORS.getOrElse(
         (toolState.selected as? AnnotationTool.Pen)?.colorIndex ?: 0,
@@ -381,8 +381,8 @@ fun ReaderScreen(
     // ReadyScore as a parameter so the whole screen shares exactly one instance.
     val inkHandoff = remember { AnnotationHandoffQueue<DrawingAnchorWire>() }
 
-    // Owns the BEGIN/MOVE/END erase-drag state machine (Task 8; extracted to `EraseGestureController` in
-    // Task 11 so a PDF surface's own page-anchored eraser drives the identical generation/history-push
+    // Owns the BEGIN/MOVE/END erase-drag state machine (extracted to `EraseGestureController`
+    // so a PDF surface's own page-anchored eraser drives the identical generation/history-push
     // bookkeeping instead of re-deriving it — see that class's own field docs for the hazards it guards
     // against). `remember`ed (not rebuilt every recomposition) so an in-flight drag survives a
     // recomposition mid-gesture; not shared across a layout-mode switch on purpose (see its class doc).
@@ -579,7 +579,7 @@ fun ReaderScreen(
     // Push display options into the VM; its recompute loop re-runs nativeComputeLayout on change.
     LaunchedEffect(displayOptions) { readerVm.setLayoutOptions(displayOptions) }
 
-    // Push the persisted annotation pen setup into the VM (Task 9). DataStore is the source of truth
+    // Push the persisted annotation pen setup into the VM. DataStore is the source of truth
     // across restarts; the toolbar's onSelect/onWidthChange below already write the VM optimistically,
     // so when this later re-fires with the same value the setAnnotationToolState is idempotent — no
     // feedback loop, because a StateFlow re-set to an equal value doesn't trigger any further collection.
@@ -726,7 +726,7 @@ fun ReaderScreen(
                     presetColors = AnnotationToolbarDefaults.DEFAULT_COLORS,
                     canUndo = canUndo,
                     canRedo = canRedo,
-                    // Optimistic VM write + persist callback (Task 9): update the VM immediately so the
+                    // Optimistic VM write + persist callback: update the VM immediately so the
                     // toolbar's selection ring / width reflect the change on this frame — the DataStore
                     // round-trip through onAnnotationToolStateChange -> MainActivity -> collectAsState ->
                     // LaunchedEffect(annotationToolState) above would otherwise visibly lag by a frame or
@@ -831,7 +831,7 @@ fun ReaderScreen(
                     )
                 }
                 is ReaderState.ReadyPdf -> when (layoutMode) {
-                    // Horizontal is not reachable for a PDF (Task 5 removed it from the offered modes for
+                    // Horizontal is not reachable for a PDF (it is not among the offered modes for
                     // this state), so it falls to the vertical surface below along with VERTICAL itself —
                     // the same "everything else" fallback the plan calls for.
                     ReaderLayoutMode.PAGE -> readerVm.pdfPageSource?.let { pdfSource ->
@@ -1193,7 +1193,7 @@ private fun ReadyScore(
                 // during playback AND no recenter-on-pause — full manual viewport control.
                 if (!autoFollowEnabled) return@collectLatest
                 // Suspend just the playing re-pin while auto-follow is suspended — i.e. the reader took
-                // manual control of the viewport during playback (sticky until play/seek, Task 5). The
+                // manual control of the viewport during playback (sticky until play/seek). The
                 // paused/manual keep-in-view branch below still runs — a gesture there is the reader
                 // positioning the view themselves, not something to fight.
                 if (isPlaying &&
@@ -1474,7 +1474,7 @@ private fun ReadyScore(
  * Builds the musical [AnnotationDryOverlay]/[AnnotationLayers] `resolveDisplayTransforms` lambda for
  * [scoreHandle]: the ssm ref-point round trip (`SheetMusicJNI.nativeAnchorReferencePoint`) followed by
  * `ReaderAnnotationJNI.displayTransforms`, exactly what this composable's own `computePlacement` did
- * inline before Task 11 generalized the seam to also serve a PDF page-anchor resolver (see
+ * inline before the seam was generalized to also serve a PDF page-anchor resolver (see
  * [AnnotationDryOverlay]'s parameter doc). Shared by `ReadyScore` and `PagedScore` — both `remember` the
  * result keyed on their own `scoreHandle`, so the lambda's identity (and so the dry overlay's
  * `LaunchedEffect`) only changes when the handle itself does, never on a live pinch frame.
@@ -1544,7 +1544,7 @@ private fun TransportBar(
             enabled = isPrepared,
             onSeek = { cursor ->
                 if (isPrepared) {
-                    // A rehearsal-mark jump is a manual cursor set → resume auto-follow (Task 5).
+                    // A rehearsal-mark jump is a manual cursor set → resume auto-follow.
                     audioVm.resumePlaybackFollow()
                     engine?.seek(to = cursor)
                 }
@@ -1560,7 +1560,7 @@ private fun TransportBar(
             onSeek = { fraction ->
                 if (totalSecs > 0) {
                     // A seek-bar scrub is a manual cursor set → resume auto-follow so the score follows the
-                    // committed position instead of staying suspended (Task 5; iOS `endScrub`).
+                    // committed position instead of staying suspended (iOS `endScrub`).
                     audioVm.resumePlaybackFollow()
                     engine?.seek(fraction * totalSecs)
                 }
@@ -1602,7 +1602,7 @@ private fun TransportBar(
             IconButton(
                 onClick = {
                     if (isPrepared) {
-                        // Jump-to-start is a manual cursor set → resume auto-follow (Task 5).
+                        // Jump-to-start is a manual cursor set → resume auto-follow.
                         audioVm.resumePlaybackFollow()
                         engine?.seek(0.0)
                         onAnalyticsSeek()
@@ -2014,7 +2014,7 @@ fun PlaybackFab(
         SmallFloatingActionButton(
             onClick = {
                 if (isPrepared) {
-                    // Jump-to-start is a manual cursor set → resume auto-follow (Task 5).
+                    // Jump-to-start is a manual cursor set → resume auto-follow.
                     audioVm.resumePlaybackFollow()
                     engine?.seek(0.0)
                     onAnalyticsSeek()
@@ -2141,7 +2141,7 @@ internal fun HorizontalScore(
                 // during playback AND no recenter-on-pause — full manual viewport control.
                 if (!autoFollowEnabled) return@collectLatest
                 // Suspend just the playing re-pin while auto-follow is suspended (sticky — the reader took
-                // manual control of the viewport during playback, Task 5); the paused/manual keep-in-view
+                // manual control of the viewport during playback); the paused/manual keep-in-view
                 // branches below still run.
                 if (isPlaying &&
                     !shouldAutoFollow(autoFollowEnabled, isPlaying, audioVm.isPlaybackFollowSuspended.value)

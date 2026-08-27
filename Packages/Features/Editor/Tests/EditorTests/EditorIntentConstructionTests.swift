@@ -81,7 +81,7 @@ struct EditorIntentConstructionTests {
         #expect(vm.caretItem == .rest(EditorFixtures.restID(element: 2)))
     }
 
-    /// The one real behavioral fork the spec flags, ruled in Task 3: `.writeNote` re-pitches notehead 0, but a
+    /// The one real behavioral fork the spec flags: `.writeNote` re-pitches notehead 0, but a
     /// caret naming a chord's UPPER notehead — the ＋音-then-fix flow — means THAT notehead, so the host builds a
     /// `.setNotePitch` for it instead.
     @Test func `letter input with the caret on a chord's upper notehead re-pitches that notehead, not the root`() {

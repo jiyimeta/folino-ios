@@ -3,7 +3,7 @@ import SwiftUI
 
 // Previews for `EditorTopBarView`, split out to keep that file within the line budget — mirrors
 // `EditorChromeView+Previews.swift`. The cutout tier itself (完了 / revert) is NOT shown here — it's the Reader's
-// own `ReaderCutoutTier`, previewed alongside that type, not this one (review Important 4).
+// own `ReaderCutoutTier`, previewed alongside that type, not this one.
 
 #if DEBUG
 @MainActor
