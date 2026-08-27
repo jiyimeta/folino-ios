@@ -197,7 +197,7 @@ struct NewScoreTests {
     }
 
     @Test
-    func `clone instrumentation copies staff shape, percussion and bracket-free grouping`() throws {
+    func `clone instrumentation copies staff shape, percussion and grouping`() throws {
         let source = Score.blank(BlankScoreTemplate(
             title: "S",
             parts: [
@@ -219,8 +219,105 @@ struct NewScoreTests {
         #expect(template.parts[0].staves.map(\.clefType) == ["G", "F"])
         #expect(template.parts[1].staves.first?.isPercussion == true)
         #expect(template.parts[1].isDrums)
-        // The source's group bracket is not cloned — see `applyInstrumentation(of:)`.
+        // The source's group bracket comes across as the part range it covers — the whole point of "same
+        // instrumentation as an existing score" is that the created score looks like the one it was cloned from.
+        #expect(template.bracketGroups == [0 ..< 2])
+    }
+
+    /// The SATB shape the QA report used: four single-staff parts with one group bracket over parts 1...3, anchored
+    /// on the second part's staff (global staff index 1, span 3).
+    private static func satbSource() -> Score {
+        var source = Score.blank(BlankScoreTemplate(
+            title: "S",
+            parts: (0 ..< 4).map { index in
+                .init(instrumentID: "voice-\(index)", longName: "Voice \(index)", staves: [.init(clefType: "G")])
+            },
+            measureCount: 1,
+        ))
+        source.parts[1].staves[0].brackets = [BracketItem(type: .normal, span: 3)]
+        return source
+    }
+
+    @Test
+    func `clone derives a part-range group from a cross-part bracket`() throws {
+        var form = NewScoreForm()
+        form.title = "T"
+        form.applyInstrumentation(of: Self.satbSource())
+        let template = try #require(form.template())
+        #expect(template.parts.count == 4)
+        #expect(template.bracketGroups == [1 ..< 4])
+        // The created score engraves it back onto the group's first part, spanning its three staves.
+        let created = Score.blank(template)
+        #expect(created.parts[1].staves[0].brackets.map(\.type) == [.normal])
+        #expect(created.parts[1].staves[0].brackets.map(\.span) == [3])
+    }
+
+    @Test
+    func `clone skips a grand staff's own brace`() throws {
+        let source = Score.blank(BlankScoreTemplate(
+            title: "S",
+            parts: [
+                .init(instrumentID: "piano", longName: "Piano", staves: [
+                    .init(clefType: "G"), .init(clefType: "F"),
+                ]),
+            ],
+            measureCount: 1,
+        ))
+        // `Score.blank` gave the two-staff part its brace; nothing else is bracketed.
+        #expect(source.parts[0].staves[0].brackets.map(\.type) == [.brace])
+        var form = NewScoreForm()
+        form.title = "T"
+        form.applyInstrumentation(of: source)
+        let template = try #require(form.template())
         #expect(template.bracketGroups.isEmpty)
+        // The brace is still there — the factory re-derives it for any multi-staff part.
+        #expect(Score.blank(template).parts[0].staves[0].brackets.map(\.type) == [.brace])
+    }
+
+    @Test
+    func `clone expands a bracket that ends inside a part to the whole part`() throws {
+        // Parts: [solo(1 staff), piano(2 staves)]. The bracket covers global staves 0...1 — the solo staff and only
+        // the piano's TOP staff — which no part range can express, so it expands to cover the piano outright.
+        var source = Score.blank(BlankScoreTemplate(
+            title: "S",
+            parts: [
+                .init(instrumentID: "flute", longName: "Flute", staves: [.init(clefType: "G")]),
+                .init(instrumentID: "piano", longName: "Piano", staves: [
+                    .init(clefType: "G"), .init(clefType: "F"),
+                ]),
+            ],
+            measureCount: 1,
+        ))
+        source.parts[0].staves[0].brackets = [BracketItem(type: .normal, span: 2)]
+        var form = NewScoreForm()
+        form.title = "T"
+        form.applyInstrumentation(of: source)
+        let template = try #require(form.template())
+        #expect(template.bracketGroups == [0 ..< 2])
+    }
+
+    @Test
+    func `a non-normal group bracket clones as a normal one`() throws {
+        var source = Self.satbSource()
+        source.parts[1].staves[0].brackets = [BracketItem(type: .square, span: 3)]
+        var form = NewScoreForm()
+        form.title = "T"
+        form.applyInstrumentation(of: source)
+        let template = try #require(form.template())
+        // `bracketGroups` carries no style, so the square bracket comes back as `.normal` — documented on
+        // `partBracketGroups(of:)`.
+        #expect(template.bracketGroups == [1 ..< 4])
+        #expect(Score.blank(template).parts[1].staves[0].brackets.map(\.type) == [.normal])
+    }
+
+    @Test
+    func `editing a cloned instrumentation drops its derived grouping`() {
+        var form = NewScoreForm()
+        form.title = "T"
+        form.applyInstrumentation(of: Self.satbSource())
+        #expect(form.bracketGroups == [1 ..< 4])
+        form.removeInstruments(at: IndexSet(integer: 0))
+        #expect(form.bracketGroups.isEmpty)
     }
 
     @Test

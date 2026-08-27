@@ -141,8 +141,9 @@ struct NewScoreForm: Equatable {
     /// assignment does not go through the setter above, so it is not a hand-edit.
     private(set) var instrumentationSource = NewScoreForm.defaultTemplateID
 
-    /// Half-open part ranges a group bracket spans. Set by `applyTemplate`; cleared by every manual edit — a
-    /// hand-edited ensemble no longer matches the template's grouping. Grand-staff braces are per-part
+    /// Half-open part ranges a group bracket spans. Set by `applyTemplate` (from the template's own grouping) and by
+    /// `applyInstrumentation(of:)` (derived from the source score's brackets); cleared by every manual edit — a
+    /// hand-edited ensemble no longer matches the grouping it was seeded with. Grand-staff braces are per-part
     /// (`Part.init(blankPlan:id:measures:)` adds them) and are unaffected by this.
     var bracketGroups: [Range<Int>] = []
     var concertKey = 0
@@ -162,13 +163,61 @@ struct NewScoreForm: Equatable {
         instrumentationSource = template.id
     }
 
-    /// Replaces the list with `score`'s parts, cloned structure-first. Brackets are NOT cloned: the source's
-    /// grouping is expressed in global staff spans, which no longer describe this list once the user edits it.
+    /// Replaces the list with `score`'s parts, cloned structure-first, and adopts the grouping its cross-part
+    /// brackets describe (`partBracketGroups(of:)`). Same assignment order as `applyTemplate`, for the same reason:
+    /// setting `instrumentation` clears `bracketGroups` and demotes the provenance stamp, so both go on afterwards.
     mutating func applyInstrumentation(of score: Score) {
         instrumentation = score.parts.enumerated().map { index, part in
             PartDraft.fromExistingPart(part, at: index, in: score)
         }
+        bracketGroups = Self.partBracketGroups(of: score)
         instrumentationSource = Self.clonedSource
+    }
+
+    /// `score`'s cross-part group brackets as the half-open PART ranges `BlankScoreTemplate.bracketGroups` speaks.
+    ///
+    /// A `BracketItem` is anchored on a `Staff` and its `span` counts staves in the GLOBAL flattened staff order (the
+    /// convention `Score.filtered(hidingStaves:)` documents and `Score.blank`'s `applyBracketGroups` writes), so the
+    /// anchor staff's global index and the span give the staff interval the bracket covers; the parts contributing
+    /// staves to that interval are the group.
+    ///
+    /// Three deliberate reductions:
+    ///
+    /// * **`.brace` is skipped.** A brace is per-part — a grand staff's own — and `Part.init(blankPlan:id:measures:)`
+    ///   re-derives one for every multi-staff part it builds. Cloning it as a group would draw a second bracket
+    ///   around a part that already braces itself.
+    /// * **Every other type clones as `.normal`.** `bracketGroups` is a bare list of part ranges with no style, and
+    ///   `Score.blank` engraves `.normal` for each, so a `.square` or `.line` group in the source comes back as a
+    ///   normal bracket. That is the whole vocabulary the template has.
+    /// * **A span ending part-way through a part EXPANDS to that whole part.** A part range cannot describe "one
+    ///   staff of a grand staff", and expanding keeps the bracket over everything the user saw it over — the
+    ///   alternative, dropping it, loses the grouping entirely.
+    ///
+    /// Duplicate ranges (two brackets resolving to the same parts) collapse to one, in first-seen order.
+    static func partBracketGroups(of score: Score) -> [Range<Int>] {
+        // Flattened staff order → owning part index, so a bracket's global span maps straight back to parts.
+        var partOfGlobalStaff: [Int] = []
+        var globalStartOfPart: [Int] = []
+        for (partIndex, part) in score.parts.enumerated() {
+            globalStartOfPart.append(partOfGlobalStaff.count)
+            partOfGlobalStaff.append(contentsOf: repeatElement(partIndex, count: part.staves.count))
+        }
+        var groups: [Range<Int>] = []
+        for (partIndex, part) in score.parts.enumerated() {
+            for (staffIndex, staff) in part.staves.enumerated() {
+                for bracket in staff.brackets where bracket.type != .brace && bracket.type != .noBracket {
+                    let first = globalStartOfPart[partIndex] + staffIndex
+                    // Clamp: a score can declare a span running past its last staff, and MuseScore draws what exists.
+                    let last = min(first + bracket.span - 1, partOfGlobalStaff.count - 1)
+                    guard partOfGlobalStaff.indices.contains(first), first <= last else { continue }
+                    let group = partOfGlobalStaff[first] ..< (partOfGlobalStaff[last] + 1)
+                    if !groups.contains(group) {
+                        groups.append(group)
+                    }
+                }
+            }
+        }
+        return groups
     }
 
     /// Replaces the whole list with a single catalog instrument — the "start from an instrument" entry point.
