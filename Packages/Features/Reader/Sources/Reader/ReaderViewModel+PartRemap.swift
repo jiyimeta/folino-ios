@@ -25,8 +25,12 @@ extension ReaderViewModel {
     /// 3. **Lift the hold — HERE, not when the Editor's save finished.** Until this line the sub-models were still
     ///    holding pre-migration addresses; dropping the flag any earlier would leave a window in which a write could
     ///    escape carrying exactly those, which is the second half of the corruption the hold exists to prevent.
-    /// 4. **Let the deferred writes go** — after the lift, or each held write would simply be held again by its own
-    ///    release.
+    /// 4. **Let the deferred writes go — but ONLY if step 2 actually re-seeded.** The held closures read the
+    ///    sub-models, so replaying them after a failed re-read persists the pre-migration addresses those models are
+    ///    still holding, straight over the row the Editor has just migrated — with the map consumed, so nothing ever
+    ///    retries. A failed re-read therefore discards the queue instead, the same policy the no-score bail in
+    ///    `ReaderRootScreen.wirePartRemapReload` applies for the same reason. The hold still comes down either way:
+    ///    leaving it up would strand it, which is the failure mode the release ordering was fixed to avoid.
     ///
     /// `authoredHiddenStaves` must come from the POST-edit score (the editing host's `editedScore`), not from
     /// `loadState.score` — the latter is still the score the session opened on, whose part numbering is the one that
@@ -41,9 +45,13 @@ extension ReaderViewModel {
         liftHold: @MainActor () -> Bool,
     ) async {
         await flushPendingPreferenceWrites()
-        await loadOrSeedPreferences(authoredHiddenStaves: authoredHiddenStaves)
+        let didReseed = await loadOrSeedPreferences(authoredHiddenStaves: authoredHiddenStaves)
         if liftHold() {
-            await applyDeferredPreferenceWrites()
+            if didReseed {
+                await applyDeferredPreferenceWrites()
+            } else {
+                discardDeferredPreferenceWrites()
+            }
         }
         // The same two side effects `layoutModel.onHiddenStavesChanged` fires, because the hidden set may well have
         // moved: the cursor's staff translation is derived from it, and a live PiP renderer was built against the
