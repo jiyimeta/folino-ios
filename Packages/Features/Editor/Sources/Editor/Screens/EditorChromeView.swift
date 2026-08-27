@@ -3,27 +3,20 @@ import SheetMusicCore
 import SwiftUI
 import UtilityUI
 
-/// Full-screen editing chrome. The App injects this into the Reader seam (Task 15) so it floats over the live score.
-/// Layout:
-///  - the editing cluster — the reader's transport plus the `EditorPadView` pad — docked to the top or bottom edge
-///    and draggable between the two by its grabber, the way `PKToolPicker` can be moved off whatever it's covering.
-///    Dragging it toward a side edge instead tucks it offscreen behind a PiP-style pull tab (`EditorPadTuckHandle`);
-///    the old top-bar show / hide toggle is gone.
+/// Full-screen editing chrome. The App injects this into the Reader seam so it floats over the live score.
 ///
-/// The fixed controls — voice, undo / redo / 完了 — and the revert confirmation used to live here too
-/// (as `ToolbarContent` filling the Reader's navigation bar). They now live in `EditorTopBarView`, drawn into the
-/// Reader's own top strip (Task 5) — the Reader's navigation bar is gone, so there is no bar left for a `.toolbar`
-/// here to fill.
+/// What it draws is the editing cluster — the reader's transport plus the `EditorPadView` pad — docked to the top
+/// or bottom edge and draggable between the two by its grabber, the way `PKToolPicker` can be moved off whatever it
+/// is covering. Dragging it toward a side edge instead tucks it offscreen behind a PiP-style pull tab
+/// (`EditorPadTuckHandle`); there is no show / hide toggle anywhere else.
 ///
-/// Regular width used to add a third piece: a palette card docked to the trailing edge, carrying a selection readout,
-/// the tie key and the `+3度` / `+8度` shortcuts. It is gone — it sat on the score permanently for keys the pad
-/// already has, and the readout was the only thing unique to it. The commands it drove (`addIntervalNote`) still
-/// exist on the view model, so bringing any of it back is a view-only change.
+/// The fixed controls — voice, undo / redo / 完了 — and the revert confirmation are NOT here: they live in
+/// `EditorTopBarView`, drawn into the Reader's own top strip.
 ///
-/// Most of what the per-selection callout used to carry now lives in chrome that stays put (voice in the header
-/// pill, tuplets and tie on the pad), so the score isn't covered by a panel that moves as the selection moves. What
-/// remains in the callout is ♯ / ♭ — see `EditorCalloutView` for why those two belong beside the note rather than in
-/// a row of keys aimed at the caret.
+/// The chrome that stays put carries most of what a per-selection panel would (voice in the header pill, tuplets
+/// and tie on the pad), so the score is not covered by something that moves as the selection moves. What is left
+/// beside the note is the callout — pitch steps and the next length — which this view mounts and positions via
+/// `SelectionCalloutLayer`; see `EditorCalloutView` for why those two jobs belong there.
 public struct EditorChromeView: View {
     @Bindable var viewModel: EditorViewModel
     /// Room the reader's bottom transport occupies, so a bottom-docked pad parks above it instead of over it.
@@ -97,7 +90,7 @@ public struct EditorChromeView: View {
     /// replaced a velocity-matched, overshoot-free settle — the uniform spring won on feel.
     static let tuckSpring: Animation = .spring(duration: 0.4, bounce: 0.2)
 
-    /// One-time "saved as .mscz" notice (Task 16, spec §11-2) — shown at most once per install.
+    /// One-time "saved as .mscz" notice (spec §11-2) — shown at most once per install.
     @AppStorage("editorSiblingMSCZNoticeShown") private var siblingMSCZNoticeShown = false
     @State private var showsSiblingNotice = false
 
@@ -139,11 +132,11 @@ public struct EditorChromeView: View {
 
             editingCluster
         }
-        // Task 16: bridges ScoreEditSession's undo/redo stacks to the system UndoManager so three-finger swipe
+        // Bridges ScoreEditSession's undo/redo stacks to the system UndoManager so three-finger swipe
         // gestures work. Triggers off `appliedEditCount` — NOT `generation` — because `generation` also bumps on
         // undo/redo; re-registering here on every undo/redo would double up with `registerSystemUndo`'s own
-        // symmetric re-registration and drift the system stack from `ScoreEditSession`'s real depth (Task 16 review
-        // fix). Only a genuinely new applied edit should arm a fresh trampoline. [Task 17 verify] confirm the
+        // symmetric re-registration and drift the system stack from `ScoreEditSession`'s real depth. Only a
+        // genuinely new applied edit should arm a fresh trampoline. Unconfirmed on device: whether the
         // three-finger swipe reaches this view's UndoManager through the glass overlay hierarchy on device — if it
         // doesn't, the on-screen undo/redo buttons remain the primary path.
         .onChange(of: viewModel.appliedEditCount) { _, _ in

@@ -6,9 +6,9 @@ import UtilityUI
 /// The Reader's own controls, drawn into `ReaderTopBar`'s control tier: the leading back/sidebar affordance and PDF
 /// badge (`ReaderTopBarControls+Leading.swift`), score actions, note editing, annotation, and the paired inspectors.
 ///
-/// This used to be a `ToolbarContent` (`ReaderToolbar`, deleted alongside `ReaderToolbar+PDF` and
-/// `ReaderToolbarCollapse`) folded by arithmetic because a `ToolbarContent` cannot measure itself. Now that the strip
-/// is a view we draw, `ViewThatFits` answers that question directly — see `body`.
+/// The row folds with `ViewThatFits` — see `body`. That is only possible because the strip is a view we draw: a
+/// `ToolbarContent` cannot measure itself, so the navigation-bar version of this had to fold by arithmetic against a
+/// measured window width instead.
 ///
 /// The inspector pair sits OUTSIDE the `ViewThatFits` ladder on purpose: it never folds, and a candidate swap
 /// (rotation, a split-view resize) would otherwise tear down whichever inspector popover is open. A stable sibling —

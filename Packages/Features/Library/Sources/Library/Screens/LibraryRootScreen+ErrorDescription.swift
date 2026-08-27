@@ -1,9 +1,8 @@
 import Domain
 import Foundation
 
-/// Verbatim move of the switch that used to live in `LibraryViewModel.describe(_:)`. Kept as a
-/// top-level helper so it stays accessible from any Screen that surfaces a `LibraryViewModel`
-/// error. The localization keys and `defaultValue` fallbacks match the originals byte-for-byte.
+/// Maps a `LibraryViewModel` error to its user-facing string. A top-level helper rather than a method on the view
+/// model, so any Screen that surfaces such an error can reach it without holding the view model.
 func describeLibraryError(_ error: Error) -> String {
     if let domain = error as? DomainError {
         switch domain {

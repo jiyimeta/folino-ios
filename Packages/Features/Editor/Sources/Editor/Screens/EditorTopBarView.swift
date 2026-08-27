@@ -3,14 +3,15 @@ import SwiftUI
 import UtilityUI
 
 /// The editing session's control tier (`ReaderRootScreen.editingTopBar`) — voice picker, undo, redo, and, where
-/// there is no cutout tier, 完了 and revert too. Ported from `EditorChromeView+Toolbar.swift`'s navigation-bar items
-/// and `EditorChromeView+Revert.swift`'s revert control, now drawn as plain views instead of `ToolbarContent` — the
-/// Reader's own strip replaced the navigation bar these used to fill. (The pad show / hide toggle that used to lead
-/// here is gone: the pad is dismissed and recalled in place, PiP-style — see `EditorChromeView`.)
+/// there is no cutout tier, 完了 and revert too.
+///
+/// These are plain views, not `ToolbarContent`: the Reader hides the navigation bar and draws its own strip, so
+/// there is no bar for a `.toolbar` to fill. The pad has no show / hide control here either — it is dismissed and
+/// recalled in place, PiP-style (see `EditorChromeView`).
 ///
 /// **The cutout tier is NOT drawn here.** Where one exists, 完了 and revert are mounted by the Reader's own
 /// `ReaderCutoutTier` instead (`ReaderRootScreen.editingCutoutTier`, using the shared `EditorDoneButton` /
-/// `EditorRevertButton` views) — review Important 4: an earlier draft re-declared `ReaderCutoutTier`'s
+/// `EditorRevertButton` views). An earlier draft re-declared `ReaderCutoutTier`'s
 /// `offset`/`ignoresSafeArea` shape locally (this package cannot import `Reader` to reuse the type itself), which
 /// left two independently-positioned mechanisms both claiming the same band, exactly what the design spec warns
 /// against. Reusing the Reader's real layout code makes that structurally impossible instead of merely unlikely.
@@ -32,7 +33,7 @@ public struct EditorTopBarView: View {
     /// Only two rungs, not three: a `.revert`-only middle rung (revert alone folded into `⋯`, 完了 still a
     /// standalone text button) measures IDENTICAL to `.expanded` whenever revert is showing — swapping one 44×44
     /// icon (`revertButton`) for another (the `⋯` menu) saves nothing, so `ViewThatFits` could never actually pick
-    /// it (review Important 2). `doneButton`'s `minWidth: 60` is what makes `.folded` unconditionally narrower than
+    /// it. `doneButton`'s `minWidth: 60` is what makes `.folded` unconditionally narrower than
     /// `.expanded` — see the comment there.
     enum Collapse {
         case expanded
@@ -53,7 +54,7 @@ public struct EditorTopBarView: View {
 
     public var body: some View {
         // The shadow matches `ReaderTopBarControls`' so the reading and editing strips read as the same physical
-        // surface — see review Important 2.
+        // surface.
         revertFailureAlert(on: controlTierRow)
             .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
     }
@@ -114,7 +115,7 @@ public struct EditorTopBarView: View {
         .interactiveGlassCompat()
     }
 
-    /// Bare glyphs need something behind them to stay legible over arbitrary score content (review Important 2), so
+    /// Bare glyphs need something behind them to stay legible over arbitrary score content, so
     /// the voice picker gets glass of its own.
     private var voiceButton: some View {
         voiceMenu

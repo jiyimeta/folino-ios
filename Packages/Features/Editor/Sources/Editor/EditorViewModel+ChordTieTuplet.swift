@@ -20,7 +20,10 @@ extension EditorViewModel {
         apply(.removeNoteFromChord(at: noteID))
     }
 
-    /// iPad +3度 / +8度 → `.addNoteToChord` with `IntervalPlanner`'s pitch.
+    /// Stacks a diatonic third or an octave onto the selected note, via `.addNoteToChord` with `IntervalPlanner`'s
+    /// pitch. **No UI drives this today** — it backed the regular-width palette card's `+3度` / `+8度` keys, and the
+    /// card was removed because it sat on the score permanently for keys the pad already carries. Kept because
+    /// re-offering the shortcut is then a view-only change; covered by `EditorViewModelChordTests`.
     public func addIntervalNote(_ interval: DiatonicInterval) {
         guard case let .note(noteID)? = selectedItem, let score, let note = score[noteID] else { return }
         let keySig = score.activeKey(at: noteID)
@@ -32,7 +35,7 @@ extension EditorViewModel {
         addNoteToChord(at: noteID, pitch: target.pitch, tpc: target.tpc, keySig: keySig)
     }
 
-    /// The chord-armed branch of `inputPitch` (Task 5 wiring, `EditorViewModel+Input.swift`): adds `letter`'s
+    /// The chord-armed branch of `inputPitch` (wired in `EditorViewModel+Input.swift`): adds `letter`'s
     /// in-key pitch, nearest the selected note, to the chord — then clears the arm and selects the added note.
     /// Never auto-advances (spec §5.4).
     func addLetterToChord(_ letter: Character, at noteID: NoteID, in score: Score) {
