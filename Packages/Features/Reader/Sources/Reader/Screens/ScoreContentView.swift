@@ -89,8 +89,9 @@ struct ScoreContentView: View {
         case .loading:
             ProgressView().controlSize(.large)
         case .loaded:
-            // `visibleScore` is the clef-applied / transposed / hidden-filtered score, cached on the view model and
-            // recomputed only when its inputs change — so this body no longer rebuilds the score on every re-eval.
+            // `visibleScore` is the display score — clef overrides → written-pitch view → transpose → hidden staves
+            // (`ReaderDisplayTransforms`) — cached on the view model and recomputed only when its inputs change, so
+            // this body no longer rebuilds the score on every re-eval.
             if let score = renderedScore {
                 switch layoutMode {
                 case .vertical:

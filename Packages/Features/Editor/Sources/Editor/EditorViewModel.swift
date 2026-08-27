@@ -268,6 +268,13 @@ public final class EditorViewModel {
     /// still holding the pre-migration addresses. So the release belongs to whoever performs the re-read — see
     /// `hasUnsettledPartEdits`, which is how it asks whether a LATER part edit has since raised it again.
     public var onPartEditApplied: @MainActor () -> Void = {}
+    /// Fired for a part edit the USER asked for, with which of the three it was. Distinct from `onPartEditApplied`,
+    /// which also covers an undo / redo that moved the parts — that is the same bookkeeping problem but not a new
+    /// instrumentation decision, and counting it would double every edit that gets undone.
+    ///
+    /// A closure rather than an analytics client on this view model: the Editor logs nothing itself, and the App
+    /// composition root already owns the one `Analytics` instance.
+    public var onPartsEdited: @MainActor (PartEditAction) -> Void = { _ in }
     /// Fired when the persisted `ReaderPreferences` row may have moved under the host: once per part edit as its
     /// save settles, and again from `endSession`'s retry if that is what finally lands the migration.
     ///

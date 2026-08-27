@@ -96,6 +96,12 @@ struct NewScoreForm: Equatable {
     /// The template a fresh form opens on — the same solo piano the M1 form defaulted to.
     static let defaultTemplateID = "solo-piano"
 
+    /// `instrumentationSource` for a list the user built or edited by hand, and for one cloned from another score.
+    /// Analytics vocabulary, not ids: they sit in the same `score_created.template` parameter as a template id, so a
+    /// query can ask "which ensembles do people start from" in one group-by.
+    static let customSource = "custom"
+    static let clonedSource = "cloned"
+
     var title = ""
     var composer = ""
 
@@ -122,9 +128,18 @@ struct NewScoreForm: Equatable {
             renumber()
             if structureChanged {
                 bracketGroups = []
+                instrumentationSource = Self.customSource
             }
         }
     }
+
+    /// Where the current list came from, for `score_created.template`: a template's id, `clonedSource`, or
+    /// `customSource`. Maintained exactly like `bracketGroups` — every structural edit demotes it to "custom", and the
+    /// two seeding flows stamp their own value *after* assigning the list, for the same reason.
+    ///
+    /// A fresh form opens on `defaultTemplateID` because that is what `seedInstrumentation()` puts in the list; that
+    /// assignment does not go through the setter above, so it is not a hand-edit.
+    private(set) var instrumentationSource = NewScoreForm.defaultTemplateID
 
     /// Half-open part ranges a group bracket spans. Set by `applyTemplate`; cleared by every manual edit — a
     /// hand-edited ensemble no longer matches the template's grouping. Grand-staff braces are per-part
@@ -144,6 +159,7 @@ struct NewScoreForm: Equatable {
     mutating func applyTemplate(_ template: ScoreCreationTemplate) {
         instrumentation = template.instruments.map(PartDraft.fromCatalog)
         bracketGroups = template.bracketGroups
+        instrumentationSource = template.id
     }
 
     /// Replaces the list with `score`'s parts, cloned structure-first. Brackets are NOT cloned: the source's
@@ -152,6 +168,7 @@ struct NewScoreForm: Equatable {
         instrumentation = score.parts.enumerated().map { index, part in
             PartDraft.fromExistingPart(part, at: index, in: score)
         }
+        instrumentationSource = Self.clonedSource
     }
 
     /// Replaces the whole list with a single catalog instrument — the "start from an instrument" entry point.

@@ -4,6 +4,8 @@ import ScoreUI
 import SwiftUI
 import UtilityUI
 
+// PARITY(android): M2 ensemble wizard — instrumentation list, templates, clone-from-existing on Android's creation flow
+
 /// The "New score" wizard: a plain `Form` collecting the fields `NewScoreForm` maps to a `BlankScoreTemplate`.
 /// Presented as a sheet from `LibraryRootPresentations`; Create hands the built form to
 /// `LibraryViewModel.createScore(from:)`, which owns dismissal on success. On failure the sheet stays up (the typed

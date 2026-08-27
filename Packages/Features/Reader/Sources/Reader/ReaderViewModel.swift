@@ -468,6 +468,8 @@ final class ReaderViewModel {
         }
         // Clef overrides → written-pitch view → transpose → hidden staves. The order and why every step is safe for
         // the playback cursor are documented on `ReaderDisplayTransforms`, which PiP and the editing page share.
+        // PARITY(android): M2 written-pitch view — Android's render pipeline still needs writtenPitchView() between
+        //   clef overrides and transpose
         visibleScore = ReaderDisplayTransforms.display(
             score,
             clefOverrides: layoutModel.staffClefOverrides,

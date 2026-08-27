@@ -17,8 +17,11 @@ public final class ReaderEditingHost {
     public internal(set) var isEditing = false
 
     /// Written by the App (mirroring EditorViewModel outputs), read by the Reader:
-    /// The editor's live score. While editing the Reader renders THIS raw score (no transpose / hidden staves /
-    /// multi-measure-rest collapse) so positional IDs stay valid.
+    /// The editor's live score, in CONCERT pitch and with every staff present — the shape the file is saved in. The
+    /// Reader draws it through `ReaderRootScreen.editingScore`, which applies clef overrides, the written-pitch view
+    /// and the hidden-staves filter (all of which a `StaffAddress` remap can undo) but not the global transpose or
+    /// multi-measure-rest collapse (which renumber ELEMENTS within a staff, and no remap can undo that), so positional
+    /// IDs stay valid.
     public var editedScore: Score?
     /// Bumped per mutation; included in the vertical container's layout task key.
     public var editGeneration = 0

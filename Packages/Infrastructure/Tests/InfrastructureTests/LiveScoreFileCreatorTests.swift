@@ -81,6 +81,37 @@ struct LiveScoreFileCreatorTests {
         try await waitFor { repository.scoreItems.contains { $0.id == item.id } }
     }
 
+    /// The whole M2 creation path end to end, at the layer that actually writes the file: a template expands to parts,
+    /// `LiveScoreFileCreator` encodes them, and reading the file back through the gateway yields the same ensemble.
+    /// The unit tests either side of this one cover the expansion and the encoding separately — what only a round trip
+    /// can show is that nothing is lost in between.
+    @Test
+    func `an ensemble template round-trips through the file`() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appending(path: "creator-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let db = try AppDatabase(databaseURL: dir.appending(path: "f.sqlite"))
+        let repository = LiveScoreLibraryRepository(database: db, scoresDirectory: dir)
+        try await repository.refresh()
+        let gateway = LiveScoreFileGateway()
+        let creator = LiveScoreFileCreator(gateway: gateway, repository: repository, scoresDirectory: dir)
+
+        let template = try #require(ScoreCreationTemplate.all.first { $0.id == "string-quartet" })
+        let item = try await creator.createScore(Score.blank(BlankScoreTemplate(
+            title: "Quartet", parts: template.instruments.map { $0.partPlan() },
+            bracketGroups: template.bracketGroups, measureCount: 4,
+        )))
+
+        let (reloaded, _) = try await gateway.loadScore(fileURL: dir.appending(path: item.localFileName))
+        #expect(reloaded.parts.count == 4)
+        #expect(reloaded.parts.map(\.instrument.id) == ["violin", "violin", "viola", "violoncello"])
+        // `longName` is optional on `Instrument`; a part that came back without one reads as "" and fails here.
+        #expect(reloaded.parts.map { $0.instrument.longName ?? "" } == ["Violin", "Violin", "Viola", "Cello"])
+        // One staff each — a quartet is four single-staff parts, not two grand staves.
+        #expect(reloaded.parts.allSatisfy { $0.staves.count == 1 })
+    }
+
     @Test
     func `a failed row save removes the orphaned file`() async throws {
         let dir = FileManager.default.temporaryDirectory

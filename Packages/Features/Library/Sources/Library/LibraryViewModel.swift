@@ -371,7 +371,9 @@ public final class LibraryViewModel {
         guard let template = form.template() else { return }
         do {
             let item = try await creator.createScore(Score.blank(template))
-            analytics.log(.scoreCreated())
+            analytics.log(.scoreCreated(
+                template: form.instrumentationSource, partCount: form.instrumentation.count,
+            ))
             pendingOpenInEditSession = true
             pendingScoreToOpen = item
             isNewScoreSheetPresented = false

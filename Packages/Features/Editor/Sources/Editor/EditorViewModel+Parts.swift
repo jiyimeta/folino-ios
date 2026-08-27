@@ -10,6 +10,14 @@ import SheetMusicCore
 /// says, so it belongs to the Reader's per-score preferences. The sheet reaches it through the two seams the App
 /// wires (`isStaffVisible` / `onToggleStaffVisibility`) — this package cannot import Reader.
 extension EditorViewModel {
+    /// Which of the three instrumentation edits happened, for whoever is counting them (`onPartsEdited`). Raw values
+    /// are the analytics vocabulary so the App can forward one without a translation table of its own.
+    public enum PartEditAction: String, Sendable {
+        case add
+        case remove
+        case reorder
+    }
+
     /// One part as the instruments sheet lists it.
     public struct PartRow: Identifiable, Equatable {
         /// `Part.id`, which the engine keeps stable across reorders — so a dragged row keeps its identity instead of
@@ -63,6 +71,7 @@ extension EditorViewModel {
         let caret = caretItem
         guard apply(.addPart(plan: plan, at: score.parts.count)) else { return }
         place(selection: selection, caret: caret)
+        onPartsEdited(.add)
         commitPartEdit()
     }
 
@@ -79,6 +88,7 @@ extension EditorViewModel {
             selection: Self.item(selection, afterRemovingPart: index),
             caret: Self.item(caret, afterRemovingPart: index),
         )
+        onPartsEdited(.remove)
         commitPartEdit()
     }
 
@@ -104,6 +114,7 @@ extension EditorViewModel {
             selection: Self.item(selection, afterMovingPart: from, to: to),
             caret: Self.item(caret, afterMovingPart: from, to: to),
         )
+        onPartsEdited(.reorder)
         commitPartEdit()
     }
 

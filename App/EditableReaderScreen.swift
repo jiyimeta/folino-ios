@@ -3,6 +3,7 @@ import Editor
 import Reader
 import SheetMusicUI
 import SwiftUI
+import UtilityCore
 import UtilityUI
 
 /// Composition-root wrapper that mounts a ReaderRootScreen with the note-editing seam filled in: one
@@ -36,6 +37,9 @@ struct EditableReaderScreen: View {
     /// — see the comment there. The same instance the App handed to `readerBuilder`'s `ReaderRootScreen`, so its
     /// live cache already carries whatever that Reader (or the Library, via the same shared repository) last wrote.
     private let repository: any ScoreLibraryRepository
+    /// The Editor logs nothing itself — it reports what the user did through closures, and this is where those become
+    /// events. Kept for `wireOnce()`, the same way `repository` is.
+    private let analytics: any Analytics
     /// One-shot: opens straight into an edit session for a score that was just created (spec: a scratch score should
     /// land on the editing surface, not the score view). Forwarded into `readerBuilder`; see its doc comment.
     private let startInEditMode: Bool
@@ -48,6 +52,7 @@ struct EditableReaderScreen: View {
         originalStore: any ScoreOriginalStore,
         historyStore: any ScoreEditHistoryStore,
         playbackController: (any PlaybackController)?,
+        analytics: any Analytics = NoopAnalytics(),
         startInEditMode: Bool = false,
         readerBuilder: @escaping (
             ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder, Bool,
@@ -63,6 +68,7 @@ struct EditableReaderScreen: View {
             playback: playbackController,
         ))
         self.repository = repository
+        self.analytics = analytics
         self.startInEditMode = startInEditMode
         self.readerBuilder = readerBuilder
     }
@@ -221,6 +227,11 @@ struct EditableReaderScreen: View {
     private func wirePartEditSeams(host: ReaderEditingHost, vm: EditorViewModel) {
         vm.onPartEditApplied = { [weak host] in
             host?.raisePartMappingHold()
+        }
+        // The Editor's own count of what the user changed about the instrumentation. Logged here rather than there:
+        // the Editor has no analytics client, and this is the composition root that owns the one there is.
+        vm.onPartsEdited = { [analytics] action in
+            analytics.log(.scorePartsEdited(action: action.rawValue))
         }
         host.isPartMappingSettled = { [weak vm] in
             vm?.hasUnsettledPartEdits != true
