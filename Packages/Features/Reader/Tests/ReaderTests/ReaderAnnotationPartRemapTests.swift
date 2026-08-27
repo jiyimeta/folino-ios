@@ -179,19 +179,72 @@ struct ReaderAnnotationPartRemapTests {
 
     /// The one this exists for. A failed read must NOT be taken for "no ink": overwriting the live model with an
     /// empty set would make the next capture persist that emptiness and delete the score's ink for good.
-    @Test func `a failed re-read leaves the ink alone`() async {
+    ///
+    /// And refusing to re-seed is only half of it. The hold comes down regardless — keeping it up would strand the
+    /// preferences writer — so the model is left holding pre-migration anchors with an unheld writer behind it, and
+    /// the very next capture is not hypothetical: the reload ends in `recomputeVisibleScore()`, which moves the
+    /// document, which reprojects every container and brings PencilKit's echo straight back. Hence the ink-side
+    /// latch, and hence the second half of this test.
+    @Test func `a failed re-read leaves the ink alone and latches the writer`() async {
         let item = makeItem()
         let store = FakeStore()
         let original = [stroke(part: 2, staff: 1)]
-        store.put(AnnotationLayerCodec.encode(drawings: original, textBoxes: []), for: item.id)
+        let originalPayload = AnnotationLayerCodec.encode(drawings: original, textBoxes: [])
+        store.put(originalPayload, for: item.id)
         let vm = makeVM(item: item, store: store)
         await vm.loadAnnotations()
         let ticketBefore = vm.annotationReseedTicket
 
+        // The Editor has migrated the layer; this process's re-read of it fails.
+        let migratedPayload = AnnotationLayerCodec.encode(
+            drawings: AnnotationLayers.remappingParts([0: nil, 1: 0, 2: 1], in: original), textBoxes: [],
+        )
+        store.put(migratedPayload, for: item.id)
         store.loadError = DomainError.persistenceFailed(reason: "boom")
         await vm.reloadPreferencesAfterPartRemap(authoredHiddenStaves: []) { true }
 
         #expect(vm.annotationDrawings == original)
         #expect(vm.annotationReseedTicket == ticketBefore)
+        #expect(vm.isInkReseedPending)
+
+        // The capture that follows — the reproject echo — must not reach the store, hold or no hold.
+        store.loadError = nil
+        vm.setPartMigrationPendingProvider { false }
+        vm.annotationDrawingsDidChange(original)
+        await vm.flushPendingAnnotationSave()
+        #expect(store.payload(for: item.id) == migratedPayload)
+
+        // A later read that succeeds is what lifts it, and the writer goes live again.
+        #expect(await vm.reseedAnnotationsAfterPartRemap())
+        #expect(vm.isInkReseedPending == false)
+        #expect(partIndices(vm.annotationDrawings) == [1])
+        vm.annotationDrawingsDidChange([stroke(part: 0, byte: 0xEE)])
+        await vm.flushPendingAnnotationSave()
+        #expect(store.payload(for: item.id) != migratedPayload)
+    }
+
+    /// `loadAnnotations` is the other retry point: a score opening on a store that answers lifts the latch, so a
+    /// failed re-seed cannot silently disable ink for the rest of the app's life.
+    @Test func `a successful load lifts the latch`() async {
+        let item = makeItem()
+        let store = FakeStore()
+        let vm = makeVM(item: item, store: store)
+        vm.isInkReseedPending = true
+
+        await vm.loadAnnotations()
+
+        #expect(vm.isInkReseedPending == false)
+    }
+
+    @Test func `a failed load leaves the latch standing`() async {
+        let item = makeItem()
+        let store = FakeStore()
+        let vm = makeVM(item: item, store: store)
+        vm.isInkReseedPending = true
+        store.loadError = DomainError.persistenceFailed(reason: "boom")
+
+        await vm.loadAnnotations()
+
+        #expect(vm.isInkReseedPending)
     }
 }

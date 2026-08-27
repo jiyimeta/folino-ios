@@ -6,8 +6,18 @@ import Foundation
 extension ReaderViewModel {
     /// Loads any persisted annotation layer for the current score into `annotationDrawings`. Called from `load()` once
     /// the score and preferences are ready. The shared coordinator owns the decode + miss handling (empty on no layer).
+    ///
+    /// Also the retry point for `isInkReseedPending`: a read that SUCCEEDS proves the model matches the store again,
+    /// whatever a failed part-remap re-seed left behind, so it lowers the latch. One that fails leaves the latch where
+    /// it stands — the model is still not known to match — while falling back to the same empty set as before, because
+    /// this runs on a score swap and keeping the previous score's ink would be worse than showing none.
     func loadAnnotations() async {
-        annotationDrawings = await annotationCoordinator.load(scoreID: scoreItem.id)
+        guard let loaded = await annotationCoordinator.reload(scoreID: scoreItem.id) else {
+            annotationDrawings = []
+            return
+        }
+        annotationDrawings = loaded
+        isInkReseedPending = false
     }
 
     /// Called by the container on every canvas change with the freshly re-anchored drawings. Updates the in-memory
@@ -28,11 +38,20 @@ extension ReaderViewModel {
     /// re-anchored old one. The migrated layer wins and the re-seed puts it back on screen.
     ///
     /// What that costs is bounded to near nothing in practice: a part edit is driven from the editing chrome's
-    /// instruments sheet, and while note editing is active the ink canvas is a dimmed, non-interactive reference layer
-    /// (`AnnotationOverlaySpec.isInkDimmed`) — so the captures arriving in this window are echoes of programmatic
-    /// re-seeds, not the user's ink.
+    /// instruments sheet, which is only reachable inside an edit session — and there the annotation toggle is not on
+    /// screen, so `isAnnotating` is false and the canvas takes no touches at all
+    /// (`AnnotationCanvasController.update` sets `isUserInteractionEnabled` from it). The captures arriving in this
+    /// window are therefore echoes of programmatic re-seeds, not the user's ink. (`isInkDimmed` additionally makes the
+    /// ink a translucent reference layer while editing, but only the vertical container sets it, so it is not the
+    /// guarantee being relied on here.)
+    ///
+    /// **Also dropped while `isInkReseedPending` stands** — a part-remap re-seed that could not read the store. The
+    /// model is then still holding pre-migration anchors with the mapping already consumed, so the very next capture
+    /// would write them over the migrated layer permanently. A separate latch rather than holding the SHARED
+    /// `isPartMigrationPending` up: that one also gates the preferences writer, and leaving it raised would strand
+    /// that writer for the rest of the session (the round-3 stranded-hold failure mode).
     func annotationDrawingsDidChange(_ drawings: [DrawingAnchor]) {
-        guard !isPartMigrationPending() else { return }
+        guard !isPartMigrationPending(), !isInkReseedPending else { return }
         // A net increase in anchored strokes means new ink was actually committed — the real pencil-usage signal. The
         // canvas's `canvasViewDrawingDidChange` also fires for reflow re-anchoring (same count) and erase (lower
         // count); only a higher count is a fresh commit, so this logs once per committed stroke, never per change tick
@@ -69,11 +88,26 @@ extension ReaderViewModel {
     /// A FAILED read re-seeds nothing. `reload` tells a store failure apart from "there is no ink" precisely so this
     /// can refuse: overwriting the live model with an empty set on the strength of one unlucky read would make the
     /// next capture persist that emptiness and delete the score's ink for good.
+    ///
+    /// But refusing is only half of it — the model is then left holding pre-migration anchors while the hold comes
+    /// down and the mapping is consumed, and the next capture is not hypothetical: `reloadPreferencesAfterPartRemap`
+    /// ends in `recomputeVisibleScore()`, which moves `document`, which reprojects all three containers and brings
+    /// PencilKit's echo of that re-seed straight back here. So a failed read RAISES `isInkReseedPending`, which
+    /// refuses captures until a later read succeeds (the next part remap's reload, or `loadAnnotations` on the next
+    /// score open). Losing a session's further ink is recoverable; overwriting the migrated layer is not.
     @discardableResult
     func reseedAnnotationsAfterPartRemap() async -> Bool {
-        guard let reloaded = await annotationCoordinator.reload(scoreID: scoreItem.id) else { return false }
-        annotationDrawings = reloaded
-        annotationReseedTicket += 1
+        guard let reloaded = await annotationCoordinator.reload(scoreID: scoreItem.id) else {
+            isInkReseedPending = true
+            return false
+        }
+        // Only when the layer actually moved. An unmoved one (all-page-anchored ink, or a mapping that renumbered
+        // nothing it names) would otherwise force a reproject and the canvas echo that comes with it, for nothing.
+        if reloaded != annotationDrawings {
+            annotationDrawings = reloaded
+            annotationReseedTicket += 1
+        }
+        isInkReseedPending = false
         return true
     }
 }

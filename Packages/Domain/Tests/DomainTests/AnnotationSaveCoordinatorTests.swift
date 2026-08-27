@@ -52,8 +52,10 @@ struct AnnotationSaveCoordinatorTests {
     /// proves what the test is for — a fixed number of writes for two rapid changes — because it stops on the FIRST
     /// write and the extra one, if the debounce were broken, would have to arrive inside the remaining budget.
     private func waitForWrite(_ store: FakeBlobStore) async throws {
-        for _ in 0 ..< 200 where store.saves.isEmpty && store.deletes.isEmpty {
+        var ticks = 0
+        while store.saves.isEmpty, store.deletes.isEmpty, ticks < 200 {
             try await Task.sleep(for: .milliseconds(10))
+            ticks += 1
         }
         // A moment for a SECOND write to show up if the debounce failed to coalesce.
         try await Task.sleep(for: .milliseconds(50))

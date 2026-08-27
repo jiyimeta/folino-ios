@@ -36,9 +36,10 @@ extension AnnotationLayers {
         drawings.compactMap { $0.remappingParts(mapping) }
     }
 
-    /// The same rewrite for the layer's text boxes. Always empty in v1 (annotations are ink only), but the persisted
-    /// body carries the field and a migration that silently dropped it would be a data loss the day it stops being
-    /// empty.
+    /// The same rewrite for the layer's text boxes. **Defensive, not a live guarantee:** the only writer,
+    /// `AnnotationSaveCoordinator.persist`, encodes `textBoxes: []` unconditionally, so nothing reaches this today.
+    /// The persisted body carries the field, though, and a migration that silently dropped it would be a data loss
+    /// the day text boxes ship.
     public static func remappingParts(
         _ mapping: [Int: Int?], in textBoxes: [TextBoxAnchor],
     ) -> [TextBoxAnchor] {

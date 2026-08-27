@@ -51,6 +51,10 @@ extension ReaderViewModel {
         // drawing each stroke over whichever instrument now sits where its part used to. Re-seeded BEFORE the hold
         // comes down, for the reason step 3 gives: until this line a capture would still be describing the old
         // numbering. See `reseedAnnotationsAfterPartRemap`.
+        //
+        // Its answer is deliberately not branched on here, unlike `didReseed` below: a failure has to keep the INK
+        // writer shut without keeping the shared hold up (which would strand the preferences writer), so it carries
+        // that state itself in `isInkReseedPending` rather than handing it back for the release to juggle.
         await reseedAnnotationsAfterPartRemap()
         if liftHold() {
             if didReseed {

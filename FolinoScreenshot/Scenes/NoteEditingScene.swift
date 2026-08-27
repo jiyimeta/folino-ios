@@ -115,6 +115,9 @@ struct NoteEditingScene: View {
                     originalStore: FixtureOriginalStore(),
                     historyStore: Self.historyStore,
                     playbackController: nil,
+                    // No ink store: this scene draws one framed screenshot of the editing surface and never runs a
+                    // part edit, so there is no annotation layer for the part-index migration to rewrite.
+                    annotationStore: nil,
                     // `startInEditMode` is unused here: this scene enters edit mode via
                     // `ReaderScreenshotEditing.requestedMeasure` instead, so it's picked up with a selected note.
                 ) { host, chrome, topBar, cutoutTier, _ in

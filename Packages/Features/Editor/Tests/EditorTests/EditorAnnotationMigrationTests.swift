@@ -344,4 +344,77 @@ struct EditorAnnotationMigrationTests {
         // The drain's own write is what got migrated, which is the whole point of awaiting it.
         #expect(partIndices(storedStrokes(annotations, for: item.id)) == [1])
     }
+
+    /// `endSession`'s retry reads the ink too, and it does NOT go through `commitPartEdit` — so the drain has to sit
+    /// at the migration itself, not at the one caller that raises the hold. A capture still pending here would land
+    /// on the far side of this read and undo the whole migration.
+    @Test func `the session-end retry drains before it reads`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let repository = FakeScoreLibraryRepository()
+        let annotations = FakeAnnotationBlobStore()
+        let item = EditorFixtures.sampleItem()
+        repository.readerPreferences[item.id] = ReaderPreferences(
+            scoreItemID: item.id, hiddenStaves: [StaffAddress(partIndex: 2, staffIndexInPart: 1)],
+        )
+        // The part edit's own save cannot land the migration, so the map survives to the session-end retry.
+        repository.readerPreferencesSaveError = DomainError.persistenceFailed(reason: "boom")
+        let vm = makeViewModel(item: item, directory: dir, repository: repository, annotations: annotations)
+        vm.beginSession(score: EditorFixtures.parts(named: ["Flute", "Violin", "Piano"], twoStavesAt: 2))
+
+        vm.removePart(at: 0)
+        await vm.partEditCommitTask?.value
+
+        // What the host's debounced writer has in the air when the session ends.
+        repository.readerPreferencesSaveError = nil
+        var drains = 0
+        vm.onPartMigrationWillRun = {
+            drains += 1
+            annotations.payloads[item.id] = AnnotationLayerCodec.encode(
+                drawings: [stroke(part: 2, staff: 1)], textBoxes: [],
+            )
+        }
+        await vm.endSession()
+
+        #expect(drains == 1)
+        // Drained BEFORE the read, so the pending capture is what the retry migrated.
+        #expect(partIndices(storedStrokes(annotations, for: item.id)) == [1])
+        let migrated = try #require(repository.readerPreferences[item.id])
+        #expect(migrated.hiddenStaves == [StaffAddress(partIndex: 1, staffIndexInPart: 1)])
+    }
+
+    /// Same for `unwindSessionEdits`' snapshot gear, which is reachable with no prior failure at all: discard a
+    /// session that removed a part and the gear migrates both stores back onto the restored numbering.
+    @Test func `the snapshot gear drains before it reads`() async {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let repository = FakeScoreLibraryRepository()
+        let annotations = FakeAnnotationBlobStore()
+        let item = EditorFixtures.sampleItem()
+        let vm = makeViewModel(item: item, directory: dir, repository: repository, annotations: annotations)
+        vm.beginSession(score: EditorFixtures.parts(named: ["Flute", "Violin", "Piano"], twoStavesAt: 2))
+
+        // Two removals, each saved: the session re-baselines onto the single remaining part.
+        vm.removePart(at: 0)
+        await vm.partEditCommitTask?.value
+        vm.removePart(at: 0)
+        await vm.partEditCommitTask?.value
+
+        // The capture the host has in the air when the discard runs — stamped in the ONE-part numbering the score is
+        // in at that moment, which is what the gear's composed map is defined over.
+        var drains = 0
+        vm.onPartMigrationWillRun = {
+            drains += 1
+            annotations.payloads[item.id] = AnnotationLayerCodec.encode(
+                drawings: [stroke(part: 0, staff: 1)], textBoxes: [],
+            )
+        }
+        // Leave a depth the undo stack cannot consume, so the gear — not the loop — is what lands the restore.
+        vm.previewSeedSessionEdit()
+        await vm.unwindSessionEdits()
+
+        #expect(drains == 1)
+        // The drained capture rode the composed map back to the restored three-part numbering.
+        #expect(partIndices(storedStrokes(annotations, for: item.id)) == [2])
+    }
 }

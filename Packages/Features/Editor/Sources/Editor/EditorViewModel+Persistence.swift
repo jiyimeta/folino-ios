@@ -185,8 +185,9 @@ extension EditorViewModel {
     /// anyway strands the other half; half-migrating and NOT consuming is worse, because the retry would rewrite the
     /// half that already moved a second time and point every setting at a third part. So the ink is written second and
     /// a failure there ROLLS THE ROW BACK to the value it was read at, leaving the retry a clean whole. Only a second
-    /// failure — on the rollback write itself — can leave the two disagreeing, and nothing at this layer can do better
-    /// without a transaction spanning two stores.
+    /// failure — on the rollback write itself — can leave the two disagreeing. That residual is not expressible at
+    /// THIS layer, but it is not unclosable: both stores are the same GRDB pool, so a combined Infrastructure write
+    /// spanning the two tables would close it.
     ///
     /// Nothing stored (no row, no ink) still consumes: there is nothing to migrate, and leaving the map unconsumed
     /// would make the next part operation report a stale cumulative map against state written since. It reports `nil`
@@ -207,6 +208,14 @@ extension EditorViewModel {
     func migratePartIndexedState(
         _ mapping: [Int: Int?], in session: ScoreEditSession, for id: ScoreItemID,
     ) async -> [Int: Int?]? {
+        // Ahead of BOTH reads, and here rather than at the one caller that raises the hold: all three migration sites
+        // — the part op's own commit, `endSession`'s retry and `unwindSessionEdits`' snapshot gear — read the host's
+        // stores, and the last two run with the host's debounced ink writer live and never drained. A capture pending
+        // when either of those reads would land on the far side of the write and put the whole layer back into the
+        // old numbering, with the mapping consumed. Draining at the one place the reads actually happen covers all
+        // three by construction; a second drain from the commit path would only have been a no-op anyway (`flush`
+        // does nothing once `pending` is clear).
+        await onPartMigrationWillRun()
         do {
             // Both reads first: a read that throws must leave the stores exactly as they were, so there is nothing to
             // undo and the retry is a clean whole.

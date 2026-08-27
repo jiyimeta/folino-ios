@@ -82,6 +82,14 @@ final class ReaderViewModel {
     /// Handle to the latest `drawingsDidChange` hop onto the coordinator, awaited by `flushPendingAnnotationSave`.
     @ObservationIgnored var annotationChangeTask: Task<Void, Never>?
 
+    /// Raised when a part-remap re-seed could not read the annotation layer back, and lowered by the next read that
+    /// can. While it stands the ink writer refuses every capture: the model is holding pre-migration anchors that the
+    /// stored layer no longer agrees with, and the mapping has been consumed, so a write would make that permanent.
+    ///
+    /// Deliberately NOT the shared `isPartMigrationPending` hold — that one also gates the preferences writer, and
+    /// leaving it raised to cover this would strand that writer for the rest of the session.
+    @ObservationIgnored var isInkReseedPending = false
+
     /// Bumped whenever `annotationDrawings` is replaced WHOLESALE from the store rather than by the user's own ink —
     /// today, the part-index re-seed. The score containers reproject the canvas on it.
     ///

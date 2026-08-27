@@ -54,7 +54,11 @@ struct EditableReaderScreen: View {
         playbackController: (any PlaybackController)?,
         // The score's ink, for the Editor's part-index migration only — a part add / remove / reorder renumbers the
         // staff each stroke is anchored to exactly as it renumbers the preferences row.
-        annotationStore: (any AnnotationBlobStore)? = nil,
+        //
+        // Required here, unlike the Editor view model's own defaulted parameter: every real screen has ink to migrate,
+        // and a default at this layer would let a wiring site forget it and silently ship the bug this exists to fix.
+        // A host that genuinely has no store passes `nil` and says why.
+        annotationStore: (any AnnotationBlobStore)?,
         analytics: any Analytics = NoopAnalytics(),
         startInEditMode: Bool = false,
         readerBuilder: @escaping (
