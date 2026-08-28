@@ -4,7 +4,7 @@ import Foundation
 import SheetMusicUI
 import Testing
 
-/// Task 9 — audition: a fire-and-forget pitch preview on note input and pitch change (spec §5.6). `audition(_:)`
+/// Audition: a fire-and-forget pitch preview on note input and pitch change (spec §5.6). `audition(_:)`
 /// stores its spawned work in `vm.auditionTask`, so tests await that instead of racing the fire-and-forget call.
 @MainActor
 @Suite("EditorViewModel audition")
@@ -15,6 +15,8 @@ struct EditorViewModelAuditionTests {
             scoresDirectory: URL(filePath: "/tmp"),
             gateway: FakeScoreFileGateway(),
             repository: FakeScoreLibraryRepository(),
+            originalStore: FakeScoreOriginalStore(),
+            historyStore: NoopScoreEditHistoryStore(),
             playback: playback,
         )
     }

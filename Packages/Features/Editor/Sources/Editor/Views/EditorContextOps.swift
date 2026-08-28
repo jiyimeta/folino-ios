@@ -1,12 +1,12 @@
 import Domain
 import SwiftUI
 
-/// The contextual ops that live on the pad's third row (and, on iPad, in `EditorPaletteView`).
+/// The contextual ops that live on the pad's third row (`EditorPadView`).
 ///
-/// This used to carry accidentals (♭ ♮ ♯), chord add / remove, tie and tuplet for the floating callout. The callout
-/// is gone and the set is now deliberately small: tuplets moved under the pad's `⋯` duration key, ♯ / ♭ are the pad's
-/// own pitch-step keys, and the remaining ops (♮, ＋音, −音) are out of the UI for now — the commands still exist on
-/// `EditorViewModel`, so re-surfacing them is a view-only change.
+/// The set is deliberately small — the tie key and the tuplet glyph. Everything else that a contextual row could
+/// carry went somewhere it fits better: tuplets sit under the pad's `⋯` duration key, and pitch alteration is the
+/// callout's chevrons (`EditorCalloutView`). The remaining ops (♮, ＋音, −音) are out of the UI entirely; the
+/// commands still exist on `EditorViewModel`, so re-surfacing them is a view-only change.
 enum EditorContextOps {
     static func buttons(viewModel: EditorViewModel, isFlexible: Bool = false) -> some View {
         TieButton(viewModel: viewModel, isFlexible: isFlexible)

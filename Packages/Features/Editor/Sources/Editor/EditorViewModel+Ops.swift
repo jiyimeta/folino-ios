@@ -167,12 +167,6 @@ extension EditorViewModel {
         syncFromCore()
     }
 
-    /// The library row this session is editing, as the last save left it.
-    var scoreItem: ScoreItem {
-        _ = generation
-        return core.scoreItem
-    }
-
     // MARK: - Selection, driven from the hit test and the host
 
     /// Internal, for `EditorViewModel+HitTest.swift`.

@@ -19,7 +19,8 @@ private final class ScreenshotStringsAnchor {}
 /// switches the app already has:
 ///  - `readerAutoEditMeasure` makes the Reader open an edit session on that measure's first note once the score has
 ///    loaded (see `ReaderRootScreen.startScreenshotEditingIfRequested`);
-///  - `editorPadVisible` is the Editor chrome's own `@AppStorage` for the pad, which is off by default.
+///  - `editorPadVisible` is the Editor chrome's own `@AppStorage` for the pad — expanded is the default, but the
+///    scene pins it anyway so a device that once tucked the pad can't capture a padless shot.
 struct NoteEditingScene: View {
     @Environment(\.screenshotIdiom) private var idiom
 
@@ -54,6 +55,11 @@ struct NoteEditingScene: View {
     }
 
     private let repository: FixtureScoreRepository
+
+    /// One instance for the process, not one per `body`. `ProcessScoreEditHistoryStore` installs a `.default`
+    /// NotificationCenter observer it never removes — correct only for the process-lifetime singleton the app
+    /// composes in `AppBootstrap`, and a leak per body evaluation if built inline here.
+    @MainActor private static let historyStore = ProcessScoreEditHistoryStore()
 
     init() {
         ScreenshotSetup.ensure()
@@ -98,19 +104,23 @@ struct NoteEditingScene: View {
             layout: FolinoScreenshotLayout.layout(for: idiom, subtitleBullet: true, innerStatusBarHeight: 0),
             idiom: idiom,
         ) {
-            // ReaderRootScreen puts its controls in a real `.toolbar`, so it needs an ancestor nav container to host
-            // them. The bar's own background is hidden, so the outer NavigationStack adds no doubled chrome.
+            // ReaderRootScreen draws its own top strip and hides the system navigation bar, so this NavigationStack
+            // contributes no chrome of its own — it's here only so `.restoresInteractivePopGesture()` has a
+            // `UINavigationController` ancestor to install its edge-swipe delegate on.
             NavigationStack {
                 EditableReaderScreen(
                     item: Fixture.items[0],
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                     gateway: FixtureGateway(),
                     repository: repository,
+                    originalStore: FixtureOriginalStore(),
+                    historyStore: Self.historyStore,
                     playbackController: nil,
-                ) { host, chrome in
+                ) { host, chrome, topBar, cutoutTier in
                     ReaderRootScreen(
                         scoreItem: Fixture.items[0],
                         repository: repository,
+                        originalStore: FixtureOriginalStore(),
                         gateway: FixtureGateway(),
                         shareService: FixtureShareService(),
                         vocalTunerHandoff: NoopVocalTunerHandoff(),
@@ -119,6 +129,8 @@ struct NoteEditingScene: View {
                         scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                         editingHost: host,
                         editingChrome: chrome,
+                        editingTopBar: topBar,
+                        editingCutoutTier: cutoutTier,
                     )
                 }
             }

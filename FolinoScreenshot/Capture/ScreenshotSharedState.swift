@@ -32,7 +32,8 @@ enum ScreenshotSharedState {
 /// The two `UserDefaults` keys `NoteEditingScene` writes, declared once so the scene and the reset above can't drift
 /// apart. Both are owned by other modules and neither has a public constant to import: `autoEditMeasure` is the
 /// Reader's screenshot hook (`ReaderRootScreen.screenshotEditMeasure`), `padVisible` is the Editor chrome's own
-/// `@AppStorage` for the input pad (`EditorChromeView.isPadVisible`).
+/// `@AppStorage` for the input pad (`EditorChromeView.storedPadVisible`; expanded is the default, but the scene
+/// still pins it so a device that once tucked the pad can't capture a padless shot).
 enum ScreenshotEditingKey {
     static let autoEditMeasure = "readerAutoEditMeasure"
     static let padVisible = "editorPadVisible"

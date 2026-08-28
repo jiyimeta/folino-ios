@@ -26,6 +26,7 @@ struct LibraryViewModelBulkTests {
         repo.scoreItems = scoreItems
         let vm = LibraryViewModel(
             repository: repo,
+            originalStore: FakeScoreOriginalStore(),
             importer: FakeScoreFileImporter(),
             gateway: FakeScoreFileGateway(),
             shareService: FakeScoreShareService(),

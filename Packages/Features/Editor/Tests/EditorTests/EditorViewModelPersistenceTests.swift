@@ -88,6 +88,8 @@ struct EditorViewModelPersistenceTests {
             scoresDirectory: dir,
             gateway: gateway,
             repository: repository,
+            originalStore: FakeScoreOriginalStore(),
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
@@ -119,6 +121,8 @@ struct EditorViewModelPersistenceTests {
             scoresDirectory: dir,
             gateway: gateway,
             repository: repository,
+            originalStore: FakeScoreOriginalStore(),
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
@@ -147,6 +151,8 @@ struct EditorViewModelPersistenceTests {
             scoresDirectory: dir,
             gateway: gateway,
             repository: repository,
+            originalStore: FakeScoreOriginalStore(),
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
@@ -170,6 +176,8 @@ struct EditorViewModelPersistenceTests {
             scoresDirectory: dir,
             gateway: gateway,
             repository: repository,
+            originalStore: FakeScoreOriginalStore(),
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
@@ -178,5 +186,84 @@ struct EditorViewModelPersistenceTests {
 
         #expect(gateway.savedCalls.isEmpty)
         #expect(repository.savedScoreItems.isEmpty)
+    }
+
+    // MARK: - Original capture
+
+    @Test func `the first save captures the original before writing`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let gateway = FakeScoreFileGateway()
+        let repository = FakeScoreLibraryRepository()
+        let originalStore = FakeScoreOriginalStore()
+        let vm = EditorViewModel(
+            scoreItem: EditorFixtures.sampleItem(),
+            scoresDirectory: dir,
+            gateway: gateway,
+            repository: repository,
+            originalStore: originalStore,
+            historyStore: NoopScoreEditHistoryStore(),
+            playback: nil,
+        )
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
+
+        await vm.flushPendingSave()
+
+        #expect(originalStore.captureCalls.count == 1)
+        let saved = try #require(repository.savedScoreItems.first)
+        #expect(saved.originalFileName == "score.original.mscz")
+        #expect(saved.originalContentHash == "captured-hash")
+        #expect(vm.scoreItem.originalFileName == "score.original.mscz")
+        #expect(vm.hasCapturedOriginal == true)
+    }
+
+    @Test func `the capture is asked for before the gateway writes`() async {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        // A shared log both fakes append to: the only way to prove ONE fake's call happened before the OTHER's,
+        // rather than merely happening before `scoreItem` was reassigned — which passes identically whether the
+        // capture ran before or after the write, and would not catch a regression that swapped the two calls.
+        let eventLog = FakeEventLog()
+        let gateway = FakeScoreFileGateway()
+        gateway.eventLog = eventLog
+        let repository = FakeScoreLibraryRepository()
+        let originalStore = FakeScoreOriginalStore()
+        originalStore.eventLog = eventLog
+        let vm = EditorViewModel(
+            scoreItem: EditorFixtures.sampleItem(),
+            scoresDirectory: dir,
+            gateway: gateway,
+            repository: repository,
+            originalStore: originalStore,
+            historyStore: NoopScoreEditHistoryStore(),
+            playback: nil,
+        )
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
+
+        await vm.flushPendingSave()
+
+        #expect(eventLog.events == ["capture", "save"])
+    }
+
+    @Test func `a clean flush never asks for a capture`() async {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let originalStore = FakeScoreOriginalStore()
+        let vm = EditorViewModel(
+            scoreItem: EditorFixtures.sampleItem(),
+            scoresDirectory: dir,
+            gateway: FakeScoreFileGateway(),
+            repository: FakeScoreLibraryRepository(),
+            originalStore: originalStore,
+            historyStore: NoopScoreEditHistoryStore(),
+            playback: nil,
+        )
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+
+        await vm.flushPendingSave()
+
+        #expect(originalStore.captureCalls.isEmpty)
     }
 }

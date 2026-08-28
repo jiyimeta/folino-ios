@@ -1,3 +1,4 @@
+import Domain
 import Observation
 import SheetMusicCore
 import SheetMusicLayout
@@ -23,7 +24,9 @@ public final class ReaderEditingHost {
     public var editGeneration = 0
     public var selection: ScoreSelection = .none {
         didSet {
-            if case .single = selection { onSelectionMade() }
+            if case .single = selection {
+                onSelectionMade()
+            }
         }
     }
 
@@ -128,6 +131,14 @@ public final class ReaderEditingHost {
     /// the cursor is running, since an edit mid-playback would reflow the score out from under it.
     public internal(set) var isPlaying = false
 
+    /// Answers whether any ink is anchored to the notation, so the Editor's confirmation can say whether reverting
+    /// will move it. A provider rather than a stored mirror, matching `hiddenStavesProvider`: the answer changes as
+    /// the user draws, and a value copied at wiring time would be stale by the time the dialog opens.
+    public var hasMusicalAnnotationsProvider: @MainActor () -> Bool = { false }
+    /// Filled by the Reader. The App calls it when a revert lands; the Reader adopts the rebuilt row, leaves the
+    /// editing session, stops playback and reloads the score from disk.
+    public var requestReloadAfterRevert: @MainActor (ScoreItem) -> Void = { _ in }
+
     /// Written by the App (measured from the editing chrome), read by the Reader: how much vertical room the editing
     /// cluster occupies at the top and bottom of the screen. The score containers turn these into SCROLL PADDING, not
     /// layout width — so the last system can be scrolled clear of the pad without the score being re-engraved. Page
@@ -136,21 +147,34 @@ public final class ReaderEditingHost {
     public var editingChromeTopInset: CGFloat = 0
     public var editingChromeBottomInset: CGFloat = 0
 
-    /// Where the chrome's note-input (pad open/close) button sits among the navigation bar's LEADING items, or `nil`
-    /// when the chrome isn't up. Written by the App from the Editor's chrome, read by the Reader's coach-mark overlay
-    /// — which has to point at a control it neither draws nor can measure.
-    ///
-    /// A position in a sequence rather than a frame, because a bar item cannot report a frame: measured on iOS 26,
-    /// everything hosted by the navigation bar reports its own bounds centred on the origin. The Reader matches this
-    /// ordinal against the bar's rendered items (`ReaderBarItemLocator`); the Editor is the only side that knows
-    /// where in its own leading sequence the button sits, so that is what crosses the seam. Counted from the leading
-    /// edge of what the CHROME contributes — the Reader hides its own back button for the session, so the two agree.
-    public var noteInputBarLeadingOrder: Int?
+    /// Where the note-input pad is on screen, in WINDOW coordinates, or `nil` while it is tucked away (or the chrome
+    /// isn't up). Written by the App from the Editor's chrome, read by the Reader's coach-mark overlay — which has to
+    /// point at a surface it does not draw. Window coordinates because the two sides may live in different hosting
+    /// contexts, and the window is the one space they genuinely share (`onWindowFrameChange`).
+    public var noteInputPadFrame: CGRect?
 
-    /// Asks the editing chrome to reveal the note-input pad. Wired by the App to the Editor's view model; called when
-    /// the user taps the note-input coach mark, so the bubble opens the pad it is pointing at rather than just naming
-    /// it. The pad starts hidden, which is exactly why that hint exists.
-    public var onRevealNoteInputPad: @MainActor () -> Void = {}
+    /// The pull tab a tucked pad leaves at the screen edge, in the same WINDOW coordinates — the "bring it back"
+    /// coach mark's anchor. `nil` while the pad is out.
+    public var noteInputPadHandleFrame: CGRect?
+
+    /// Bumped when the user actually moves the pad to the other vertical dock / tucks it past a side edge / brings
+    /// it back out. The coach marks teaching those gestures watch these and retire (and the restore chains the next
+    /// hint — see `PadHintWiring`).
+    public private(set) var padDockMoveUses = 0
+    public private(set) var padTuckUses = 0
+    public private(set) var padRestoreUses = 0
+
+    public func notePadDockMoved() {
+        padDockMoveUses += 1
+    }
+
+    public func notePadTucked() {
+        padTuckUses += 1
+    }
+
+    public func notePadRestored() {
+        padRestoreUses += 1
+    }
 
     // App-wired callbacks:
     public var onBeginEditing: @MainActor (Score) -> Void = { _ in }
@@ -206,7 +230,31 @@ public struct ReaderEditingChromeContext {
     /// it. The transport stays anchored to the bottom edge and stays the Reader's to draw; only the pad moves.
     public let bottomTransportClearance: CGFloat
 
-    public init(bottomTransportClearance: CGFloat) {
+    /// Whether this device's top safe-area inset is wide enough to host a control — see
+    /// `ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset:)`. Precomputed here rather than exposing
+    /// `ReaderTopBarLayout` itself, which is package-internal: `editingTopBar` needs the answer to decide whether
+    /// 完了 / revert belong in its own row or the cutout tier, without this package's layout internals crossing the
+    /// Reader/Editor seam. Defaulted to `false` so the pad-overlay builder, which never reads it, doesn't have to
+    /// supply it.
+    public let hasCutoutTier: Bool
+
+    public init(bottomTransportClearance: CGFloat, hasCutoutTier: Bool = false) {
         self.bottomTransportClearance = bottomTransportClearance
+        self.hasCutoutTier = hasCutoutTier
+    }
+}
+
+/// The cutout tier's editing-session content — 完了 leading, revert trailing — supplied by the App and drawn by the
+/// Reader's OWN `ReaderCutoutTier`, not a re-implementation of it (`ReaderRootScreen.editingCutoutTier`; review
+/// Important 4). Two pieces, not one combined view, because `ReaderCutoutTier` places its `leading` and `trailing`
+/// parameters at opposite ends of the reserved band with its own `Spacer` between them — collapsing them into a
+/// single view here would lose that placement and the padding that comes with it.
+public struct ReaderEditingCutoutTierContent {
+    public let leading: AnyView
+    public let trailing: AnyView
+
+    public init(leading: AnyView, trailing: AnyView) {
+        self.leading = leading
+        self.trailing = trailing
     }
 }

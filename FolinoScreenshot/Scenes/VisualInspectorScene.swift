@@ -91,6 +91,7 @@ struct VisualInspectorScene: View {
             ReaderRootScreen(
                 scoreItem: Fixture.items[0],
                 repository: FixtureScoreRepository(),
+                originalStore: FixtureOriginalStore(),
                 gateway: FixtureGateway(),
                 shareService: FixtureShareService(),
                 vocalTunerHandoff: NoopVocalTunerHandoff(),

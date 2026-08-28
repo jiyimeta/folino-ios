@@ -26,7 +26,7 @@ struct AnnotationEraseCoreTests {
         )
     }
 
-    /// Same shape as `drawing(_:baseWidth:)` but PAGE-anchored (Task 11) — used to confirm
+    /// Same shape as `drawing(_:baseWidth:)` but PAGE-anchored — used to confirm
     /// `AnnotationEraseCore.erase` is anchor-kind-agnostic: a page fragment must keep the SAME page
     /// index as its parent, never migrate to another page or degrade to a musical anchor.
     private func pageDrawing(_ points: [(Float, Float)], pageIndex: Int, baseWidth: Float = 0.5) -> DrawingAnchor {
@@ -147,7 +147,7 @@ struct AnnotationEraseCoreTests {
         #expect(out.changedIndices.isEmpty)
     }
 
-    // MARK: - Anchor-kind preservation (Task 11: PDF page-anchored erase)
+    // MARK: - Anchor-kind preservation (PDF page-anchored erase)
 
     @Test
     func `erasing the middle of a page anchored stroke preserves its page index on both fragments`() {

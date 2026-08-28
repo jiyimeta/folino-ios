@@ -135,7 +135,7 @@ class PagedPdfLayoutTest {
         assertEquals(-300f, PagedPdfLayout.panFromViewportOffset(offsetAfter, fitWidthPx * 2f, 1000f), 0.001f)
     }
 
-    // -- annotationCameraTranslate (Task 11: PDF page-anchored annotation) -------------------------
+    // -- annotationCameraTranslate (PDF page-anchored annotation) -------------------------
 
     @Test fun annotationCameraIsIdentityAtRestWithNoPan() {
         // Raster content already matches the viewport 1:1, zoom 1x, no pan — the raster page's own
@@ -201,7 +201,7 @@ class PagedPdfLayoutTest {
         assertEquals(-20f, ty, 0.001f)
     }
 
-    // -- pxPerPageMm (Task 11 fix-report: PDF pen/eraser were ~5x too thin) ------------------------
+    // -- pxPerPageMm (PDF pen/eraser were ~5x too thin) ------------------------
 
     @Test fun pxPerPageMmMatchesTheKnownA4PortraitRatio() {
         // A4 portrait is 595 x 842 pt ~= 209.9 x 297.2mm (595pt * 25.4/72). Rendered 1000px wide:
@@ -221,7 +221,7 @@ class PagedPdfLayoutTest {
         assertEquals(1f, PagedPdfLayout.pxPerPageMm(rasterWidthPx = 1000, pageWidthPt = -5.0), 0.0001f)
     }
 
-    // -- worldPointForTap (Task 14: tap-to-seek) ---------------------------------------------------
+    // -- worldPointForTap (tap-to-seek) ---------------------------------------------------
     // The inverse of the camera above. It must agree with `annotationCameraTranslate` exactly, since the cursor and
     // the ink are both placed by that function — a tap that resolves through a different camera would seek to a
     // point other than the one the user is looking at.

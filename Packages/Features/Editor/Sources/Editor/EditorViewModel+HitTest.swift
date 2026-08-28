@@ -47,7 +47,7 @@ extension EditorViewModel {
         select(nil)
     }
 
-    /// Task 16 (spec §5.2, Pencil hover pre-highlight): same resolution as `handleTap(at:)` but WITHOUT mutating
+    /// Pencil hover pre-highlight (spec §5.2): same resolution as `handleTap(at:)` but WITHOUT mutating
     /// selection — the Reader overlay draws a soft highlight at the returned item's anchor while the Pencil hovers,
     /// so the target is visible before the user commits with a tap.
     public func hoverItem(at point: CGPoint) -> SheetMusicCore.ScoreItemID? {

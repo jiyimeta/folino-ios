@@ -2,6 +2,7 @@ import Domain
 import Foundation
 import GRDB
 import Observation
+import UtilityCore
 
 /// Live, GRDB-backed implementation of `ScoreLibraryRepository`. Holds the library snapshot in `@Observable` properties
 /// refreshed by a single `ValueObservation` task started on the first `refresh()`.
@@ -14,11 +15,13 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
     public private(set) var playlists: [Playlist] = []
 
     @ObservationIgnored
-    private let database: AppDatabase
+    let database: AppDatabase
     @ObservationIgnored
     private let scoresDirectory: URL
     @ObservationIgnored
     private let playlistsIndexPublisher: (any PlaylistsIndexPublisher)?
+    @ObservationIgnored
+    private let crashReporter: any CrashReporter
     @ObservationIgnored
     private var observationTask: Task<Void, Never>?
 
@@ -26,10 +29,12 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
         database: AppDatabase,
         scoresDirectory: URL,
         playlistsIndexPublisher: (any PlaylistsIndexPublisher)? = nil,
+        crashReporter: any CrashReporter = NoopCrashReporter(),
     ) {
         self.database = database
         self.scoresDirectory = scoresDirectory
         self.playlistsIndexPublisher = playlistsIndexPublisher
+        self.crashReporter = crashReporter
     }
 
     deinit {
@@ -205,10 +210,7 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
                 _ = try ScoreItemRecord.deleteOne(db, key: id.rawValue.uuidString)
             }
             for filename in filenames {
-                let url = scoresDirectory.appending(path: filename)
-                // Best-effort: file may already be missing. TODO: log orphaned-file events to telemetry once logging
-                // infrastructure exists.
-                try? FileManager.default.removeItem(at: url)
+                removeBackingFile(named: filename)
             }
         } catch {
             throw DomainError.persistenceFailed(reason: "\(error)")
@@ -231,21 +233,43 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
                 return names
             }
             for filename in filenames {
-                let url = scoresDirectory.appending(path: filename)
-                try? FileManager.default.removeItem(at: url)
+                removeBackingFile(named: filename)
             }
         } catch {
             throw DomainError.persistenceFailed(reason: "\(error)")
         }
     }
 
+    /// Deletes one file whose row is already gone.
+    ///
+    /// Best-effort by design: the row is the source of truth, so a file that cannot be removed must not fail the
+    /// delete the user asked for. But it is no longer silent — a failure other than "already missing" leaves an
+    /// orphan taking up space that nothing will ever reclaim, so it goes out as a non-fatal. The breadcrumb carries
+    /// the extension rather than the filename, which is derived from the score's title.
+    private func removeBackingFile(named filename: String) {
+        let url = scoresDirectory.appending(path: filename)
+        do {
+            try FileManager.default.removeItem(at: url)
+        } catch CocoaError.fileNoSuchFile {
+            // Nothing to reclaim — the common case for a row whose file was already swept.
+        } catch {
+            crashReporter.log("orphaned score file after row delete (.\(url.pathExtension))")
+            crashReporter.record(error: error)
+        }
+    }
+
     /// Every file in the scores directory that belongs to a row. Usually just the score, but an item folino read out
     /// of a PDF also owns the original sidecar — leaving that behind would silently retain the largest file of an
-    /// item the user deleted.
-    private nonisolated static func filesBackingRow(_ row: ScoreItemRecord) -> [String] {
+    /// item the user deleted — and an edited item owns the copy of the bytes it was imported with.
+    nonisolated static func filesBackingRow(_ row: ScoreItemRecord) -> [String] {
         var names = [row.localFileName]
         if let sidecar = row.sourcePDFFileName, sidecar != row.localFileName {
             names.append(sidecar)
+        }
+        // For a MusicXML / MIDI import the original IS a file the row already names elsewhere in the general case,
+        // so de-duplicate rather than assuming a distinct sidecar.
+        if let original = row.originalFileName, !names.contains(original) {
+            names.append(original)
         }
         return names
     }
@@ -360,36 +384,6 @@ public final class LiveScoreLibraryRepository: ScoreLibraryRepository {
                 try ReaderPreferencesRecord.fetchAll(db)
             }
             return try records.map { try $0.toDomain() }
-        } catch {
-            throw DomainError.persistenceFailed(reason: "\(error)")
-        }
-    }
-
-    public func scoreItems(matchingContentHash contentHash: String) async throws -> [ScoreItem] {
-        do {
-            return try await database.pool.read { db in
-                // Trashed rows are excluded so duplicate detection treats them as gone. The original PDF's hash counts
-                // too: once a PDF has been read into notation the row's own `content_hash` is the `.mscz`'s, so
-                // matching only that would let the same PDF be imported a second time.
-                let records = try ScoreItemRecord
-                    .filter(
-                        (
-                            Column("content_hash") == contentHash
-                                || Column("source_pdf_content_hash") == contentHash
-                        )
-                            && Column("deleted_at") == nil,
-                    )
-                    .fetchAll(db)
-                return try records.map { rec -> ScoreItem in
-                    let tagRows = try ScoreItemTagRecord
-                        .filter(Column("score_item_id") == rec.id)
-                        .fetchAll(db)
-                    let tagIDs = Set(tagRows.compactMap {
-                        UUID(uuidString: $0.tagID).map(TagID.init(rawValue:))
-                    })
-                    return try rec.toDomain(tagIDs: tagIDs)
-                }
-            }
         } catch {
             throw DomainError.persistenceFailed(reason: "\(error)")
         }

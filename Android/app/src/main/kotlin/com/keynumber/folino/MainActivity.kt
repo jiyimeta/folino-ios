@@ -203,7 +203,7 @@ class MainActivity : ComponentActivity(), PipHost {
                             LibraryNavGraph(
                                 prefs = prefs,
                                 onOpenSettings = {
-                                    // Task 18 smoke event: fire settings_opened through the REAL pipeline
+                                    // Smoke event: fire settings_opened through the REAL pipeline
                                     // (Swift builder → AndroidAnalytics.log) at the single Settings entry point,
                                     // mirroring iOS which logs it once at the settings button. Once per open; the
                                     // drawer's gear is the only nav action to "settings", so no duplicate.
@@ -597,7 +597,7 @@ private fun LibraryNavGraph(
                 val autoFollowEnabled by prefs.autoFollow.collectAsState(initial = true)
                 val pageTurnButtonsVisible by prefs.pageTurnButtonsVisible.collectAsState(initial = true)
                 val continuationModeWire by prefs.playlistContinuationMode.collectAsState(initial = "playThrough")
-                // Annotation pen setup (Task 9): global DataStore-backed, mirroring the display-options
+                // Annotation pen setup: global DataStore-backed, mirroring the display-options
                 // split above — persisted here in the app module, the Reader module only ever sees the
                 // resolved AnnotationToolState via the prop/callback pair below.
                 val annotationToolState by prefs.annotationToolState.collectAsState(initial = AnnotationToolState())

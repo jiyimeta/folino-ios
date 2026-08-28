@@ -33,6 +33,7 @@ Two smaller ones, both stated so they are not mistaken for oversights:
 
 4. **The score-info sheet's ink warning is worded conditionally rather than measured.** The Editor's confirmation can say "your handwriting *will* shift" because the Reader knows what ink is loaded; the sheet is presented from the Library too, which does not load annotations at all. Rather than plumb an annotation query through the composition root for one sentence, the sheet says "handwriting anchored to the notation may move" unconditionally. `RevertPolicy.warnings` still takes `hasMusicalAnnotations` — the Editor uses it — the sheet simply passes `true`.
 5. **Revert verifies the restored bytes against `original_content_hash`** (spec "What changes"), which the first draft of this plan omitted. Task 7 throws on a mismatch rather than adopting whatever it found.
+6. **The hash check runs before the file is touched, not after.** Task 7's own code block above originally hashed the *destination* — i.e. it swapped the sidecar into place (or deleted the sibling `.mscz`) and only then compared the resulting hash against `original_content_hash`, throwing after the mutation had already happened. That meant a corrupted sidecar was discovered only once the user's edit and its only backup were both gone — the exact failure deviation 5 exists to prevent. What shipped in `LiveScoreOriginalStore.swift` (Task 7) hashes the *source* — the sidecar, or the adopt-target — before `swapIn` or the sibling delete runs, and refuses with both the edit and the backup still intact if it disagrees. This is corrected in Task 14, both in Task 7's code block above and in the spec's "What changes" section.
 
 ---
 
@@ -1954,48 +1955,67 @@ Replace the placeholder in `LiveScoreOriginalStore.swift`:
     /// the user opens their original and loses nothing, and the next save or revert corrects the hash. The other
     /// order would leave a row claiming the original over a file that still held the edits, which is worse.
     public func revertToOriginal(_ item: ScoreItem, restoringScoreInfo: Bool) async throws -> ScoreItem {
+        let restoredFacts = try Self.restoreFile(for: item, in: scoresDirectory)
+        let restored = scoresDirectory.appending(path: restoredFacts.localFileName)
+        let summary = try await gateway.loadFileMetadata(fileURL: restored)
+        return item.adoptingRevertedOriginal(
+            RevertedOriginalFacts(
+                localFileName: restoredFacts.localFileName,
+                contentHash: restoredFacts.contentHash,
+                sizeBytes: restoredFacts.sizeBytes,
+                summary: summary,
+            ),
+            restoringScoreInfo: restoringScoreInfo,
+        )
+    }
+
+    /// Performs the file plan from `RevertPolicy.filePlan(for:)` and returns the restored file's identity and hash.
+    ///
+    /// Verifies the source's hash — the sidecar, or the adopt-target — **before touching anything**. The whole
+    /// promise of this feature is that the bytes coming back are the bytes that went in, so a corrupted original
+    /// must be refused with the edit and its only backup both still intact, not discovered only after they are
+    /// gone: the copy or adoption that follows is byte-for-byte, so hashing the source proves exactly what hashing
+    /// the result would have proven, without first destroying the evidence a retry would need.
+    private static func restoreFile(
+        for item: ScoreItem,
+        in scoresDirectory: URL,
+    ) throws -> (localFileName: String, contentHash: String, sizeBytes: Int64) {
         guard let plan = RevertPolicy.filePlan(for: item) else {
             throw DomainError.scoreWriteFailed(reason: "no original recorded for \(item.localFileName)")
         }
-        let restoredFileName: String
         switch plan {
         case let .restoreSidecar(sidecarFileName, over):
             let sidecar = scoresDirectory.appending(path: sidecarFileName)
             guard FileManager.default.fileExists(atPath: sidecar.path) else {
                 throw DomainError.scoreFileNotFound(name: sidecarFileName)
             }
-            try Self.swapIn(sidecar, over: scoresDirectory.appending(path: over))
+            let facts = try verifiedHashAndSize(of: sidecar, against: item.originalContentHash, name: sidecarFileName)
+            try swapIn(sidecar, over: scoresDirectory.appending(path: over))
             try? FileManager.default.removeItem(at: sidecar)
-            restoredFileName = over
+            return (over, facts.contentHash, facts.sizeBytes)
         case let .adoptExistingFile(originalFileName, deleting):
-            guard FileManager.default.fileExists(atPath: scoresDirectory.appending(path: originalFileName).path)
-            else {
+            let source = scoresDirectory.appending(path: originalFileName)
+            guard FileManager.default.fileExists(atPath: source.path) else {
                 throw DomainError.scoreFileNotFound(name: originalFileName)
             }
+            let facts = try verifiedHashAndSize(of: source, against: item.originalContentHash, name: originalFileName)
             try? FileManager.default.removeItem(at: scoresDirectory.appending(path: deleting))
-            restoredFileName = originalFileName
+            return (originalFileName, facts.contentHash, facts.sizeBytes)
         }
+    }
 
-        let restored = scoresDirectory.appending(path: restoredFileName)
-        let facts = try Self.hashAndSize(of: restored)
-        // The whole promise of this feature is that the bytes coming back are the bytes that went in. Check it
-        // rather than adopting whatever turned up: a sidecar corrupted by a failed copy would otherwise be
-        // recorded as the item's content, hash and all, with nothing left to compare against.
-        if let expected = item.originalContentHash, expected != facts.contentHash {
-            throw DomainError.scoreWriteFailed(
-                reason: "restored original does not match its recorded hash (\(restoredFileName))",
-            )
+    /// Hashes `url` and, when `expectedHash` is non-`nil`, throws before returning if it disagrees — the check the
+    /// caller must run before mutating anything.
+    private static func verifiedHashAndSize(
+        of url: URL,
+        against expectedHash: String?,
+        name: String,
+    ) throws -> (contentHash: String, sizeBytes: Int64) {
+        let facts = try hashAndSize(of: url)
+        if let expected = expectedHash, expected != facts.contentHash {
+            throw DomainError.scoreWriteFailed(reason: "restored original does not match its recorded hash (\(name))")
         }
-        let summary = try await gateway.loadFileMetadata(fileURL: restored)
-        return item.adoptingRevertedOriginal(
-            RevertedOriginalFacts(
-                localFileName: restoredFileName,
-                contentHash: facts.contentHash,
-                sizeBytes: facts.sizeBytes,
-                summary: summary,
-            ),
-            restoringScoreInfo: restoringScoreInfo,
-        )
+        return facts
     }
 
     /// Copies `source` over `destination` through a scratch file, so a failure part-way cannot leave the score
@@ -2017,6 +2037,8 @@ Replace the placeholder in `LiveScoreOriginalStore.swift`:
         }
     }
 ```
+
+Note: the shipped code additionally runs the file-side work (`restoreFile`, plus the hash) off the caller's `@MainActor` via `Task.detached`, mirroring `captureOriginalIfNeeded`'s shape — omitted from the block above for the same reason `Task 3`'s block omits that detail, but present in `Packages/Infrastructure/Sources/ScoreFiles/LiveScoreOriginalStore.swift`.
 
 - [ ] **Step 4: Run to verify the tests pass**
 
@@ -2470,7 +2492,7 @@ extension EditorViewModel {
 
 - [ ] **Step 5: Add the localized string**
 
-In `Packages/Features/Editor/Sources/Editor/Resources/Localizable.xcstrings`, add `editor.revert.failed` with the six locales the file already carries. English: `Couldn't restore the original.` Japanese: `オリジナルに戻せませんでした。` Match the existing entries' tone for ko / zh-Hans / zh-Hant / es by following how `reader.pdf.reread.failed` is phrased in the Reader's catalog.
+In `Packages/Features/Editor/Sources/Editor/Resources/Localizable.xcstrings`, add `editor.revert.failed` with the five locales the file already carries (`en`, `ja`, `ko`, `zh-Hans`, `zh-Hant`). English: `Couldn't restore the original.` Japanese: `オリジナルに戻せませんでした。` Match the existing entries' tone for ko / zh-Hans / zh-Hant by following how `reader.pdf.reread.failed` is phrased in the Reader's catalog.
 
 - [ ] **Step 6: Run the Editor suite**
 
@@ -2601,7 +2623,7 @@ Add to the Editor's `Localizable.xcstrings`, in all locales the file already car
 | `editor.revert.confirm.inkMayShift` | `Handwriting anchored to the notation may move.` | `楽譜に紐づいた手書きは位置がずれることがあります。` |
 | `editor.revert.confirm.mayNotBeImport` | `This score was in your library before folino started keeping originals, so the saved version may already include earlier edits.` | `この楽譜は folino がオリジナルを保存し始める前からライブラリにあるため、保存されている状態には以前の編集が含まれている可能性があります。` |
 
-Follow `project_localization_key_scheme`: `module.feature.thing`. Supply ko / zh-Hans / zh-Hant / es alongside, matching the register of the neighbouring strings.
+Follow `project_localization_key_scheme`: `module.feature.thing`. Supply ko / zh-Hans / zh-Hant alongside — the five locales this catalog carries — matching the register of the neighbouring strings.
 
 - [ ] **Step 5: Verify the toolbar by preview**
 

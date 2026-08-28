@@ -4,12 +4,15 @@ import SheetMusicCore
 
 /// The pad's core operations — note input, delete, duration change — per spec §5.3.
 extension EditorSessionCore {
-    /// Letter key C…B — writes at the CARET. Rest at the caret → `.inputNote`; note at the caret → `.writeNote`.
-    /// Both carry the armed length, and both re-time the slot to it in the same undo step. Either way the pitch is
-    /// the letter's spelling AS THE BAR READS IT (`MeasureAccidentals.plannedPitch`) nearest the previous note: the
-    /// key signature's, unless an accidental earlier in the same measure has already respelled that staff line.
-    /// Add-to-chord armed is the one exception: it stacks onto the SELECTED chord (`.addNoteToChord`), since what it
-    /// means is "another note in the one I just wrote".
+    /// Letter key C…B — writes at the CARET. Rest at the caret → `.inputNote` (composited with a re-time when a
+    /// different duration is armed); note at the caret → a two-way fork: notehead 0 (or a length that crosses the
+    /// barline) takes `.writeNote`, which re-pitches AND re-times in one step, while a caret on an upper notehead
+    /// of an existing chord (added via ＋音, then typed over) takes a narrower `.setNotePitch` — composited with
+    /// `.setChordDuration` when a length is armed too, since `.setNotePitch` alone never re-times. Either way the
+    /// pitch is the letter's spelling AS THE BAR READS IT (`MeasureAccidentals.plannedPitch`) nearest the previous
+    /// note: the key signature's, unless an accidental earlier in the same measure has already respelled that staff
+    /// line. Add-to-chord armed is the one exception: it stacks onto the SELECTED chord (`.addNoteToChord`),
+    /// since what it means is "another note in the one I just wrote".
     ///
     /// Afterwards the selection lands on the note that was written and the caret moves on to the next timed element
     /// (spec §11-5: advance on after keys), so ♯ / ♭ / ⌫ keep addressing the note rather than the empty slot ahead.
@@ -31,10 +34,10 @@ extension EditorSessionCore {
     }
 
     /// ⌫ — acts on the SELECTION (the note you last wrote or tapped, not the slot the caret is parked on).
-    /// Multi-note chord + `.note` selection → `RemoveNoteFromChord`; single-note chord or whole-element selection →
-    /// `DeleteVoiceElement` (same-duration rest, measure length invariant), or a full-measure rest when that delete
-    /// empties the measure (see `FullMeasureRestCollapse`); `.tuplet` selection → `RemoveTuplet`. Selection stays on
-    /// the affected slot (now a rest) via re-derivation.
+    /// Multi-note chord + `.note` selection → `.removeNoteFromChord`; single-note chord or whole-element selection →
+    /// `.delete` (same-duration rest, measure length invariant), or a full-measure rest when that delete empties the
+    /// measure (the engine's own full-measure-rest collapse); `.tuplet` selection → `.removeTuplet`. Selection stays
+    /// on the affected slot (now a rest) via re-derivation.
     public func deleteSelection() {
         guard let selectedItem, let score else { return }
         switch selectedItem {
@@ -82,18 +85,19 @@ extension EditorSessionCore {
 
     /// Writes a rest of the armed length over the timed slot at `location`, whatever is currently in it.
     ///
-    /// `.writeRest` is the whole operation — over a note it deletes and re-times as one undo step, over a rest it
-    /// re-times, and it spells a chain across the barline or promotes a bar-filling length to `.measure` on its own.
-    ///
-    /// Falls back to `deleteSelection()` when there is no re-timing to ask for — nothing armed, or the armed length
-    /// is what is already there. That path goes through `.delete`, which collapses an emptied bar into one measure
-    /// rest; `.writeRest` deliberately does not, because a stated length is not an emptied bar. Inside a tuplet the
-    /// member lengths are the tuplet's to decide and the engine refuses the re-time, so those slots delete plainly
-    /// too.
+    /// The guard is the key's INTERPRETATION and stays here: with nothing armed, the armed length already in the
+    /// slot, or a tuplet member (whose lengths are the tuplet's to decide), the key falls back to a plain delete on
+    /// a note and does nothing on a rest — exactly as before. Everything past the guard is planning, and
+    /// `.writeRest` owns it now: the cross-barline run of rests, the `.measure` promotion for a bar-filling length,
+    /// and the delete-plus-retime composite over a note (with the PLAIN delete — re-timing must not collapse the
+    /// bar it empties, that would throw away the length the user just stated).
     private func writeRest(over location: VoiceElementID, in score: Score) {
         guard case let .chord(current)? = score[location] else { return }
+        let isNote = !current.notes.isEmpty
         guard let armed = armedInputDuration, current.duration != armed, !isInsideTuplet(location) else {
-            if !current.notes.isEmpty { deleteSelection() }
+            if isNote {
+                deleteSelection()
+            }
             return
         }
         apply(.writeRest(at: location, duration: armed))
@@ -107,14 +111,10 @@ extension EditorSessionCore {
         }
     }
 
-    /// The delete, or the whole voice-measure replaced by one full-measure rest when it leaves nothing but rests
-    /// behind. One undo step either way — `.delete` decides which, from the same `FullMeasureRestCollapse` this
-    /// used to call.
-    ///
-    /// No explicit `select(...)` afterwards: `ScoreEditSession`'s `.delete` case threads the collapse's own
-    /// `restElementIndex` through as the affected location precisely so re-derivation lands the selection on the new
-    /// measure rest. (`ReplaceVoiceElements` reports element 0 on its own, which is usually the clef or time
-    /// signature rather than the rest — that is what the threading is for.)
+    /// `.delete`: a plain delete leaves a same-duration rest; a delete that empties its bar collapses the voice-
+    /// measure to ONE measure rest (the engine's own full-measure-rest collapse), reporting the collapsed rest as
+    /// the affected location — so re-derivation lands the selection there without the explicit `select` this method
+    /// used to do.
     private func deleteElement(at location: VoiceElementID) {
         apply(.delete(at: location))
     }
@@ -171,15 +171,19 @@ extension EditorSessionCore {
         applyToSelection(base: current.base, dots: current.dots > 0 ? 0 : 1)
     }
 
-    /// The callout's length keys are the pad's keys pointed at one item instead of at the next one, so they have to
-    /// reach as far — including past a barline, which the session's own cross-bar planning is what makes work.
     private func applyToSelection(base: NoteDuration, dots: Int) {
         guard let selectedItem, let slot = Self.slot(of: selectedItem) else { return }
         let duration = dots > 0 ? base.dotted(dots) : base
         switch selectedItem {
-        case .note: apply(.setChordDuration(at: slot, duration: duration))
-        case .rest: apply(.setRestDuration(at: slot, duration: duration))
-        case .tuplet, .clef: return
+        case .note:
+            // `.setChordDuration` spells a length the bar can't hold as a chain across the barline itself — from
+            // the chord ALREADY in the slot, so its other notes survive — and the engine's refusal of a bad slot
+            // is the same observable no-op the old early-return produced.
+            apply(.setChordDuration(at: slot, duration: duration))
+        case .rest:
+            apply(.setRestDuration(at: slot, duration: duration))
+        case .tuplet, .clef:
+            return
         }
     }
 
@@ -208,23 +212,59 @@ extension EditorSessionCore {
 
     private func inputPitch(letter: Character, onRest restID: RestID, in score: Score) {
         let veID = VoiceElementID(restID)
-        guard let planned = MeasureAccidentals.plannedPitch(
-            forLetter: letter,
-            nearestTo: referencePitch(before: veID),
-            at: veID,
-            in: score,
-        )
+        guard let rest = score[restID],
+              let planned = MeasureAccidentals.plannedPitch(
+                  forLetter: letter,
+                  nearestTo: referencePitch(before: veID),
+                  at: veID,
+                  in: score,
+              )
         else { return }
+        // The armed length rides as the intent's `duration` — ssm re-times the slot, skips the re-time inside a
+        // tuplet, and spells a length that outruns the bar as a tied chain. `nil` when there is nothing to re-time,
+        // mirroring the old guard exactly: ssm's `.inputNote` does not skip a same-length re-time on its own, and a
+        // no-op `SetRestDuration` must not ride along in the undo step.
+        var duration: NoteDuration?
+        if let armed = armedInputDuration, rest.duration != armed {
+            duration = armed
+        }
+        // Decided BEFORE the apply, against the pre-edit score: after a chain write the caret belongs past the
+        // chain's tail, but after an in-bar write it belongs one slot on even if the slot's note is (or becomes)
+        // tied to something else — walking the chain unconditionally would overshoot there.
+        //
+        // The predicate measures the armed length against the bar without asking whether the slot is inside a
+        // tuplet, where ssm skips the re-time and so writes no chain at all. Harmless HERE, and only here: the
+        // target is a rest, a rest cannot already be tied, so the write's own chain is the only one there is and
+        // `chainTail` falls back to `head` when it did not produce one. The note-input site below has no such
+        // guarantee — see the comment there.
+        let crossesBar = duration.map { !CrossBarInputPlanner.fitsInMeasure($0, at: veID, in: score) } ?? false
         let revisionBeforeInput = revision
-        apply(.inputNote(at: restID, pitch: planned.pitch, tpc: planned.tpc, duration: armedInputDuration))
-        land(after: veID, unlessStillAt: revisionBeforeInput)
+        guard apply(.inputNote(at: restID, pitch: planned.pitch, tpc: planned.tpc, duration: duration)) != nil else {
+            return
+        }
+        if crossesBar, let mutated = self.score {
+            land(
+                selection: veID,
+                caretAfter: chainTail(from: veID, in: mutated),
+                unlessStillAt: revisionBeforeInput,
+            )
+        } else {
+            land(after: veID, unlessStillAt: revisionBeforeInput)
+        }
     }
 
-    /// A letter key on a slot that already holds a note: re-pitch it, and re-time it to the armed length too.
+    // PARITY(android): letter input on a chord's upper notehead — Android's `.writeNote` path re-pitches
+    //   notehead 0; Android still needs the caret-notehead `.setNotePitch` branch iOS keeps here.
+    /// A letter key on a slot that already holds a note: re-pitch it, and re-time it to the armed length too —
+    /// `.writeNote`'s own meaning. Writing over an existing note is still writing a note, and the length keys say
+    /// what the next note will be, so a quarter armed over an existing half has to produce a quarter.
     ///
-    /// Both, not just the pitch. Writing over an existing note is still writing a note, and the length keys say what
-    /// the next note will be — so a quarter armed over an existing half has to produce a quarter. Leaving the length
-    /// alone silently ignored half of what the pad was showing.
+    /// One case stays host-side: a caret naming a chord's UPPER notehead (`noteIndexInChord != 0`) — reached by
+    /// ＋音 adding a note (which selects the added note) and typing a letter to fix it. `.writeNote` re-pitches
+    /// notehead 0; the user in that flow means the notehead the caret names, so the intent is built to say so
+    /// (which notehead a letter means is interpretation, not planning). The barline case takes `.writeNote` for
+    /// any index: the pre-intent code already collapsed the chord to a single note of the new pitch when the armed
+    /// length crossed the bar, and that is exactly what `.writeNote` plans.
     private func inputPitch(letter: Character, onNote noteID: NoteID, in score: Score) {
         let veID = VoiceElementID(noteID)
         guard let note = score[noteID],
@@ -232,37 +272,77 @@ extension EditorSessionCore {
                   forLetter: letter, nearestTo: note.pitch, at: veID, in: score,
               )
         else { return }
+        var duration: NoteDuration?
+        if let armed = armedInputDuration, case let .chord(chord)? = score[veID], chord.duration != armed {
+            duration = armed
+        }
+        // Same predicate as the rest-input site, and NOT harmless for the same reason: the target here already
+        // holds a note, which may already be tied forward. When the predicate says "crosses the bar" but ssm wrote
+        // no chain — inside a tuplet, where it skips the re-time, or in a slot with no bar left to overrun —
+        // `chainTail` walks the PRE-EXISTING chain instead of the one this write made, and the caret lands past a
+        // chain the write never created. Left alone deliberately: reaching it needs a tuplet member or staff-end
+        // slot, an armed length that overruns the bar, and a pre-existing tie forward, all at once, and the cost is
+        // a misplaced caret rather than a wrong note.
+        let crossesBar = duration.map { !CrossBarInputPlanner.fitsInMeasure($0, at: veID, in: score) } ?? false
         let revisionBeforeInput = revision
-        apply(.writeNote(at: veID, pitch: target.pitch, tpc: target.tpc, duration: armedInputDuration))
-        land(after: veID, unlessStillAt: revisionBeforeInput)
+        let applied: Bool
+        if noteID.noteIndexInChord == 0 || crossesBar {
+            applied = apply(.writeNote(at: veID, pitch: target.pitch, tpc: target.tpc, duration: duration)) != nil
+        } else {
+            let repitch = EditIntent.setNotePitch(
+                at: noteID, pitch: target.pitch, tpc: target.tpc, accidental: nil,
+            )
+            if let duration, !isInsideTuplet(veID) {
+                applied = apply(.composite([.setChordDuration(at: veID, duration: duration), repitch])) != nil
+            } else {
+                applied = apply(repitch) != nil
+            }
+        }
+        guard applied else { return }
+        if crossesBar, let mutated = self.score {
+            land(
+                selection: veID,
+                caretAfter: chainTail(from: veID, in: mutated),
+                unlessStillAt: revisionBeforeInput,
+            )
+        } else {
+            land(after: veID, unlessStillAt: revisionBeforeInput)
+        }
     }
 
-    /// Where input leaves the two markers: the selection on the note just written, the caret on the next timed
-    /// element in voice order (spec §11-5: advance on after pitch-key input) — nil past the end of the staff. Both
-    /// are placed in one go, before the audition, so the preview sounds the note that was actually written. A
-    /// refused edit (`revision` unmoved) leaves everything where it was.
-    ///
-    /// The caret advance walks from the END of a tie chain, not from `location`. A note whose armed length outran
-    /// the bar is written as a tied chain occupying several slots — it lands AT `location` but does not end there,
-    /// and the caret has to clear the whole chain rather than park inside it. The session reports the chain's head
-    /// as the affected location and does not report its tail, so the tail is walked for here.
+    /// Where input leaves the two markers: the selection on the note just written at `location`, the caret on the
+    /// next timed element in voice order (spec §11-5: advance on after pitch-key input) — nil past the end of the
+    /// staff. Both are placed in one go, before the audition, so the preview sounds the note that was actually
+    /// written. A refused edit (`revision` unmoved) leaves everything where it was.
     private func land(after location: VoiceElementID, unlessStillAt previousGeneration: Int) {
+        land(selection: location, caretAfter: location, unlessStillAt: previousGeneration)
+    }
+
+    /// The last slot of the tie chain a cross-barline write just produced at `head` — where the caret's "past what
+    /// was written" starts. The chain a fresh write produces is exactly the planner's chain (its head has no
+    /// `tieBack`), and `TiePlanner.tieChain` walks it whole; a chain of one hands back `head` itself.
+    private func chainTail(from head: VoiceElementID, in score: Score) -> VoiceElementID {
+        let headNote = NoteID(
+            staff: head.staff,
+            measureIndex: head.measureIndex,
+            voiceIndex: head.voiceIndex,
+            elementIndex: head.elementIndex,
+            noteIndexInChord: 0,
+        )
+        guard let tail = TiePlanner.tieChain(containing: headNote, in: score).last else { return head }
+        return VoiceElementID(tail)
+    }
+
+    /// The two-slot form of `land(after:)`, for a note written as a tied chain: the selection belongs on where the
+    /// note starts, the caret on what follows where it ends.
+    private func land(
+        selection slot: VoiceElementID, caretAfter tail: VoiceElementID, unlessStillAt previousGeneration: Int,
+    ) {
         guard revision != previousGeneration, let score else { return }
-        let written = SelectionRederivation.item(at: location, in: score, preferringNoteIndex: nil)
-        let next = ElementNavigator.nextTimedElement(after: tailOfTie(from: location, in: score), in: score)
+        let written = SelectionRederivation.item(at: slot, in: score, preferringNoteIndex: nil)
+        let next = ElementNavigator.nextTimedElement(after: tail, in: score)
             .flatMap { SelectionRederivation.item(at: $0, in: score, preferringNoteIndex: nil) }
         place(selection: written, caret: next)
         auditionSelectedNote(unlessStillAt: previousGeneration)
-    }
-
-    /// The last slot of a tied chain starting at `location`, or `location` itself when nothing is tied forward.
-    private func tailOfTie(from location: VoiceElementID, in score: Score) -> VoiceElementID {
-        var tail = location
-        while case let .chord(chord)? = score[tail], chord.notes.first?.tieForward != nil,
-              let next = ElementNavigator.nextTimedElement(after: tail, in: score)
-        {
-            tail = next
-        }
-        return tail
     }
 }

@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.dp
  * button, the four pen color swatches (sized to each pen's current stroke width), undo/redo, and a
  * re-tap width picker for whichever tool is already selected.
  *
- * Selection and width live in [state] ([AnnotationToolState], Task 3); this composable is purely
+ * Selection and width live in [state] ([AnnotationToolState]); this composable is purely
  * presentational — it reports intent via [onSelect] / [onWidthChange] / [onUndo] / [onRedo] and
  * never mutates anything itself beyond which tool's width picker is open.
  */

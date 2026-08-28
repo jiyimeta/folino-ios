@@ -27,7 +27,7 @@ struct AnalyticsBridgeScorePrefsTests {
         #expect(AnalyticsBridge().scorePrefs(prefsJson: "", widthDp: 430).name.isEmpty)
     }
 
-    /// The carry-forward from Task 10, widened by the final review. Every score any Android user has ever opened
+    /// The legacy-blob carry-forward, widened by review. Every score any Android user has ever opened
     /// carries a legacy blob whose `staffSize` is whatever the *global* staff size was at that moment, written by an
     /// eager seed that has since been removed. Matching it against the current global is not enough — the global is a
     /// user-movable slider — so the analytics builder drops `staff_size` for every legacy blob.

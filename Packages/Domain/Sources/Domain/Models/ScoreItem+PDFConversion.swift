@@ -82,6 +82,9 @@ extension ScoreItem {
             sourcePDFContentHash: sourcePDFContentHash,
             pdfDerivedContentHash: pdfDerivedContentHash,
             pdfConversionFailed: pdfConversionFailed,
+            originalFileName: originalFileName,
+            originalContentHash: originalContentHash,
+            originalProvenance: originalProvenance,
         )
     }
 }

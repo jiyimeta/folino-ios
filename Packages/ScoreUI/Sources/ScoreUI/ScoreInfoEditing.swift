@@ -8,4 +8,7 @@ public protocol ScoreInfoEditing {
     func loadFileMetadata(for item: ScoreItem) async -> ScoreFileMetadata?
     /// Apply edited fields and persist. Title is required (trimmed, non-empty); empties are stored as `""`.
     func saveMetadata(_ item: ScoreItem, fields: EditableScoreInfo) async
+    /// Restores the score's original bytes. `restoringScoreInfo` additionally re-reads the credit fields from that
+    /// file; content-derived fields come from it either way.
+    func revertToOriginal(_ item: ScoreItem, restoringScoreInfo: Bool) async
 }

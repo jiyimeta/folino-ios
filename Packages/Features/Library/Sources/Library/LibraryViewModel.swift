@@ -8,6 +8,7 @@ import UtilityCore
 @Observable
 public final class LibraryViewModel {
     let repository: any ScoreLibraryRepository
+    let originalStore: any ScoreOriginalStore
     let importer: any ScoreFileImporter
     let gateway: any ScoreFileGateway
     let shareService: any ScoreShareService
@@ -58,6 +59,7 @@ public final class LibraryViewModel {
 
     public init(
         repository: any ScoreLibraryRepository,
+        originalStore: any ScoreOriginalStore,
         importer: any ScoreFileImporter,
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService,
@@ -67,6 +69,7 @@ public final class LibraryViewModel {
         crashReporter: any CrashReporter = NoopCrashReporter(),
     ) {
         self.repository = repository
+        self.originalStore = originalStore
         self.importer = importer
         self.gateway = gateway
         self.shareService = shareService

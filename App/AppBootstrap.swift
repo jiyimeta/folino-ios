@@ -37,11 +37,16 @@ final class AppBootstrap {
     private(set) var annotationCoordinator: AnnotationSaveCoordinator?
     private(set) var repository: LiveScoreLibraryRepository?
     private(set) var gateway: LiveScoreFileGateway?
+    private(set) var originalStore: LiveScoreOriginalStore?
     private(set) var importer: LiveScoreFileImporter?
     private(set) var playbackController: LivePlaybackController?
     /// Stateless PDF → playable-score parser (ssm OMR). Always available on Apple, no async setup, so
     /// it's a plain constant rather than a slot filled during `start()`.
     let pdfPlaybackParser = LivePDFPlaybackParser()
+    /// Process-lifetime store retaining each score's `ScoreEditSession` across Editor entries (cross-session
+    /// undo). A plain constant, like `pdfPlaybackParser`: no async setup, no failure mode, and it must exist
+    /// before the first Reader screen is built.
+    let editHistoryStore = ProcessScoreEditHistoryStore()
     /// Reads a PDF into notation and writes it as `.mscz`. Built once in `start()` over `pdfPlaybackParser` and the
     /// gateway, then handed to both the importer (convert on import) and every Reader session (convert a PDF imported
     /// before folino could read one, and re-read on request).
@@ -96,8 +101,10 @@ final class AppBootstrap {
                 database: database,
                 scoresDirectory: AppPaths.scoresDirectory,
                 playlistsIndexPublisher: writer,
+                crashReporter: crashReporter ?? NoopCrashReporter(),
             )
             let gateway = LiveScoreFileGateway(crashReporter: crashReporter ?? NoopCrashReporter())
+            let originalStore = LiveScoreOriginalStore(scoresDirectory: AppPaths.scoresDirectory, gateway: gateway)
             pdfScoreConversion = makePDFScoreConversion(gateway: gateway)
             let importer = LiveScoreFileImporter(
                 gateway: gateway,
@@ -123,6 +130,7 @@ final class AppBootstrap {
             annotationCoordinator = AnnotationSaveCoordinator(store: annotationStore)
             self.repository = repository
             self.gateway = gateway
+            self.originalStore = originalStore
             self.importer = importer
             incomingShareCoordinator = shareCoordinator
             installAudioStack(gateway: gateway)
@@ -147,7 +155,9 @@ final class AppBootstrap {
                 before: Date().addingTimeInterval(-Self.recentlyDeletedRetention),
             )
             // Publish current playlists so the Share Extension's picker is populated on first use.
-            if let writer { writer.publish(playlists: repository.playlists) }
+            if let writer {
+                writer.publish(playlists: repository.playlists)
+            }
             // Drain any tokens queued by the Share Extension before this launch.
             _ = await incomingShareCoordinator?.drain(token: nil)
             await pushAnalyticsSnapshot(repository: repository)

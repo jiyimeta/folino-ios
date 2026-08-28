@@ -30,6 +30,9 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
     var sourcePDFContentHash: String?
     var pdfDerivedContentHash: String?
     var pdfConversionFailed: Bool
+    var originalFileName: String?
+    var originalContentHash: String?
+    var originalProvenance: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -55,6 +58,9 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
         case sourcePDFContentHash = "source_pdf_content_hash"
         case pdfDerivedContentHash = "pdf_derived_content_hash"
         case pdfConversionFailed = "pdf_conversion_failed"
+        case originalFileName = "original_file_name"
+        case originalContentHash = "original_content_hash"
+        case originalProvenance = "original_provenance"
     }
 
     init(domain item: ScoreItem) {
@@ -81,6 +87,9 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
         sourcePDFContentHash = item.sourcePDFContentHash
         pdfDerivedContentHash = item.pdfDerivedContentHash
         pdfConversionFailed = item.pdfConversionFailed
+        originalFileName = item.originalFileName
+        originalContentHash = item.originalContentHash
+        originalProvenance = item.originalProvenance?.rawValue
     }
 
     func toDomain(tagIDs: Set<TagID>) throws -> ScoreItem {
@@ -112,6 +121,9 @@ struct ScoreItemRecord: FetchableRecord, PersistableRecord, Codable {
             sourcePDFContentHash: sourcePDFContentHash,
             pdfDerivedContentHash: pdfDerivedContentHash,
             pdfConversionFailed: pdfConversionFailed,
+            originalFileName: originalFileName,
+            originalContentHash: originalContentHash,
+            originalProvenance: originalProvenance.flatMap(OriginalProvenance.init(rawValue:)),
         )
     }
 }

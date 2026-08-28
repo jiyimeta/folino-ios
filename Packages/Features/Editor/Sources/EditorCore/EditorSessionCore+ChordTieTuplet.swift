@@ -20,13 +20,10 @@ extension EditorSessionCore {
         apply(.removeNoteFromChord(at: noteID))
     }
 
-    /// Stacks a diatonic third or an octave onto the selected note — `.addNoteToChord` with `IntervalPlanner`'s
-    /// pitch.
-    ///
-    /// **Nothing calls this but its test.** It was the iPad palette card's `+3度` / `+8度` shortcuts, and that card
-    /// was removed for sitting permanently on the score to offer keys the pad already had (see `EditorChromeView`'s
-    /// doc comment). The op is kept because reinstating the shortcuts anywhere — the pad, a context menu, Android —
-    /// is then a view-only change.
+    /// Stacks a diatonic third or an octave onto the selected note, via `.addNoteToChord` with `IntervalPlanner`'s
+    /// pitch. **No UI drives this today** — it backed the regular-width palette card's `+3度` / `+8度` keys, and the
+    /// card was removed because it sat on the score permanently for keys the pad already carries. Kept because
+    /// re-offering the shortcut is then a view-only change; covered by `EditorViewModelChordTests`.
     public func addIntervalNote(_ interval: DiatonicInterval) {
         guard case let .note(noteID)? = selectedItem, let score, let note = score[noteID] else { return }
         let keySig = score.activeKey(at: noteID)
@@ -38,7 +35,7 @@ extension EditorSessionCore {
         addNoteToChord(at: noteID, pitch: target.pitch, tpc: target.tpc, keySig: keySig)
     }
 
-    /// The chord-armed branch of `inputPitch` (Task 5 wiring, `EditorViewModel+Input.swift`): adds `letter`'s
+    /// The chord-armed branch of `inputPitch` (wired in `EditorViewModel+Input.swift`): adds `letter`'s
     /// in-key pitch, nearest the selected note, to the chord — then clears the arm and selects the added note.
     /// Never auto-advances (spec §5.4).
     func addLetterToChord(_ letter: Character, at noteID: NoteID, in score: Score) {
@@ -59,9 +56,8 @@ extension EditorSessionCore {
     private func addNoteToChord(at noteID: NoteID, pitch: Int, tpc: Int, keySig: Int) {
         let accidental = PitchSpelling.displayedAccidental(forTpc: tpc, in: keySig)
         let veID = VoiceElementID(noteID)
-        let revisionBeforeAdd = revision
-        apply(.addNoteToChord(at: veID, pitch: pitch, tpc: tpc, accidental: accidental))
-        guard revision != revisionBeforeAdd, let score, case let .chord(chord)? = score[veID] else { return }
+        guard apply(.addNoteToChord(at: veID, pitch: pitch, tpc: tpc, accidental: accidental)) != nil,
+              let score, case let .chord(chord)? = score[veID] else { return }
         let addedNoteID = NoteID(
             staff: noteID.staff,
             measureIndex: noteID.measureIndex,
@@ -89,65 +85,72 @@ extension EditorSessionCore {
         return note.tieForward != nil
     }
 
-    /// The pad's tie ＋ key: writes a note of the ARMED length in the slot after the selected one, at the same pitch,
-    /// and ties the two together — one composite, so one undo step.
+    /// The pad's tie ＋ key: writes a note of the ARMED length in the slot after the selected one, at the same
+    /// pitch, and ties the two together — one intent, one undo step.
     ///
-    /// This is the "hold this note longer" gesture, and a tie is how a score says that across a barline or past what
-    /// a single note value can express. As a bare toggle the key was near-useless: it needed you to have already
-    /// written the same pitch twice in a row, which nobody does by hand — you write the note, then decide to hold it.
-    /// (Toggling an existing tie off still lives in the callout's tie key, which appears exactly when there is one.)
+    /// ssm's `.composite` reports its FIRST member's location (the appended note), where the old command pinned the
+    /// location to the source note so re-derivation kept the selection there. Compensate with an explicit
+    /// `select(.note(sourceID))` after a successful apply — the same post-apply explicit landing
+    /// `addNoteToChord(at:pitch:tpc:keySig:)` already does. The source's own slot index is untouched by the append
+    /// (`.setRestDuration`'s planning re-splices what FOLLOWS the slot; a cross-bar plan rewrites from the next slot
+    /// on), so the captured id stays valid.
     public func appendTiedNote() {
-        guard let plan = tieAppendPlan() else { return }
-        apply(.composite(plan.intents))
+        guard case let .note(sourceID)? = selectedItem else { return }
+        guard let intent = tieAppendIntent() else { return }
+        guard apply(intent) != nil else { return }
+        select(.note(sourceID))
     }
 
-    /// Whether `appendTiedNote` has somewhere to write: a selected note, an armed length, and a rest in the next slot
-    /// to overwrite. A note already sitting there would have to be pushed aside, which is not what a tie key should
-    /// quietly do.
+    /// Whether `appendTiedNote` has somewhere to write: a selected note, an armed length, and a rest in the next
+    /// slot to overwrite. A note already sitting there would have to be pushed aside, which is not what a tie key
+    /// should quietly do.
     public var canAppendTiedNote: Bool {
-        tieAppendPlan() != nil
+        tieAppendIntent() != nil
     }
 
-    /// The chain across the barline is `.inputNote`'s job now — it asks the cross-bar planner itself — so this only
-    /// names the slot, the pitch and the length, then ties onto whatever landed. `sourceTieForward: 1` /
-    /// `targetTieBack: 1` are the tie's own numbering, unchanged.
+    /// The composite `appendTiedNote` applies: write the pitch into the next slot at the armed length (ssm spells a
+    /// length that outruns the bar as a tied chain), then tie the source note onto what was written. Sound because
+    /// ssm plans composite members against the PRE-edit score and `.setTie` is built purely from scalars — and the
+    /// chain's head lands at the very slot being written (`CrossBarInputPlanner.Plan.head`), so the tie target's
+    /// `NoteID` is `next`'s slot whether the length fits the bar or spills across it.
     ///
-    /// The planner is still consulted, but only to answer "is there anywhere for this length to go": no chain and no
-    /// room means the write would run off the end of the staff, and issuing it anyway hands the session an intent it
-    /// refuses — a lit key that does nothing. Reporting unavailable is what dims it instead.
-    private func tieAppendPlan() -> (intents: [EditIntent], target: NoteID)? {
+    /// `nil` (the key dims) when the length has no plan AND no room: the chain would run off the end of the staff,
+    /// and issuing the write anyway just hands the engine an edit it refuses — a lit key that does nothing.
+    private func tieAppendIntent() -> EditIntent? {
         guard case let .note(noteID)? = selectedItem, let score, let note = score[noteID],
               let armed = armedInputDuration,
               let next = ElementNavigator.nextTimedElement(after: VoiceElementID(noteID), in: score),
               case let .chord(target)? = score[next], target.notes.isEmpty
         else { return nil }
-        guard CrossBarInputPlanner.plan(
-            .chord(Chord(duration: armed, notes: [Note(pitch: note.pitch, tpc: note.tpc)])),
-            duration: armed, at: next, in: score,
-        ) != nil || CrossBarInputPlanner.fitsInMeasure(armed, at: next, in: score) else { return nil }
-        let head = NoteID(
-            staff: next.staff,
-            measureIndex: next.measureIndex,
-            voiceIndex: next.voiceIndex,
-            elementIndex: next.elementIndex,
-            noteIndexInChord: 0,
-        )
+        guard CrossBarInputPlanner.fitsInMeasure(armed, at: next, in: score)
+            || CrossBarInputPlanner.plan(
+                .chord(Chord(duration: armed, notes: [Note(pitch: note.pitch, tpc: note.tpc)])),
+                duration: armed, at: next, in: score,
+            ) != nil
+        else { return nil }
         let restID = RestID(
             staff: next.staff,
             measureIndex: next.measureIndex,
             voiceIndex: next.voiceIndex,
             elementIndex: next.elementIndex,
         )
-        return (
-            [
-                .inputNote(at: restID, pitch: note.pitch, tpc: note.tpc, duration: armed),
-                .setTie(from: noteID, to: head, sourceTieForward: 1, targetTieBack: 1),
-            ],
-            head,
+        let headID = NoteID(
+            staff: next.staff,
+            measureIndex: next.measureIndex,
+            voiceIndex: next.voiceIndex,
+            elementIndex: next.elementIndex,
+            noteIndexInChord: 0,
         )
+        return .composite([
+            .inputNote(
+                at: restID, pitch: note.pitch, tpc: note.tpc,
+                duration: target.duration != armed ? armed : nil,
+            ),
+            .setTie(from: noteID, to: headID, sourceTieForward: 1, targetTieBack: 1),
+        ])
     }
 
-    /// Adds the tie when absent (`.setTie` … `sourceTieForward: 1, targetTieBack: 1`), removes it when present
+    /// Adds the tie when absent (`.setTie` ... `sourceTieForward: 1, targetTieBack: 1`), removes it when present
     /// (nil / nil) — reads the selected note's `tieForward` to decide. No-op when there's no tie target.
     public func toggleTie() {
         guard case let .note(noteID)? = selectedItem, let score, let note = score[noteID],
@@ -172,9 +175,9 @@ extension EditorSessionCore {
     /// Whether `location` is one of a tuplet's members.
     ///
     /// Input asks this before it re-times a slot: the member lengths inside a tuplet are the tuplet's to decide, and
-    /// the engine refuses `SetRestDuration` / `SetChordDuration` there outright. Since input applies the armed length
-    /// and the note in ONE composite, that refusal used to take the note down with it — which is why nothing could be
-    /// written into a triplet after its first member.
+    /// the engine refuses `.setRestDuration` / `.setChordDuration` there outright. Since input applies the armed
+    /// length and the note in ONE composite, that refusal used to take the note down with it — which is why nothing
+    /// could be written into a triplet after its first member.
     func isInsideTuplet(_ location: VoiceElementID) -> Bool {
         guard let score, let staff = score[location.staff],
               staff.measures.indices.contains(location.measureIndex)

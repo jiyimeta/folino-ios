@@ -19,7 +19,7 @@ import SheetMusicCore
 public final class EditorSessionCore {
     // MARK: - The session
 
-    public private(set) var session: ScoreEditSession?
+    public internal(set) var session: ScoreEditSession?
 
     public var score: Score? {
         session?.score
@@ -41,7 +41,7 @@ public final class EditorSessionCore {
 
     /// Bumped on every applied, undone or redone intent. The Reader includes the adapter's copy in its layout task
     /// key, so a score re-lays-out after edits that don't change its structural signature.
-    public private(set) var revision = 0
+    public internal(set) var revision = 0
 
     /// Bumped ONLY by a successful `apply` — never by undo or redo. Distinct from `revision` because the system-undo
     /// bridge must re-register its `UndoManager` trampoline on a genuinely NEW edit and not on a replay of one.
@@ -120,6 +120,36 @@ public final class EditorSessionCore {
         }
     }
 
+    // MARK: - What this session started from, and how far it has moved
+
+    /// The score as it stood when this session opened — the baseline `discardSessionEdits()` unwinds back to, and
+    /// what `isAtSessionOpenScore` compares against. Not the FILE's contents: a session adopted from the history
+    /// store opens on a score that already carries the previous session's edits, and discarding must return to that,
+    /// not to disk.
+    public internal(set) var sessionOpenScore: Score?
+
+    /// Applied minus undone since the session opened. Zero means "back where we started" as far as the command stack
+    /// is concerned — but not on its own proof of it, since an adopted session can be at depth 0 on a different
+    /// score; `sessionHasEdits` checks both.
+    public internal(set) var sessionEditDepth = 0
+
+    /// Set once `discardSessionEdits()` has run, so `endSession()` does not then deposit the session it just undid
+    /// into the history store and offer it back on the next open.
+    public internal(set) var didDiscardSession = false
+
+    /// True from the moment a revert starts until it finishes. `performSave` refuses while it is set — twice, once
+    /// on entry and once after its only suspension point — so an autosave already in flight cannot write the edited
+    /// score back over the original the revert just restored.
+    public internal(set) var isReverting = false
+
+    /// Whether the row currently records an original to revert to.
+    public internal(set) var hasCapturedOriginal: Bool
+
+    /// Whether it was THIS session that first put a sidecar there. `discardSessionEdits()` has to take it back out
+    /// again, or a score whose only edits were just thrown away would go on offering to revert to an original it is
+    /// already identical to.
+    public internal(set) var capturedOriginalThisSession = false
+
     // MARK: - Side effects the host performs
 
     /// The note the last op decided should be previewed, or `nil` when it decided nothing should. The host takes it,
@@ -128,7 +158,7 @@ public final class EditorSessionCore {
 
     /// Whether the score has changed since the last successful save. The host debounces on this; `performSave()` is
     /// a no-op while it is false, so a stray flush after a save costs nothing.
-    public private(set) var isDirty = false
+    public internal(set) var isDirty = false
 
     /// True once a non-MSCX/MSCZ source has been rewritten as a sibling `.mscz` file. One-way: never reset, since it
     /// drives the host's one-time "saved as .mscz" notice.
@@ -167,10 +197,31 @@ public final class EditorSessionCore {
         isDirty = false
     }
 
+    #if DEBUG
+    /// Every intent `apply` was ASKED to land, refusals included — the construction tests assert on what the ops
+    /// built, which is a different question from what the engine accepted.
+    public private(set) var appliedIntents: [EditIntent] = []
+
+    /// Marks the score dirty without editing it, so a test can drive the save path from a known state.
+    public func markDirtyForTesting() {
+        isDirty = true
+    }
+
+    /// Forgets the score this session opened on, so a test can reach `unwindSessionEdits`' rebuild-refusal branch.
+    public func forgetSessionOpenScoreForTesting() {
+        sessionOpenScore = nil
+    }
+    #endif
+
     // MARK: - Dependencies
 
     @usableFromInline let fileFacts: any FileFactsProviding
     @usableFromInline let writer: any ScoreFileWriting
+
+    /// Captures and restores the pre-edit copy of the file. Optional: Android has no originals store yet, and a
+    /// `nil` one simply means every save skips the capture and nothing is revertable.
+    @usableFromInline let originals: (any ScoreOriginalStore)?
+
     /// The library row this session is editing. `internal(set)` so the persistence extension can replace it after a
     /// save refreshes it, readable so a host can show what it now says.
     public internal(set) var scoreItem: ScoreItem
@@ -181,19 +232,35 @@ public final class EditorSessionCore {
         scoresDirectory: URL,
         fileFacts: any FileFactsProviding,
         writer: any ScoreFileWriting,
+        originals: (any ScoreOriginalStore)? = nil,
         recordsRelayIntents: Bool = false,
     ) {
         self.scoreItem = scoreItem
         self.scoresDirectory = scoresDirectory
         self.fileFacts = fileFacts
         self.writer = writer
+        self.originals = originals
         self.recordsRelayIntents = recordsRelayIntents
+        hasCapturedOriginal = scoreItem.canRevertToOriginal
     }
 
     // MARK: - Lifecycle
 
-    public func beginSession(score: Score) {
-        session = ScoreEditSession(score: score)
+    /// Opens a session over `score` — or resumes `adopting`, a session a host kept from a previous entry.
+    ///
+    /// The store that keeps those sessions is the HOST's, not this type's: `ScoreEditHistoryStore` is `@MainActor`
+    /// (its `ScoreEditSession` is deliberately non-`Sendable`), and this core also runs on a JNI thread. So the host
+    /// does the lookup and hands the answer in. Passing `nil` — always, on Android — simply opens a fresh session.
+    ///
+    /// The adopted score is returned so the host can publish it: a resumed session opens on the score the previous
+    /// one LEFT, which is not the `score` the caller just parsed off disk.
+    @discardableResult
+    public func beginSession(score: Score, adopting adopted: ScoreEditSession? = nil) -> Score? {
+        session = adopted ?? ScoreEditSession(score: score)
+        sessionOpenScore = session?.score
+        sessionEditDepth = 0
+        didDiscardSession = false
+        capturedOriginalThisSession = false
         revision = 0
         appliedIntentCount = 0
         selectionRevision = 0
@@ -204,17 +271,41 @@ public final class EditorSessionCore {
         isAddToChordArmed = false
         pendingAudition = nil
         relayIntents.removeAll()
+        return adopted?.score
     }
 
     /// Tears the session down. The host flushes any pending save FIRST — the debounce is its timer, not this type's.
+    ///
+    /// The host reads `shouldRetain(_:)` first if it keeps a history store; this only tears down.
     public func endSession() {
         session = nil
+        sessionOpenScore = nil
+    }
+
+    /// Tears down, but only while `ending` is still the live session.
+    ///
+    /// Ending a session flushes a save first, and that is a real file write the user does not wait for: they can be
+    /// back in edit mode, on a NEW session, before `endSession` resumes. Tearing down unconditionally at that point
+    /// would close the editor they are looking at.
+    public func endSession(ifStillOn ending: ScoreEditSession) {
+        guard session === ending else { return }
+        endSession()
+    }
+
+    /// Whether `ending` is worth depositing for a later entry.
+    ///
+    /// Something on its stacks, so reopening the same unchanged file can undo across the gap — but not while the
+    /// score is still dirty (its edits are not yet on disk, so the content hash it would be keyed on is about to
+    /// change), and not one that was just discarded.
+    public func shouldRetain(_ ending: ScoreEditSession) -> Bool {
+        !didDiscardSession && !isDirty && (ending.canUndo || ending.canRedo)
     }
 
     public func undo() {
         // The `guard`'s second clause carries the contract a `do { try … } catch { return }` used to: a refused undo
         // must not bump a revision or move the selection.
         guard let session, session.undo() else { return }
+        sessionEditDepth -= 1
         revision += 1
         rederiveSelection()
         isDirty = true
@@ -222,6 +313,7 @@ public final class EditorSessionCore {
 
     public func redo() {
         guard let session, session.redo() else { return }
+        sessionEditDepth += 1
         revision += 1
         rederiveSelection()
         isDirty = true
@@ -236,9 +328,13 @@ public final class EditorSessionCore {
     /// untouched by contract, and v1 shows no error.
     @discardableResult
     public func apply(_ intent: EditIntent) -> EditIntent? {
+        #if DEBUG
+        appliedIntents.append(intent)
+        #endif
         guard let session, session.apply(intent) else { return nil }
         revision += 1
         appliedIntentCount += 1
+        sessionEditDepth += 1
         if recordsRelayIntents { relayIntents.append(intent) }
         rederiveSelection()
         isDirty = true
@@ -258,7 +354,7 @@ public final class EditorSessionCore {
     /// selection off the note just written, and ♯ would drag the caret back onto it, making the next letter overwrite
     /// what was just sharpened. Whichever one wasn't aimed at keeps its own slot; when the two already share a slot —
     /// the ordinary case, and every case before the first note of a run — both follow.
-    private func rederiveSelection() {
+    func rederiveSelection() {
         guard let session, let location = session.lastAffectedLocation else { return }
         let score = session.score
         let affected = SelectionRederivation.item(

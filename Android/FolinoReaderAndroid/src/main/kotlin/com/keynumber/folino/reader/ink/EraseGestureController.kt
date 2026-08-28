@@ -11,7 +11,7 @@ import kotlinx.coroutines.withContext
  * Sequences one BEGIN→MOVE*→END partial-eraser gesture against [AnnotationEraseController], including the
  * generation/history-push bookkeeping that collapses a whole drag into at most one undo entry even under a
  * fast scrub-lift-scrub. Extracted from an inline handler `ReaderScreen` originally built for the musical
- * surfaces only (Task 8) so a PDF surface (Task 11: page-anchored erase) drives the identical state machine
+ * surfaces only so a PDF surface (page-anchored erase) drives the identical state machine
  * against [AnnotationEraseController]'s now anchor-kind-generic `applyErase`/`reanchor` instead of
  * re-deriving this bookkeeping's hazards a second time — see the field docs below for exactly what each one
  * defends against.

@@ -1,1 +1,3 @@
-- Fixed playback issues
+- Improved audio export
+- Improved usability in editing mode
+- Improved the display and playback of bends, slurs and crescendos

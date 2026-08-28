@@ -27,6 +27,20 @@ extension View {
         }
     }
 
+    /// `.glassEffect(.regular.tint(_).interactive(), in: shape)` on iOS 26+ — glass that carries a colour rather than
+    /// a flat fill of it, the way the system tints a prominent glass control.
+    ///
+    /// On iOS 18 there is no glass to tint, so the shape is filled with the colour outright: a `.regularMaterial`
+    /// under a strong tint reads as muddy, and the point of tinting this control is that it is unmistakable.
+    @ViewBuilder
+    public func tintedGlassCompat<S: Shape>(_ tint: Color, in shape: S) -> some View {
+        if #available(iOS 26, *) {
+            glassEffect(.regular.tint(tint).interactive(), in: shape)
+        } else {
+            background(tint, in: shape)
+        }
+    }
+
     /// `.glassEffect(.regular, in: shape)` (non-interactive) on iOS 26+; a `.regularMaterial` background drawn in the
     /// same shape on iOS 18.
     @ViewBuilder
@@ -48,25 +62,6 @@ extension View {
             buttonStyle(.borderedProminent)
         }
     }
-
-    #if os(iOS)
-    /// Lets a navigation bar float over the content behind it, for screens whose content — not their chrome — is the
-    /// point.
-    ///
-    /// On iOS 26+ this hides both the bar's own background and the top scroll-edge effect: every toolbar item already
-    /// carries its own Liquid Glass, so the bar chrome would only cover content that should stay visible through it.
-    /// On iOS 18 it does nothing, and the bar keeps its default background — pre-glass toolbar items are bare glyphs
-    /// and need something behind them to stay legible over arbitrary content.
-    @ViewBuilder
-    public func floatingToolbarBackgroundCompat() -> some View {
-        if #available(iOS 26, *) {
-            toolbarBackgroundVisibility(.hidden, for: .navigationBar)
-                .scrollEdgeEffectHidden(true, for: .top)
-        } else {
-            self
-        }
-    }
-    #endif
 }
 
 #if DEBUG

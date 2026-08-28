@@ -13,6 +13,8 @@ struct EditorViewModelHitTestTests {
             scoresDirectory: URL(filePath: "/tmp"),
             gateway: FakeScoreFileGateway(),
             repository: FakeScoreLibraryRepository(),
+            originalStore: FakeScoreOriginalStore(),
+            historyStore: NoopScoreEditHistoryStore(),
             playback: nil,
         )
     }
@@ -137,7 +139,7 @@ struct EditorViewModelHitTestTests {
         #expect(vm.selectedItem?.voiceIndex == 0)
     }
 
-    // MARK: - Task 16: hoverItem(at:) — same resolution as handleTap, without mutating selection
+    // MARK: - hoverItem(at:) — same resolution as handleTap, without mutating selection
 
     @Test func `hover over a notehead resolves it without mutating selection`() throws {
         let score = EditorFixtures.chordAtIndex1()

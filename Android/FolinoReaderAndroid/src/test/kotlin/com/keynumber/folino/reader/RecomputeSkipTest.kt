@@ -7,7 +7,7 @@ import org.junit.Test
 /**
  * Unit tests for the pure [shouldSkipLayoutRecompute] predicate — the gate that keeps
  * `ReaderViewModel`'s layout recompute loop from ever computing a DrawProgram for a PDF's
- * background-parsed score (Task 12). This is the regression guard for the highest-value fix in that
+ * background-parsed score. This is the regression guard for the highest-value fix in that
  * task: without it, the loop would overwrite `ReaderState.ReadyPdf` with `Ready(program)` the instant a
  * PDF's OMR parse succeeded, silently swapping the user's own PDF pages for reconstructed notation.
  */

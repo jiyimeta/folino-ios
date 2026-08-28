@@ -274,7 +274,7 @@ internal object PagedPdfLayout {
  * surface only inverts its own center-anchored camera ([PagedPdfLayout.worldPointForTap]); the rest is native (see
  * [PdfCursorProjector.cursorForTap]).
  *
- * [annotation] (Task 11) anchors ink to a PAGE, not a musical position — see [PdfVerticalScore]'s own class
+ * [annotation] anchors ink to a PAGE, not a musical position — see [PdfVerticalScore]'s own class
  * doc for the shared `PageAnchoringCore` rationale. Only one page is ever visible here, so capture always
  * knows its page already (no centroid resolve, unlike the scrolling surface) and display only ever shows
  * strokes anchored to the CURRENT page (`PagedPdfPage` builds a whole-document-length page-frame array with
@@ -372,7 +372,7 @@ internal fun PagedPdfScore(
         renderedPageWidthsPt = state.pageWidthsPt,
     )
 
-    // A user-initiated page swipe DURING playback suspends auto-page-turn (Task 5) — `interactionSource` only emits
+    // A user-initiated page swipe DURING playback suspends auto-page-turn — `interactionSource` only emits
     // `DragInteraction` for real finger drags, so the auto-turn's own `animateScrollToPage` never self-suspends.
     // `PagedScore` parity, verbatim.
     LaunchedEffect(pagerState, audioVm) {
@@ -418,7 +418,7 @@ internal fun PagedPdfScore(
     // composable's body would recompose this whole function ~60x/second for the life of a pinch gesture,
     // even though the result is a `Boolean` that only actually flips twice per gesture (zoom past 1x, and
     // back). `derivedStateOf` re-runs the same per-frame read but only PUBLISHES — and so only recomposes
-    // readers on — an actual change to that `Boolean` (lesson from Task 7's zoom-path fix rounds).
+    // readers on — an actual change to that `Boolean` (lesson from the zoom-path fix rounds).
     // `annotationMode` is a `remember` key (not read directly inside the block): it changes rarely (an
     // explicit tool toggle), so rebuilding the wrapper on it costs nothing, but the block itself must close
     // over a LIVE value — `PagedScore`'s own `scale == 1f && !annotationMode` is the reference this mirrors:
@@ -467,7 +467,7 @@ internal fun PagedPdfScore(
                 showsHint = !pageTapHintDismissed,
                 onAnyZoneTouchDown = onDismissPageTapHint,
                 // An explicit edge-tap navigation is a manual page turn → suspend auto-page-turn during playback so
-                // the playhead's page doesn't yank the reader back (Task 5; `PagedScore` parity).
+                // the playhead's page doesn't yank the reader back (`PagedScore` parity).
                 onFirst = {
                     audioVm.suspendPlaybackFollowForManualViewportChange()
                     scope.launch { pagerState.animateScrollToPage(0) }

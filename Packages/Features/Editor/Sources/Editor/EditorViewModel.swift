@@ -104,6 +104,90 @@ public final class EditorViewModel {
     /// drives the one-time "saved as .mscz" notice.
     public private(set) var didSaveAsSiblingMSCZ = false
 
+    // MARK: - Revert and discard
+    //
+    // The decisions are the core's (`EditorSessionCore+Revert.swift`) — what counts as an edit, what unwinding means,
+    // what a revert does to the session. What lives here is what needs a screen or a run loop: the two confirmation
+    // flags the sheets bind to, the message a failure shows, and the tasks a revert has to outrun.
+
+    /// Whether this session has moved the score away from where it opened.
+    public var sessionHasEdits: Bool {
+        _ = generation
+        return core.sessionHasEdits
+    }
+
+    /// What leaving the session should offer to do — drives the end-of-session buttons.
+    public var sessionEndMode: EditorSessionEndMode {
+        _ = generation
+        return core.sessionEndMode
+    }
+
+    /// Whether the row records an original to go back to. Mirrored so the button that offers it re-renders.
+    public internal(set) var hasCapturedOriginal = false
+
+    public var canRevertToOriginal: Bool {
+        hasCapturedOriginal
+    }
+
+    /// True when the original is what a PDF conversion produced rather than a file the user supplied — the warning
+    /// copy differs, so the sheet asks.
+    var revertsToConversionOutput: Bool {
+        core.scoreItem.originalProvenance == .conversionOutput
+    }
+
+    public func revertWarnings(hasMusicalAnnotations: Bool) -> RevertWarnings {
+        RevertPolicy.warnings(for: core.scoreItem, hasMusicalAnnotations: hasMusicalAnnotations)
+    }
+
+    /// Set when a revert could not be written. Nil the rest of the time.
+    public internal(set) var revertError: String?
+
+    public var isConfirmingRevert = false
+    public var isConfirmingDiscard = false
+
+    /// Fired once a revert has restored the file and the row, so the host can re-read the score it now names.
+    public var onRevertCompleted: @MainActor (ScoreItem) -> Void = { _ in }
+
+    /// The save currently in flight, if any. A revert awaits it before touching the file: cancelling `autosaveTask`
+    /// does not reach a call already past `performSave()`'s entry guard.
+    @ObservationIgnored var inFlightSaveTask: Task<Void, Never>?
+
+    /// Whether the score has changed since the last successful save. Read by the revert tests to assert that a
+    /// revert leaves nothing pending.
+    var isDirty: Bool {
+        core.isDirty
+    }
+
+    /// Applied minus undone since the session opened. Read by the cross-session-undo tests, which are about exactly
+    /// this counter surviving (or not) an entry boundary.
+    var sessionEditDepth: Int {
+        _ = generation
+        return core.sessionEditDepth
+    }
+
+    /// The live engine session, for the tests that assert on its identity across an entry — adoption means the very
+    /// same object comes back, which no amount of score comparison can show.
+    var session: ScoreEditSession? {
+        core.session
+    }
+
+    #if DEBUG
+    func previewSeedSessionEdit() {
+        core.seedSessionEditDepthForPreview()
+        syncFromCore()
+    }
+
+    var appliedIntents: [EditIntent] { core.appliedIntents }
+
+    func markDirtyForTesting() {
+        core.markDirtyForTesting()
+    }
+
+    func forgetSessionOpenScoreForTesting() {
+        core.forgetSessionOpenScoreForTesting()
+    }
+    #endif
+
     /// Set synchronously by `performPendingAudition()` so tests can deterministically `await vm.auditionTask?.value`
     /// instead of racing a fire-and-forget preview.
     @ObservationIgnored var auditionTask: Task<Void, Never>?
@@ -148,12 +232,20 @@ public final class EditorViewModel {
     /// The audio seam. The other two — the digest and the writer — belong to the core, which is what decides when a
     /// save is due; this one stays here because sounding a note needs a `Task` and an audio session.
     @ObservationIgnored let audition: (any NoteAuditioning)?
+    @ObservationIgnored let repository: any ScoreLibraryRepository
+
+    /// Keeps a finished session's undo stack alive so reopening the same unchanged file can undo across the gap.
+    /// Held here rather than in the core because the protocol is `@MainActor` by design — its `ScoreEditSession` is
+    /// non-`Sendable` — and the core also runs on Android's JNI thread. See `EditorSessionCore.beginSession`.
+    @ObservationIgnored let historyStore: any ScoreEditHistoryStore
 
     public init(
         scoreItem: ScoreItem,
         scoresDirectory: URL,
         gateway: any ScoreFileGateway,
         repository: any ScoreLibraryRepository,
+        originalStore: any ScoreOriginalStore,
+        historyStore: any ScoreEditHistoryStore,
         playback: (any PlaybackController)?,
     ) {
         core = EditorSessionCore(
@@ -161,22 +253,68 @@ public final class EditorViewModel {
             scoresDirectory: scoresDirectory,
             fileFacts: EditorFileFacts(),
             writer: GatewayScoreWriter(gateway: gateway, repository: repository),
+            originals: originalStore,
         )
+        self.historyStore = historyStore
+        self.repository = repository
         audition = playback.map(PlaybackAudition.init(controller:))
+        hasCapturedOriginal = core.hasCapturedOriginal
+    }
+
+    /// Stable identity of the row this session's saves and captures act on — safe to read from outside the module
+    /// without exposing the whole (frequently stale) row itself.
+    public var scoreItemID: Domain.ScoreItemID {
+        core.scoreItem.id
+    }
+
+    /// The library row as the last save left it.
+    public var scoreItem: ScoreItem {
+        _ = generation
+        return core.scoreItem
+    }
+
+    /// Re-seeds the row the next capture/save acts on. Call before `beginSession` — see the core's own doc for the
+    /// staleness this closes.
+    public func refreshRow(_ item: ScoreItem) {
+        core.refreshRow(item)
+        hasCapturedOriginal = core.hasCapturedOriginal
     }
 
     // MARK: - Lifecycle
 
     public func beginSession(score: Score) {
-        core.beginSession(score: score)
+        // Keyed on the content hash, so a file that changed underneath us gets a fresh session rather than an undo
+        // stack addressed to notes that have moved.
+        let retained = historyStore.session(for: core.scoreItem.id, contentHash: core.scoreItem.contentHash)
+        let adopted = core.beginSession(score: score, adopting: retained)
         core.activeVoice = activeVoice
+        // Opening a session is not an edit: match the counter first so `syncFromCore` neither announces a score nor
+        // arms the autosave timer for it. The one announcement an open owes the host is the adopted score below.
+        generation = core.revision
         syncFromCore()
+        // A resumed session opens on the score the PREVIOUS one left, not the one just parsed off disk, so the host
+        // has to be told about it — `syncFromCore` only announces a score the revision moved.
+        if let adopted { onScoreChanged(adopted) }
+        Task { await reconcileCapturedOriginal() }
+    }
+
+    /// Adopts an original that is on disk but missing from the row, and persists the row that names it.
+    public func reconcileCapturedOriginal() async {
+        guard let adopted = await core.reconcileCapturedOriginal() else { return }
+        hasCapturedOriginal = true
+        try? await repository.saveScoreItem(adopted)
     }
 
     /// Flushes any pending autosave and tears the session down.
     public func endSession() async {
+        // Captured BEFORE the flush: that flush is a real file write the caller does not wait for, so by the time it
+        // returns the user can already be in a new session — which must be neither deposited nor torn down.
+        guard let ending = core.session else { return }
         await flushPendingSave()
-        core.endSession()
+        if core.shouldRetain(ending) {
+            historyStore.retain(ending, for: core.scoreItem.id, contentHash: core.scoreItem.contentHash)
+        }
+        core.endSession(ifStillOn: ending)
         syncFromCore()
     }
 
@@ -227,6 +365,7 @@ public final class EditorViewModel {
         isAddToChordArmed = core.isAddToChordArmed
         armedTuplet = core.armedTuplet
         didSaveAsSiblingMSCZ = core.didSaveAsSiblingMSCZ
+        hasCapturedOriginal = core.hasCapturedOriginal
         performPendingAudition()
         if selectionMoved { onSelectionChanged(selection, caretItem) }
         if scoreMoved, let score = core.score {

@@ -12,7 +12,7 @@ import com.keynumber.folino.reader.DrawingAnchorWire
  * The toolbar state (color/width/eraser-mode) is owned by `ReaderScreen`, shared verbatim by every surface
  * — a layout-mode switch must not reset the armed tool. `onEraseGesture` / `onStrokeCaptured` are ALSO
  * built once in `ReaderScreen` for the three musical surfaces, sequencing calls against a musical
- * `scoreHandle`. A PDF surface (Task 11) instead builds its OWN local copy of this whole object — same
+ * `scoreHandle`. A PDF surface instead builds its OWN local copy of this whole object — same
  * toolbar fields (color, width, eraser-mode, `inkHandoff`), but its OWN `onEraseGesture`/`onStrokeCaptured`
  * closures routed through the page-anchor JNI path instead — see `PdfVerticalScore`/`PagedPdfScore`'s own
  * `pdfAnnotation` construction. Either way, a surface never MUTATES the instance it's handed; it either
@@ -49,7 +49,7 @@ internal class AnnotationSurfaceState(
     /**
      * Active eraser DIAMETER, same world-units convention as [brushWidthWorld] (a preset, not a radius —
      * every caller of `EraseGestureController.handle` halves this itself, matching the existing "presets
-     * are diameters, `applyErase` wants a radius" convention). Threaded through here (Task 11) so a PDF
+     * are diameters, `applyErase` wants a radius" convention). Threaded through here so a PDF
      * surface — which has no `toolState` of its own — can build its own eraser gesture handler without a
      * second source of truth for this value.
      */

@@ -1,3 +1,4 @@
+import Domain
 import SheetMusicCore
 import SwiftUI
 
@@ -5,7 +6,7 @@ import SwiftUI
 
 #if DEBUG
 /// Preview-only: seed a session + selection on a `PreviewEditorFactory` VM so the callout / palette / readout render
-/// populated. Reuses the Task 13 factory (`EditorPadButtons.swift`) for the Infrastructure-free fakes.
+/// populated. Reuses the factory in `EditorPadButtons.swift` for the Infrastructure-free fakes.
 @MainActor
 private func previewChromeViewModel(select item: SheetMusicCore.ScoreItemID) -> EditorViewModel {
     let viewModel = PreviewEditorFactory.makeViewModel(armedDuration: .quarter)
@@ -30,20 +31,13 @@ private func previewChromeScore() -> Score {
 
 private let previewStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
-/// The chrome's fixed controls are `ToolbarItem`s now, so a preview has to stand it inside a navigation container the
-/// way the Reader does — outside one, `.toolbar` has no bar to fill and the row simply doesn't render.
+/// The fixed controls (voice, pad toggle, undo / redo / 完了, revert) live in `EditorTopBarView` now, drawn into the
+/// Reader's own top strip rather than a navigation bar this view fills — so unlike the old `ToolbarContent` version,
+/// this preview needs no navigation container to render in.
 @MainActor
 private func previewChromeHost(viewModel: EditorViewModel) -> some View {
-    NavigationStack {
-        EditorChromeView(
-            viewModel: viewModel,
-            bottomTransportClearance: 44,
-            onDone: {},
-        )
+    EditorChromeView(viewModel: viewModel, bottomTransportClearance: 44)
         .background(Color.gray.opacity(0.15))
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-    }
 }
 
 #Preview("chrome · compact / rest selected") {
