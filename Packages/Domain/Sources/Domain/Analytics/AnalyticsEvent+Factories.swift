@@ -90,6 +90,14 @@ extension AnalyticsEvent {
         ])
     }
 
+    /// A rehearsal mark written, renamed or removed in the editor. `action` is `"set"` or `"remove"` — a rename is
+    /// a `"set"`, because from the score's point of view it is the same write.
+    public static func scoreRehearsalMarkEdited(action: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "score_rehearsal_mark_edited", parameters: [
+            "action": .string(action),
+        ])
+    }
+
     // MARK: Playlists & tags
 
     public static func playlistCreated(source: AnalyticsSource) -> AnalyticsEvent {

@@ -120,6 +120,21 @@ extension EditorViewModel {
 
     // MARK: - Settling a part edit against the preferences row
 
+    /// Whether any part edit's save is still outstanding. Read by the host when it is about to release its
+    /// preference-write hold: the edit that asked for the release may not be the last one, and lowering the flag
+    /// with a later edit's numbering still unreconciled reopens exactly the window the hold exists to close.
+    public var hasUnsettledPartEdits: Bool {
+        unsettledPartEdits > 0
+    }
+
+    /// Whether the live session's parts have moved away from the baseline the preferences row was last written
+    /// against — i.e. a migration is owed. `false` outside a session, and `false` for an append (which renumbers
+    /// nothing the baseline knew about).
+    var isPartMigrationOwed: Bool {
+        guard let session else { return false }
+        return !session.isPartMappingIdentity
+    }
+
     /// What every part edit does once its intent has landed: raise the host's hold, and write NOW rather than in two
     /// seconds.
     ///

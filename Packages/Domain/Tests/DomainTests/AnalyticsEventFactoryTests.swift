@@ -48,6 +48,13 @@ struct AnalyticsEventFactoryTests {
         #expect(event.parameters["action"] == .string(action))
     }
 
+    @Test(arguments: ["set", "remove"])
+    func `rehearsal mark edited carries its action`(action: String) {
+        let event = AnalyticsEvent.scoreRehearsalMarkEdited(action: action)
+        #expect(event.name == "score_rehearsal_mark_edited")
+        #expect(event.parameters["action"] == .string(action))
+    }
+
     @Test func `favorite toggled carries enabled source mode`() {
         let event = AnalyticsEvent.favoriteToggled(enabled: true, source: .scoreRowMenu, mode: .single)
         #expect(event.name == "favorite_toggled")

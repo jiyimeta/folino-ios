@@ -200,21 +200,6 @@ public final class EditorViewModel {
     /// racing it. Chained onto the previous one so overlapping ops settle in the order they were applied.
     @ObservationIgnored var partEditCommitTask: Task<Void, Never>?
 
-    /// Whether any part edit's save is still outstanding. Read by the host when it is about to release its
-    /// preference-write hold: the edit that asked for the release may not be the last one, and lowering the flag
-    /// with a later edit's numbering still unreconciled reopens exactly the window the hold exists to close.
-    public var hasUnsettledPartEdits: Bool {
-        unsettledPartEdits > 0
-    }
-
-    /// Whether the live session's parts have moved away from the baseline the preferences row was last written
-    /// against — i.e. a migration is owed. `false` outside a session, and `false` for an append (which renumbers
-    /// nothing the baseline knew about).
-    var isPartMigrationOwed: Bool {
-        guard let session else { return false }
-        return !session.isPartMappingIdentity
-    }
-
     /// True once a non-MSCX/MSCZ source has been rewritten as a sibling `.mscz` file. One-way: never reset, since
     /// it drives the Task 16 one-time "saved as .mscz" notice.
     public internal(set) var didSaveAsSiblingMSCZ = false
@@ -321,12 +306,21 @@ public final class EditorViewModel {
         didSet { signatureSheetPresentationChanged(from: oldValue, to: isTimeSignatureSheetPresented) }
     }
 
+    /// Drives the rehearsal-mark sheet. On the view model for the same reason the signature flags are: the row that
+    /// raises it folds into the overflow `Menu`, and a `@State` flag owned by a control that can disappear takes the
+    /// open sheet with it. No refusal to clear on open, unlike those two — the sheet has no reachable refusal (see
+    /// `EditorViewModel+RehearsalMarks.swift`).
+    var isRehearsalMarkSheetPresented = false
+
     /// Why the last signature apply was refused, or `nil` when it landed — or was the quiet no-op ssm reports as
     /// `.nothingToApply` (see `EditorViewModel+Signatures.swift`, which owns both the writes and that distinction).
     public var lastSignatureRefusal: EditRefusal?
     /// Fired after a signature change lands, as `("key"|"time", "set"|"remove")`. A closure rather than an analytics
     /// client, for the reason `onPartsEdited` gives: the Editor logs nothing itself.
     public var onSignatureChanged: ((String, String) -> Void)?
+    /// Fired after a rehearsal-mark edit lands, as `"set"` or `"remove"`. A closure rather than an analytics client,
+    /// for the reason `onPartsEdited` gives: the Editor logs nothing itself.
+    public var onRehearsalMarkEdited: ((String) -> Void)?
     /// Whether the Reader is SHOWING this staff, and the flip for it — wired by the App to the Reader's per-score
     /// layout settings, the same store its own inspector toggles. Visibility is a reading preference, not a property
     /// of the file, and this package cannot import Reader; the defaults suit an Editor with no Reader behind it.
