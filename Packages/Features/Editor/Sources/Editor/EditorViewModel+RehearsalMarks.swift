@@ -31,8 +31,15 @@ extension EditorViewModel {
     /// between A and B is suggested "B" while B itself keeps its name.
     ///
     /// A suggestion, not a rule: the field is free-form, and nothing renumbers anything afterwards.
+    ///
+    /// A mark whose text is blank falls through to the letter rather than seeding the field with it: the engine's
+    /// MSCX decoder reads a `<RehearsalMark>` with no `<text>` child as `text == ""`, so an imported score can carry
+    /// one, and opening the sheet on an empty field would be worse than useless. `targetRehearsalMarkText` still
+    /// reports the blank mark, which is what keeps the sheet's Delete row available to take it back out.
     var suggestedRehearsalMarkText: String {
-        if let existing = targetRehearsalMarkText {
+        if let existing = targetRehearsalMarkText,
+           !existing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
             return existing
         }
         guard let score, let targetMeasureIndex else { return Self.rehearsalMarkLetter(at: 0) }
@@ -58,11 +65,15 @@ extension EditorViewModel {
 
     /// Writes `text` as the target bar's rehearsal mark, replacing the one it carries or creating one where it
     /// carried none. `false` when there is no target, or when the bar already reads exactly this.
+    ///
+    /// Reports `"set"` for a bar that carried no mark and `"rename"` for one that did — read BEFORE the apply,
+    /// because the apply is what makes the bar carry one.
     @discardableResult
     func setRehearsalMark(text: String) -> Bool {
         guard let targetMeasureIndex else { return false }
+        let action = targetRehearsalMarkText == nil ? "set" : "rename"
         return applyRehearsalMark(
-            .setRehearsalMark(measureIndex: targetMeasureIndex, text: text), action: "set",
+            .setRehearsalMark(measureIndex: targetMeasureIndex, text: text), action: action,
         )
     }
 

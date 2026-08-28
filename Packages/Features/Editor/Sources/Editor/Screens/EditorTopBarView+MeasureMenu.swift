@@ -5,8 +5,8 @@ import SwiftUI
 // `EditorTopBarView+Instruments.swift` is: that file is already at SwiftLint's file-length budget.
 
 extension EditorTopBarView {
-    /// The signature rows and the rehearsal-mark row, appended to `measureActionRows` — the measure menu is where
-    /// "what is true of THIS bar" already lives, and both a signature change and a rehearsal mark are exactly that.
+    /// The bar-scoped rows — the two signature changes and the rehearsal mark — appended to `measureActionRows`:
+    /// the measure menu is where "what is true of THIS bar" already lives, and every one of these is exactly that.
     /// No standalone buttons: three more 44pt controls would push the expanded strip past the narrowest cutout
     /// device's width.
     ///
@@ -14,7 +14,7 @@ extension EditorTopBarView {
     /// The key row is disabled for a kit-only score too — `targetConcertKey` is `nil` when the score has no pitched
     /// staff to read a key from, and a drum part declares none to change.
     @ViewBuilder
-    var signatureMenuRows: some View {
+    var measureMenuRows: some View {
         Button {
             viewModel.isKeySignatureSheetPresented = true
         } label: {
@@ -47,10 +47,10 @@ extension EditorTopBarView {
         .disabled(viewModel.targetMeasureIndex == nil)
     }
 
-    /// Presents all three sheets from the strip's ROOT — same reasoning as `instrumentsSheet(on:)`: the rows that
-    /// open them live inside a `Menu` that folds in and out as the width changes, and a presentation attached to a
-    /// control that can disappear takes the open sheet with it.
-    func signatureSheets(on content: some View) -> some View {
+    /// Presents all three of the measure menu's sheets from the strip's ROOT — same reasoning as
+    /// `instrumentsSheet(on:)`: the rows that open them live inside a `Menu` that folds in and out as the width
+    /// changes, and a presentation attached to a control that can disappear takes the open sheet with it.
+    func measureMenuSheets(on content: some View) -> some View {
         content
             .sheet(isPresented: $viewModel.isKeySignatureSheetPresented) {
                 EditorKeySignatureSheet(viewModel: viewModel)

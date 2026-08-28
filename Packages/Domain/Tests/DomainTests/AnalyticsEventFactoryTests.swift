@@ -48,8 +48,8 @@ struct AnalyticsEventFactoryTests {
         #expect(event.parameters["action"] == .string(action))
     }
 
-    @Test(arguments: ["set", "remove"])
-    func `rehearsal mark edited carries its action`(action: String) {
+    @Test(arguments: ["set", "rename", "remove"])
+    func `rehearsal mark edited carries its action`(_ action: String) {
         let event = AnalyticsEvent.scoreRehearsalMarkEdited(action: action)
         #expect(event.name == "score_rehearsal_mark_edited")
         #expect(event.parameters["action"] == .string(action))

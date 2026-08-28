@@ -74,6 +74,23 @@ struct EditorRehearsalMarkTests {
         #expect(vm.suggestedRehearsalMarkText == "Bridge")
     }
 
+    /// An imported blank mark. ssm's MSCX decoder reads a `<RehearsalMark>` with no `<text>` child as `text == ""`,
+    /// so this bar is reachable from a real file even though no folino write can produce it — and seeding the field
+    /// with that blank would leave the sheet looking broken. The mark itself still reads back, which is what keeps
+    /// the sheet's Delete row on screen to remove it.
+    @Test(arguments: ["", "   "])
+    func `a blank mark suggests a letter and still reads back`(_ blank: String) {
+        let vm = makeViewModel()
+        var score = EditorFixtures.threeMeasuresOfQuarterRests()
+        score.systemMeasures = Array(repeating: SystemMeasure(), count: 3)
+        let mark = PositionedSystemElement(position: .start, element: .rehearsalMark(RehearsalMark(text: blank)))
+        score.systemMeasures[1] = SystemMeasure(elements: [mark])
+        vm.beginSession(score: score)
+        vm.select(.rest(EditorFixtures.restID(measure: 1, element: 0)))
+        #expect(vm.targetRehearsalMarkText == blank) // the Delete row keys off this
+        #expect(vm.suggestedRehearsalMarkText == "A")
+    }
+
     @Test func `removing drops the mark`() {
         let vm = session(targeting: 1)
         #expect(vm.setRehearsalMark(text: "A"))
@@ -91,13 +108,17 @@ struct EditorRehearsalMarkTests {
         #expect(reported.isEmpty) // a write that changed nothing is not an edit to count
     }
 
-    @Test func `both writes report through the analytics hook`() {
+    /// The three verbs, in the one order that produces all of them: naming an unnamed bar is `"set"`, naming it
+    /// again is `"rename"` — a distinction collected `"set"` data could never be split back apart into — and taking
+    /// the mark out is `"remove"`.
+    @Test func `all three writes report through the analytics hook`() {
         let vm = session(targeting: 1)
         var reported: [String] = []
         vm.onRehearsalMarkEdited = { reported.append($0) }
         #expect(vm.setRehearsalMark(text: "A"))
+        #expect(vm.setRehearsalMark(text: "Bridge"))
         #expect(vm.removeRehearsalMark())
-        #expect(reported == ["set", "remove"])
+        #expect(reported == ["set", "rename", "remove"])
     }
 
     /// No session at all — `targetMeasureIndex` is `selectedItem?.measureIndex ?? caretItem?.measureIndex`, and

@@ -1654,7 +1654,7 @@
       }
     },
     "editor.rehearsalMark.title": {
-      "comment": "Title of the sheet that sets the rehearsal mark on one bar.",
+      "comment": "Title of the sheet that sets the rehearsal mark on one bar. Also the text field's own label, which iOS shows as the field's placeholder and reads out as its VoiceOver label — so it has to work as a short field name too, not only as a title.",
       "localizations": {
         "en": {
           "stringUnit": {

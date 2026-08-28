@@ -34,7 +34,7 @@
 6. **The system lane is padded to full length on write.** A score that never held a system element has an empty `Score.systemMeasures`; writing a mark grows it to one entry per measure so it stays the parallel lane `InsertMeasure` / `DeleteMeasure` / `SetTimeSignature+Splice` all test for (`systemMeasures.count == measureCount`). Growing it only as far as the target index would leave the lane non-parallel and those commands would then stop maintaining it.
 7. **The inverse captures the whole lane.** `Score.systemMeasures` is one small struct per measure, usually with an empty element array; capturing all of it makes the inverse obviously correct — it restores the padding as well as the mark — where a per-measure capture would have to re-derive whether it had padded.
 8. **No confirmation dialog on removal, and no refusal alert in the sheet.** Deleting a mark is one undoable byte change with no re-barring behind it (unlike a signature removal, which is why that one confirms). And no refusal the sheet can reach exists: `.targetNotFound` needs an out-of-range bar the selection cannot produce, and `.emptyRehearsalMarkText` is gated by the disabled Apply button. Writing copy for unreachable states is what `EditorSignatureSheet`'s refusal doc argues against.
-9. **The suggested name is the next letter.** Opening the sheet on a bar with no mark seeds the field with the letter for `index = (number of rehearsal marks in bars strictly before the target)`, spelled A…Z then AA, AB, … Opening it on a bar that has one seeds the field with that mark's text (a rename). The field is a free-form `TextField` throughout — numbers, CJK, anything.
+9. **The suggested name is the next letter.** Opening the sheet on a bar with no mark seeds the field with the letter for `index = (number of bars strictly before the target that carry a rehearsal mark)`, spelled A…Z then AA, AB, … Bars, not marks: one bar carries one mark as far as this surface is concerned, which is the premise ssm's own commands are written on, so counting bars is the version that stays consistent with it. Opening it on a bar that has one seeds the field with that mark's text (a rename). The field is a free-form `TextField` throughout — numbers, CJK, anything.
 
 ---
 
@@ -1215,11 +1215,31 @@ Add these keys to `Packages/Features/Editor/Sources/Editor/Resources/Localizable
 
 The last row's wording matches `editor.signature.apply` on purpose, but it gets its own key so the two sheets' copy can diverge later without one silently changing the other.
 
-Verify the file still parses after editing:
+Verify the file still parses after editing. **Not `plutil -lint`** — it cannot lint JSON on this machine (it fails
+identically on pristine `HEAD` and on `{"a":1}`), so a "failure" from it says nothing. Use `python3`, which parses the
+file AND can assert the things a broken hand-edit actually produces:
 
 ```bash
-plutil -lint Packages/Features/Editor/Sources/Editor/Resources/Localizable.xcstrings
+python3 -m json.tool Packages/Features/Editor/Sources/Editor/Resources/Localizable.xcstrings > /dev/null
+python3 -c '
+import json
+p = "Packages/Features/Editor/Sources/Editor/Resources/Localizable.xcstrings"
+d = json.load(open(p))
+strings = d["strings"]
+assert list(strings) == sorted(strings), "keys are not sorted"
+for key in [k for k in strings if k.startswith("editor.rehearsalMark.")]:
+    entry = strings[key]
+    assert entry.get("comment"), f"{key}: no comment"
+    locs = entry["localizations"]
+    assert set(locs) == {"en", "ja", "ko", "zh-Hans", "zh-Hant"}, f"{key}: locales {sorted(locs)}"
+    for locale, value in locs.items():
+        assert value["stringUnit"]["state"] == "translated", f"{key}/{locale}: not translated"
+print("ok")
+'
 ```
+
+Strictly stronger than a parse check: it also catches the five-locale gap, a missing comment, a `state` left at
+`new`, and keys inserted out of order.
 
 - [ ] **Step 2: Write the sheet**
 

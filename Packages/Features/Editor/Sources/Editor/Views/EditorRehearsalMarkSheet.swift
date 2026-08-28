@@ -1,5 +1,4 @@
 import Foundation
-import SheetMusicCore
 import SwiftUI
 import UtilityUI
 
@@ -8,7 +7,7 @@ import UtilityUI
 /// Names the target bar. A free-form field seeded with the bar's own mark (a rename) or the next letter, plus the
 /// destructive row that takes an existing mark back out.
 ///
-/// Its own view rather than a use of `EditorSignatureSheet`'s scaffold: that one is built around a picker, a
+/// Its own view rather than a use of `EditorSignatureSheet`'s scaffold: that one is built around a picker, an
 /// "applies until the next change" span, a removal confirmation and a refusal alert, and a rehearsal mark has none
 /// of those — it is a point, not a span; its removal is one undoable byte; and no refusal is reachable from here
 /// (see `EditorViewModel+RehearsalMarks.swift`).
@@ -103,6 +102,9 @@ struct EditorRehearsalMarkSheet: View {
 }
 
 #if DEBUG
+// Only the preview fixture below builds a `Score`; the sheet itself reads everything through `EditorViewModel`.
+import SheetMusicCore
+
 #Preview("Rehearsal mark — new") {
     EditorRehearsalMarkSheetPreviews.sheet(withExistingMark: false)
 }

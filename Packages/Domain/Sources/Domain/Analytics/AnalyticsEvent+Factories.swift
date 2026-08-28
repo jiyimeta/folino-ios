@@ -90,8 +90,10 @@ extension AnalyticsEvent {
         ])
     }
 
-    /// A rehearsal mark written, renamed or removed in the editor. `action` is `"set"` or `"remove"` — a rename is
-    /// a `"set"`, because from the score's point of view it is the same write.
+    /// A rehearsal mark written, renamed or removed in the editor. `action` is `"set"` (the bar carried no mark),
+    /// `"rename"` (it did) or `"remove"`. The score sees one write either way, but naming a bar for the first time
+    /// and renaming one that was already named are different user acts, and collected data cannot be split apart
+    /// afterwards — so the two are separated at the source.
     public static func scoreRehearsalMarkEdited(action: String) -> AnalyticsEvent {
         AnalyticsEvent(name: "score_rehearsal_mark_edited", parameters: [
             "action": .string(action),
