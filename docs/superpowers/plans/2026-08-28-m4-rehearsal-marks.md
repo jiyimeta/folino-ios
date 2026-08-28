@@ -15,7 +15,7 @@
 - Two worktrees, two repos: **folino** = `/Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/.claude/worktrees/scratch-creation-spec` (branch `worktree-scratch-creation-spec`); **ssm** = `/Users/kiichi/Developer/Personal/swift-packages/wt-scratch-creation/swift-sheet-music` (branch `feature/scratch-creation-m1`). Commit each change in its own repo. Never merge ssm to main; no ssm release (umbrella policy — everything releases as 2.1.0 after M6).
 - folino consumes ssm via local path pin; the 6 pin files (`Packages/Domain/Package.swift`, `Packages/Features/{Editor,Library,Reader}/Package.swift`, `Packages/Infrastructure/Package.swift`, `project.yml`) are already modified in the working tree — leave them modified, do **NOT** commit them.
 - ssm tests: `xcrun swift test --filter <SuiteName>` from the ssm worktree root (plain `swift test` may pick the wrong toolchain).
-- folino package tests: `xcodebuild test -scheme <Pkg> -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation` **from the package directory** (check the scheme name with `xcodebuild -list`; it may be `<Pkg>-Package`). Plain `swift test` does NOT work in the folino repo.
+- folino package tests: `xcodebuild test -scheme <Pkg> -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation` **from the package directory**. The two packages this plan touches expose their schemes as plain `Editor` and `Domain` (verified with `xcodebuild -list`, no `-Package` suffix). Plain `swift test` does NOT work in the folino repo.
 - folino app build: `xcodebuild -project Folino.xcodeproj -scheme Folino -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation build` (this plan does not change `project.yml`).
 - `EditIntent` case order is the wire format: **append, never renumber**. M4's cases are wire indices **23 and 24** exactly as listed in Tasks 2 and 3. The highest index in use today is 22 (`removeTimeSignature`).
 - MuseScore (`~/Developer/musescore/MuseScore`) is a **behavioral reference only — GPL, no code ported or translated**.
@@ -389,12 +389,12 @@ public struct RemoveRehearsalMark: EditCommand {
 Run: `xcrun swift test --filter RehearsalMarkCommandTests`
 Expected: PASS, 9 tests.
 
-If `TextFrameType.circle` does not exist, read `Sources/SheetMusicCore/Score/TextFrameType.swift` and use whichever non-`.rectangle` case it defines in the `renamePreservesStyling` test.
+(`TextFrameType` is declared in `Sources/SheetMusicCore/Score/TextStyle.swift` and its cases are `.rectangle`, `.circle`, `.none` — `.circle` in `renamePreservesStyling` is correct as written.)
 
 - [ ] **Step 6: Run the surrounding suites for regressions**
 
 Run: `xcrun swift test --filter EditRefusalTests` then `xcrun swift test --filter EditingTests`
-Expected: PASS. (`EditRefusalTests` is the one that could break — it may switch exhaustively over `Reason`.)
+Expected: PASS. `EditRefusalTests` holds no exhaustive `switch` over `Reason`, so appending a case should not touch it — if it nevertheless fails, read it before changing anything, because a break there means the new case collided with an existing expectation rather than merely widening the enum.
 
 - [ ] **Step 7: Commit (ssm)**
 
@@ -995,10 +995,11 @@ struct EditorRehearsalMarkTests {
         #expect(reported == ["set", "remove"])
     }
 
+    /// No session at all — `targetMeasureIndex` is `selectedItem?.measureIndex ?? caretItem?.measureIndex`, and
+    /// both are nil before one begins. There is no `clearSelection()` to reach for; this is the shape that makes
+    /// "no target" certain rather than dependent on where a fresh session parks its caret.
     @Test func `without a target both writes are a no-op`() {
         let vm = makeViewModel()
-        vm.beginSession(score: EditorFixtures.threeMeasuresOfQuarterRests())
-        vm.clearSelection()
         #expect(vm.targetMeasureIndex == nil)
         #expect(!vm.setRehearsalMark(text: "A"))
         #expect(!vm.removeRehearsalMark())
@@ -1011,12 +1012,11 @@ struct EditorRehearsalMarkTests {
 }
 ```
 
-Note on the last two: `clearSelection()` and `EditorFixtures.threeMeasuresOfQuarterRests()` are existing API — read `Packages/Features/Editor/Tests/EditorTests/EditorSignatureIntentTests.swift` and `EditorFixtures.swift` first and use whatever those files actually call to reach "a session with no selection and no caret". If no such method exists, drop the `without a target` test's `clearSelection()` line and instead build a view model with `beginSession` and no `select` call.
+`EditorFixtures.threeMeasuresOfQuarterRests()` and `EditorFixtures.sampleItem()` both exist at `Packages/Features/Editor/Tests/EditorTests/Support/EditorFixtures.swift:162` and `:235`; the fake stores are the same ones `EditorSignatureIntentTests` constructs.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
 From `Packages/Features/Editor`: `xcodebuild test -scheme Editor -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation -only-testing:EditorTests/EditorRehearsalMarkTests`
-(check the scheme name with `xcodebuild -list` — it may be `Editor-Package`.)
 Expected: FAIL — `value of type 'EditorViewModel' has no member 'targetRehearsalMarkText'`.
 
 - [ ] **Step 3: Add the analytics factory**
@@ -1328,11 +1328,24 @@ struct EditorRehearsalMarkSheet: View {
 
 /// The fixture behind both previews: three bars of quarter rests with bar 1 selected, optionally already carrying a
 /// mark so the destructive Section is one flag away.
+///
+/// The score is built inline rather than shared, because the Editor package has no common preview fixture —
+/// `EditorSignatureSheetPreviews.score()` next door builds its own for the same reason, and `EditorFixtures` is in
+/// the test target and unreachable from here.
 @MainActor
 enum EditorRehearsalMarkSheetPreviews {
+    private static func score() -> Score {
+        let staff = Staff(measures: (0 ..< 3).map { _ in
+            Measure(voices: [Voice(elements: Array(repeating: .rest(duration: .quarter), count: 4))])
+        })
+        return Score(division: 480, parts: [
+            Part(id: "1", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+    }
+
     static func sheet(withExistingMark: Bool) -> some View {
         let viewModel = PreviewEditorFactory.makeViewModel()
-        viewModel.beginSession(score: EditorPreviewScores.threeMeasuresOfQuarterRests())
+        viewModel.beginSession(score: score())
         viewModel.select(.rest(RestID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 1, voiceIndex: 0, elementIndex: 0,
@@ -1346,7 +1359,7 @@ enum EditorRehearsalMarkSheetPreviews {
 #endif
 ```
 
-`EditorPreviewScores.threeMeasuresOfQuarterRests()` is a stand-in name — `EditorFixtures` is test-only and not reachable from the source target. Use whatever DEBUG score fixture the Editor package's own previews use; `EditorSignatureSheetPreviews.score()` in `Views/EditorSignatureSheet.swift` builds one inline from `Score` / `Part` / `Staff` / `Measure` / `Voice`, so if there is no shared fixture, build a three-bar one the same way right here.
+`PreviewEditorFactory.makeViewModel()` is declared in `Views/EditorPadView.swift` with a single defaulted `armedDuration:` parameter, so the no-argument call above is correct.
 
 - [ ] **Step 3: Add the menu row and the presentation**
 
@@ -1405,11 +1418,11 @@ xcodebuild test -scheme Editor -destination 'platform=iOS Simulator,name=iPhone 
 
 Expected: build succeeds and the whole Editor suite passes (not just the new one — the menu rows are covered by existing snapshot/behavior tests in some layouts).
 
-- [ ] **Step 7: Confirm the reading surface refreshes**
+- [ ] **Step 7: Confirm the reading surface refreshes (no code expected)**
 
-Read `Packages/Features/Reader/Sources/Reader/ReaderViewModel.swift` around lines 480-520 and confirm `recomputeSeekTimeline()` runs on the path that receives an edited score from the Editor (the same publish that makes a note edit appear). It should already, because the seek timeline is rebuilt whenever the score is replaced — but a rehearsal mark is the first edit that changes the mark bar's CONTENTS rather than only the notes, so this is the one place M4 could be silently half-wired.
+`ReaderViewModel.adoptEditedScore(_:)` — the path that takes an edited score back from the editing session — already calls `recomputeSeekTimeline()` on the line after `recomputeVisibleScore()`, and `recomputeSeekTimeline` rebuilds `ReaderSeekTimeline(score:)`, which is what reads `Score.rehearsalMarks()`. So the mark bar picks up an added or renamed mark with no wiring of its own.
 
-If it does not run on that path, add the call there and note it in the commit body. If it does, add nothing — but say so explicitly in the task report rather than leaving it unstated.
+Nothing to write here; this step exists because a rehearsal mark is the first edit that changes what the mark bar itself displays rather than only the notes, and "it just works" is worth confirming by eye once (smoke item 5 below is the runtime check). Report that it was confirmed rather than leaving the step silently ticked.
 
 - [ ] **Step 8: Commit (folino)**
 
