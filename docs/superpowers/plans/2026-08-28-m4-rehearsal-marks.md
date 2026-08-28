@@ -19,7 +19,7 @@
 - folino app build: `xcodebuild -project Folino.xcodeproj -scheme Folino -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation build` (this plan does not change `project.yml`).
 - `EditIntent` case order is the wire format: **append, never renumber**. M4's cases are wire indices **23 and 24** exactly as listed in Tasks 2 and 3. The highest index in use today is 22 (`removeTimeSignature`).
 - MuseScore (`~/Developer/musescore/MuseScore`) is a **behavioral reference only — GPL, no code ported or translated**.
-- **ssm core code must compile for wasm, which has no `CharacterSet`.** `FoundationEssentials` — what the wasm build links — does not carry it, so `trimmingCharacters(in: .whitespacesAndNewlines)` builds on Apple and fails the wasm gate. Use the repo's own `trimmingWhitespaceAndNewlines()` (pinned equivalent by `TrimmingHelpersTests`' scalar sweep). This bit M4: Tasks 1-3 shipped the `CharacterSet` form and only the wasm gate in Task 4 caught it.
+- **ssm core code must compile for wasm, which has no `CharacterSet`.** `FoundationEssentials` — what the wasm build links — does not carry it, so `trimmingCharacters(in: .whitespacesAndNewlines)` builds on Apple and fails the wasm gate. In **ssm only**, use that repo's own `trimmingWhitespaceAndNewlines()` (pinned equivalent by `TrimmingHelpersTests`' scalar sweep). This bit M4: Tasks 1-3 shipped the `CharacterSet` form and only the wasm gate in Task 4 caught it. **Folino is the opposite case** — an Apple-only app target with no wasm build and no access to the ssm helper, so `CharacterSet` is correct there and must stay.
 - No access modifier unless needed; `public` only for cross-module use. New tests use Swift Testing. Whole-file staging only (`git add <file>`, never `-p`).
 - User-facing copy: app name lowercase `folino`; never expose internal feature names (`Editor`, `Reader`, …) in user-readable strings; Editor xcstrings fill all five locales (en, ja, ko, zh-Hans, zh-Hant).
 - Comment paragraphs reflow at 120 columns.
@@ -1255,8 +1255,11 @@ struct EditorRehearsalMarkSheet: View {
 
     /// Whitespace alone is not a mark, and the engine refuses it. Gating Apply here is what keeps that refusal
     /// unreachable from the UI.
+    ///
+    /// `CharacterSet` is fine here, unlike in ssm: this is an Apple-only app target, not a module that also has
+    /// to build for wasm against `FoundationEssentials`. The ssm-side helper is not in scope from folino anyway.
     private var trimmed: String {
-        text.trimmingWhitespaceAndNewlines()
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {
