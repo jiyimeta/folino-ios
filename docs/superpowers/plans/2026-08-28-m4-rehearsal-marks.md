@@ -14,11 +14,12 @@
 
 - Two worktrees, two repos: **folino** = `/Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/.claude/worktrees/scratch-creation-spec` (branch `worktree-scratch-creation-spec`); **ssm** = `/Users/kiichi/Developer/Personal/swift-packages/wt-scratch-creation/swift-sheet-music` (branch `feature/scratch-creation-m1`). Commit each change in its own repo. Never merge ssm to main; no ssm release (umbrella policy — everything releases as 2.1.0 after M6).
 - folino consumes ssm via local path pin; the 6 pin files (`Packages/Domain/Package.swift`, `Packages/Features/{Editor,Library,Reader}/Package.swift`, `Packages/Infrastructure/Package.swift`, `project.yml`) are already modified in the working tree — leave them modified, do **NOT** commit them.
-- ssm tests: `xcrun swift test --filter <SuiteName>` from the ssm worktree root (plain `swift test` may pick the wrong toolchain).
+- ssm tests: `xcrun swift test --filter <SuiteName>` from the ssm worktree root (plain `swift test` may pick the wrong toolchain). **`--filter` matches TYPE names only** — a directory name (`EditingTests`) or a `@Suite` display string (`"Rehearsal mark commands"`) silently runs zero tests and still reports success. Always pass the `struct` name, and sanity-check the reported test count against what you expected to run.
 - folino package tests: `xcodebuild test -scheme <Pkg> -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation` **from the package directory**. The two packages this plan touches expose their schemes as plain `Editor` and `Domain` (verified with `xcodebuild -list`, no `-Package` suffix). Plain `swift test` does NOT work in the folino repo.
 - folino app build: `xcodebuild -project Folino.xcodeproj -scheme Folino -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation build` (this plan does not change `project.yml`).
 - `EditIntent` case order is the wire format: **append, never renumber**. M4's cases are wire indices **23 and 24** exactly as listed in Tasks 2 and 3. The highest index in use today is 22 (`removeTimeSignature`).
 - MuseScore (`~/Developer/musescore/MuseScore`) is a **behavioral reference only — GPL, no code ported or translated**.
+- **ssm core code must compile for wasm, which has no `CharacterSet`.** `FoundationEssentials` — what the wasm build links — does not carry it, so `trimmingCharacters(in: .whitespacesAndNewlines)` builds on Apple and fails the wasm gate. Use the repo's own `trimmingWhitespaceAndNewlines()` (pinned equivalent by `TrimmingHelpersTests`' scalar sweep). This bit M4: Tasks 1-3 shipped the `CharacterSet` form and only the wasm gate in Task 4 caught it.
 - No access modifier unless needed; `public` only for cross-module use. New tests use Swift Testing. Whole-file staging only (`git add <file>`, never `-p`).
 - User-facing copy: app name lowercase `folino`; never expose internal feature names (`Editor`, `Reader`, …) in user-readable strings; Editor xcstrings fill all five locales (en, ja, ko, zh-Hans, zh-Hant).
 - Comment paragraphs reflow at 120 columns.
@@ -337,7 +338,7 @@ public struct SetRehearsalMark: EditCommand {
         if let restoredLane {
             score.systemMeasures = restoredLane
         } else {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = text.trimmingWhitespaceAndNewlines()
             guard !trimmed.isEmpty else { throw Self.refused(.emptyRehearsalMarkText) }
             RehearsalMarkLane.pad(&score)
             RehearsalMarkLane.write(trimmed, into: &score.systemMeasures[measureIndex])
@@ -563,7 +564,7 @@ extension ScoreEditSession {
     static func setRehearsalMarkCommand(
         at measureIndex: Int, text: String, in score: Score,
     ) -> (any EditCommand)? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = text.trimmingWhitespaceAndNewlines()
         guard RehearsalMarkLane.mark(in: score, measureIndex: measureIndex)?.text != trimmed else { return nil }
         return SetRehearsalMark(measureIndex: measureIndex, text: trimmed)
     }
@@ -799,10 +800,11 @@ In `EditReplayScript.standard(staff:)`, after `let step12b = …` and before the
         let step13a = EditReplayStep.intent(.setRehearsalMark(measureIndex: 1, text: "A"))
         // Step 13b: take it away again. Paired with 13a deliberately, for the reason 11a/11b are paired:
         // `RemoveRehearsalMark` has its own inverse and its own wire bytes, and a script that only ever set a mark
-        // would encode neither. NOT an arithmetic undo of 13a and deliberately so: 13a padded the empty system
-        // lane out to one entry per measure, and the removal takes the mark back out WITHOUT un-padding — so the
-        // score ends this script with a lane 12b never gave it, and a fingerprint that differs from 12b's. That is
-        // the removal's own path, reached through its own wire bytes.
+        // would encode neither. The score's VALUE does not return to 12b's — 13a padded the empty system lane out
+        // to one entry per measure and the removal takes the mark back out WITHOUT un-padding — but its
+        // FINGERPRINT does, because `ScoreFingerprint.combineSystemLane` hashes the lane by its occupants and
+        // never by its length, deliberately, so that the in-memory and MSCX spellings of the same score agree.
+        // Empty padding is invisible to it.
         let step13b = EditReplayStep.intent(.removeRehearsalMark(measureIndex: 1))
 ```
 
@@ -1254,7 +1256,7 @@ struct EditorRehearsalMarkSheet: View {
     /// Whitespace alone is not a mark, and the engine refuses it. Gating Apply here is what keeps that refusal
     /// unreachable from the UI.
     private var trimmed: String {
-        text.trimmingCharacters(in: .whitespacesAndNewlines)
+        text.trimmingWhitespaceAndNewlines()
     }
 
     var body: some View {
