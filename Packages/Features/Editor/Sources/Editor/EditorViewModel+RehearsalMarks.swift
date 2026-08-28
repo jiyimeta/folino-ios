@@ -27,8 +27,8 @@ extension EditorViewModel {
     }
 
     /// What the sheet's field opens holding: the target bar's own mark when it has one (the sheet is renaming), and
-    /// otherwise the next letter — the letter for however many marks sit in bars BEFORE this one, so a mark added
-    /// between A and B is suggested "B" while B itself keeps its name.
+    /// otherwise the next letter — the letter for however many bars strictly before this one carry a rehearsal mark,
+    /// so a mark added between A and B is suggested "B" while B itself keeps its name.
     ///
     /// A suggestion, not a rule: the field is free-form, and nothing renumbers anything afterwards.
     ///
