@@ -251,6 +251,10 @@ struct EditableReaderScreen: View {
         vm.onSignatureChanged = { [analytics] kind, action in
             analytics.log(.scoreSignatureChanged(kind: kind, action: action))
         }
+        // Same seam, same reason, for the rehearsal-mark sheet.
+        vm.onRehearsalMarkEdited = { [analytics] action in
+            analytics.log(.scoreRehearsalMarkEdited(action: action))
+        }
         host.isPartMappingSettled = { [weak vm] in
             vm?.hasUnsettledPartEdits != true
         }

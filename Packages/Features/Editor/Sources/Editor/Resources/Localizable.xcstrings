@@ -932,6 +932,41 @@
         }
       }
     },
+    "editor.measure.rehearsalMark": {
+      "comment": "Measure-menu row that opens the rehearsal-mark sheet for the target bar.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rehearsal Mark…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リハーサルマーク…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "리허설 마크…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "排练标记…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "排練標記…"
+          }
+        }
+      }
+    },
     "editor.measure.timeSignature": {
       "comment": "Measure-menu row that opens the time-signature sheet for the target bar.",
       "localizations": {
@@ -1439,6 +1474,216 @@
           "stringUnit": {
             "state": "translated",
             "value": "上一個音符"
+          }
+        }
+      }
+    },
+    "editor.rehearsalMark.apply": {
+      "comment": "Confirmation button that writes the typed rehearsal mark.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "適用"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "적용"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "套用"
+          }
+        }
+      }
+    },
+    "editor.rehearsalMark.footer": {
+      "comment": "Footer explaining where the mark is drawn.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drawn at the start of the measure, above the top staff."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小節の先頭、最上段の上に表示されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마디 시작 부분, 맨 위 보표 위에 표시됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示在小节开头、最上方谱表的上方。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顯示在小節開頭、最上方譜表的上方。"
+          }
+        }
+      }
+    },
+    "editor.rehearsalMark.header %lld": {
+      "comment": "Section header of the rehearsal-mark sheet. %lld is the bar's displayed measure number.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Measure %lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld小節目"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld번째 마디"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第%lld小节"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第%lld小節"
+          }
+        }
+      }
+    },
+    "editor.rehearsalMark.header.unnumbered": {
+      "comment": "Same section header for a bar the score draws no number for (a pickup).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Measure"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この小節"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 마디"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本小节"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本小節"
+          }
+        }
+      }
+    },
+    "editor.rehearsalMark.remove": {
+      "comment": "Destructive row that deletes the target bar's rehearsal mark.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Mark"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マークを削除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마크 삭제"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除标记"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除標記"
+          }
+        }
+      }
+    },
+    "editor.rehearsalMark.title": {
+      "comment": "Title of the sheet that sets the rehearsal mark on one bar.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rehearsal Mark"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リハーサルマーク"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "리허설 마크"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "排练标记"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "排練標記"
           }
         }
       }
