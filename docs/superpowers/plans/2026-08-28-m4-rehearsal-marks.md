@@ -799,8 +799,10 @@ In `EditReplayScript.standard(staff:)`, after `let step12b = …` and before the
         let step13a = EditReplayStep.intent(.setRehearsalMark(measureIndex: 1, text: "A"))
         // Step 13b: take it away again. Paired with 13a deliberately, for the reason 11a/11b are paired:
         // `RemoveRehearsalMark` has its own inverse and its own wire bytes, and a script that only ever set a mark
-        // would encode neither. The removal restores the pre-13a lane exactly, padding included, so the score ends
-        // this script where step 12b left it.
+        // would encode neither. NOT an arithmetic undo of 13a and deliberately so: 13a padded the empty system
+        // lane out to one entry per measure, and the removal takes the mark back out WITHOUT un-padding — so the
+        // score ends this script with a lane 12b never gave it, and a fingerprint that differs from 12b's. That is
+        // the removal's own path, reached through its own wire bytes.
         let step13b = EditReplayStep.intent(.removeRehearsalMark(measureIndex: 1))
 ```
 
@@ -1259,13 +1261,15 @@ struct EditorRehearsalMarkSheet: View {
         NavigationStack {
             Form {
                 Section {
+                    // No `textInputAutocapitalization` override: `.characters` would suit "A" / "B" and wreck
+                    // "Bridge" and "1サビ", which this field has to take just as readily. The seeded letter is
+                    // already uppercase, so the default costs nothing.
                     TextField(text: $text) {
                         Text("editor.rehearsalMark.title", bundle: .module)
                     }
-                    .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
                     .submitLabel(.done)
-                    .onSubmit { finish(viewModel.setRehearsalMark(text: trimmed)) }
+                    .onSubmit(apply)
                 } header: {
                     header
                 } footer: {
@@ -1274,7 +1278,8 @@ struct EditorRehearsalMarkSheet: View {
                 if viewModel.targetRehearsalMarkText != nil {
                     Section {
                         Button(role: .destructive) {
-                            finish(viewModel.removeRehearsalMark())
+                            viewModel.removeRehearsalMark()
+                            dismiss()
                         } label: {
                             Text("editor.rehearsalMark.remove", bundle: .module)
                         }
@@ -1302,17 +1307,22 @@ struct EditorRehearsalMarkSheet: View {
             Button { dismiss() } label: { L10n.Common.cancel }
         }
         ToolbarItem(placement: .confirmationAction) {
-            Button { finish(viewModel.setRehearsalMark(text: trimmed)) } label: {
+            Button(action: apply) {
                 Text("editor.rehearsalMark.apply", bundle: .module)
             }
             .disabled(trimmed.isEmpty)
         }
     }
 
-    /// Closes either way. Unlike the signature sheet there is nothing to keep the sheet up FOR: a `false` here only
-    /// ever means the bar already reads exactly this, which is the state the user asked for.
-    private func finish(_ changed: Bool) {
-        _ = changed
+    /// Writes the field and closes. The write's `false` is deliberately discarded — unlike the signature sheet
+    /// there is nothing to keep this sheet up FOR, since a `false` here only ever means the bar already reads
+    /// exactly this, which is the state the user asked for.
+    ///
+    /// The empty guard is for `onSubmit`, which fires on the keyboard's Done regardless of what Apply's own
+    /// `disabled` says.
+    private func apply() {
+        guard !trimmed.isEmpty else { return }
+        viewModel.setRehearsalMark(text: trimmed)
         dismiss()
     }
 }
