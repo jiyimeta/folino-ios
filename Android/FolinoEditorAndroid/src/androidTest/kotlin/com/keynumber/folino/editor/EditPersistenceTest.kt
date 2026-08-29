@@ -14,6 +14,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.util.UUID
 
 /**
  * Spec §9's Android persistence gate: an edit made in a session is on disk once the session ends, a fresh session
@@ -62,6 +63,7 @@ class EditPersistenceTest {
         val rows: RecordingRows,
         val file: File,
         val scoresDir: File,
+        val scoreId: String,
     )
 
     private val relaysToClose = mutableListOf<EditSessionRelay>()
@@ -105,11 +107,22 @@ class EditPersistenceTest {
     }
 
     /**
-     * Opens a session over [name]'s staged fixture, or over [existing] when reopening the file a previous session
-     * wrote. A reopen loads a FRESH handle off the file, so nothing but the file itself can carry an edit across.
+     * Opens a session over [name]'s staged fixture, or over [reopening] when reopening the file a previous session
+     * wrote. A reopen loads a FRESH handle off the file, so nothing but the file itself can carry an edit across —
+     * and it keeps that session's id, which is what a real reopen of the same library row does.
+     *
+     * **[scoreId] has to be a UUID string.** `EditorBridge.stubRowPendingSave` parses it with
+     * `UUID(uuidString:) ?? UUID()`, so anything else silently becomes a fresh random id and the row refresh then
+     * names a row that does not exist. Every real caller passes a library row id, which is
+     * `UUID().uuidString` — see `LibraryAndroidStore`'s import path.
      */
-    private fun openRig(name: String, existing: Pair<File, File>? = null): Rig {
-        val (file, scoresDir) = existing ?: stagedFixture(name)
+    private fun openRig(
+        name: String,
+        scoreId: String = UUID.randomUUID().toString().uppercase(),
+        reopening: Rig? = null,
+    ): Rig {
+        val (file, scoresDir) = reopening?.let { it.file to it.scoresDir } ?: stagedFixture(name)
+        val id = reopening?.scoreId ?: scoreId
         val handle = SheetMusicJNI.nativeLoadScore(file.readBytes())
         assertNotEquals(0L, handle)
         val host = TestHost(handle)
@@ -129,10 +142,10 @@ class EditPersistenceTest {
             )
             relaysToClose.add(relay)
             hostsToRelease.add(host)
-            opened = relay.open(file.path, scoresDir.path, name)
+            opened = relay.open(file.path, scoresDir.path, id)
         }
         assertEquals(OpenResult.OPENED, opened)
-        return Rig(bridge, host, relay, rows, file, scoresDir)
+        return Rig(bridge, host, relay, rows, file, scoresDir, id)
     }
 
     /** Writes one quarter-note C into the first bar — the smallest edit that moves the score. */
@@ -158,7 +171,9 @@ class EditPersistenceTest {
         assertNotEquals("the edit never reached the file", before.toList(), rig.file.readBytes().toList())
         // And the library row was told where the bytes are now, with a digest in the importer's format.
         val (id, localFileName, contentHash) = rig.rows.calls.last()
-        assertEquals("persist-basic", id)
+        // The id has to come back exactly as the session was opened with — it is the `WHERE id =` of the row
+        // refresh, and an id that changed shape on the way through updates nothing, silently.
+        assertEquals(rig.scoreId, id)
         assertEquals(rig.file.name, localFileName)
         assertTrue("digest must be lowercase hex SHA-256: $contentHash", contentHash.matches(Regex("[0-9a-f]{64}")))
     }
@@ -169,7 +184,7 @@ class EditPersistenceTest {
         val edited = localFingerprint(rig)
         onMain { rig.relay.close() }
 
-        val reopened = openRig("persist-reopen", existing = rig.file to rig.scoresDir)
+        val reopened = openRig("persist-reopen", reopening = rig)
 
         assertEquals("the file does not hold the score the session ended on", edited, localFingerprint(reopened))
         // The other half of the same statement: with the file current, `open()`'s fingerprint check finds the two
@@ -191,7 +206,7 @@ class EditPersistenceTest {
             rig.relay.close()
         }
 
-        val reopened = openRig("persist-discard", existing = rig.file to rig.scoresDir)
+        val reopened = openRig("persist-discard", reopening = rig)
         assertEquals(
             "a discard has to take the FILE back to where the session opened, not only the memory",
             opening,
@@ -211,7 +226,7 @@ class EditPersistenceTest {
         val expected = localFingerprint(rig)
         onMain { rig.relay.close() }
 
-        val reopened = openRig("persist-undo", existing = rig.file to rig.scoresDir)
+        val reopened = openRig("persist-undo", reopening = rig)
 
         assertEquals("the file must hold exactly the score the session ended on", expected, localFingerprint(reopened))
     }
