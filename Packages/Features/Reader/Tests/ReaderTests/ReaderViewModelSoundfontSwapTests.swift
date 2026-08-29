@@ -34,11 +34,17 @@ struct ReaderViewModelSoundfontSwapTests {
         )))
     }
 
-    /// Park the main actor briefly so `Observations`-backed tasks scheduled by mutations get a chance to run before the
-    /// next assertion. Polls with a 10 ms tick up to 500 ms total so the check fires as soon as the condition settles
-    /// rather than waiting for a fixed sleep — resilient against a busy simulator where 50 ms flat is too short.
+    /// Park the main actor so `Observations`-backed tasks scheduled by mutations get a chance to run before the next
+    /// assertion. Polls with a 10 ms tick so the check fires as soon as the condition settles rather than waiting out
+    /// a fixed sleep.
+    ///
+    /// The budget is a hang guard, not an expectation: this suite shares the main actor with every other
+    /// `@MainActor` suite in the bundle, and how long the swap waits for a turn is not ours to predict. It was 500 ms
+    /// and flaked — instrumented over five full-bundle runs the condition always did settle, but took up to 1.61 s
+    /// under load, so the budget was simply too close to the real distribution. A large budget costs nothing on the
+    /// happy path, which is the common one (typically under 50 ms).
     private func yieldForObservation(until condition: @MainActor () -> Bool = { true }) async {
-        let deadline = Date.now.addingTimeInterval(0.5)
+        let deadline = Date.now.addingTimeInterval(30)
         repeat {
             try? await Task.sleep(for: .milliseconds(10))
         } while !condition() && Date.now < deadline
