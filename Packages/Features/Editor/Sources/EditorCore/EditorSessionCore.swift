@@ -129,6 +129,11 @@ public final class EditorSessionCore {
 
     public var activeVoice = 0
 
+    /// The drum pad's keys, in order. Seeded by the host from what it persisted (the layout is global, not
+    /// per-score) and read back through `resolvedDrumPadLayout`, which takes each key's engraving from the open
+    /// score's own kit.
+    public var drumPadLayout = DrumPadLayout.default
+
     /// Mirrored in from the host's transport. Editing and playback coexist — you can hear the passage you're writing
     /// without leaving edit mode — but the pad's keys go inert while the cursor runs: applying an edit mid-playback
     /// reflows the score out from under the cursor, and the preview would fight the playing engine for the same
