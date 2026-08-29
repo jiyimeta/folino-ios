@@ -44,8 +44,8 @@ var targets: [Target] = [
 ]
 
 var packageDependencies: [Package.Dependency] = [
-    .package(url: "https://github.com/devicekit/devicekit", from: "5.8.0"),
-    .package(url: "https://github.com/jpsim/Yams", from: "5.3.0"),
+    .package(url: "https://github.com/devicekit/devicekit", exact: "5.8.0"),
+    .package(url: "https://github.com/jpsim/Yams", exact: "5.4.0"),
     .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", exact: "0.63.2"),
     // swift-wirelet v0.2.2 (pinned by revision, not semver). Deliberately behind the `ba1b8e33` that Library,
     // Reader and Infrastructure pin: this pin has to match the wirelet Gradle plugin `FolinoSettingsAndroid`
