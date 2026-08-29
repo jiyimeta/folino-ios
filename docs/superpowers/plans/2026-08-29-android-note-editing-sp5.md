@@ -40,13 +40,25 @@ Verified:
 - **iOS**: the Editor package's 191 tests, since `EditorSessionCore.performSave` is the shared half.
 - **Artifact**: arm64 and x86_64 `.so`s rebuilt from a cleaned `.build`, with `flushSave` / `refreshRow` /
   `didSaveAsSiblingMSCZ` confirmed present via `nm`.
-- **Task 7's number**: a real save costs **21-24 ms**, a flush of a clean session ~0.2 ms, measured at the Kotlin
-  boundary against `parity.mscz`. Comfortably under the 120 ms line this plan set for the main-thread encode. Kept in
-  `EditPersistenceTest` rather than reverted — the choice it justifies is permanent, so the number should be too.
+- **Task 7's number, and the thing it caught.** On the emulator a save measured 21-24 ms and this plan's 120 ms line
+  looked comfortably met. **On a Pixel 8a the same save is 160-230 ms** — the emulator was ~10x optimistic, and the
+  main-thread encode this plan chose deliberately was not affordable after all. That is the one finding here worth
+  carrying forward: performance judgements on Android need the device.
+
+  The fix (commit `f4478734`) is `ConfinedEditSessionOps` — the editing session moved off Compose's main thread onto
+  a dedicated single-thread executor, which is what `EditSessionRelay`'s own threading note already pointed at.
+  `EditorBridge` is untouched and still single-threaded; only *which* thread changed. Main-thread cost is now
+  0.14-0.32 ms per op and a save never lands there at all. The alternative considered and rejected was splitting
+  `performSave` into prepare/write/complete phases on the shared core: correct, but it changes iOS-shared API to
+  solve an Android-only threading problem.
+
+  What the ~200 ms save *is* stayed partly unattributed: encode 59-88 ms, file write 0.7 ms, digest ~2 ms, and
+  ~150 ms that is neither encoder options nor task priority nor the write. `EditPersistenceTest` records the dead
+  ends so nobody re-runs them. It stopped mattering once the whole 200 ms left the main thread.
 
 Still owed, and **only a person can do it**: the hands-on pass of Task 7 Step 4 on the physical Pixel — the six
 scenarios plus the one thing SP5 cannot check for itself, whether the sibling-`.mscz` Snackbar reads right in place.
-Task 7's separate diagnostic-log commit was not needed; the measurement lives in the test instead.
+Task 7's separate diagnostic-log commit was not needed; the measurements live in the test instead.
 
 Deviations from the plan as written, all small:
 
