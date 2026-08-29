@@ -51,6 +51,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.keynumber.folino.editor.ConfinedEditSessionOps
 import com.keynumber.folino.editor.DebouncedAutosave
 import com.keynumber.folino.editor.EditSessionController
 import com.keynumber.folino.editor.EditSessionRelay
@@ -104,6 +105,10 @@ import com.keynumber.folino.ui.settings.SettingsPrefs
 import com.keynumber.folino.ui.settings.SettingsScreen
 import com.keynumber.folino.ui.settings.VersionHistoryItem
 import com.keynumber.folino.ui.settings.VersionHistoryScreen
+import java.util.concurrent.Executors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -689,7 +694,14 @@ private fun LibraryNavGraph(
                 val editBridgeVm: EditorBridgeViewModel =
                     viewModel(factory = remember(context) { EditorBridgeVMFactory(context) })
                 val editScope = rememberCoroutineScope()
-                val editController = remember(editBridgeVm, readerVm, audioVm, editScope) {
+                // The editing session's own thread. NOT the main thread: a save encodes the whole score, which
+                // measured 160-230 ms on a Pixel 8a, and every op reaching `EditorBridge` runs synchronously. See
+                // `ConfinedEditSessionOps` for why moving the one thread is the answer rather than making the
+                // bridge concurrent. Single-threaded is load-bearing, not an efficiency choice.
+                val editExecutor = remember {
+                    Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "folino-edit") }
+                }
+                val editController = remember(editBridgeVm, readerVm, audioVm, editScope, editExecutor) {
                     val bridging = GeneratedEditBridging(editBridgeVm)
                     // The audition seam (iOS's `NoteAuditioning`): the shared core decides which note to preview
                     // and after which ops, the relay drains that decision, and this is the sound.
@@ -697,11 +709,15 @@ private fun LibraryNavGraph(
                         bridging,
                         readerVm,
                         audition = NoteAuditioning(audioVm::playNotePreview),
-                        // The Reader screen's scope, so a pending write dies with the screen rather than with the
-                        // process. `close()` flushes on the way out, so nothing is lost when it does.
-                        autosave = DebouncedAutosave(editScope) { bridging.flushSave() },
+                        // On the editing thread, so the debounce fires the save there rather than posting it back
+                        // to the main thread — which is the whole point of the confinement below. `close()` and
+                        // `flushPendingSave()` reach `flushNow()` already on that thread, so every save the session
+                        // performs runs in exactly one place.
+                        autosave = DebouncedAutosave(
+                            CoroutineScope(editExecutor.asCoroutineDispatcher() + SupervisorJob()),
+                        ) { bridging.flushSave() },
                     )
-                    EditSessionController(relay, bridging, editScope)
+                    EditSessionController(ConfinedEditSessionOps(relay, editExecutor), bridging, editScope)
                 }
                 val editing by editController.ui.collectAsState()
                 // A session must not outlive the screen that opened it: leaving the Reader, or an Activity
@@ -710,7 +726,17 @@ private fun LibraryNavGraph(
                 // so without this the Swift side would still believe a session was open while `EditUiState` had
                 // reset to "not editing" — the exact divergence `open()`'s fingerprint check exists to catch, but
                 // reached by a route it should never have to.
-                DisposableEffect(editController) { onDispose { editController.end() } }
+                //
+                // The executor dies with the session, in this order and in this one effect: `end()` blocks until
+                // the confined thread has flushed and closed, and only then is the thread allowed to stop. Shutting
+                // it down from a separate `DisposableEffect` would leave the order to Compose's disposal sequence,
+                // and losing that race means the session's last save never runs.
+                DisposableEffect(editController, editExecutor) {
+                    onDispose {
+                        editController.end()
+                        editExecutor.shutdown()
+                    }
+                }
                 // …and a session must not lose an edit to a process death either. `onDispose` above covers LEAVING
                 // the Reader; this covers being backgrounded while still in it, which is the last moment Android
                 // guarantees before the process can be killed. Two triggers rather than one because neither implies

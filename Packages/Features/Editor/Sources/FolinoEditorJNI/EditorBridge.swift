@@ -237,10 +237,11 @@ public final class EditorBridge {
     /// `originals?.captureOriginalIfNeeded`, and Android builds the core with no originals store, so the awaited work
     /// is a straight-line encode and write with nothing to starve the cooperative pool on.
     ///
-    /// It blocks the caller's thread — the Android main thread — for the length of an MSCZ encode. That is deliberate
-    /// rather than tolerated: every op in this file already runs synchronously on that thread and each one triggers a
-    /// full relayout, so the core is single-threaded by construction and moving just the save off it would be a data
-    /// race, not an optimization. The 2 s debounce is what keeps the cost off the typing path.
+    /// It blocks the caller's thread for the length of an MSCZ encode, which on a Pixel 8a measured 160-230 ms even
+    /// for a small score. That is affordable only because the caller is NOT the thread that draws: `EditorBridge` is
+    /// single-threaded by construction, so rather than make it concurrent the host moves the one thread it runs on —
+    /// see `ConfinedEditSessionOps`, which posts every op and every save to a dedicated executor. Blocking that
+    /// thread is exactly right; blocking Compose's would not be.
     @WireletExpose
     public func flushSave() {
         guard let core else { return }

@@ -270,11 +270,17 @@ interface EditSessionOps {
  *
  * ## Threading
  *
- * **Every method here must be called from one thread**, and on Android that thread is Compose's main thread.
+ * **Every method here must be called from one thread**, and in the app that thread is a dedicated single-thread
+ * executor rather than Compose's main thread — see [ConfinedEditSessionOps] for what put it there and why (a save
+ * encodes the whole score, ~200 ms on a Pixel 8a, and none of that may land on the thread that draws).
  * ssm's side takes a lock across each of its entry points; Folino's bridge deliberately does not (it holds a
  * non-`Sendable` core, one per isolation domain), and an op followed by `takeRelayFrames()` is two separate JNI
- * calls that must not interleave with another op's pair. Do not move these onto a coroutine dispatcher without
- * giving the bridge a lock first.
+ * calls that must not interleave with another op's pair. Do not move these onto a general coroutine dispatcher
+ * without giving the bridge a lock first — a SINGLE-thread executor is what satisfies that condition here, by
+ * construction rather than by a lock.
+ *
+ * The instrumented suites drive this class from Android's main thread instead, which is equally valid: the contract
+ * asks for one thread, not for a particular one.
  *
  * ## Why a `false` is never shrugged off
  *

@@ -7,12 +7,18 @@ import io.github.jiyimeta.sheetmusic.audio.model.RestID
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
 import io.github.jiyimeta.sheetmusic.audio.model.StaffAddress
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreItemIDCodec
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.MainScope
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.io.File
 import java.util.UUID
 
@@ -72,18 +78,20 @@ class EditPersistenceTest {
     /**
      * Every flush this test performed, in microseconds, logged in [tearDown] under the `EditPersistence` tag.
      *
-     * The design takes the MSCZ encode on the main thread deliberately — `EditorBridge` is single-threaded by
-     * construction, so moving just the save off it would be a data race rather than an optimization — and a choice
-     * like that is worth a number rather than an argument. Measured 2026-08-29 against `parity.mscz`, which is a
-     * SMALL fixture (28.8 KB encoded):
+     * This is the cost of a save, wherever it runs. It is NOT what the user feels: since
+     * [neitherEditingNorTheAutosaveHoldsTheMainThread], the app takes it on a dedicated editing thread
+     * ([ConfinedEditSessionOps]) and the main thread sees ~0.2 ms per op. The number still matters — it bounds how
+     * long a session's last save delays leaving the Reader, and how much work a debounce tick does — so it stays
+     * measured. Against `parity.mscz`, a SMALL fixture (28.8 KB encoded):
      *
      * | | real save | clean flush |
      * | --- | --- | --- |
      * | Pixel 8a | **160-230 ms** | ~2 ms |
      * | `Pixel_6_Pro_API_36` arm64 emulator | 21-24 ms | ~0.2 ms |
      *
-     * **The emulator is ~10x optimistic; do not judge this on one.** On the real device a save is over ten dropped
-     * frames — well past the 120 ms the SP5 plan set as the line for taking the encode on the main thread.
+     * **The emulator is ~10x optimistic; do not judge this on one.** Reading 21 ms off an emulator is what made the
+     * main thread look like an acceptable place to do this at all — the real device says otherwise, by a factor of
+     * ten, and that is why the save moved off it.
      *
      * [whereTheFlushTimeGoes] splits what it can. Against the same fixture on a Pixel 8a: encode 88 ms cold and
      * 59 ms warm, the file write 0.7 ms (timed in Kotlin over the same bytes), the digest 1.6 ms, and a clean flush
@@ -95,10 +103,12 @@ class EditPersistenceTest {
      * plus the three JNI upcalls `performSave` makes from a non-JVM thread (`sha256Hex`, `fileSize`, `refreshRow`).
      * A probe op to measure those did not bind (jextract exported it under the `EditorBridge` class while the
      * wirelet view model expected its own `native` symbol), and it was abandoned rather than chased: the attribution
-     * does not change the fix. Taking the save off the main thread removes the pool hop, the semaphore and the
-     * blocking all at once, whichever of them dominates.
+     * does not change the fix. Taking the save off the main thread takes the whole 200 ms off it, whichever part of
+     * the 200 ms dominates.
      *
      * Not asserted on: a threshold here would be a flake. Read it from logcat.
+     * [neitherEditingNorTheAutosaveHoldsTheMainThread] does assert, because the gap it measures is
+     * three orders of magnitude rather than a margin.
      */
     private val flushMicros = mutableListOf<Long>()
 
@@ -266,6 +276,78 @@ class EditPersistenceTest {
                 "digest=${digestMicros}us kotlinWrite=${kotlinWriteMicros}us " +
                 "wholeFlush=${flushMicros.last()}us",
         )
+    }
+
+    /**
+     * The point of [ConfinedEditSessionOps]: a save costs ~200 ms on this device, and none of it may be spent on the
+     * thread that draws.
+     *
+     * Every other test here drives the relay directly, which is deliberate — they are about what the save DOES — so
+     * this is the only one that goes through the wiring the app actually uses, and the only one that can see the
+     * main thread at all.
+     *
+     * Two things are asserted, and a threshold is fair here in a way it is not for the save's own cost: the gap
+     * being measured is three orders of magnitude (0.1 ms against 200 ms), so 50 ms is nowhere near either.
+     */
+    @Test fun neitherEditingNorTheAutosaveHoldsTheMainThread() {
+        val (file, scoresDir) = stagedFixture("persist-confined")
+        val scoreId = UUID.randomUUID().toString().uppercase()
+        val handle = SheetMusicJNI.nativeLoadScore(file.readBytes())
+        assertNotEquals(0L, handle)
+        val host = TestHost(handle)
+        hostsToRelease.add(host)
+
+        val executor = Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "test-folino-edit") }
+        val autosaveScope = CoroutineScope(executor.asCoroutineDispatcher() + SupervisorJob())
+        lateinit var confined: ConfinedEditSessionOps
+        var opened: OpenResult? = null
+        onMain {
+            val bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles { _, _, _ -> }))
+            // The shape MainActivity builds: the debounce fires ON the editing thread, and ops are posted to it.
+            // A 500 ms quiet period rather than the shipping 2 s, only so the test does not idle for the difference.
+            val relay = EditSessionRelay(
+                bridge,
+                host,
+                RealEditNatives,
+                autosave = DebouncedAutosave(autosaveScope, delayMillis = 500L) { bridge.flushSave() },
+            )
+            confined = ConfinedEditSessionOps(relay, executor)
+            opened = confined.open(file.path, scoresDir.path, scoreId)
+        }
+        assertEquals(OpenResult.OPENED, opened)
+
+        val before = file.readBytes()
+        val mainMicros = mutableListOf<Long>()
+        onMain {
+            for (op in listOf<() -> Unit>(
+                { confined.selectItem(ScoreItemIDCodec.encode(ScoreItemID.Rest(firstRestID()))) },
+                { confined.armDuration(QUARTER) },
+                { confined.inputPitch("C") },
+            )) {
+                val started = System.nanoTime()
+                op()
+                mainMicros.add((System.nanoTime() - started) / 1_000)
+            }
+        }
+
+        // Wait out the debounce from THIS thread, never the main one, so the tick has to run on the editing thread.
+        Thread.sleep(2_000)
+
+        android.util.Log.i("EditPersistence", "confined: mainThreadPerOp=${mainMicros}us")
+        assertTrue(
+            "an op must not hold the main thread: $mainMicros us",
+            mainMicros.all { it < 50_000 },
+        )
+        assertNotEquals(
+            "the debounced save must still have happened, just not on the main thread",
+            before.toList(),
+            file.readBytes().toList(),
+        )
+
+        onMain { confined.close() }
+        autosaveScope.cancel()
+        executor.shutdown()
+        assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS))
     }
 
     @Test fun anEditReachesTheFileWhenTheSessionEnds() {

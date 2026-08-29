@@ -31,11 +31,13 @@ interface EditAutosave {
  * `EditorSessionCore.performSave`; what lives here is only the timer, which belongs where the run loop is. The
  * `FolinoEditorJNI` image has no run loop at all, so this is the piece that cannot be shared.
  *
- * **[save] runs on the caller's thread — the main thread.** It reaches into `EditorBridge`, which is single-threaded
- * by construction: every op runs synchronously on the main thread and mutates the same non-`Sendable`
- * `EditorSessionCore`. Moving the write to `Dispatchers.IO` would be a data race against the next pad tap, not a
- * responsiveness win. The quiet period is what keeps the encode off the typing path; [flushNow] is the one place the
- * cost is taken deliberately.
+ * **[save] must run on the session's own thread, and [scope] is what puts it there.** It reaches into
+ * `EditorBridge`, which is single-threaded by construction: every op mutates the same non-`Sendable`
+ * `EditorSessionCore`, so a save on any other thread is a data race against the next pad tap. The composition root
+ * builds this scope on the same single-thread executor [ConfinedEditSessionOps] posts ops to — not on
+ * `Dispatchers.Main`, which is the thread this whole arrangement exists to keep free, and not on `Dispatchers.IO`,
+ * which would be the race. [flushNow] inherits its caller's thread and every caller already reaches it from that
+ * same executor.
  *
  * @param delayMillis the quiet period after the last edit. 2 s, matching iOS's `scheduleAutosave` and the Reader's
  *   annotation debounce.
