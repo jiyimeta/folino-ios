@@ -34,17 +34,19 @@ public final class EditorViewModel {
 
     /// Bumped on every applied / undone / redone intent. The Reader includes it in its layout task key so the score
     /// re-lays-out after edits that don't change the structural score signature.
-    public private(set) var generation = 0
+    public internal(set) var generation = 0
 
     /// Bumped ONLY by a successful apply — never by `undo()`/`redo()`. Distinct from `generation` (which bumps on all
     /// three) because `EditorChromeView`'s system-undo bridge must re-register its `UndoManager` trampoline only on a
     /// genuinely NEW edit; re-registering after undo/redo would double up with `registerSystemUndo`'s own symmetric
     /// re-registration and drift the system stack from the session's real depth.
-    public private(set) var appliedEditCount = 0
+    public internal(set) var appliedEditCount = 0
 
-    /// This adapter's copy of `core.selectionRevision`. Not public: nothing outside reads it, and it exists only so
-    /// `syncFromCore` can tell "the selection was placed again" from "the selection happens to be equal".
-    private var selectionRevision = 0
+    /// This adapter's copy of `core.selectionRevision`. Not public: nothing outside the module reads it, and it
+    /// exists only so `syncFromCore` can tell "the selection was placed again" from "the selection happens to be
+    /// equal". Internal rather than private because the mirror that writes it lives in its own file, and Swift's
+    /// `private` does not span files — the same reason the mirrored counters above are `internal(set)`.
+    var selectionRevision = 0
 
     public var isSessionActive: Bool {
         _ = generation
@@ -53,9 +55,9 @@ public final class EditorViewModel {
 
     // Selection and caret, both rendered by the Reader through the seam — the selection as a tint on the item, the
     // caret as an insertion bar in front of a slot.
-    public private(set) var selection: ScoreSelection = .none
-    public private(set) var selectedItem: SheetMusicCore.ScoreItemID?
-    public private(set) var caretItem: SheetMusicCore.ScoreItemID?
+    public internal(set) var selection: ScoreSelection = .none
+    public internal(set) var selectedItem: SheetMusicCore.ScoreItemID?
+    public internal(set) var caretItem: SheetMusicCore.ScoreItemID?
 
     /// Whether the pad has anything at all to act on. With neither a caret nor a selection there is no slot to write
     /// into and no item to edit, so every key is inert.
@@ -77,10 +79,10 @@ public final class EditorViewModel {
         EditorSessionCore.slot(of: selectedItem) != nil
     }
 
-    public private(set) var armedDuration: NoteDuration?
-    public private(set) var armedDots = 0
-    public private(set) var isAddToChordArmed = false
-    public private(set) var armedTuplet = 3
+    public internal(set) var armedDuration: NoteDuration?
+    public internal(set) var armedDots = 0
+    public internal(set) var isAddToChordArmed = false
+    public internal(set) var armedTuplet = 3
 
     public var activeVoice = 0 {
         didSet { core.activeVoice = activeVoice }
@@ -106,7 +108,7 @@ public final class EditorViewModel {
 
     /// True once a non-MSCX/MSCZ source has been rewritten as a sibling `.mscz` file. One-way: never reset, since it
     /// drives the one-time "saved as .mscz" notice.
-    public private(set) var didSaveAsSiblingMSCZ = false
+    public internal(set) var didSaveAsSiblingMSCZ = false
 
     // MARK: - Revert and discard
     //
@@ -255,7 +257,7 @@ public final class EditorViewModel {
     /// Bumped when something outside the Editor asks for the input pad — today, the host's note-input coach mark
     /// being tapped. A counter rather than a `Bool` so a second request still lands after the user has closed the pad
     /// again; the chrome owns the actual `editorPadVisible` state and watches this.
-    public private(set) var padRevealRequests = 0
+    public internal(set) var padRevealRequests = 0
 
     /// Asks the chrome to bring the input pad up. Safe to call whether or not the pad is already showing.
     public func requestPadReveal() {

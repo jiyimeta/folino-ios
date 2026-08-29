@@ -2,6 +2,7 @@ import Domain
 import EditorCore
 import Foundation
 import SheetMusicCore
+import SheetMusicUI
 
 /// The mirror: re-reading everything the core owns into this adapter's `@Observable` state, performing the side
 /// effects the core asked for, and firing the two seam callbacks when it says something moved.
