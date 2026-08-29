@@ -75,6 +75,9 @@
     <string name="reader_editing_undo">撤销</string>
     <string name="reader_editing_redo">重做</string>
     <string name="reader_editing_pad">音符面板</string>
+    <string name="reader_editing_discard_action">放弃更改</string>
+    <string name="reader_editing_pad_hide">隐藏音符键盘</string>
+    <string name="reader_editing_pad_show">显示音符键盘</string>
     <string name="reader_editing_voice">声部 %1$d</string>
     <string name="reader_editing_unavailable_version">无法编辑：此乐谱正由不同版本的引擎渲染。</string>
     <string name="reader_editing_unavailable_diverged">此乐谱目前无法编辑。</string>

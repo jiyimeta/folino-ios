@@ -1,3 +1,4 @@
+import EditorCore
 import SwiftUI
 import UtilityUI
 

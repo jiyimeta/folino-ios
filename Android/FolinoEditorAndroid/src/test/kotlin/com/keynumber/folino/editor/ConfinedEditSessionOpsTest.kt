@@ -40,7 +40,12 @@ class ConfinedEditSessionOpsTest {
             synchronized(this) { inFlight = false }
         }
 
-        override fun open(scorePath: String, scoresDirectory: String, scoreId: String): OpenResult {
+        override fun open(
+            scorePath: String,
+            scoresDirectory: String,
+            scoreId: String,
+            carriedItem: ByteArray,
+        ): OpenResult {
             record("open")
             return openResult
         }

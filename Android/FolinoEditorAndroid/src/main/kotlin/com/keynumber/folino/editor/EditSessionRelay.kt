@@ -60,6 +60,12 @@ interface EditBridging {
     fun appliedIntentCount(): Int
 
     fun selectItem(bytes: ByteArray)
+
+    /** Selects an element chosen OUTSIDE the session — the reader's last tap-to-seek. Empty bytes mean nothing was
+     * remembered. Distinct from [selectItem] because the two differ in shared BEHAVIOR, not in plumbing: a carried
+     * ID is dropped when this score no longer contains it, and it sounds nothing (a tap asked to hear that note;
+     * opening a session did not). See `EditorSessionCore.selectCarriedItem`. */
+    fun selectCarriedItem(bytes: ByteArray)
     fun inputPitch(letter: String)
     fun deleteSelection()
     fun writeRest()
@@ -128,6 +134,7 @@ class GeneratedEditBridging(private val vm: EditorBridgeViewModel) : EditBridgin
     override fun appliedIntentCount() = vm.appliedIntentCountNow()
 
     override fun selectItem(bytes: ByteArray) = vm.selectItem(EditBytesWire(bytes))
+    override fun selectCarriedItem(bytes: ByteArray) = vm.selectCarriedItem(EditBytesWire(bytes))
     override fun inputPitch(letter: String) = vm.inputPitch(letter)
     override fun deleteSelection() = vm.deleteSelection()
     override fun writeRest() = vm.writeRest()
@@ -218,7 +225,25 @@ fun interface NoteAuditioning {
  * so add one here whenever the relay grows a new op the controller needs to reach.
  */
 interface EditSessionOps {
-    fun open(scorePath: String, scoresDirectory: String, scoreId: String): OpenResult
+    /**
+     * Opens a session over the score at [scorePath].
+     *
+     * [carriedItem] is the element the reader's last tap-to-seek landed on, as `ScoreItemID` bytes — the session
+     * opens on it, so edit mode starts where the finger left off rather than on an inert pad. Empty means nothing
+     * was remembered, which is also what a cold open gets.
+     *
+     * It is a parameter of OPENING rather than an op of its own because that is what it is: iOS carries the same
+     * value across the same seam at the same moment (`ReaderEditingHost.pendingSelection` handed to
+     * `EditorViewModel.selectItem` inside `onBeginEditing`). Whether the ID still names anything is not decided
+     * here — `EditorSessionCore.selectCarriedItem` decides it for both platforms.
+     */
+    fun open(
+        scorePath: String,
+        scoresDirectory: String,
+        scoreId: String,
+        carriedItem: ByteArray = ByteArray(0),
+    ): OpenResult
+
     fun close()
 
     /** Writes any pending edit now, without ending the session. Driven from the Reader's `onPause`. */
@@ -331,7 +356,12 @@ class EditSessionRelay(
      * file-parsed score into the handle, which is also the correct semantics: what the mirror holds beyond the file
      * was never persisted, so the file is the truth.
      */
-    override fun open(scorePath: String, scoresDirectory: String, scoreId: String): OpenResult {
+    override fun open(
+        scorePath: String,
+        scoresDirectory: String,
+        scoreId: String,
+        carriedItem: ByteArray,
+    ): OpenResult {
         if (isOpen) close()
         val handle = host.scoreHandle()
         if (handle == 0L) return OpenResult.NO_HANDLE
@@ -348,6 +378,17 @@ class EditSessionRelay(
         // not when it can be skipped.
         verifyOrResync()
         host.requestRelayout()
+        // After the resync, never before it: a resync can swap the handle out from under the host, and a selection
+        // placed against the score that lost is a selection nothing can see. Unconditional rather than gated on
+        // non-empty bytes — empty means "carry nothing", which the core reads as a deliberate deselect and is the
+        // correct opening state for a cold session either way.
+        //
+        // Straight to the bridge, NOT through `relay {}`: that funnel arms the autosave, and opening a session is
+        // not an edit. iOS is explicit about the same thing at the same moment ("Opening a session is not an edit:
+        // match the counter first so `syncFromCore` neither announces a score nor arms the autosave timer for it").
+        // Nothing the funnel does is owed here anyway — placing a selection emits no intent and queues no
+        // audition, which is exactly what makes carrying one different from a tap.
+        if (isOpen) bridge.selectCarriedItem(carriedItem)
         return if (isOpen) OpenResult.OPENED else OpenResult.RESYNC_FAILED
     }
 

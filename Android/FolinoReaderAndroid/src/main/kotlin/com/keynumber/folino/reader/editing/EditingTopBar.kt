@@ -9,12 +9,10 @@ import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Piano
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.IconButton
@@ -40,26 +38,31 @@ import com.keynumber.folino.reader.R
 private const val VOICE_COUNT = 4
 
 /**
- * The Reader's app-bar actions while an edit session is open — undo, redo, the voice picker, the note-pad
- * toggle and a `Done` that ends the session — REPLACING the reading actions (share, edit info, playback
- * controls, display settings, annotate) rather than joining them, mirroring how
+ * The Reader's app-bar actions while an edit session is open — undo, redo, the voice picker and a `Done` that
+ * ends the session — REPLACING the reading actions (share, edit info, playback controls, display settings,
+ * annotate) rather than joining them, mirroring how
  * [ReaderTopBar][com.keynumber.folino.reader.ReaderTopBar] already swaps content for a contextual mode. Mounted
- * inside its `actions` slot; the back arrow's own swap (ending the session instead of navigating away) lives in
- * that caller, since it also owns the `BackHandler` for the system back gesture.
+ * inside its `actions` slot; the leading ✕ (leaving the session, asking first when there is something to lose)
+ * lives in that caller, since it also owns the `BackHandler` for the system back gesture.
  *
- * **The voice picker and the pad toggle used to live in a fixed row above the transport (`EditingBottomBar`).**
- * That row is gone: it cost the score a band of screen for the whole session to hold three controls, and it
- * spelled voice as four always-visible buttons — a quarter of the row spent on a choice that is made rarely and
- * is almost always 1. Both belong to the SESSION rather than to what is being written, and the app bar is where
- * Android puts a session's own controls; iOS reaches the same place from its side (`EditorTopBarView` carries the
- * voice picker in its control tier, and its pad is dismissed and recalled in place). The ← / → steppers that
- * shared that row moved the other way, onto the pad itself — see `EditingPad`.
+ * **The voice picker used to live in a fixed row above the transport (`EditingBottomBar`).** That row is gone: it
+ * cost the score a band of screen for the whole session to hold three controls, and it spelled voice as four
+ * always-visible buttons — a quarter of the row spent on a choice that is made rarely and is almost always 1.
+ * Voice belongs to the SESSION rather than to what is being written, and the app bar is where Android puts a
+ * session's own controls; iOS reaches the same place from its side (`EditorTopBarView` carries the voice picker in
+ * its control tier). The ← / → steppers that shared that row are their own pill at the bottom-left now — see
+ * `EditingStepperPill`.
+ *
+ * **There is no pad show / hide toggle here.** There was one, a `Piano` `FilledIconToggleButton`, and it is gone
+ * for the reason iOS deleted its own: the pad is dismissed and recalled IN PLACE now, by dragging it past a side
+ * edge the way each platform's own PiP parks a window (`EditingPadTuck`). A toggle in the bar meant the pad and
+ * the control that summons it were nowhere near each other, and it made edit mode open looking inert.
  *
  * The voice picker is ONE control that shows the current voice and opens a menu of the four — the same shape
  * iOS settled on in `EditorVoicePicker` (a menu, not the segmented control it used to be), because four
  * permanent buttons crowd out the title on a phone and buy nothing.
  *
- * [canUndo] / [canRedo] / [activeVoice] / [isPadVisible] come straight from
+ * [canUndo] / [canRedo] / [activeVoice] come straight from
  * [EditUiState][com.keynumber.folino.editor.EditUiState] — the only local state here is whether the voice menu
  * is open, which nothing outside this row has any use for. [activeVoice] is zero-indexed and displayed 1-based,
  * matching iOS's `viewModel.activeVoice + 1`; [onSetVoice] is called with the zero-indexed value.
@@ -69,11 +72,9 @@ fun EditingTopBarActions(
     canUndo: Boolean,
     canRedo: Boolean,
     activeVoice: Int,
-    isPadVisible: Boolean,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     onSetVoice: (Int) -> Unit,
-    onTogglePad: () -> Unit,
     onEndEditing: () -> Unit,
     canRevertToOriginal: Boolean,
     onRevertToOriginal: () -> Unit,
@@ -87,9 +88,6 @@ fun EditingTopBarActions(
             Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = stringResource(R.string.reader_editing_redo))
         }
         VoicePicker(activeVoice = activeVoice, onSetVoice = onSetVoice)
-        FilledIconToggleButton(checked = isPadVisible, onCheckedChange = { onTogglePad() }) {
-            Icon(Icons.Filled.Piano, contentDescription = stringResource(R.string.reader_editing_pad))
-        }
         // Revert lives behind the overflow rather than beside Done, where iOS puts it (`EditorTopBarView` gives it
         // the trailing slot, in red). Two reasons to move it: Material reserves the bar's trailing weight for the
         // PRIMARY action, and this is one a reader takes once in the life of a score — and the bar is already
@@ -136,10 +134,12 @@ private fun EditingOverflowMenu(onRevertToOriginal: () -> Unit) {
 /**
  * Asks before throwing this session's edits away.
  *
- * Android's answer to iOS's always-visible `✕`: the same CONCEPT — "put back what I just did" — reached by the
- * gesture an Android reader already uses to leave (back, or the bar's arrow), and only when there is something to
- * lose. That keeps the two platforms teachable to each other without ever letting one gesture mean two things:
- * back never silently discards here, and iOS has no back in edit mode at all.
+ * Reached two ways, and they now agree with iOS on both: the bar's own leading ✕ — the same control
+ * `EditorDiscardButton` puts in the same place — and the system back gesture, which an Android reader will use to
+ * leave whatever the bar shows. The bar no longer shows a back ARROW while editing: a contextual bar takes ✕, and
+ * an arrow there promised navigation that edit mode does not offer (iOS shows no back affordance at all).
+ *
+ * The dialog appears only when there is something to lose. Back never silently discards.
  */
 @Composable
 fun DiscardEditsDialog(onDiscard: () -> Unit, onKeepEditing: () -> Unit) {
@@ -294,29 +294,25 @@ private fun EditingTopBarActionsPreview() {
         canUndo = true,
         canRedo = false,
         activeVoice = 0,
-        isPadVisible = false,
         onUndo = {},
         onRedo = {},
         onSetVoice = {},
-        onTogglePad = {},
         onEndEditing = {},
         canRevertToOriginal = true,
         onRevertToOriginal = {},
     )
 }
 
-@Preview(name = "Editing top-bar actions — pad open, voice 3", showBackground = true)
+@Preview(name = "Editing top-bar actions — voice 3, nothing to revert", showBackground = true)
 @Composable
-private fun EditingTopBarActionsPadOpenPreview() {
+private fun EditingTopBarActionsVoiceThreePreview() {
     EditingTopBarActions(
         canUndo = true,
         canRedo = true,
         activeVoice = 2,
-        isPadVisible = true,
         onUndo = {},
         onRedo = {},
         onSetVoice = {},
-        onTogglePad = {},
         onEndEditing = {},
         canRevertToOriginal = false,
         onRevertToOriginal = {},

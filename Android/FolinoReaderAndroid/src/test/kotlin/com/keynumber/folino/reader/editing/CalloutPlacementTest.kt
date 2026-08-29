@@ -253,6 +253,41 @@ class CalloutPlacementTest {
         )
     }
 
+    /**
+     * The editing chrome floats over the score's bottom now — the compact transport's band, plus the note pad
+     * while it is out — so a callout that lands there is a control the reader cannot reach. The clearance is what
+     * keeps the last-resort clamp above it.
+     */
+    @Test
+    fun `the clamp keeps the card clear of the floating editing chrome`() {
+        val selLeftPx = 120f
+        // Low enough that the card cannot fit above it either, so the clamp — not the side choice — is what
+        // decides where this one lands. That is exactly the case the clearance has to survive.
+        val selTopPx = 40f
+        val bottomClearancePx = 300f
+
+        val placement = resolveCalloutPlacement(
+            selLeftPx = selLeftPx,
+            selTopPx = selTopPx,
+            selWidthPx = selWidthPx,
+            selHeightPx = selHeightPx,
+            cardWidthPx = cardWidthPx,
+            cardHeightPx = cardHeightPx,
+            gapPx = gapPx,
+            edgeInsetPx = edgeInsetPx,
+            viewportPanPx = Offset.Zero,
+            viewportSizePx = viewportSizePx,
+            bottomClearancePx = bottomClearancePx,
+        )
+
+        val cardBottom = placement.offset.y + cardHeightPx
+        assertTrue(
+            "card bottom $cardBottom reaches into the ${bottomClearancePx}px chrome band at the foot of a " +
+                "${viewportSizePx.height}px viewport",
+            cardBottom <= viewportSizePx.height - bottomClearancePx - edgeInsetPx,
+        )
+    }
+
     /** Fails with the two rects' coordinates if the card's placed rect and the selection's own rect intersect —
      * the geometric property that actually matters, independent of which numbers [resolveCalloutPlacement] used
      * to get there. */

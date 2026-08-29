@@ -103,6 +103,7 @@ internal fun resolveCalloutPlacement(
     edgeInsetPx: Float,
     viewportPanPx: Offset,
     viewportSizePx: IntSize,
+    bottomClearancePx: Float = 0f,
 ): CalloutPlacement {
     val minX = viewportPanPx.x + edgeInsetPx
     val maxX = (viewportPanPx.x + viewportSizePx.width - cardWidthPx - edgeInsetPx).coerceAtLeast(minX)
@@ -110,7 +111,11 @@ internal fun resolveCalloutPlacement(
     val x = rawX.coerceIn(minX, maxX)
 
     val viewportTopPx = viewportPanPx.y + edgeInsetPx
-    val viewportBottomPx = viewportPanPx.y + viewportSizePx.height - edgeInsetPx
+    // The floating editing chrome covers the bottom of the viewport — the transport's band, plus the pad while it
+    // is out — so the usable bottom is that much higher than the viewport's own. iOS passes the same figure into
+    // `SelectionCalloutLayer(bottomClearance:)`, and for the same reason: the callout carries the pitch steps, and
+    // a card parked under the pad is a control the reader cannot reach.
+    val viewportBottomPx = viewportPanPx.y + viewportSizePx.height - bottomClearancePx - edgeInsetPx
     val aboveY = selTopPx - gapPx - cardHeightPx
     val belowY = selTopPx + selHeightPx + gapPx
 
@@ -169,6 +174,8 @@ fun EditingCallout(
     vPadPx: Float,
     viewportPanPx: Offset,
     viewportSizePx: IntSize,
+    /** Room the floating editing chrome occupies at the bottom of the viewport — see [resolveCalloutPlacement]. */
+    bottomClearancePx: Float = 0f,
     onSetDuration: (Int) -> Unit,
     onSetDots: (Int) -> Unit,
     onToggleDot: () -> Unit,
@@ -204,6 +211,7 @@ fun EditingCallout(
                 edgeInsetPx = edgeInsetPx,
                 viewportPanPx = viewportPanPx,
                 viewportSizePx = viewportSizePx,
+                bottomClearancePx = bottomClearancePx,
             ).offset
         },
     ) {

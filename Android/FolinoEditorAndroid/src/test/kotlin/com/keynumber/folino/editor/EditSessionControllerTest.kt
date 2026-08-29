@@ -6,6 +6,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -31,8 +32,17 @@ private class FakeRelay(private val openResult: OpenResult = OpenResult.OPENED) 
     /** Records every op call by name, so a test can assert a controller method reached the right one. */
     val calls = mutableListOf<String>()
 
-    override fun open(scorePath: String, scoresDirectory: String, scoreId: String): OpenResult {
+    /** The bytes the last [open] was handed — what a test asserts the reader's carried selection reached. */
+    var openedWithCarriedItem: ByteArray? = null
+
+    override fun open(
+        scorePath: String,
+        scoresDirectory: String,
+        scoreId: String,
+        carriedItem: ByteArray,
+    ): OpenResult {
         openCalls += 1
+        openedWithCarriedItem = carriedItem
         return openResult
     }
 
@@ -138,6 +148,29 @@ class EditSessionControllerTest {
     }
 
     @Test
+    fun `begin hands the reader's last tap through to the session it opens`() {
+        val relay = FakeRelay(openResult = OpenResult.OPENED)
+        val controller = EditSessionController(relay, FakeProjection(), scope)
+        val tapped = byteArrayOf(4, 2)
+
+        controller.begin("/score.mscx", "/scores", "id", tapped)
+
+        assertArrayEquals(tapped, relay.openedWithCarriedItem)
+    }
+
+    /** Nothing tapped is the ordinary cold open, and it must still reach the relay as "carry nothing" rather than
+     * as a missing argument some layer defaults differently. */
+    @Test
+    fun `begin with nothing remembered carries empty bytes`() {
+        val relay = FakeRelay(openResult = OpenResult.OPENED)
+        val controller = EditSessionController(relay, FakeProjection(), scope)
+
+        controller.begin("/score.mscx", "/scores", "id")
+
+        assertArrayEquals(ByteArray(0), relay.openedWithCarriedItem)
+    }
+
+    @Test
     fun `no handle, an unreadable score, and a refused mirror all read the same to the user`() {
         for (result in listOf(OpenResult.NO_HANDLE, OpenResult.SCORE_UNREADABLE, OpenResult.MIRROR_REFUSED)) {
             val controller = EditSessionController(FakeRelay(openResult = result), FakeProjection(), scope)
@@ -156,26 +189,11 @@ class EditSessionControllerTest {
         val relay = FakeRelay(openResult = OpenResult.OPENED)
         val controller = EditSessionController(relay, FakeProjection(), scope)
         controller.begin("/score.mscx", "/scores", "id")
-        controller.setPadVisible(true)
 
         controller.end()
 
         assertEquals(1, relay.closeCalls)
         assertEquals(EditUiState(), controller.ui.value)
-    }
-
-    // MARK: - The pad disclosure
-
-    @Test
-    fun `setPadVisible is controller-local and defaults to closed`() {
-        val controller = EditSessionController(FakeRelay(), FakeProjection(), scope)
-        assertFalse(controller.ui.value.isPadVisible)
-
-        controller.setPadVisible(true)
-        assertTrue(controller.ui.value.isPadVisible)
-
-        controller.setPadVisible(false)
-        assertFalse(controller.ui.value.isPadVisible)
     }
 
     // MARK: - EditUiState's ByteArray equality override

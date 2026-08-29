@@ -62,8 +62,12 @@ class ConfinedEditSessionOps(
 
     // MARK: - Blocking
 
-    override fun open(scorePath: String, scoresDirectory: String, scoreId: String): OpenResult =
-        await { delegate.open(scorePath, scoresDirectory, scoreId) }
+    override fun open(
+        scorePath: String,
+        scoresDirectory: String,
+        scoreId: String,
+        carriedItem: ByteArray,
+    ): OpenResult = await { delegate.open(scorePath, scoresDirectory, scoreId, carriedItem) }
 
     override fun close() = await { delegate.close() }
 

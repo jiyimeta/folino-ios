@@ -442,6 +442,25 @@ public final class EditorBridge {
         sync()
     }
 
+    /// The selection the reader was already on, carried into the session that just opened — Android's half of what
+    /// `EditableReaderScreen` does with `ReaderEditingHost.pendingSelection`. Empty bytes mean nothing was
+    /// remembered, and the session opens blank with an inert pad, exactly as iOS does.
+    ///
+    /// `selectCarriedItem`, not `selectItem`: the rules that separate the two — drop an ID this score no longer
+    /// contains, and sound nothing — are the core's, so both platforms get one answer. See
+    /// `EditorSessionCore.selectCarriedItem`.
+    @WireletExpose
+    public func selectCarriedItem(frame: EditBytesWire) {
+        guard !frame.bytes.isEmpty else {
+            core?.selectCarriedItem(nil)
+            sync()
+            return
+        }
+        guard let item = try? ScoreItemIDCodec.decode(frame.bytes) else { return }
+        core?.selectCarriedItem(item)
+        sync()
+    }
+
     // MARK: Navigation and voice
 
     @WireletExpose

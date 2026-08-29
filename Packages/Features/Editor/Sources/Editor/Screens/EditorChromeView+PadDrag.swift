@@ -1,3 +1,4 @@
+import EditorCore
 import SwiftUI
 
 /// The drag half of the editing cluster: the one gesture that repositions the pad between its docks AND tucks /
