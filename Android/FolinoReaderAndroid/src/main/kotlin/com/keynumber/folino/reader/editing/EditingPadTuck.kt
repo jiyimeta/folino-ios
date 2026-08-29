@@ -69,10 +69,11 @@ private val TUCK_SPRING = spring<Float>(dampingRatio = 0.7f, stiffness = Spring.
  * that edge with [PAD_TUCK_PEEK] of it still showing; drag or tap the sliver to bring it back. This is what replaced
  * the app-bar visibility toggle on both platforms — dismissal became PiP's, not a toolbar button's.
  *
- * The wrapper owns the MOTION only. [isExpanded] and [tuckSide] are the caller's persisted state: a release or an
- * accessibility action REQUESTS a change through [onTuck] / [onRestore], and the wrapper animates toward whatever
- * the parameters currently say — it never writes them itself, so a caller that drops a request simply gets a pad
- * that springs back to where the state says it belongs.
+ * [isExpanded] and [tuckSide] are the caller's PERSISTED state, and they seed this wrapper's own — which is what
+ * the motion and every release decision then read. A release moves that local state, starts the spring, and
+ * reports outward through [onTuck] / [onRestore]; the caller's write comes back later and agrees. The mirror is a
+ * lead, not a fork: whenever the parameters themselves move — the restore at launch, or any other writer — they
+ * win. See `expandedNow` for the release this ordering protects.
  *
  * Every threshold and release decision comes from the shared Swift geometry through [geometry] — asked at a
  * gesture's start and end only, never per frame (see [PadTuckGeometry]'s own doc for why); between the two, the
@@ -123,12 +124,28 @@ fun EditingPadTuck(
     // drag taking over from a running settle is a snap of this animatable, not a second source of truth to reconcile.
     val offsetX = remember { Animatable(0f) }
 
+    // **Local state is the truth; the hoisted preference is the echo.** A release writes these two immediately and
+    // only then reports through [onTuck] / [onRestore], because the caller persists to DataStore and a release must
+    // neither wait on that round trip nor be re-judged against a value that has not caught up yet: a tuck-flick
+    // followed straight away by a pull on the sliver would otherwise be judged as an EXPANDED pad's release and
+    // park the card on the opposite edge instead of restoring it. iOS splits the same way and says so — its
+    // `EditorChromeView` drives the layout from `@State` mirrors of its `@AppStorage` pair, because reading the
+    // stored value back made re-docking lurch.
+    var expandedNow by remember { mutableStateOf(isExpanded) }
+    var sideNow by remember { mutableStateOf(tuckSide) }
+    // The caller still wins whenever IT moves — the restore at launch, or anything else that writes the
+    // preference — so the mirrors are a lead, not a fork.
+    LaunchedEffect(isExpanded, tuckSide) {
+        expandedNow = isExpanded
+        sideNow = tuckSide
+    }
+
     // The drag detector lives in a `pointerInput(Unit)` that never restarts: keying it on the state it reads would
     // tear the detector down at the exact moment a release changes that state, aborting the gesture mid-decision —
     // the same class of bug as the cancelled-drag stranding below. So everything the detector reads at release time
     // comes through `rememberUpdatedState` instead of the (stale-once-captured) closure.
-    val currentExpanded by rememberUpdatedState(isExpanded)
-    val currentSide by rememberUpdatedState(tuckSide)
+    val currentExpanded by rememberUpdatedState(expandedNow)
+    val currentSide by rememberUpdatedState(sideNow)
     val currentGeometry by rememberUpdatedState(geometry)
     val currentViewportWidth by rememberUpdatedState(viewportWidthPx)
     val currentViewportHeight by rememberUpdatedState(viewportHeightPx)
@@ -154,13 +171,29 @@ fun EditingPadTuck(
         scope.launch { offsetX.animateTo(target, TUCK_SPRING) }
     }
 
-    // Tracks the HOISTED state: whatever changed it — a release below, the accessibility actions, the caller
-    // restoring state at launch — the pad animates to that state's rest. Releases also settle locally (same target),
-    // so the motion doesn't wait on the caller's persistence round trip; this effect retargets the running spring,
-    // which continues from its live value and velocity. Skipped mid-drag — the finger outranks everything.
-    LaunchedEffect(isExpanded, tuckSide, viewportWidthPx, frameWidthPx) {
+    // The only two ways the resting state changes, whichever asked — a drag's release, a tap on the sliver, an
+    // accessibility action. Each writes the local truth, starts the motion, and only then reports outward, so no
+    // path can end up judging its successor against a preference that is still being written.
+    fun requestTuck(side: PadTuckSide) {
+        expandedNow = false
+        sideNow = side
+        settle(restOffset(expanded = false, side = side))
+        currentOnTuck(side)
+    }
+
+    fun requestRestore() {
+        expandedNow = true
+        settle(0f)
+        currentOnRestore()
+    }
+
+    // Whatever moved the pad's resting state — a release below, an accessibility action, the caller restoring the
+    // preference at launch — the pad animates to that state's rest. A release also settles locally with the same
+    // target, so the motion starts on the release frame; this effect then retargets the running spring, which
+    // continues from its live value and velocity. Skipped mid-drag — the finger outranks everything.
+    LaunchedEffect(expandedNow, sideNow, viewportWidthPx, frameWidthPx) {
         if (frameWidthPx == 0f || isDragging) return@LaunchedEffect
-        val target = restOffset(isExpanded, tuckSide)
+        val target = restOffset(expandedNow, sideNow)
         if (hasSettled) {
             offsetX.animateTo(target, TUCK_SPRING)
         } else {
@@ -173,14 +206,14 @@ fun EditingPadTuck(
     val hideLabel = stringResource(R.string.reader_editing_pad_hide)
     val showLabel = stringResource(R.string.reader_editing_pad_show)
     val padLabel = stringResource(R.string.reader_editing_pad)
-    val semanticsModifier = if (isExpanded) {
+    val semanticsModifier = if (expandedNow) {
         // The non-gestural equivalent of the tuck drag, parked toward the side the pad last tucked to so the sliver
         // comes back where the user left it. No contentDescription while expanded: naming the container would give
         // TalkBack a labeled node wrapping every key and fight the keys' own traversal — the action is enough.
         Modifier.semantics {
             customActions = listOf(
                 CustomAccessibilityAction(hideLabel) {
-                    currentOnTuck(currentSide)
+                    requestTuck(sideNow)
                     true
                 },
             )
@@ -191,12 +224,12 @@ fun EditingPadTuck(
         Modifier.clearAndSetSemantics {
             contentDescription = padLabel
             onClick {
-                currentOnRestore()
+                requestRestore()
                 true
             }
             customActions = listOf(
                 CustomAccessibilityAction(showLabel) {
-                    currentOnRestore()
+                    requestRestore()
                     true
                 },
             )
@@ -264,18 +297,14 @@ fun EditingPadTuck(
                                 threshold,
                             )
                             if (side != null) {
-                                // Settle locally AND report: the motion starts this frame, while the caller's
-                                // state lands whenever its persistence does — the settle effect then retargets
-                                // the same spring at the same value, which is a no-op in motion terms.
-                                settle(restOffset(expanded = false, side = side))
-                                currentOnTuck(side)
+                                requestTuck(side)
                             } else {
+                                // A reposition, not a dismissal — nothing changes but the offset going home.
                                 settle(0f)
                             }
                         } else {
                             if (currentGeometry.restoresFromTuck(currentSide, projectedX, threshold)) {
-                                settle(0f)
-                                currentOnRestore()
+                                requestRestore()
                             } else {
                                 settle(restOffset(expanded = false, side = currentSide))
                             }
@@ -294,7 +323,7 @@ fun EditingPadTuck(
             .then(semanticsModifier),
     ) {
         content()
-        if (!isExpanded) {
+        if (!expandedNow) {
             // What makes the tucked keys inert STRUCTURALLY: this sibling sits on top of the card, so hit testing
             // resolves here and the keys under the sliver never see the down at all — no per-key enabled flag to
             // keep honest. A tap restores; a slide is the parent's drag (the tap detector holds the down without
@@ -303,7 +332,7 @@ fun EditingPadTuck(
                 Modifier
                     .matchParentSize()
                     .pointerInput(Unit) {
-                        detectTapGestures { currentOnRestore() }
+                        detectTapGestures { requestRestore() }
                     },
             )
         }

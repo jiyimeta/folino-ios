@@ -1660,13 +1660,13 @@ private fun ReadyScore(
     onSelectItem: (ByteArray?) -> Unit = {},
     /**
      * Reached with the element a tap-to-seek landed on, so a LATER edit session can open on it — the note under
-     * the playhead is almost always the one the reader came to change. Null when the tap named no element (the
-     * nearest cursor answered with a beat, which measure-stepping and scrubbing also produce).
+     * the playhead is almost always the one the reader came to change.
      *
-     * Only fires OUTSIDE edit mode: inside it, the same tap picks an element to edit instead of seeking.
-     * Android's half of iOS's `ReaderEditingHost.rememberTappedItem`.
+     * Only fires OUTSIDE edit mode (inside it the same tap picks an element to edit instead of seeking), and only
+     * for a tap that named an element: a cursor that resolved to a bare beat leaves the last one standing rather
+     * than clearing it. Android's half of iOS's `ReaderEditingHost.rememberTappedItem`, down to that rule.
      */
-    onTapSeekItem: (ByteArray?) -> Unit = {},
+    onTapSeekItem: (ByteArray) -> Unit = {},
     /**
      * Ops the callout's keys (Task 8) call directly on
      * [com.keynumber.folino.editor.EditSessionController] — one per key group (length tray, dot, pitch step,
@@ -1936,13 +1936,14 @@ private fun ReadyScore(
                     ) ?: return@detectTapGestures
                     audioVm.handleTap(cursor)
                     // Remember what the playhead landed ON, so entering edit mode later starts there instead of on
-                    // an inert pad. `nativeNearestCursor` answers in the score's own addressing — the same addressing
-                    // an edit session speaks — so the bytes go straight across. A `.Beat` cursor names no element
-                    // (measure-stepping and scrubbing produce those) and clears what was remembered, exactly as iOS's
-                    // `rememberTappedItem` ignores everything but `.item`.
-                    currentOnTapSeekItem(
-                        (cursor as? ScoreCursor.Item)?.let { ScoreItemIDCodec.encode(it.arg0) },
-                    )
+                    // an inert pad. `nativeNearestCursor` answers in the score's own addressing — the same
+                    // addressing an edit session speaks — so the bytes go straight across.
+                    //
+                    // A `.Beat` cursor names no element, and is IGNORED rather than treated as "nothing tapped":
+                    // iOS's `rememberTappedItem` is a `guard case .item else { return }`, so the last real element
+                    // survives a tap that resolved to a beat. Clearing here instead would open edit mode blank
+                    // after a sequence iOS opens on the note.
+                    (cursor as? ScoreCursor.Item)?.let { currentOnTapSeekItem(ScoreItemIDCodec.encode(it.arg0)) }
                 }
             }
             // Pan, pinch, and fling. While annotating only two-finger gestures are taken — a single finger
