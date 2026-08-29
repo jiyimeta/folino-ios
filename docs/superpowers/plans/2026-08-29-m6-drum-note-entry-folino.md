@@ -416,7 +416,15 @@ which is exactly what the existing suites assert; on a multi-voice staff the new
 
 **Interfaces:**
 - Consumes: `ColumnNavigation`, `ScoreColumn` from Task 1.
-- Produces: `EditorSessionCore.caretColumn: ScoreColumn?` (public, read-only) — the column the caret is in.
+- Produces: `EditorSessionCore.caretColumn: ScoreColumn?` (public, read-only) — the column the caret is in, and
+  the authority on where the next write lands.
+
+**Why the column has to be stored rather than derived.** `caretItem` names a SLOT, and a slot cannot express "beat
+2 of an empty bar": that bar holds one measure rest whose only slot begins at tick 0. Deriving the column from
+`caretItem` would round every mid-slot position back to its slot's start and silently undo the armed-duration step.
+So `place(selection:caret:)` keeps `caretColumn` in step with `caretItem` for every ordinary placement (tap, ← / →
+onto an onset, re-derivation), and the column stepper sets it directly when it lands between onsets. The RENDERED
+caret stays `caretItem` — the covering slot — exactly as spec §5.4 says: drawn at the write destination.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -450,18 +458,29 @@ a single-voice staff that is the only voice there is.
 Keep the doc comment's two existing contracts and add the column one: navigation applies no command, and at either
 end the markers HOLD rather than clearing.
 
-- [ ] **Step 4: Pitched writes go to `activeVoice`**
+- [ ] **Step 4: Pitched writes go to `activeVoice`, splitting the rest they land inside**
 
-In `EditorSessionCore+Input.swift`, resolve the target slot for a note/rest write through
+In `EditorSessionCore+Input.swift`, resolve the target slot for a note write through
 `ColumnNavigation.slot(inVoice: activeVoice, at: caretColumn, in: score)` instead of using the caret's own slot
-directly. Two rules the existing tests pin, so preserve them exactly:
+directly. Three rules:
 
 - when `activeVoice` is the caret's own voice — the single-voice case and the default — the resolved slot IS the
   caret's slot, so nothing about today's behavior may change;
-- when the resolved slot is mid-rest (`tickWithinSlot != 0`), the write is refused for now rather than splitting:
-  splitting is `SplitRest`'s job and belongs to the drum path in Task 5, where the composite that does it is
-  built. Add a `// PARITY` free note in the doc comment saying so — NOT a `PARITY(android):` marker, which is for
-  platform gaps.
+- when the measure has no such voice, the write is refused (voice creation belongs to the drum key, which knows
+  which voice its instrument wants; a letter key does not grow a staff a second voice behind the user's back);
+- **when the column falls INSIDE a rest (`tickWithinSlot != 0`), split it first** — `.splitRest` and the write in
+  ONE `.composite`, so it is one undo step. This is what makes the armed-duration step of Step 3 mean anything: →
+  into the middle of an empty bar and then a letter must write THERE, not back at beat 1.
+
+  The composite's second member has to name the slot the split will create, and it is planned against the
+  PRE-split score — so compute the index rather than re-reading: the tail's first element is
+  `coveringSlot.elementIndex + DurationChangeAlgorithm.alignedDurations(forTicks: tickWithinSlot, rtickStart:
+  columnTick - tickWithinSlot, division: score.division).count`. That is ssm's own public decomposition, the very
+  one `SplitRest` uses, so the two cannot disagree.
+
+**This deviates from the plan as first written**, which refused a mid-rest write and deferred splitting to the
+drum path. Refusing it makes the empty-bar step of §5.4 unreachable on a pitched staff, which is the case the spec
+names as the reason the fallback exists at all.
 
 - [ ] **Step 5: Run the whole EditorCore + Editor suite**
 
