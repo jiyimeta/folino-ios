@@ -24,6 +24,34 @@ flush, sibling-`.mscz` parity, instrumented smoke, device pass").
 Predecessor plans: `…-sp0.md` … `…-sp4.md` in the same directory. SP4's SDD ledger is
 `.superpowers/sdd/2026-08-15-android-note-editing-sp4/progress.md` (gitignored; lives only in this worktree).
 
+## Status (2026-08-29)
+
+Tasks 1-6 are **implemented and committed** on `worktree-android-note-editing` (`557c4178` seam, `750a304a` the save
+path and everything after it). What that leaves:
+
+- **Task 6 Steps 4-5 — the instrumented run has not happened.** `EditPersistenceTest` compiles but has never
+  executed: no Pixel was attached (`adb devices` empty, `adb mdns services` empty — wireless debugging was off), and
+  this repo does not run editor tests on an emulator. **This is the only automated coverage the Swift writer has**, so
+  until it runs, the encode-and-write path is verified by reasoning alone.
+- **Task 7 — the device pass has not happened**, for the same reason. The flush-cost measurement it exists to produce
+  is therefore also missing, and the main-thread encode is an argued choice rather than a measured one.
+- Everything that could be verified without a device was: 59 + 221 + 2 + 8 Android JVM tests green, the Android
+  `:app:assembleDebug` and `:FolinoEditorAndroid:compileDebugAndroidTestKotlin` green, the arm64 and x86_64 `.so`s
+  rebuilt from a cleaned `.build` with `flushSave` / `refreshRow` / `didSaveAsSiblingMSCZ` confirmed present via
+  `nm`, and the iOS side's 191 Editor tests green (the save policy they cover is shared).
+
+Deviations from the plan as written, all small:
+
+- Task 1's `RoomScoreRowRefresh.kt` in `:app` was not created. `RoomLibraryStore.sharedDatabase` is in a **private**
+  companion object, so `:app` cannot reach the DAO; the row refresh is a public method on `RoomLibraryStore` instead,
+  bound by method reference at the composition root. Fewer moving parts and no widened access.
+- `EditAutosave` was introduced as an interface alongside `DebouncedAutosave`, matching `EditNatives`/`EditBridging`
+  in the same module, so the relay's cadence obligations are assertable without a clock and the two mirror-focused
+  instrumented suites can inject `NoAutosave`.
+- `SheetMusicError` has no `unsupportedFormat` case; the unreachable branch throws `.unsupportedFeature` instead.
+
+---
+
 ## Global Constraints
 
 - **Worktree:** all work happens in `/Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/.claude/worktrees/android-note-editing`
