@@ -82,8 +82,48 @@ extension EditorSessionCore {
     public func place(selection item: SheetMusicCore.ScoreItemID?, caret: SheetMusicCore.ScoreItemID?) {
         selectedItem = item
         caretItem = caret
+        // Every ordinary placement names a slot, and a slot begins at a column — so the two stay in step here, and
+        // only the column stepper (which can land BETWEEN onsets) writes `caretColumn` on its own.
+        caretColumn = Self.slot(of: caret).flatMap { slot in
+            score.flatMap { ColumnNavigation.column(of: slot, in: $0) }
+        }
         armFromSelectionIfNeeded()
         selectionRevision += 1
+    }
+
+    /// Places the two markers at `column`, drawing the caret on whatever slot covers it.
+    ///
+    /// Used by ← / →, which may land between onsets — an empty bar stepped through by the armed duration — where
+    /// the covering slot's own start is NOT the column. Everything else goes through `place(selection:caret:)`,
+    /// whose column follows its slot.
+    func place(column: ScoreColumn, preferring voiceIndex: Int) {
+        guard let score, let covering = coveringSlot(at: column, preferring: voiceIndex, in: score) else { return }
+        let item = SelectionRederivation.item(at: covering, in: score, preferringNoteIndex: nil)
+        selectedItem = item
+        caretItem = item
+        caretColumn = column
+        armFromSelectionIfNeeded()
+        selectionRevision += 1
+    }
+
+    /// The slot to draw the caret on at `column`: the voice it came from when that voice has one there, and
+    /// otherwise the lowest-numbered voice that does. On a single-voice staff — most scores — that is the only
+    /// voice there is, which is why this changes nothing for them.
+    func coveringSlot(at column: ScoreColumn, preferring voiceIndex: Int, in score: Score) -> VoiceElementID? {
+        if let preferred = ColumnNavigation.slot(inVoice: voiceIndex, at: column, in: score) {
+            return preferred.slot
+        }
+        guard score.parts.indices.contains(column.staff.partIndex),
+              score.parts[column.staff.partIndex].staves.indices.contains(column.staff.staffIndexInPart)
+        else { return nil }
+        let measures = score.parts[column.staff.partIndex].staves[column.staff.staffIndexInPart].measures
+        guard measures.indices.contains(column.measureIndex) else { return nil }
+        for candidate in measures[column.measureIndex].voices.indices {
+            if let resolved = ColumnNavigation.slot(inVoice: candidate, at: column, in: score) {
+                return resolved.slot
+            }
+        }
+        return nil
     }
 
     /// Arms the length keys from whatever was just picked, but ONLY while nothing is armed yet — which in practice

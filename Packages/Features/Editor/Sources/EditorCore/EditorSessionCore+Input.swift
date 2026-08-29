@@ -24,8 +24,8 @@ extension EditorSessionCore {
             addLetterToChord(letter, at: noteID, in: score)
             return
         }
-        guard let caretItem else { return }
-        switch caretItem {
+        guard let target = writeTarget(in: score), let score = self.score else { return }
+        switch target {
         case let .rest(restID):
             inputPitch(letter: letter, onRest: restID, in: score)
         case let .note(noteID):
@@ -33,6 +33,43 @@ extension EditorSessionCore {
         case .tuplet, .clef:
             return
         }
+    }
+
+    /// The slot a letter key writes into: the caret's column, taken in `activeVoice`.
+    ///
+    /// On a single-voice staff — and whenever `activeVoice` is the caret's own voice, which is every case before
+    /// the voice picker is touched — this resolves to exactly the slot `caretItem` names, so nothing about today's
+    /// behavior changes. What it adds is the multi-voice case the picker has always promised: with voice 2 armed, a
+    /// letter writes into voice 2 at the moment the caret marks, rather than into whichever voice the caret happened
+    /// to be placed from (drum note entry's §5.4).
+    ///
+    /// `nil` — the key does nothing — when the measure has no such voice. Growing a staff a second voice is the drum
+    /// key's job, which knows which voice its instrument wants; a letter key must not do it behind the user's back.
+    ///
+    /// **A column INSIDE a rest is split first, as its own edit.** That is two undo steps rather than one, and
+    /// deliberately: the write's pitch is planned from the accidentals in force at its slot, and planning that
+    /// against the pre-split score at a post-split index would read the wrong neighbours. The drum key, whose pitch
+    /// is literal, composes the two into one step instead (§5.5). The case is only reachable by stepping → into an
+    /// empty bar before writing anything.
+    private func writeTarget(in score: Score) -> SheetMusicCore.ScoreItemID? {
+        guard let column = caretColumn else { return caretItem }
+        guard let resolved = ColumnNavigation.slot(inVoice: activeVoice, at: column, in: score) else { return nil }
+        guard resolved.tickWithinSlot != 0 else {
+            // The caret ITSELF when the column resolves back to the slot it names — which is the ordinary case, and
+            // the only way to keep `noteIndexInChord`: a re-derivation would answer notehead 0, and a letter key on
+            // a chord's upper notehead means the notehead the caret names.
+            if Self.slot(of: caretItem) == resolved.slot {
+                return caretItem
+            }
+            return SelectionRederivation.item(at: resolved.slot, in: score, preferringNoteIndex: nil)
+        }
+        guard case let .chord(chord)? = score[resolved.slot], chord.notes.isEmpty else { return nil }
+        guard apply(.splitRest(at: resolved.slot, tickOffset: resolved.tickWithinSlot)) != nil,
+              let split = self.score,
+              let reResolved = ColumnNavigation.slot(inVoice: activeVoice, at: column, in: split),
+              reResolved.tickWithinSlot == 0
+        else { return nil }
+        return SelectionRederivation.item(at: reResolved.slot, in: split, preferringNoteIndex: nil)
     }
 
     /// ⌫ — acts on the SELECTION (the note you last wrote or tapped, not the slot the caret is parked on).

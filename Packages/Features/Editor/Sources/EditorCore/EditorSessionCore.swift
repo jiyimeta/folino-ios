@@ -69,6 +69,18 @@ public final class EditorSessionCore {
     public internal(set) var selectedItem: SheetMusicCore.ScoreItemID?
     public internal(set) var caretItem: SheetMusicCore.ScoreItemID?
 
+    /// Where the caret actually is: a column — `(staff, measureIndex, tick)` — rather than a slot in one voice.
+    ///
+    /// Stored rather than derived from `caretItem`, because a slot cannot express "beat 2 of an empty bar": that
+    /// bar holds one measure rest whose only slot begins at tick 0, and deriving the column would round every
+    /// mid-slot position back to its slot's start, silently undoing the step that put it there. `place` keeps the
+    /// two in step for every ordinary placement; the column stepper sets this directly when it lands between
+    /// onsets.
+    ///
+    /// `caretItem` remains what is DRAWN — the slot covering this column in the caret's own voice — which is what
+    /// the seam renders and what a single-voice staff has always shown.
+    public internal(set) var caretColumn: ScoreColumn?
+
     /// Whether the pad has anything at all to act on. With neither a caret nor a selection there is no slot to write
     /// into and no item to edit, so every key is inert (there is nothing for one to mean).
     public var hasEditTarget: Bool {
