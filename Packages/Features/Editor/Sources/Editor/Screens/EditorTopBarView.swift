@@ -57,7 +57,7 @@ public struct EditorTopBarView: View {
     public var body: some View {
         // The shadow matches `ReaderTopBarControls`' so the reading and editing strips read as the same physical
         // surface.
-        measureMenuSheets(on: instrumentsSheet(on: revertFailureAlert(on: controlTierRow)))
+        drumLayoutSheet(on: measureMenuSheets(on: instrumentsSheet(on: revertFailureAlert(on: controlTierRow))))
             .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
     }
 
@@ -155,6 +155,11 @@ public struct EditorTopBarView: View {
     private var overflowMenu: some View {
         Menu {
             instrumentsMenuRow
+            // Only on a percussion staff: on a pitched one there is no drum layout to edit, and a row that opened a
+            // sheet about keys the pad is not showing would be a puzzle rather than a feature.
+            if viewModel.isDrumStaffActive {
+                drumLayoutMenuRow
+            }
             measureActionRows
             if viewModel.canRevertToOriginal {
                 revertMenuRow

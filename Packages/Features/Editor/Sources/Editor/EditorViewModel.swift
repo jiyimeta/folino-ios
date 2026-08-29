@@ -169,6 +169,10 @@ public final class EditorViewModel {
         didSet { signatureSheetPresentationChanged(from: oldValue, to: isTimeSignatureSheetPresented) }
     }
 
+    /// Drives the drum layout sheet, which the `⋯` menu raises on a percussion staff. On the view model for the
+    /// same reason the others here are: the row that opens it folds into a `Menu` that can disappear.
+    public var isDrumLayoutSheetPresented = false
+
     /// Drives the rehearsal-mark sheet. On the view model for the same reason the signature flags are: the row that
     /// raises it folds into the overflow `Menu`, and a `@State` flag owned by a control that can disappear takes the
     /// open sheet with it. No refusal to clear on open, unlike those two — the sheet has no reachable refusal (see

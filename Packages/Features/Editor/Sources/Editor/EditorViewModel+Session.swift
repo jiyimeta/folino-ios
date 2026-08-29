@@ -18,6 +18,7 @@ extension EditorViewModel {
         let retained = historyStore.session(for: core.scoreItem.id, contentHash: core.scoreItem.contentHash)
         let adopted = core.beginSession(score: score, adopting: retained)
         core.activeVoice = activeVoice
+        seedDrumPadLayout()
         // Opening a session is not an edit: match the counter first so `syncFromCore` neither announces a score nor
         // arms the autosave timer for it. The one announcement an open owes the host is the adopted score below.
         generation = core.revision
@@ -97,5 +98,23 @@ extension EditorViewModel {
                 vm2.registerSystemUndo(with: manager)
             }
         }
+    }
+
+    /// Seeds the pad's drum layout for the session that just opened: the keys the user persisted (the layout is
+    /// global) with the voice preset the OPEN FILE implies (that part is per-score).
+    ///
+    /// Asking the file rather than remembering a preset is what makes the pad agree with the chart in front of you
+    /// without being told: a one-voice chart opens on one voice, and the moment any bar uses two the pad opens on
+    /// hands-and-feet. A per-key voice the user set by hand survives inside the persisted layout only until a
+    /// score implies the other preset — which is the trade the preset makes, and why it is one tap to change.
+    private func seedDrumPadLayout() {
+        let stored = DrumPadLayoutStore.load()
+        guard let staff = core.caretColumn?.staff ?? EditorSessionCore.slot(of: core.caretItem)?.staff,
+              let score = core.score
+        else {
+            core.drumPadLayout = stored
+            return
+        }
+        core.drumPadLayout = DrumVoicePreset.implied(by: score, staff: staff).applied(to: stored)
     }
 }

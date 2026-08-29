@@ -31,6 +31,10 @@ public struct DrumPadKey: Sendable, Equatable, Codable, Identifiable {
         self.voiceIndex = voiceIndex
     }
 
+    /// Every drum GM names, ascending — the instrument list a layout editor offers. Exposed here so a host does
+    /// not have to reach past this module into `SheetMusicCore` for the table.
+    public static let allGMPitches: [Int] = GMDrumset.entries.keys.sorted()
+
     /// The key GM would make for `pitch`, or `nil` for a pitch the table does not name.
     public init?(gmPitch pitch: Int, voiceIndex: Int? = nil) {
         guard let entry = GMDrumset.entries[pitch] else { return nil }
