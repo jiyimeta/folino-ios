@@ -84,9 +84,19 @@ class EditPersistenceTest {
      *
      * **The emulator is ~10x optimistic; do not judge this on one.** On the real device a save is over ten dropped
      * frames — well past the 120 ms the SP5 plan set as the line for taking the encode on the main thread.
-     * [whereTheFlushTimeGoes] splits it: the encode alone is ~89 ms, the digest ~2 ms, and ~115 ms is elsewhere
-     * inside `performSave`. Raising the save `Task` to `.userInitiated` was tried and measured as noise, so the
-     * cooperative pool's thread priority is not the cause.
+     *
+     * [whereTheFlushTimeGoes] splits what it can. Against the same fixture on a Pixel 8a: encode 88 ms cold and
+     * 59 ms warm, the file write 0.7 ms (timed in Kotlin over the same bytes), the digest 1.6 ms, and a clean flush
+     * — which still runs `sync()` — 1.4 ms. That accounts for roughly 60 ms of a 212 ms flush.
+     *
+     * **The remaining ~150 ms was not attributed, and two hypotheses are already dead:** the encoder options are the
+     * same on both paths (`MSCXEncoderOptions`' default IS `.v4`), and raising the save `Task` to `.userInitiated`
+     * measured as noise, so the cooperative pool's thread priority is not it. What is left is the pool hop itself
+     * plus the three JNI upcalls `performSave` makes from a non-JVM thread (`sha256Hex`, `fileSize`, `refreshRow`).
+     * A probe op to measure those did not bind (jextract exported it under the `EditorBridge` class while the
+     * wirelet view model expected its own `native` symbol), and it was abandoned rather than chased: the attribution
+     * does not change the fix. Taking the save off the main thread removes the pool hop, the semaphore and the
+     * blocking all at once, whichever of them dominates.
      *
      * Not asserted on: a threshold here would be a flake. Read it from logcat.
      */
@@ -212,13 +222,33 @@ class EditPersistenceTest {
         val rig = openRig("persist-cost")
         writeANote(rig)
 
+        // Twice: the first encode in a process pays for warming whatever the encoder touches, and if that is most of
+        // the cost then the encode inside the flush — which is never the first — is cheaper than a single probe says.
         var encodeMicros = 0L
+        var encodeAgainMicros = 0L
         var encodedBytes = 0
+        lateinit var encoded: ByteArray
         onMain {
-            val started = System.nanoTime()
-            val bytes = rig.bridge.encodeScore()
+            var started = System.nanoTime()
+            encoded = rig.bridge.encodeScore()
             encodeMicros = (System.nanoTime() - started) / 1_000
-            encodedBytes = bytes.size
+            encodedBytes = encoded.size
+
+            started = System.nanoTime()
+            rig.bridge.encodeScore()
+            encodeAgainMicros = (System.nanoTime() - started) / 1_000
+        }
+
+        // The same number of bytes, written to the same directory, by Kotlin. `AndroidScoreWriter` goes through
+        // Foundation's `Data.write(to:options:.atomicIfAvailable)`, which writes a temp file and renames; if that is
+        // where the unexplained time sits, this comparison is what shows it.
+        var kotlinWriteMicros = 0L
+        onMain {
+            val scratch = File(rig.scoresDir, "cost-probe.bin")
+            val started = System.nanoTime()
+            scratch.writeBytes(encoded)
+            kotlinWriteMicros = (System.nanoTime() - started) / 1_000
+            scratch.delete()
         }
 
         var digestMicros = 0L
@@ -232,7 +262,8 @@ class EditPersistenceTest {
 
         android.util.Log.i(
             "EditPersistence",
-            "cost split: encode=${encodeMicros}us (${encodedBytes}B) digest=${digestMicros}us " +
+            "cost split: encode=${encodeMicros}us encodeAgain=${encodeAgainMicros}us (${encodedBytes}B) " +
+                "digest=${digestMicros}us kotlinWrite=${kotlinWriteMicros}us " +
                 "wholeFlush=${flushMicros.last()}us",
         )
     }
