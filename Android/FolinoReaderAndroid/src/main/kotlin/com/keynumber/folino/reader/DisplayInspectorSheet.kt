@@ -61,6 +61,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.keynumber.folino.reader.editing.rememberBravuraTypeface
 import com.keynumber.folino.reader.ui.CollapsibleHeader
 import com.keynumber.folino.reader.ui.InspectorRow
 import com.keynumber.folino.reader.ui.InspectorSliderHeight
@@ -740,17 +741,3 @@ private fun localizedClefLabel(choice: ClefChoice): String = stringResource(
         ClefChoice.PERCUSSION2 -> R.string.reader_clef_percussion2
     },
 )
-
-/**
- * The bundled SMuFL music typeface (Bravura). The asset ships in the SheetMusicComposeAndroid
- * dependency at `fonts/Bravura.otf` and merges into the app's assets at build time, so the
- * library module resolves it at runtime via the app context's AssetManager. Returned as an
- * android.graphics.Typeface so the clef tiles can draw glyphs through a native Canvas.
- */
-@Composable
-private fun rememberBravuraTypeface(): Typeface {
-    val ctx = LocalContext.current
-    return remember(ctx) {
-        Typeface.createFromAsset(ctx.assets, "fonts/Bravura.otf")
-    }
-}

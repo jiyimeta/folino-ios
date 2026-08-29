@@ -47,12 +47,18 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/devicekit/devicekit", from: "5.8.0"),
     .package(url: "https://github.com/jpsim/Yams", from: "5.3.0"),
     .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", exact: "0.63.2"),
-    // swift-wirelet v0.2.2 (pinned by revision, not semver). Deliberately behind the `ba1b8e33` that Library,
-    // Reader and Infrastructure pin: this pin has to match the wirelet Gradle plugin `FolinoSettingsAndroid`
-    // applies (also 0.2.2), not the other packages, because each JNI `.so` links its own runtime and trades bytes
-    // only with the Kotlin codecs generated for its own module. See the longer note in Infrastructure's manifest.
-    // swiftlint:disable:next line_length
-    .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "cd0d148e9d4dddad1c6afc47d5ef0a8d6f4a4a13"),
+    // The same wirelet every other JNI `.so` in this app links. This package sat on v0.2.2 by revision
+    // while Reader, Library, Editor and Infrastructure moved to 0.5.0, so one process carried two builds
+    // of one package, each exporting the other's mangled names — 206 of them are defined by both this
+    // `.so` and `libFolinoLibraryJNI.so`.
+    //
+    // That is a defect on its own terms and the reason for this pin, but it is NOT the cause of the heap
+    // corruption it was found while chasing: every `Wirelet` symbol these images export has PROTECTED
+    // visibility, so a reference inside a library always binds to that library's own definition and the
+    // duplicate cannot be substituted. (The corruption was a stale SwiftPM `.build` producing a mixed
+    // `libFolinoEditorJNI.so`; rebuilding the identical source fixed it.) Keep the versions aligned
+    // anyway — the next skew may be between symbols that are not PROTECTED.
+    .package(url: "https://github.com/jiyimeta/swift-wirelet.git", exact: "0.5.0"),
     .package(path: "../../Domain"),
     .package(path: "../../Utility"),
 ]

@@ -117,8 +117,7 @@ if isAndroid {
     // Domain (already a path dependency above) provides the shared `SoundfontDownloadReducer` / state / preset
     // types so download behavior matches iOS exactly.
     packageDependencies += [
-        // swiftlint:disable:next line_length
-        .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "ba1b8e337a508079c5213656e4c01e9edbedc8b4"),
+        .package(url: "https://github.com/jiyimeta/swift-wirelet.git", exact: "0.5.0"),
     ]
     products += [
         .library(name: "FolinoSoundfontJNI", type: .dynamic, targets: ["FolinoSoundfontJNI"]),

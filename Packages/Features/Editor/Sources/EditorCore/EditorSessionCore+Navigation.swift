@@ -7,7 +7,7 @@ import SheetMusicCore
 /// Navigation only: no command is applied, so the score, the undo stack and `appliedEditCount` are untouched. At
 /// either end of the staff the selection HOLDS rather than clearing — a key that empties the selection would leave
 /// the rest of the pad inert, which reads as the app losing your place.
-extension EditorViewModel {
+extension EditorSessionCore {
     public func selectPreviousElement() {
         step { ElementNavigator.previousTimedElement(before: $0, in: $1) }
     }

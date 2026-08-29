@@ -1,3 +1,4 @@
+import EditorCore
 import SwiftUI
 import UtilityUI
 
@@ -254,10 +255,11 @@ extension View {
 private func previewViewModel(canRevert: Bool, sessionEdits: Bool = false) -> EditorViewModel {
     let viewModel = PreviewEditorFactory.makeViewModel(armedDuration: sessionEdits ? .quarter : nil)
     if canRevert {
-        viewModel.scoreItem = viewModel.scoreItem.capturingOriginal(
+        // `refreshRow` is the supported way in — it re-seeds the row AND `hasCapturedOriginal` together, which is
+        // the pairing the core owns.
+        viewModel.refreshRow(viewModel.scoreItem.capturingOriginal(
             fileName: "preview.original.mscx", contentHash: "preview-original", provenance: .importTime,
-        )
-        viewModel.hasCapturedOriginal = true
+        ))
     }
     if sessionEdits {
         viewModel.previewSeedSessionEdit()

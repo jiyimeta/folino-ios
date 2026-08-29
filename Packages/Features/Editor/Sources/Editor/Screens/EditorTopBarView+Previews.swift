@@ -10,10 +10,11 @@ import SwiftUI
 private func previewViewModel(canRevert: Bool) -> EditorViewModel {
     let viewModel = PreviewEditorFactory.makeViewModel(armedDuration: .quarter)
     if canRevert {
-        viewModel.scoreItem = viewModel.scoreItem.capturingOriginal(
+        // The same door a real caller uses to re-seed the row (`refreshRow` also updates `hasCapturedOriginal`),
+        // rather than a preview-only setter on state the core owns.
+        viewModel.refreshRow(viewModel.scoreItem.capturingOriginal(
             fileName: "preview.original.mscx", contentHash: "preview-original", provenance: .importTime,
-        )
-        viewModel.hasCapturedOriginal = true
+        ))
     }
     return viewModel
 }

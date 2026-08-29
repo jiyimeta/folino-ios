@@ -1,10 +1,9 @@
 import Domain
 import Foundation
 import SheetMusicCore
-import SheetMusicLayout // DurationInterpretation: splits a written duration back into base + dots
 
 /// The pad's core operations — note input, delete, duration change — per spec §5.3.
-extension EditorViewModel {
+extension EditorSessionCore {
     /// Letter key C…B — writes at the CARET. Rest at the caret → `.inputNote` (composited with a re-time when a
     /// different duration is armed); note at the caret → a two-way fork: notehead 0 (or a length that crosses the
     /// barline) takes `.writeNote`, which re-pitches AND re-times in one step, while a caret on an upper notehead
@@ -47,10 +46,10 @@ extension EditorViewModel {
             if chord.notes.count > 1 {
                 apply(.removeNoteFromChord(at: noteID))
             } else {
-                deleteElement(at: VoiceElementID(noteID), in: score)
+                deleteElement(at: VoiceElementID(noteID))
             }
         case let .rest(restID):
-            deleteElement(at: VoiceElementID(restID), in: score)
+            deleteElement(at: VoiceElementID(restID))
         case let .tuplet(tupletID):
             apply(.removeTuplet(at: VoiceElementID(
                 staff: tupletID.staff,
@@ -116,7 +115,7 @@ extension EditorViewModel {
     /// measure to ONE measure rest (the engine's own full-measure-rest collapse), reporting the collapsed rest as
     /// the affected location — so re-derivation lands the selection there without the explicit `select` this method
     /// used to do.
-    private func deleteElement(at location: VoiceElementID, in _: Score) {
+    private func deleteElement(at location: VoiceElementID) {
         apply(.delete(at: location))
     }
 
@@ -239,18 +238,18 @@ extension EditorViewModel {
         // `chainTail` falls back to `head` when it did not produce one. The note-input site below has no such
         // guarantee — see the comment there.
         let crossesBar = duration.map { !CrossBarInputPlanner.fitsInMeasure($0, at: veID, in: score) } ?? false
-        let generationBeforeInput = generation
-        guard apply(.inputNote(at: restID, pitch: planned.pitch, tpc: planned.tpc, duration: duration)) else {
+        let revisionBeforeInput = revision
+        guard apply(.inputNote(at: restID, pitch: planned.pitch, tpc: planned.tpc, duration: duration)) != nil else {
             return
         }
         if crossesBar, let mutated = self.score {
             land(
                 selection: veID,
                 caretAfter: chainTail(from: veID, in: mutated),
-                unlessStillAt: generationBeforeInput,
+                unlessStillAt: revisionBeforeInput,
             )
         } else {
-            land(after: veID, unlessStillAt: generationBeforeInput)
+            land(after: veID, unlessStillAt: revisionBeforeInput)
         }
     }
 
@@ -285,18 +284,18 @@ extension EditorViewModel {
         // slot, an armed length that overruns the bar, and a pre-existing tie forward, all at once, and the cost is
         // a misplaced caret rather than a wrong note.
         let crossesBar = duration.map { !CrossBarInputPlanner.fitsInMeasure($0, at: veID, in: score) } ?? false
-        let generationBeforeInput = generation
+        let revisionBeforeInput = revision
         let applied: Bool
         if noteID.noteIndexInChord == 0 || crossesBar {
-            applied = apply(.writeNote(at: veID, pitch: target.pitch, tpc: target.tpc, duration: duration))
+            applied = apply(.writeNote(at: veID, pitch: target.pitch, tpc: target.tpc, duration: duration)) != nil
         } else {
             let repitch = EditIntent.setNotePitch(
                 at: noteID, pitch: target.pitch, tpc: target.tpc, accidental: nil,
             )
             if let duration, !isInsideTuplet(veID) {
-                applied = apply(.composite([.setChordDuration(at: veID, duration: duration), repitch]))
+                applied = apply(.composite([.setChordDuration(at: veID, duration: duration), repitch])) != nil
             } else {
-                applied = apply(repitch)
+                applied = apply(repitch) != nil
             }
         }
         guard applied else { return }
@@ -304,17 +303,17 @@ extension EditorViewModel {
             land(
                 selection: veID,
                 caretAfter: chainTail(from: veID, in: mutated),
-                unlessStillAt: generationBeforeInput,
+                unlessStillAt: revisionBeforeInput,
             )
         } else {
-            land(after: veID, unlessStillAt: generationBeforeInput)
+            land(after: veID, unlessStillAt: revisionBeforeInput)
         }
     }
 
     /// Where input leaves the two markers: the selection on the note just written at `location`, the caret on the
     /// next timed element in voice order (spec §11-5: advance on after pitch-key input) — nil past the end of the
     /// staff. Both are placed in one go, before the audition, so the preview sounds the note that was actually
-    /// written. A refused edit (`generation` unmoved) leaves everything where it was.
+    /// written. A refused edit (`revision` unmoved) leaves everything where it was.
     private func land(after location: VoiceElementID, unlessStillAt previousGeneration: Int) {
         land(selection: location, caretAfter: location, unlessStillAt: previousGeneration)
     }
@@ -339,7 +338,7 @@ extension EditorViewModel {
     private func land(
         selection slot: VoiceElementID, caretAfter tail: VoiceElementID, unlessStillAt previousGeneration: Int,
     ) {
-        guard generation != previousGeneration, let score else { return }
+        guard revision != previousGeneration, let score else { return }
         let written = SelectionRederivation.item(at: slot, in: score, preferringNoteIndex: nil)
         let next = ElementNavigator.nextTimedElement(after: tail, in: score)
             .flatMap { SelectionRederivation.item(at: $0, in: score, preferringNoteIndex: nil) }

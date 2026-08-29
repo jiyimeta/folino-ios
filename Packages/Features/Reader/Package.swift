@@ -70,7 +70,7 @@ if isAndroid {
         // encode the DrawingAnchor / transform payloads). Pinned to the same revision Library uses.
         .package(
             url: "https://github.com/jiyimeta/swift-wirelet.git",
-            revision: "ba1b8e337a508079c5213656e4c01e9edbedc8b4",
+            exact: "0.5.0",
         ),
     ]
     products += [
