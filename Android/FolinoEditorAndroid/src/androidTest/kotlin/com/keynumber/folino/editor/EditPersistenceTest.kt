@@ -74,12 +74,21 @@ class EditPersistenceTest {
      *
      * The design takes the MSCZ encode on the main thread deliberately — `EditorBridge` is single-threaded by
      * construction, so moving just the save off it would be a data race rather than an optimization — and a choice
-     * like that is worth a number rather than an argument. Measured 2026-08-29 on a `Pixel_6_Pro_API_36` arm64
-     * emulator against `parity.mscz`: **21-24 ms for a real save, ~0.2 ms for a flush of a clean session**. Roughly
-     * one dropped frame, taken 2 s after the user stopped typing. A large score scales that up, so re-read the log
-     * if this ever feels slow.
+     * like that is worth a number rather than an argument. Measured 2026-08-29 against `parity.mscz`, which is a
+     * SMALL fixture (28.8 KB encoded):
      *
-     * Not asserted on: an emulator is not a device and a threshold here would be a flake. Read it from logcat.
+     * | | real save | clean flush |
+     * | --- | --- | --- |
+     * | Pixel 8a | **160-230 ms** | ~2 ms |
+     * | `Pixel_6_Pro_API_36` arm64 emulator | 21-24 ms | ~0.2 ms |
+     *
+     * **The emulator is ~10x optimistic; do not judge this on one.** On the real device a save is over ten dropped
+     * frames — well past the 120 ms the SP5 plan set as the line for taking the encode on the main thread.
+     * [whereTheFlushTimeGoes] splits it: the encode alone is ~89 ms, the digest ~2 ms, and ~115 ms is elsewhere
+     * inside `performSave`. Raising the save `Task` to `.userInitiated` was tried and measured as noise, so the
+     * cooperative pool's thread priority is not the cause.
+     *
+     * Not asserted on: a threshold here would be a flake. Read it from logcat.
      */
     private val flushMicros = mutableListOf<Long>()
 
@@ -190,6 +199,42 @@ class EditPersistenceTest {
         var value = 0L
         onMain { value = rig.bridge.scoreFingerprint() }
         return value
+    }
+
+    /**
+     * Splits the flush cost into its two halves, so "the save is slow" can be acted on rather than only noticed.
+     *
+     * `encodeScore()` is the same MSCZ encode `performSave` performs (it is the resync path's, over the same score),
+     * so timing it alone separates CPU-bound encoding from everything else the save does — the file write, and the
+     * `sha256Hex` that reads the file straight back over the JNI seam to digest it.
+     */
+    @Test fun whereTheFlushTimeGoes() {
+        val rig = openRig("persist-cost")
+        writeANote(rig)
+
+        var encodeMicros = 0L
+        var encodedBytes = 0
+        onMain {
+            val started = System.nanoTime()
+            val bytes = rig.bridge.encodeScore()
+            encodeMicros = (System.nanoTime() - started) / 1_000
+            encodedBytes = bytes.size
+        }
+
+        var digestMicros = 0L
+        onMain {
+            val started = System.nanoTime()
+            EditorRoomFiles(rig.rows).sha256Hex(rig.file.path)
+            digestMicros = (System.nanoTime() - started) / 1_000
+        }
+
+        onMain { rig.relay.flushPendingSave() }
+
+        android.util.Log.i(
+            "EditPersistence",
+            "cost split: encode=${encodeMicros}us (${encodedBytes}B) digest=${digestMicros}us " +
+                "wholeFlush=${flushMicros.last()}us",
+        )
     }
 
     @Test fun anEditReachesTheFileWhenTheSessionEnds() {
