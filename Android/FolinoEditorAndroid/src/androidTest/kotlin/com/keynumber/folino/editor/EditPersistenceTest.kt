@@ -70,6 +70,20 @@ class EditPersistenceTest {
     private val hostsToRelease = mutableListOf<TestHost>()
 
     /**
+     * Every flush this test performed, in microseconds, logged in [tearDown] under the `EditPersistence` tag.
+     *
+     * The design takes the MSCZ encode on the main thread deliberately — `EditorBridge` is single-threaded by
+     * construction, so moving just the save off it would be a data race rather than an optimization — and a choice
+     * like that is worth a number rather than an argument. Measured 2026-08-29 on a `Pixel_6_Pro_API_36` arm64
+     * emulator against `parity.mscz`: **21-24 ms for a real save, ~0.2 ms for a flush of a clean session**. Roughly
+     * one dropped frame, taken 2 s after the user stopped typing. A large score scales that up, so re-read the log
+     * if this ever feels slow.
+     *
+     * Not asserted on: an emulator is not a device and a threshold here would be a flake. Read it from logcat.
+     */
+    private val flushMicros = mutableListOf<Long>()
+
+    /**
      * Runs [body] on the app's main thread and rethrows anything it threw on this one — without the rethrow an
      * assertion failure inside the block takes the whole app process down and surfaces as "instrumentation run
      * failed" rather than as the assertion.
@@ -88,6 +102,7 @@ class EditPersistenceTest {
 
     @After
     fun tearDown() {
+        // Before the logging, because `close()` flushes too and those are the most representative saves here.
         onMain { relaysToClose.forEach { it.close() } }
         relaysToClose.clear()
         hostsToRelease.distinctBy { System.identityHashCode(it) }.forEach { host ->
@@ -96,6 +111,13 @@ class EditPersistenceTest {
             if (host.handle != 0L) SheetMusicJNI.nativeReleaseScore(host.handle)
         }
         hostsToRelease.clear()
+        if (flushMicros.isNotEmpty()) {
+            val sorted = flushMicros.sorted()
+            android.util.Log.i(
+                "EditPersistence",
+                "flushSave: n=${sorted.size} median=${sorted[sorted.size / 2]}us max=${sorted.last()}us",
+            )
+        }
     }
 
     private fun stagedFixture(name: String): Pair<File, File> {
@@ -138,7 +160,16 @@ class EditPersistenceTest {
                 RealEditNatives,
                 // `MainScope()` only has to exist: every save in this suite is a `flushNow` through
                 // `flushPendingSave` / `close`, so the quiet period never elapses.
-                autosave = DebouncedAutosave(MainScope()) { bridge.flushSave() },
+                //
+                // Timed here rather than inside `EditorBridge` because this is the boundary that matters and the
+                // only one that can report: the whole JNI round trip including the MSCZ encode, taken on the main
+                // thread, which is what a user would feel. (Swift's `print` inside the `.so` goes to a stdout
+                // Android discards, so a measurement there cannot be read back.)
+                autosave = DebouncedAutosave(MainScope()) {
+                    val started = System.nanoTime()
+                    bridge.flushSave()
+                    flushMicros.add((System.nanoTime() - started) / 1_000)
+                },
             )
             relaysToClose.add(relay)
             hostsToRelease.add(host)
