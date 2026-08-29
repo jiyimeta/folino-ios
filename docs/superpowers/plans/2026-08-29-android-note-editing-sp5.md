@@ -26,19 +26,27 @@ Predecessor plans: `…-sp0.md` … `…-sp4.md` in the same directory. SP4's SD
 
 ## Status (2026-08-29)
 
-Tasks 1-6 are **implemented and committed** on `worktree-android-note-editing` (`557c4178` seam, `750a304a` the save
-path and everything after it). What that leaves:
+Tasks 1-7 are **implemented, committed and verified** on `worktree-android-note-editing` — `557c4178` (seam),
+`750a304a` (the save path and everything after it), `6aa866ed` (UUID score ids in the smoke test), `17bf3082` (the
+flush measurement).
 
-- **Task 6 Steps 4-5 — the instrumented run has not happened.** `EditPersistenceTest` compiles but has never
-  executed: no Pixel was attached (`adb devices` empty, `adb mdns services` empty — wireless debugging was off), and
-  this repo does not run editor tests on an emulator. **This is the only automated coverage the Swift writer has**, so
-  until it runs, the encode-and-write path is verified by reasoning alone.
-- **Task 7 — the device pass has not happened**, for the same reason. The flush-cost measurement it exists to produce
-  is therefore also missing, and the main-thread encode is an argued choice rather than a measured one.
-- Everything that could be verified without a device was: 59 + 221 + 2 + 8 Android JVM tests green, the Android
-  `:app:assembleDebug` and `:FolinoEditorAndroid:compileDebugAndroidTestKotlin` green, the arm64 and x86_64 `.so`s
-  rebuilt from a cleaned `.build` with `flushSave` / `refreshRow` / `didSaveAsSiblingMSCZ` confirmed present via
-  `nm`, and the iOS side's 191 Editor tests green (the save policy they cover is shared).
+Verified:
+
+- **Android JVM**: 59 + 221 + 2 + 8 tests, 0 failures.
+- **Instrumented, on an arm64 `Pixel_6_Pro_API_36` emulator** (the user authorised the emulator for this session;
+  the standing default is the physical Pixel): `:FolinoEditorAndroid:connectedDebugAndroidTest` 8/8 — the new
+  `EditPersistenceTest` plus `EditSessionParityTest` and `EditingUiTest`, which keep their mirror-focused premise via
+  the injected `NoAutosave`. `:app:connectedDebugAndroidTest` 70/70.
+- **iOS**: the Editor package's 191 tests, since `EditorSessionCore.performSave` is the shared half.
+- **Artifact**: arm64 and x86_64 `.so`s rebuilt from a cleaned `.build`, with `flushSave` / `refreshRow` /
+  `didSaveAsSiblingMSCZ` confirmed present via `nm`.
+- **Task 7's number**: a real save costs **21-24 ms**, a flush of a clean session ~0.2 ms, measured at the Kotlin
+  boundary against `parity.mscz`. Comfortably under the 120 ms line this plan set for the main-thread encode. Kept in
+  `EditPersistenceTest` rather than reverted — the choice it justifies is permanent, so the number should be too.
+
+Still owed, and **only a person can do it**: the hands-on pass of Task 7 Step 4 on the physical Pixel — the six
+scenarios plus the one thing SP5 cannot check for itself, whether the sibling-`.mscz` Snackbar reads right in place.
+Task 7's separate diagnostic-log commit was not needed; the measurement lives in the test instead.
 
 Deviations from the plan as written, all small:
 
