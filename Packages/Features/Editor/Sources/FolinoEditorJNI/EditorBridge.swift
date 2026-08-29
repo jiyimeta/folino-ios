@@ -1,3 +1,4 @@
+import Dispatch // DispatchSemaphore — `flushSave` joins an async save across the synchronous JNI boundary
 import Domain
 import EditorCore
 import Foundation
@@ -91,6 +92,11 @@ public final class EditorBridge {
     /// Whether the row records an original to go back to. Always `false` on Android today: the core is built with
     /// no originals store, because there is none — see `revertToOriginal()` below.
     public internal(set) var canRevertToOriginal: Bool = false
+
+    /// Whether a save has written this score's edits to a NEW file — a sibling `.mscz` next to a MusicXML / MXL /
+    /// MIDI source, which is the only format that can carry a note edit. Latched by `EditorSessionCore`, so it stays
+    /// true for the rest of the session and the host can show its notice once.
+    public internal(set) var didSaveAsSiblingMSCZ: Bool = false
     // swiftformat:enable redundantType
 
     /// `EditorSessionEndMode` as a discriminator: 0 = commitUnchanged, 1 = revert, 2 = commitEdited. An integer
@@ -199,7 +205,7 @@ public final class EditorBridge {
             scoreItem: item,
             scoresDirectory: URL(fileURLWithPath: scoresDirectory),
             fileFacts: HostFileFacts(files: files),
-            writer: UnimplementedScoreWriter(),
+            writer: AndroidScoreWriter(files: files),
             recordsRelayIntents: true,
         )
         core.beginSession(score: score)
@@ -209,12 +215,41 @@ public final class EditorBridge {
         return true
     }
 
-    /// Drops the session. The host flushes any pending save first — SP5's job; there is nothing to flush yet.
+    /// Drops the session. The host flushes any pending save first — see `EditSessionRelay.close`, which calls
+    /// `flushSave()` before this. Ending without that flush loses whatever the debounce had not yet written.
     @WireletExpose
     public func endSession() {
         core?.endSession()
         core = nil
         relayFrames = []
+        sync()
+    }
+
+    /// Writes the session's pending edits, if any. A no-op when nothing changed since the last save.
+    ///
+    /// The debounce that decides WHEN this runs is Kotlin's, for the reason `EditorSessionCore.performSave`'s own doc
+    /// gives — a timer belongs where the run loop is, and this image has none. `DebouncedAutosave` is the Android
+    /// counterpart of iOS's `EditorViewModel.scheduleAutosave`.
+    ///
+    /// Synchronous, and blocking, on purpose. `performSave` is `async`; a `@WireletExpose` op cannot await, so the
+    /// `Task` is joined with a `DispatchSemaphore` exactly as `AnnotationSaveBridge.open` does. The same argument for
+    /// why that cannot deadlock holds here: the save's only nominal suspension point is
+    /// `originals?.captureOriginalIfNeeded`, and Android builds the core with no originals store, so the awaited work
+    /// is a straight-line encode and write with nothing to starve the cooperative pool on.
+    ///
+    /// It blocks the caller's thread — the Android main thread — for the length of an MSCZ encode. That is deliberate
+    /// rather than tolerated: every op in this file already runs synchronously on that thread and each one triggers a
+    /// full relayout, so the core is single-threaded by construction and moving just the save off it would be a data
+    /// race, not an optimization. The 2 s debounce is what keeps the cost off the typing path.
+    @WireletExpose
+    public func flushSave() {
+        guard let core else { return }
+        let semaphore = DispatchSemaphore(value: 0)
+        Task {
+            await core.performSave()
+            semaphore.signal()
+        }
+        semaphore.wait()
         sync()
     }
 
@@ -458,36 +493,57 @@ public final class EditorBridge {
 
     // MARK: Ending the session
 
-    // PARITY(android): discard does not persist — the unwound score is not written back, because Android's edit
-    //   sessions have no writer yet (SP5). Delete this marker when SP5 lands and the flush is wired.
-
-    /// Throws this session's edits away: unwind the command stack back to where the session opened.
+    /// Throws this session's edits away: unwind the command stack back to where the session opened, then write that
+    /// score back over whatever the autosave had already put on disk.
     ///
-    /// **Deliberately does NOT save.** iOS follows the unwind with a flush, so the unwound score replaces the edited
-    /// one on disk; Android has no writer at all yet (`UnimplementedScoreWriter` traps on contact), so the flush
-    /// half is SP5's. Until then this is an in-memory unwind — which is still the whole of what the user sees,
-    /// because nothing they did was on disk either.
+    /// The ordering is iOS's (`EditorViewModel.discardSessionEdits`), and each step is load-bearing:
+    ///
+    /// - Mark discarded even when there is nothing to unwind — leaving without edits must not deposit a stack the
+    ///   user has just declined.
+    /// - Only write if the unwind actually landed back where the session opened. It can fail to (an adopted
+    ///   session's stack reaches back past this session's start), and half-unwound bytes are worse than the edits.
+    /// - `markDirtyForDiscardFlush()` before the save, because the unwind itself does not dirty the session and
+    ///   `performSave` no-ops on a clean one — without it the file would keep the edits that were just discarded.
+    ///
+    /// The host cancels its armed autosave before calling this (`EditSessionRelay.discardSessionEdits`): the pending
+    /// write is for the score being thrown away, and it must not land after this one.
+    ///
+    /// What iOS does and this cannot: take back an original its first save captured. Android has no originals store
+    /// — see `revertToOriginal()` below and its parity marker.
     ///
     /// Produces no relay frames: like undo, the unwind drives `ScoreEditSession` directly rather than through
     /// `apply`. The host must therefore reconcile the mirror by fingerprint afterwards rather than by replaying
     /// frames — see `EditSessionRelay.discardSessionEdits`.
     @WireletExpose
     public func discardSessionEdits() {
-        core?.markSessionDiscarded()
-        core?.unwindSessionEdits()
-        sync()
+        guard let core else { return }
+        core.markSessionDiscarded()
+        guard core.sessionHasEdits else {
+            sync()
+            return
+        }
+        core.unwindSessionEdits()
+        guard !core.sessionHasEdits else {
+            sync()
+            return
+        }
+        core.markDirtyForDiscardFlush()
+        // Ends with its own `sync()`.
+        flushSave()
     }
 
     // PARITY(android): revert to original — needs an Android `ScoreOriginalStore` (sidecar copy + restore), the
-    //   `original*` Room columns and a migration, `RevertPolicy`'s warnings bridged across, and SP5's writer to
-    //   restore through. Delete this marker when that lands.
+    //   `original*` Room columns and a migration, and `RevertPolicy`'s warnings bridged across. The writer it would
+    //   restore through exists (`AndroidScoreWriter`); what is missing is the original to restore. Delete this
+    //   marker when that lands.
 
     /// Restores the file from the copy taken when the score was imported. Answers `false` when it could not.
     ///
     /// **Always `false` today.** The core is constructed with no `ScoreOriginalStore` (its `originals` is nil), so
-    /// it throws `EditorRevertUnavailable` — and there is nothing for a store to be built on yet either: Android
-    /// has no sidecar copy, no `original*` columns in the Room row, and no writer to restore through. The op and
-    /// its call site exist now so the placement is settled and SP5 fills the body rather than re-deciding the UI.
+    /// it throws `EditorRevertUnavailable` — and there is nothing for a store to be built on yet either: Android has
+    /// no sidecar copy and no `original*` columns in the Room row. (The writer is no longer the missing half; SP5
+    /// landed it.) The op and its call site exist now so the placement is settled and whoever builds the store fills
+    /// the body rather than re-deciding the UI.
     ///
     /// It answers rather than traps on purpose. A `preconditionFailure` here would abort the whole process from
     /// inside a JNI image — the least readable failure available — for a state that is not a plan violation but
@@ -608,6 +664,7 @@ public final class EditorBridge {
             calloutDots = 0
             sessionHasEdits = false
             canRevertToOriginal = false
+            didSaveAsSiblingMSCZ = false
             sessionEndModeKind = 0
             activeVoice = 0
             selectedItemFrame = nil
@@ -635,6 +692,7 @@ public final class EditorBridge {
         calloutDots = Int32(core.selectedDuration?.dots ?? 0)
         sessionHasEdits = core.sessionHasEdits
         canRevertToOriginal = core.hasCapturedOriginal
+        didSaveAsSiblingMSCZ = core.didSaveAsSiblingMSCZ
         sessionEndModeKind = Self.endModeKind(core.sessionEndMode)
         activeVoice = Int32(core.activeVoice)
         selectedItemFrame = Self.frame(for: core.selectedItem)

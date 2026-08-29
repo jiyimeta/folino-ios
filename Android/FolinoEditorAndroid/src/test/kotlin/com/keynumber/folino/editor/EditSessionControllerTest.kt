@@ -4,6 +4,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -13,11 +15,12 @@ import org.junit.Test
  * Unit tests for [EditSessionController] — the state holder between Compose and [EditSessionRelay], tested against
  * fakes for [EditSessionOps] and [EditProjection] so none of it needs a device or a real relay.
  *
- * `scope` is a plain [CoroutineScope], not a `kotlinx-coroutines-test` `TestScope`: this module's test classpath has
- * no `kotlinx-coroutines-test` (see `ReaderViewportMotionArbitrationTest`'s doc comment for the same constraint
- * elsewhere in this repo). That is fine here because [EditSessionController.begin] and
- * [EditSessionController.end] write `isEditing`/`availability` into `ui` synchronously — see the class doc — so
- * every assertion below needs no dispatcher to actually run anything.
+ * `scope` is a plain [CoroutineScope] rather than a `TestScope` for almost every case here, and deliberately stays
+ * one: [EditSessionController.begin] and [EditSessionController.end] write `isEditing`/`availability` into `ui`
+ * synchronously — see the class doc — so those assertions need no dispatcher to actually run anything, and saying so
+ * with a plain scope keeps the distinction visible. (`kotlinx-coroutines-test` is on this module's classpath now, for
+ * `DebouncedAutosaveTest`.) The one case that DOES need the scheduler is the collected-field test at the bottom,
+ * which says so where it sits.
  */
 private val scope = CoroutineScope(Dispatchers.Unconfined + Job())
 
@@ -34,6 +37,9 @@ private class FakeRelay(private val openResult: OpenResult = OpenResult.OPENED) 
     }
 
     override fun close() { closeCalls += 1 }
+
+    var flushCalls = 0
+    override fun flushPendingSave() { flushCalls += 1 }
 
     override fun selectItem(bytes: ByteArray) { calls += "selectItem" }
     override fun inputPitch(letter: String) { calls += "inputPitch($letter)" }
@@ -87,6 +93,7 @@ private class FakeProjection : EditProjection {
     override val activeVoice = MutableStateFlow(0)
     override val sessionHasEdits = MutableStateFlow(false)
     override val canRevertToOriginal = MutableStateFlow(false)
+    override val didSaveAsSiblingMSCZ = MutableStateFlow(false)
     override val sessionEndModeKind = MutableStateFlow(0)
     override val selectedItemFrame = MutableStateFlow<EditBytesWire?>(null)
     override val caretItemFrame = MutableStateFlow<EditBytesWire?>(null)
@@ -274,5 +281,38 @@ class EditSessionControllerTest {
             ),
             relay.calls,
         )
+    }
+
+    // MARK: - Persistence
+
+    /**
+     * The Reader shows a Snackbar off this. It is latched on the Swift side, so the controller only has to carry
+     * it — a session that saved to a sibling copy keeps saying so for the rest of its life.
+     *
+     * The one test here that needs a test scheduler: this is a COLLECTED field, folded in by the background
+     * collector [EditSessionController.init] starts (see the class doc for why `begin`/`end` are the synchronous
+     * exceptions), so there is a dispatch between setting the flow and reading `ui`. The file-level [scope] cannot
+     * express "let that dispatch run" — `runCurrent()` can.
+     */
+    @Test
+    fun `the sibling-mscz notice reaches the ui state`() = runTest {
+        val projection = FakeProjection()
+        val controller = EditSessionController(FakeRelay(), projection, backgroundScope)
+
+        projection.didSaveAsSiblingMSCZ.value = true
+        runCurrent()
+
+        assertTrue(controller.ui.value.didSaveAsSiblingMSCZ)
+    }
+
+    @Test
+    fun `flushPendingSave forwards to the relay without ending the session`() {
+        val relay = FakeRelay()
+        val controller = EditSessionController(relay, FakeProjection(), scope)
+
+        controller.flushPendingSave()
+
+        assertEquals(1, relay.flushCalls)
+        assertEquals("onPause writes; it does not leave", 0, relay.closeCalls)
     }
 }

@@ -38,9 +38,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -49,6 +51,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.keynumber.folino.editor.DebouncedAutosave
 import com.keynumber.folino.editor.EditSessionController
 import com.keynumber.folino.editor.EditSessionRelay
 import com.keynumber.folino.editor.EditorRoomFiles
@@ -694,6 +697,9 @@ private fun LibraryNavGraph(
                         bridging,
                         readerVm,
                         audition = NoteAuditioning(audioVm::playNotePreview),
+                        // The Reader screen's scope, so a pending write dies with the screen rather than with the
+                        // process. `close()` flushes on the way out, so nothing is lost when it does.
+                        autosave = DebouncedAutosave(editScope) { bridging.flushSave() },
                     )
                     EditSessionController(relay, bridging, editScope)
                 }
@@ -705,6 +711,18 @@ private fun LibraryNavGraph(
                 // reset to "not editing" — the exact divergence `open()`'s fingerprint check exists to catch, but
                 // reached by a route it should never have to.
                 DisposableEffect(editController) { onDispose { editController.end() } }
+                // …and a session must not lose an edit to a process death either. `onDispose` above covers LEAVING
+                // the Reader; this covers being backgrounded while still in it, which is the last moment Android
+                // guarantees before the process can be killed. Two triggers rather than one because neither implies
+                // the other: backgrounding disposes nothing, and leaving never pauses.
+                val editLifecycleOwner = LocalLifecycleOwner.current
+                DisposableEffect(editLifecycleOwner, editController) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_PAUSE) editController.flushPendingSave()
+                    }
+                    editLifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose { editLifecycleOwner.lifecycle.removeObserver(observer) }
+                }
                 // A retarget (playlist auto-advance) swaps the score under the Reader; the session belongs to the
                 // score it was opened for, so it ends with it. One bridge view model serves the whole entry —
                 // `beginSession` takes the score id — rather than one per score, so a long playlist does not

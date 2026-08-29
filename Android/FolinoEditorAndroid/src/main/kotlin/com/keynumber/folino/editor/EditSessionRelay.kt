@@ -44,6 +44,9 @@ interface EditBridging {
     fun engineVersionStamp(): Long
     fun beginSession(path: String, dir: String, id: String): Boolean
     fun endSession()
+
+    /** Writes the session's pending edits, if any. A no-op when nothing changed since the last save. */
+    fun flushSave()
     fun scoreFingerprint(): Long
     fun encodeScore(): ByteArray
     fun takeRelayFrames(): List<ByteArray>
@@ -116,6 +119,7 @@ class GeneratedEditBridging(private val vm: EditorBridgeViewModel) : EditBridgin
     override fun engineVersionStamp() = vm.engineVersionStamp()
     override fun beginSession(path: String, dir: String, id: String) = vm.beginSession(path, dir, id)
     override fun endSession() = vm.endSession()
+    override fun flushSave() = vm.flushSave()
     override fun scoreFingerprint() = vm.scoreFingerprint()
     override fun encodeScore(): ByteArray = vm.encodeScore().bytes
     override fun takeRelayFrames(): List<ByteArray> = vm.takeRelayFrames().map { it.bytes }
@@ -174,6 +178,7 @@ class GeneratedEditBridging(private val vm: EditorBridgeViewModel) : EditBridgin
     override val activeVoice get() = vm.activeVoice
     override val sessionHasEdits get() = vm.sessionHasEdits
     override val canRevertToOriginal get() = vm.canRevertToOriginal
+    override val didSaveAsSiblingMSCZ get() = vm.didSaveAsSiblingMSCZ
     override val sessionEndModeKind get() = vm.sessionEndModeKind
     override val selectedItemFrame get() = vm.selectedItemFrame
     override val caretItemFrame get() = vm.caretItemFrame
@@ -215,6 +220,9 @@ fun interface NoteAuditioning {
 interface EditSessionOps {
     fun open(scorePath: String, scoresDirectory: String, scoreId: String): OpenResult
     fun close()
+
+    /** Writes any pending edit now, without ending the session. Driven from the Reader's `onPause`. */
+    fun flushPendingSave()
 
     fun selectItem(bytes: ByteArray)
     fun inputPitch(letter: String)
@@ -274,14 +282,12 @@ interface EditSessionOps {
  * no-op: it means no session, corrupted bytes, a released handle, or two images that have already diverged. All four
  * call for a resync (SP0's finding, and the doc comment on `nativeApplyEditIntent` itself).
  */
-// PARITY(android): note editing — the session and the relay are here and proven on a physical device, but nothing
-//   drives them yet: the contextual app bar, pad, callout and caret overlay are SP4; the save path, autosave, the
-//   onPause flush and the sibling-.mscz policy are SP5. Delete this marker when SP5 lands.
 class EditSessionRelay(
     private val bridge: EditBridging,
     private val host: EditSessionHost,
     private val natives: EditNatives = RealEditNatives,
     private val audition: NoteAuditioning = NoteAuditioning {},
+    private val autosave: EditAutosave,
 ) : EditSessionOps {
     /** Resyncs performed this session. Read by the tests, and by SP4's diagnostics. */
     var resyncCount: Int = 0
@@ -309,13 +315,15 @@ class EditSessionRelay(
      * `false` against a score that has already reverted.
      *
      * **The fingerprint check at open is not paranoia; it is the normal second session.** Ending a session does not
-     * revert the mirror ("the score keeps whatever the session last wrote" — ssm's own words), and SP3/SP4 ship no
-     * save at all. So: edit, close, reopen — and the mirror is seeded from the *edited* score behind the handle
-     * while this side parses the *unedited* file. They diverge before the first keystroke, and nothing else would
+     * revert the mirror ("the score keeps whatever the session last wrote" — ssm's own words). With SP5 the two
+     * usually agree at reopen, because this side now parses a file that HOLDS the edits — which is exactly why the
+     * check has to stay: the cases where they do not agree are a save that failed (§8.4 leaves the session dirty and
+     * the file behind), a discard whose write-back did not land, a double open, and a file replaced underneath us.
+     * In any of those the mirror is seeded from one score while this side parses another, and nothing else would
      * notice for up to `FINGERPRINT_SAMPLE_EVERY` edits — during which taps resolve against one score and edits
      * apply to another, which is the "wrong element edited" failure, not a cosmetic one. Resyncing here pushes the
-     * file-parsed score into the handle, which is also the correct semantics: unsaved edits were never persisted, so
-     * the file is the truth. The same check covers a failed save, a double open, and a file replaced underneath us.
+     * file-parsed score into the handle, which is also the correct semantics: what the mirror holds beyond the file
+     * was never persisted, so the file is the truth.
      */
     override fun open(scorePath: String, scoresDirectory: String, scoreId: String): OpenResult {
         if (isOpen) close()
@@ -340,9 +348,21 @@ class EditSessionRelay(
     /** Ends both sides. Safe to call twice; `nativeEndEditSession` is a no-op for a handle with no session. */
     override fun close() {
         if (!isOpen) return
+        // Before anything is torn down: the debounce may be holding an unwritten edit, and `endSession` drops the
+        // authoritative session that owns it. iOS flushes in `EditorViewModel.endSession` for the same reason.
+        autosave.flushNow()
         natives.endEditSession(host.scoreHandle())
         bridge.endSession()
         isOpen = false
+    }
+
+    /**
+     * Writes any pending edit now, without ending the session. The Activity calls this on `onPause` — the last moment
+     * Android guarantees before a process can be killed, and where the annotation save is flushed too.
+     */
+    override fun flushPendingSave() {
+        if (!isOpen) return
+        autosave.flushNow()
     }
 
     // MARK: - The editing ops
@@ -387,6 +407,9 @@ class EditSessionRelay(
      */
     override fun discardSessionEdits() {
         if (!isOpen) return
+        // The armed write is for the score the user has just decided to throw away. Cancel rather than flush; the
+        // write-back of the UNWOUND score is `EditorBridge.discardSessionEdits`'s own, on the Swift side.
+        autosave.cancel()
         bridge.discardSessionEdits()
         // Whatever the unwind left behind must not ride along into the mirror as if it were a fresh edit.
         bridge.takeRelayFrames()
@@ -424,6 +447,12 @@ class EditSessionRelay(
     private fun relay(op: () -> Unit) {
         if (!isOpen) return
         op()
+        // Unconditional, from the one place no op can skip. iOS arms in its own op funnel for the reason
+        // `EditorViewModel+Ops`'s doc gives — "the autosave timer can never be skipped for one op and not another" —
+        // and an op that changed nothing costs only a timer tick that `performSave` then answers with "not dirty".
+        // NOT in `carryToMirror()`: that returns early when the op applied no frames, and undo/redo move the score
+        // without emitting any, so arming there would miss exactly the ops that matter most.
+        autosave.arm()
         // Drained here, before the frames, because `takePendingAudition` empties the core: [carryToMirror] returns
         // early on an op that applied nothing — a tap, above all — and a request left behind would be picked up by
         // whichever op ran next and sound the wrong note.
@@ -480,6 +509,9 @@ class EditSessionRelay(
         val before = bridge.appliedIntentCount()
         val revisionBefore = bridge.revision()
         local()
+        // The funnel's other half — see `relay`. An undo the core refused leaves the session clean, so arming for it
+        // costs one tick that `performSave` answers with "not dirty"; an undo it accepted has to be written.
+        autosave.arm()
         // A refused undo/redo leaves the local revision where it was, and must not touch the mirror. Both reads are
         // synchronous ops on the bridge (see `GeneratedEditBridging`) — a projection read here would answer with the
         // pre-op value on this thread and make every undo look refused.

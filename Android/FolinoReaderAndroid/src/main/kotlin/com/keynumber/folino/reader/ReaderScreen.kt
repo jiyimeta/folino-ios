@@ -49,6 +49,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -931,7 +933,19 @@ fun ReaderScreen(
         return
     }
 
+    // A score whose source format cannot carry a note edit (MusicXML / MXL / MIDI) is saved as a sibling `.mscz`
+    // instead, and the user has to be told once — otherwise their edits appear to have gone into a file that, opened
+    // anywhere else, does not have them. iOS shows a top banner; Android's own surface for a one-off statement is a
+    // Snackbar. The flag is latched on the Swift side (`EditorSessionCore.didSaveAsSiblingMSCZ`), so this fires once
+    // per session rather than once per save.
+    val editSaveNoticeHost = remember { SnackbarHostState() }
+    val siblingMSCZNotice = stringResource(R.string.reader_editing_saved_as_mscz)
+    LaunchedEffect(editing.didSaveAsSiblingMSCZ) {
+        if (editing.didSaveAsSiblingMSCZ) editSaveNoticeHost.showSnackbar(siblingMSCZNotice)
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(editSaveNoticeHost) },
         topBar = {
             ReaderTopBar(
                 title = title,

@@ -36,9 +36,25 @@ private class FakeBridge : EditBridging {
     var pendingAudition: ByteArray = ByteArray(0)
     private val framesToEmit = mutableListOf<ByteArray>()
 
+    /**
+     * `flushSave` and `endSession` in the order the relay called them — the property `close()` has to get right.
+     * The autosave fake appends to this same list, so the ordering across the two collaborators is one assertion.
+     */
+    val lifecycleLog = mutableListOf<String>()
+    var flushes = 0
+
     override fun engineVersionStamp() = stamp
     override fun beginSession(path: String, dir: String, id: String) = true.also { opened = true }
-    override fun endSession() { opened = false }
+
+    override fun endSession() {
+        opened = false
+        lifecycleLog.add("endSession")
+    }
+
+    override fun flushSave() {
+        flushes += 1
+        lifecycleLog.add("flushSave")
+    }
     override fun scoreFingerprint() = fingerprint
     override fun encodeScore() = encoded
     override fun takeRelayFrames(): List<ByteArray> = framesToEmit.toList().also { framesToEmit.clear() }
@@ -189,6 +205,28 @@ private class FakeAuditioning(private val natives: FakeNatives) : NoteAuditionin
     }
 }
 
+/**
+ * Records what the relay asks of its autosave.
+ *
+ * The cadence itself is [DebouncedAutosaveTest]'s subject; what is asserted here is that the relay asks at all, and
+ * in the right order relative to the session's teardown — which is why the flush lands in the bridge's own
+ * [FakeBridge.lifecycleLog] rather than in a second list of its own.
+ */
+private class FakeAutosave(private val lifecycleLog: MutableList<String>) : EditAutosave {
+    var arms = 0
+    var flushes = 0
+    var cancels = 0
+
+    override fun arm() { arms += 1 }
+
+    override fun flushNow() {
+        flushes += 1
+        lifecycleLog.add("flushSave")
+    }
+
+    override fun cancel() { cancels += 1 }
+}
+
 /** Bundles one relay with its fakes so each test only states what it overrides. */
 private class Fixture(
     val bridge: FakeBridge = FakeBridge(),
@@ -196,7 +234,8 @@ private class Fixture(
     val host: FakeHost = FakeHost(),
 ) {
     val audition = FakeAuditioning(natives)
-    val relay = EditSessionRelay(bridge, host, natives, audition)
+    val autosave = FakeAutosave(bridge.lifecycleLog)
+    val relay = EditSessionRelay(bridge, host, natives, audition, autosave)
 
     fun open(): OpenResult = relay.open("/scores/a.ssm", "/scores", "a")
 }
@@ -565,5 +604,70 @@ class EditSessionRelayTest {
 
         f.relay.close() // safe to call twice
         assertEquals(1, f.natives.ends)
+    }
+
+    // MARK: - The autosave cadence
+
+    @Test fun everyOpArmsTheAutosave() {
+        val f = Fixture()
+        f.open()
+
+        f.relay.inputPitch("C")
+        f.relay.deleteSelection()
+        f.relay.undo()
+
+        // The funnel is the choke point — iOS's op funnel arms unconditionally too, and for the same reason its own
+        // doc gives: the timer must not be skippable for one op and not another.
+        assertEquals(3, f.autosave.arms)
+    }
+
+    @Test fun anOpBeforeTheSessionOpensArmsNothing() {
+        val f = Fixture()
+
+        f.relay.inputPitch("C")
+
+        assertEquals(0, f.autosave.arms)
+    }
+
+    @Test fun closeFlushesBeforeItEndsTheSession() {
+        val f = Fixture()
+        f.open()
+
+        f.relay.close()
+
+        // Ending first would drop whatever the debounce had not yet written: `endSession` takes the authoritative
+        // session — and the score it holds — away.
+        assertEquals(listOf("flushSave", "endSession"), f.bridge.lifecycleLog)
+    }
+
+    @Test fun aDiscardCancelsThePendingWriteRatherThanPerformingIt() {
+        val f = Fixture()
+        f.open()
+
+        f.relay.inputPitch("C")
+        f.relay.discardSessionEdits()
+
+        // The armed write is for the score the user has just thrown away. The write-back of the UNWOUND score is
+        // `EditorBridge.discardSessionEdits`'s own, on the Swift side.
+        assertEquals(1, f.autosave.cancels)
+        assertEquals(0, f.autosave.flushes)
+    }
+
+    @Test fun flushPendingSaveWritesWithoutEndingTheSession() {
+        val f = Fixture()
+        f.open()
+
+        f.relay.flushPendingSave()
+
+        assertEquals(1, f.autosave.flushes)
+        assertTrue("onPause must not end the session it flushed", f.bridge.opened)
+    }
+
+    @Test fun flushPendingSaveBeforeTheSessionOpensDoesNothing() {
+        val f = Fixture()
+
+        f.relay.flushPendingSave()
+
+        assertEquals(0, f.autosave.flushes)
     }
 }

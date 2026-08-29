@@ -122,7 +122,7 @@ class EditSessionParityTest {
             // The view model is created on the main thread too: its constructor registers the observation callbacks
             // whose notifications are dispatched there.
             bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles { _, _, _ -> }))
-            relay = EditSessionRelay(bridge, host, RealEditNatives)
+            relay = EditSessionRelay(bridge, host, RealEditNatives, autosave = NoAutosave)
             relaysToClose.add(relay)
             hostsToRelease.add(host)
             opened = relay.open(file.path, scoresDir.path, scoreId)
@@ -210,9 +210,13 @@ class EditSessionParityTest {
     }
 
     /**
-     * Closing a session does not revert the mirror, and SP3 saves nothing — so a second session parses the unedited
-     * file while the handle still holds the edits. The fingerprint check in `open()` is what catches that, and this
-     * is the test that fails if someone removes it as redundant.
+     * Closing a session does not revert the mirror, so a second session that parses a file the first one's edits
+     * never reached finds the handle already ahead of it. The fingerprint check in `open()` is what catches that,
+     * and this is the test that fails if someone removes it as redundant.
+     *
+     * This suite injects [NoAutosave], which is what makes that state reachable on purpose. In production SP5 writes
+     * on close and the two usually agree at reopen — but "usually" is the point: a save that failed (§8.4), a
+     * discard whose write-back did not land, and a file replaced underneath us all arrive right here.
      */
     @Test fun reopeningAfterAnUnsavedEditResyncsInsteadOfDiverging() {
         val (file, scoresDir) = stagedFixture("parity-reopen")
@@ -231,7 +235,7 @@ class EditSessionParityTest {
         var localFingerprint = 0L
         onMain {
             val bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles { _, _, _ -> }))
-            val relay = EditSessionRelay(bridge, first.host, RealEditNatives)
+            val relay = EditSessionRelay(bridge, first.host, RealEditNatives, autosave = NoAutosave)
             relaysToClose.add(relay)
             opened = relay.open(file.path, scoresDir.path, "parity-reopen")
             assertEquals("open must have resynced", 1, relay.resyncCount)

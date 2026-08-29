@@ -43,6 +43,10 @@ interface EditProjection {
     /** Whether the row records an original to go back to. Always false on Android today — see `revertToOriginal`. */
     val canRevertToOriginal: StateFlow<Boolean>
 
+    /** Whether a save has written this score's edits to a NEW file — a sibling `.mscz` next to a source format that
+     *  cannot carry a note edit. Latched on the Swift side, so the notice can be shown once. */
+    val didSaveAsSiblingMSCZ: StateFlow<Boolean>
+
     /** `EditorSessionEndMode`'s discriminator: 0 = commitUnchanged, 1 = revert, 2 = commitEdited. */
     val sessionEndModeKind: StateFlow<Int>
     val selectedItemFrame: StateFlow<EditBytesWire?>

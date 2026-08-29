@@ -100,6 +100,9 @@ data class EditUiState(
     /** Whether an original is recorded to go back to. Always false on Android today. */
     val canRevertToOriginal: Boolean = false,
     val sessionEndMode: EditSessionEndMode = EditSessionEndMode.COMMIT_UNCHANGED,
+    /** Whether this session's edits were written to a NEW file — a sibling `.mscz` next to a source format that
+     *  cannot carry a note edit. Latched, so the notice can be shown once and then ignored. */
+    val didSaveAsSiblingMSCZ: Boolean = false,
 ) {
     // A data class over ByteArray compares those fields by identity, not content — the default generated equals()
     // would call two ticks unequal even when selectedItem/caretItem hold the same bytes, and this state is what
@@ -233,6 +236,7 @@ private data class SessionEnd(
     val sessionHasEdits: Boolean,
     val canRevertToOriginal: Boolean,
     val sessionEndMode: EditSessionEndMode,
+    val didSaveAsSiblingMSCZ: Boolean,
 )
 
 private data class CombinedProjection(
@@ -325,8 +329,14 @@ class EditSessionController(
             projection.sessionHasEdits,
             projection.canRevertToOriginal,
             projection.sessionEndModeKind,
-        ) { sessionHasEdits, canRevertToOriginal, endModeKind ->
-            SessionEnd(sessionHasEdits, canRevertToOriginal, EditSessionEndMode.fromKind(endModeKind))
+            projection.didSaveAsSiblingMSCZ,
+        ) { sessionHasEdits, canRevertToOriginal, endModeKind, savedAsSibling ->
+            SessionEnd(
+                sessionHasEdits,
+                canRevertToOriginal,
+                EditSessionEndMode.fromKind(endModeKind),
+                savedAsSibling,
+            )
         }
         // A SIXTH group does not fit `combine`'s typed overloads (they stop at five), so the five fold first and
         // this one joins the result — a two-flow combine, which is the nesting `ChordTieTupletArming`'s own comment
@@ -363,6 +373,7 @@ class EditSessionController(
                         sessionHasEdits = ending.sessionHasEdits,
                         canRevertToOriginal = ending.canRevertToOriginal,
                         sessionEndMode = ending.sessionEndMode,
+                        didSaveAsSiblingMSCZ = ending.didSaveAsSiblingMSCZ,
                         activeVoice = voice.activeVoice,
                         selectedItem = voice.selectedItem,
                         caretItem = voice.caretItem,
@@ -383,6 +394,13 @@ class EditSessionController(
         relay.close()
         _ui.value = EditUiState()
     }
+
+    /**
+     * Writes any pending edit now. Called from the Reader's `ON_PAUSE`, which is the last moment Android guarantees
+     * before a process can be killed — the same place the annotation save is flushed from. [end] covers leaving the
+     * Reader; this covers being backgrounded while still in it.
+     */
+    fun flushPendingSave() = relay.flushPendingSave()
 
     // MARK: - The pad disclosure
     //

@@ -16,7 +16,7 @@ import java.security.MessageDigest
  */
 class EditorRoomFiles(private val rows: ScoreRowRefreshing) : EditorHostFiles {
 
-    fun refreshRow(id: String, localFileName: String, contentHash: String) =
+    override fun refreshRow(id: String, localFileName: String, contentHash: String) =
         rows.refreshAfterSave(id, localFileName, contentHash)
 
     override fun sha256Hex(path: String): String {

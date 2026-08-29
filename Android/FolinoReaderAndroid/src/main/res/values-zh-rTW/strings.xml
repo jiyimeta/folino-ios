@@ -106,4 +106,5 @@
     <string name="reader_editing_discard_keep">繼續編輯</string>
     <string name="reader_editing_more">更多</string>
     <string name="reader_editing_revert">還原為原始樂譜</string>
+    <string name="reader_editing_saved_as_mscz">編輯內容將儲存為原始檔案旁的 MuseScore (.mscz) 副本。</string>
 </resources>

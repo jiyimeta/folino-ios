@@ -106,7 +106,7 @@ class EditingUiTest {
             controllerJob = Job()
             val scope = CoroutineScope(Dispatchers.Main.immediate + controllerJob)
             bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles { _, _, _ -> }))
-            relay = EditSessionRelay(bridge, host, RealEditNatives)
+            relay = EditSessionRelay(bridge, host, RealEditNatives, autosave = NoAutosave)
             controller = EditSessionController(relay, bridge, scope)
         }
 

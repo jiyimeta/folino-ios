@@ -111,4 +111,5 @@
     <string name="reader_editing_discard_keep">Keep editing</string>
     <string name="reader_editing_more">More</string>
     <string name="reader_editing_revert">Revert to original score</string>
+    <string name="reader_editing_saved_as_mscz">Edits are saved as a MuseScore (.mscz) copy next to the original file.</string>
 </resources>

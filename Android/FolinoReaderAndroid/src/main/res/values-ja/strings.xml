@@ -106,4 +106,5 @@
     <string name="reader_editing_discard_keep">編集を続ける</string>
     <string name="reader_editing_more">その他</string>
     <string name="reader_editing_revert">元の楽譜に戻す</string>
+    <string name="reader_editing_saved_as_mscz">編集内容は元のファイルの隣に MuseScore (.mscz) 形式のコピーとして保存されます。</string>
 </resources>

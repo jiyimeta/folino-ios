@@ -68,6 +68,11 @@ dependencies {
     implementation("io.github.jiyimeta:sheet-music-android:$ssmVersion")
 
     testImplementation("junit:junit:4.13.2")
+    // Virtual time for `DebouncedAutosaveTest`: the autosave's whole subject is a 2 s quiet period, and asserting
+    // coalescing against a wall clock is how flaky tests get written. Pinned to the same 1.9.0 as the runtime
+    // artifact above — a mismatched test artifact resolves the runtime up or down and produces failures that look
+    // like the code's.
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
 }
