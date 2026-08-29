@@ -36,7 +36,7 @@ final class FakeScoreFileGateway: ScoreFileGateway, @unchecked Sendable {
         }
         eventLog?.record("save")
         savedCalls.append((score, fileURL, format))
-        // Write real bytes so callers that hash the saved file (Task 10's EditorFileFacts) see deterministic content.
+        // Write real bytes so callers that hash the saved file (`EditorFileFacts`) see deterministic content.
         try Data("saved".utf8).write(to: fileURL)
     }
 }

@@ -100,7 +100,7 @@ struct EditorCrossSessionUndoTests {
         #expect(store.sessionRequests.first?.contentHash == vm.scoreItem.contentHash)
     }
 
-    // MARK: - Signed depth and the count-driven unwind (Task 8)
+    // MARK: - Signed depth and the count-driven unwind
 
     /// Seeds one committed session so the next `beginSession` adopts real history, and returns the session-open
     /// score of the SECOND session (= the first session's edited result).

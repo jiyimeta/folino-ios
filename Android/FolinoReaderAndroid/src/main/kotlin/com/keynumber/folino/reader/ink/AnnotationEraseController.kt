@@ -38,7 +38,7 @@ data class EraseOutcome(val drawings: List<DrawingAnchorWire>, val changedIndice
  * per-fragment, musical-only) re-anchor can be batched or deferred without blocking ink.
  *
  * [applyErase]/[reanchor] both take an injected `resolveDisplayTransforms`, exactly
- * [AnnotationDryOverlay]'s own parameter of the same name and for the same reason (Task 11): a musical
+ * [AnnotationDryOverlay]'s own parameter of the same name and for the same reason: a musical
  * caller closes over its `scoreHandle` and does the ssm ref-point round trip; a PDF caller closes over its
  * current page frames and calls `ReaderAnnotationJNI.pdfDisplayTransforms` directly. The Swift/JNI side
  * (`nativeAnnotationErase`, `AnnotationEraseCore.erase`) is anchor-kind-agnostic already — a fragment keeps
@@ -142,7 +142,7 @@ object AnnotationEraseController {
             // Page anchors are reflow-invariant — see this function's own doc for why skipping is correct,
             // not merely convenient, and why recapturing via the musical path below would corrupt it.
             if (drawing.anchorKind == PAGE_ANCHOR_KIND) continue
-            // No musical score to resolve against (a PDF-only session, or Task 12 territory) — leave the
+            // No musical score to resolve against (a PDF-only session, or a PDF with no parsed score yet) — leave the
             // fragment on its inherited anchor rather than crash or guess; matches the "unresolved this
             // layout" tolerance below.
             if (scoreHandle == null) continue

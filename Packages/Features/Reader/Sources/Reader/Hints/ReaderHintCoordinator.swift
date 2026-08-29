@@ -28,11 +28,14 @@ final class ReaderHintCoordinator {
     private var anchors: [ReaderHintTarget: CGRect] = [:]
 
     @ObservationIgnored private let defaults: UserDefaults
-    /// The per-launch budget: one rotation hint, plus (independently) one note-pad hint.
+    /// The per-launch budget: one rotation hint, plus (independently) one pad-gesture hint.
     @ObservationIgnored private var didOfferRotationHintThisLaunch = false
-    @ObservationIgnored private var didOfferNotePadHintThisLaunch = false
+    @ObservationIgnored private var didOfferPadGestureHintThisLaunch = false
     /// Pending "the transport just went compact" offer (see `scheduleTransportExpandHint`).
     @ObservationIgnored private var transportExpandOfferTask: Task<Void, Never>?
+    /// Pending pad-chain offers: "bring it back" after a tuck, "move it" after a restore.
+    @ObservationIgnored private var padRestoreOfferTask: Task<Void, Never>?
+    @ObservationIgnored private var padMoveOfferTask: Task<Void, Never>?
     /// Mirrored from the editing seam. Edit mode forces the transport compact and declines mode swipes, so the
     /// expand hint has to stay away for the duration — it would be teaching a gesture that currently does nothing.
     @ObservationIgnored private var isEditing = false
@@ -43,9 +46,16 @@ final class ReaderHintCoordinator {
 
     func setEditing(_ editing: Bool) {
         isEditing = editing
-        guard editing else { return }
-        transportExpandOfferTask?.cancel()
-        if presentedHint == .transportExpand { dismiss() }
+        if editing {
+            transportExpandOfferTask?.cancel()
+            if presentedHint == .transportExpand {
+                dismiss()
+            }
+        } else {
+            // The pad chain only makes sense inside an edit session; a pending offer must not land on the Reader.
+            padRestoreOfferTask?.cancel()
+            padMoveOfferTask?.cancel()
+        }
     }
 
     // MARK: - Anchors
@@ -68,15 +78,32 @@ final class ReaderHintCoordinator {
         anchors[target] = rect
         // The compact transport appearing IS the trigger for its own hint — on opening a Reader that is already
         // compact, and on the swipe (or bubble tap) that just shrank it.
-        if isFirstReport, target == .transportCompact { scheduleTransportExpandHint() }
+        if isFirstReport, target == .transportCompact {
+            scheduleTransportExpandHint()
+        }
+        // Same shape for the pad's pull tab: its appearance is the consequence of the tuck the previous hint taught,
+        // and the moment to say how to undo it.
+        if isFirstReport, target == .noteInputPadHandle {
+            schedulePadRestoreHint()
+        }
     }
 
     /// Forgets a control that has left the screen, and takes any hint pointing at it down with it — a bubble whose
     /// caret points at nothing is worse than no bubble.
     func clearAnchor(for target: ReaderHintTarget) {
         guard anchors.removeValue(forKey: target) != nil else { return }
-        if target == .transportCompact { transportExpandOfferTask?.cancel() }
-        if presentedHint?.target == target { dismiss() }
+        if target == .transportCompact {
+            transportExpandOfferTask?.cancel()
+        }
+        if target == .noteInputPadHandle {
+            padRestoreOfferTask?.cancel()
+        }
+        if target == .noteInputPad {
+            padMoveOfferTask?.cancel()
+        }
+        if presentedHint?.target == target {
+            dismiss()
+        }
     }
 
     /// Drops every anchor, for when the Reader itself goes away. Anchors are reported by the controls that draw them,
@@ -97,8 +124,12 @@ final class ReaderHintCoordinator {
     /// Records that the user has actually used the feature — the hint retires permanently — and takes its bubble down
     /// if it happens to be the one showing (they clearly didn't need it).
     func markUsed(_ hint: ReaderFeatureHint) {
-        if !hasUsed(hint) { defaults.set(true, forKey: Self.usedKey(hint)) }
-        if presentedHint == hint { dismiss() }
+        if !hasUsed(hint) {
+            defaults.set(true, forKey: Self.usedKey(hint))
+        }
+        if presentedHint == hint {
+            dismiss()
+        }
     }
 
     // MARK: - Offering
@@ -145,14 +176,60 @@ final class ReaderHintCoordinator {
         }
     }
 
-    /// Offer the note-input pad hint. Independent of the rotation and of its per-launch budget (the pad is the one
-    /// affordance that is useless until explained, and the user has just walked into it), but still at most once per
-    /// launch and never once the pad has been used.
-    func offerNotePadHint() {
-        guard ignoresPerLaunchBudget || !didOfferNotePadHintThisLaunch, !hasUsed(.notePad) else { return }
-        guard anchors[ReaderFeatureHint.notePad.target] != nil else { return }
-        didOfferNotePadHintThisLaunch = true
-        present(.notePad)
+    /// Offer the pad chain's next unspent step on entering an edit session — the chain's SAFETY NET. The in-the-
+    /// moment offers ride the gestures' own consequences (`schedulePadRestoreHint` off the tab's appearance,
+    /// `schedulePadMoveHint` off a restore), but a chain abandoned mid-way — a bubble dismissed, a session left with
+    /// the pad tucked — must not be lost forever, so every entry re-derives where the chain stands and offers that:
+    /// pad out and never tucked → `padHide`; pad out, tuck taught, move never performed → `padMove` (the pad being
+    /// out again means a restore has happened); pad currently tucked and the tab never used → `padRestore`.
+    /// Independent of the rotation and of its per-launch budget (the user has just walked into the pad), but still
+    /// at most one per launch, and each step retires for good once its gesture has actually been performed.
+    func offerPadGestureHint() {
+        guard ignoresPerLaunchBudget || !didOfferPadGestureHintThisLaunch else { return }
+        let hint: ReaderFeatureHint? = if anchors[.noteInputPad] != nil {
+            if !hasUsed(.padHide) {
+                .padHide
+            } else if !hasUsed(.padMove) {
+                .padMove
+            } else {
+                nil
+            }
+        } else if anchors[.noteInputPadHandle] != nil, !hasUsed(.padRestore) {
+            .padRestore
+        } else {
+            nil
+        }
+        guard let hint else { return }
+        didOfferPadGestureHintThisLaunch = true
+        present(hint)
+    }
+
+    /// Offer "tap or pull the tab to bring it back", shortly after the tab appears — the beat after the tuck the
+    /// previous hint taught. Unbudgeted for the same reason `scheduleTransportExpandHint` is: the single best moment
+    /// is right after the pad vanished, which is precisely the moment a spent budget would suppress. Retires for
+    /// good the first time a restore is actually performed.
+    private func schedulePadRestoreHint() {
+        guard !hasUsed(.padRestore), isEditing else { return }
+        padRestoreOfferTask?.cancel()
+        padRestoreOfferTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.6))
+            guard !Task.isCancelled, let self, !hasUsed(.padRestore), isEditing else { return }
+            guard anchors[.noteInputPadHandle] != nil else { return }
+            present(.padRestore)
+        }
+    }
+
+    /// Offer "drag it up / down", shortly after a restore has landed the pad back on the score — the chain's last
+    /// step. Skipped forever once the user has actually moved the pad between docks, taught or not.
+    func schedulePadMoveHint() {
+        guard !hasUsed(.padMove), isEditing else { return }
+        padMoveOfferTask?.cancel()
+        padMoveOfferTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.6))
+            guard !Task.isCancelled, let self, !hasUsed(.padMove), isEditing else { return }
+            guard anchors[.noteInputPad] != nil else { return }
+            present(.padMove)
+        }
     }
 
     /// Fill the slot. Replaces whatever was showing — a rotation hint pointing at the toolbar has no business staying
@@ -178,7 +255,7 @@ final class ReaderHintCoordinator {
         }
         defaults.removeObject(forKey: Keys.cursor)
         didOfferRotationHintThisLaunch = false
-        didOfferNotePadHintThisLaunch = false
+        didOfferPadGestureHintThisLaunch = false
     }
 
     // MARK: - Rotation
@@ -194,7 +271,9 @@ final class ReaderHintCoordinator {
         let start = ((cursor % order.count) + order.count) % order.count
         for offset in 0 ..< order.count {
             let hint = order[(start + offset) % order.count]
-            if isEligible(hint) { return hint }
+            if isEligible(hint) {
+                return hint
+            }
         }
         return nil
     }

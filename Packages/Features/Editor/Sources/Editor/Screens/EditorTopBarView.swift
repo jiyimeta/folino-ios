@@ -2,21 +2,23 @@ import Domain
 import SwiftUI
 import UtilityUI
 
-/// The editing session's control tier (`ReaderRootScreen.editingTopBar`) — voice picker, pad toggle, undo, redo,
-/// and, where there is no cutout tier, 完了 and revert too. Ported from `EditorChromeView+Toolbar.swift`'s
-/// navigation-bar items and `EditorChromeView+Revert.swift`'s revert control, now drawn as plain views instead of
-/// `ToolbarContent` — the Reader's own strip replaced the navigation bar these used to fill.
+/// The editing session's control tier (`ReaderRootScreen.editingTopBar`) — voice picker, undo, redo, and, where
+/// there is no cutout tier, 完了 and revert too.
+///
+/// These are plain views, not `ToolbarContent`: the Reader hides the navigation bar and draws its own strip, so
+/// there is no bar for a `.toolbar` to fill. The pad has no show / hide control here either — it is dismissed and
+/// recalled in place, PiP-style (see `EditorChromeView`).
 ///
 /// **The cutout tier is NOT drawn here.** Where one exists, 完了 and revert are mounted by the Reader's own
 /// `ReaderCutoutTier` instead (`ReaderRootScreen.editingCutoutTier`, using the shared `EditorDoneButton` /
-/// `EditorRevertButton` views) — review Important 4: an earlier draft re-declared `ReaderCutoutTier`'s
+/// `EditorRevertButton` views). An earlier draft re-declared `ReaderCutoutTier`'s
 /// `offset`/`ignoresSafeArea` shape locally (this package cannot import `Reader` to reuse the type itself), which
 /// left two independently-positioned mechanisms both claiming the same band, exactly what the design spec warns
 /// against. Reusing the Reader's real layout code makes that structurally impossible instead of merely unlikely.
 ///
-/// **Control tier**: the voice picker and pad toggle lead, undo and redo trail. Where there is no cutout tier, 完了
-/// and revert join this row — five controls wide — and the whole thing folds with `ViewThatFits`, the same ladder
-/// shape the Reader's own row uses (`Collapse`, `Spacer(minLength: 0)`, fixed icon frames).
+/// **Control tier**: the voice picker leads, undo and redo trail. Where there is no cutout tier, 完了 and revert
+/// join this row and the whole thing folds with `ViewThatFits`, the same ladder shape the Reader's own row uses
+/// (`Collapse`, `Spacer(minLength: 0)`, fixed icon frames).
 public struct EditorTopBarView: View {
     @Bindable var viewModel: EditorViewModel
     let hasMusicalAnnotations: Bool
@@ -25,14 +27,6 @@ public struct EditorTopBarView: View {
     /// (this package cannot import `Reader` to read `ReaderTopBarLayout` itself).
     let hasCutoutTier: Bool
     let onDone: () -> Void
-    /// Reports the pad-toggle button's window frame — the coach-mark anchor `ReaderEditingHost.noteInputAnchorFrame`
-    /// points at — or `nil` once the button leaves the screen.
-    let onNoteInputAnchorFrameChange: (CGRect?) -> Void
-
-    /// Mirrors `EditorChromeView.isPadVisible` through the same `UserDefaults` key. The pad toggle lives here now;
-    /// the pad itself still lives in `EditorChromeView`. `@AppStorage` keeps two declarations of the same key in
-    /// sync without either view needing to see the other's state.
-    @AppStorage("editorPadVisible") private var isPadVisible = false
 
     /// How much the control tier gives up as width tightens, when 完了 and revert are IN it (no cutout tier).
     ///
@@ -53,18 +47,16 @@ public struct EditorTopBarView: View {
         hasMusicalAnnotations: Bool,
         hasCutoutTier: Bool,
         onDone: @escaping () -> Void,
-        onNoteInputAnchorFrameChange: @escaping (CGRect?) -> Void,
     ) {
         self.viewModel = viewModel
         self.hasMusicalAnnotations = hasMusicalAnnotations
         self.hasCutoutTier = hasCutoutTier
         self.onDone = onDone
-        self.onNoteInputAnchorFrameChange = onNoteInputAnchorFrameChange
     }
 
     public var body: some View {
         // The shadow matches `ReaderTopBarControls`' so the reading and editing strips read as the same physical
-        // surface — see review Important 2.
+        // surface.
         measureMenuSheets(on: instrumentsSheet(on: revertFailureAlert(on: controlTierRow)))
             .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
     }
@@ -74,21 +66,19 @@ public struct EditorTopBarView: View {
     @ViewBuilder
     private var controlTierRow: some View {
         if hasCutoutTier {
-            // ✕ and the session-end control live in the cutout tier; the six controls left here (undo, redo,
-            // voice, pad, the instruments sheet, and the measure-actions menu) still sit under this row's width on
-            // the narrowest device that HAS a cutout tier — so no fold is needed here.
+            // ✕ and the session-end control live in the cutout tier; the five controls left here (undo, redo,
+            // voice, the instruments sheet, and the measure-actions menu) still sit under this row's width on the
+            // narrowest device that HAS a cutout tier — so no fold is needed here.
             //
             // That device is a 375pt notched phone (12/13 mini, 11 Pro, XS), NOT the 393pt modern class:
             // `ReaderTopBarLayout.hasCutoutTier` keys off the top safe-area inset, which those reach. The budget is
-            // 6×44 + 5×12 = 324pt of controls against 375 − 32 (the strip's own horizontal padding) = 343pt — about
-            // 19pt of slack before whatever `glassEffect` adds around each pill, which is thin enough that the
-            // 375-wide preview below is the check, not the arithmetic. A device narrower than that has no cutout
-            // tier and takes the folding branch below.
+            // 5×44 + 4×12 = 268pt of controls against 375 − 32 (the strip's own horizontal padding) = 343pt, which
+            // leaves room for whatever `glassEffect` adds around each pill. A device narrower than that has no
+            // cutout tier and takes the folding branch below.
             HStack(spacing: 12) {
                 undoRedoGroup
                 Spacer(minLength: 0)
                 voiceButton
-                padButton
                 instrumentsButton
                 measureMenu
                     .interactiveGlassCompat()
@@ -118,7 +108,6 @@ public struct EditorTopBarView: View {
             undoRedoGroup
             Spacer(minLength: 0)
             voiceButton
-            padButton
             switch collapse {
             case .expanded:
                 HStack(spacing: 12) {
@@ -144,17 +133,10 @@ public struct EditorTopBarView: View {
         .interactiveGlassCompat()
     }
 
-    /// The voice picker and the pad toggle trail, and each carries its own pill rather than sharing one: they are
-    /// unrelated — which voice you are writing into, and whether the keyboard is up — and a shared surface said they
-    /// were a pair. Bare glyphs still need something behind them to stay legible over arbitrary score content
-    /// (review Important 2), so each gets glass of its own.
+    /// Bare glyphs need something behind them to stay legible over arbitrary score content, so
+    /// the voice picker gets glass of its own.
     private var voiceButton: some View {
         voiceMenu
-            .interactiveGlassCompat()
-    }
-
-    private var padButton: some View {
-        padToggleButton
             .interactiveGlassCompat()
     }
 
@@ -238,7 +220,7 @@ public struct EditorTopBarView: View {
         .disabled(viewModel.targetMeasureIndex == nil || viewModel.measureCount <= 1)
     }
 
-    // MARK: - Voice / pad toggle
+    // MARK: - Voice
 
     private var voiceMenu: some View {
         Menu {
@@ -256,41 +238,6 @@ public struct EditorTopBarView: View {
         }
         .tint(.primary)
         .accessibilityLabel(Text("editor.voice.label", bundle: .module))
-    }
-
-    /// Shows and hides the pad. Same fixed-frame glyph as the old toolbar item — see that file's history for why the
-    /// disc is inverted ink rather than the accent tint, and why the glyph frame never changes size.
-    private var padToggleButton: some View {
-        Button {
-            withAnimation(.snappy(duration: 0.28)) { isPadVisible.toggle() }
-        } label: {
-            // Mode-on is the FILLED variant of the same glyph, exactly like the annotation pen button
-            // (`pencil.tip.crop.circle.fill`): the disc is symbol ink, which glass renders at full strength,
-            // where a `Circle().fill` drawn in the label — background OR content — comes out washed into the
-            // material. The knocked-out note/plus show the glass through, the system's own fill-variant look.
-            Image(
-                isPadVisible ? "custom.music.note.badge.plus.fill" : "custom.music.note.badge.plus",
-                bundle: .module,
-            )
-            // The outline symbolset marks its note layer hierarchical:secondary; under the glass chrome iOS
-            // renders hierarchically by default, dimming that layer even when the control is enabled. Monochrome
-            // keeps the whole glyph at full foreground strength, matching the SF Symbol neighbours.
-            .symbolRenderingMode(.monochrome)
-                .font(.system(size: isPadVisible ? 26 : 21, weight: .medium))
-                .foregroundStyle(Color.primary)
-                .offset(x: isPadVisible ? 0 : -1.5)
-                // The 44pt frame is the control's own, so the pill matches its neighbours instead of shrink-wrapping
-                // the glyph.
-                .frame(width: 44, height: 44)
-        }
-        .tint(.primary)
-        .accessibilityLabel(Text(
-            isPadVisible ? "editor.chrome.hidePad" : "editor.chrome.showPad", bundle: .module,
-        ))
-        // The chrome is rendered inside the Reader's own view tree now, so both sides share a window coordinate
-        // space and this can simply report where it is — see `ReaderEditingHost.noteInputAnchorFrame`.
-        .onWindowFrameChange { onNoteInputAnchorFrameChange($0) }
-        .onDisappear { onNoteInputAnchorFrameChange(nil) }
     }
 
     // MARK: - Undo / redo

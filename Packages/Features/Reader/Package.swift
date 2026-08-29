@@ -18,7 +18,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(path: "../../Utility"),
     .package(
         url: "https://github.com/jiyimeta/swift-sheet-music.git",
-        exact: "1.15.0",
+        exact: "2.1.0",
     ),
 ]
 
@@ -62,8 +62,9 @@ if isAndroid {
     packageDependencies += [
         .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.4.0"),
         // swift-java 0.4.0's SwiftJavaTool is written against swift-subprocess 0.4.x; 0.5.0 removed APIs the
-        // jextract tool needs under swift-6.3.3. Pin to 0.4.0 (matches Settings/Library). Remove once swift-java
-        // ships against swift-subprocess 0.5+.
+        // jextract tool needs under swift-6.3.3. Pin to 0.4.0 — Settings pins the same version for the same
+        // reason; Library carries no pin of its own and resolves transitively. Remove once swift-java ships
+        // against swift-subprocess 0.5+.
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "0.4.0"),
         // swift-wirelet @WireFormat TLV codecs for the annotation JNI wire boundary (decode ssm's anchor bytes,
         // encode the DrawingAnchor / transform payloads). Pinned to the same revision Library uses.

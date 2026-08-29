@@ -21,7 +21,7 @@ struct AnnotationLayerBody: Equatable {
     }
 }
 
-// MARK: - Autosave (Task 10)
+// MARK: - Autosave
 
 extension EditorViewModel {
     /// Debounced 2 s after the last mutation; cancelled+rescheduled on each. Mirrors the Reader's annotation
@@ -37,7 +37,7 @@ extension EditorViewModel {
         }
     }
 
-    /// Cancel the debounce and write now. Safe when nothing is pending. Called by endSession and (Task 15) on
+    /// Cancel the debounce and write now. Safe when nothing is pending. Called by endSession and on
     /// scene-background.
     public func flushPendingSave() async {
         autosaveTask?.cancel()

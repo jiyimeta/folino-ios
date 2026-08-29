@@ -48,7 +48,9 @@ private struct ReaderHintAnchorModifier: ViewModifier {
                 ReaderHintCoordinator.shared.setAnchor(rect, for: target)
             }
             .onChange(of: isActive, initial: true) { _, active in
-                if !active { ReaderHintCoordinator.shared.clearAnchor(for: target) }
+                if !active {
+                    ReaderHintCoordinator.shared.clearAnchor(for: target)
+                }
             }
             .onDisappear { ReaderHintCoordinator.shared.clearAnchor(for: target) }
     }
@@ -81,7 +83,7 @@ private struct ReaderHintOverlay: View {
                 let centerX = min(max(rect.midX, minCenterX), max(minCenterX, maxCenterX))
                 // The caret keeps tracking the control even when the bubble itself is clamped to a screen edge.
                 let caretDX = min(max(rect.midX - centerX, -width / 2 + caretInset), width / 2 - caretInset)
-                let placement = hint.target.placement
+                let placement = hint.target.placement(anchorMidY: rect.midY, viewportHeight: proxy.size.height)
                 let below = placement == .below
                 // Pin the bubble's caret-side edge a fixed gap from the control — height-independent, so a long
                 // multi-line message grows away from the anchor instead of riding over it.
@@ -294,7 +296,7 @@ private final class WindowTapView: UIView, UIGestureRecognizerDelegate {
             ForEach(ReaderFeatureHint.allCases, id: \.self) { hint in
                 ReaderHintBubble(
                     hint: hint,
-                    placement: hint.target.placement,
+                    placement: hint.target.placement(),
                     caretDX: 0,
                     onActivate: {},
                 )

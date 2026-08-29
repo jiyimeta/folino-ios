@@ -10,8 +10,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: 6.3
-    MARKETING_VERSION: 1.12.3
-    CURRENT_PROJECT_VERSION: "2184"
+    MARKETING_VERSION: 1.13.0
+    CURRENT_PROJECT_VERSION: "2264"
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
@@ -47,7 +47,7 @@ packages:
     from: 7.0.0
   swift-sheet-music:
     url: https://github.com/jiyimeta/swift-sheet-music.git
-    exactVersion: 1.15.0
+    exactVersion: 2.1.0
   SwiftLintPlugins:
     url: https://github.com/SimplyDanny/SwiftLintPlugins
     exactVersion: 0.63.2

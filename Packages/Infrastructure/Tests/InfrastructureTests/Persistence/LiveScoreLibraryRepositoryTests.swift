@@ -277,6 +277,57 @@ struct LiveScoreLibraryRepositoryTests {
         #expect(!FileManager.default.fileExists(atPath: scores.url.appending(path: "converted.pdf").path))
     }
 
+    @Test func `a row whose file is already gone reports nothing`() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let scores = try TempDirectory()
+        defer { withExtendedLifetime(scores) {} }
+        let crashReporter = FakeCrashReporter()
+        let repo = LiveScoreLibraryRepository(
+            database: db,
+            scoresDirectory: scores.url,
+            crashReporter: crashReporter,
+        )
+        try await repo.refresh()
+
+        // No file is ever written for this row, which is the ordinary case for one whose bytes were already swept.
+        let item = makeBareItem(localFileName: "missing.mscz", contentHash: "h")
+        try await repo.saveScoreItem(item)
+
+        try await repo.permanentlyDeleteScoreItem(id: item.id)
+
+        #expect(crashReporter.recordedErrors.isEmpty)
+    }
+
+    @Test func `a backing file that cannot be deleted is reported`() async throws {
+        let (db, lifetime) = try makeDatabase()
+        defer { withExtendedLifetime(lifetime) {} }
+        let scores = try TempDirectory()
+        defer { withExtendedLifetime(scores) {} }
+        let crashReporter = FakeCrashReporter()
+        let repo = LiveScoreLibraryRepository(
+            database: db,
+            scoresDirectory: scores.url,
+            crashReporter: crashReporter,
+        )
+        try await repo.refresh()
+
+        let item = makeBareItem(localFileName: "locked.mscz", contentHash: "h")
+        try await repo.saveScoreItem(item)
+        try Data("score".utf8).write(to: scores.url.appending(path: "locked.mscz"))
+
+        // Unlinking needs write permission on the *directory*, so dropping it makes the delete fail for a reason
+        // other than "already missing" — the case that used to leave an orphan silently.
+        let manager = FileManager.default
+        try manager.setAttributes([.posixPermissions: 0o500], ofItemAtPath: scores.url.path)
+        defer { try? manager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: scores.url.path) }
+
+        // The row still goes, whatever disk says.
+        try await repo.permanentlyDeleteScoreItem(id: item.id)
+
+        #expect(crashReporter.recordedErrors.count == 1)
+    }
+
     private func makeBareItem(localFileName: String, contentHash: String) -> ScoreItem {
         ScoreItem(
             title: "x", composer: nil, instrumentationSummary: nil,

@@ -47,7 +47,7 @@ import kotlinx.coroutines.withContext
 fun AnnotationDryOverlay(
     /**
      * Batched anchor→display-transform resolution for a whole layer, positionally aligned with its input
-     * — the seam Task 11 (PDF page anchors) generalized this composable's original hardwired `scoreHandle:
+     * — the seam PDF page anchors generalized this composable's original hardwired `scoreHandle:
      * Long` / `SheetMusicJNI.nativeAnchorReferencePoint` call into: a musical caller (`ReadyScore`/
      * `PagedScore`) closes over its `scoreHandle` and does the ssm ref-point round trip before
      * `ReaderAnnotationJNI.displayTransforms`; a PDF caller (`PdfVerticalScore`/`PagedPdfScore`) closes

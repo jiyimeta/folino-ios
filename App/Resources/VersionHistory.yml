@@ -1,3 +1,20 @@
+- version: 1.13.0
+  descriptions:
+    - en: Improved audio export
+      ja: 音声書き出し機能の改善
+      ko: 오디오 내보내기 기능 개선
+      zh-Hans: 改进音频导出功能
+      zh-Hant: 改進音訊匯出功能
+    - en: Improved usability in editing mode
+      ja: 編集モードの使いやすさを改善
+      ko: 편집 모드의 사용성 개선
+      zh-Hans: 改进编辑模式的易用性
+      zh-Hant: 改進編輯模式的易用性
+    - en: Improved the display and playback of bends, slurs and crescendos
+      ja: ベンド・スラー・クレッシェンドの表示と再生を改善
+      ko: 벤드, 이음줄, 크레셴도의 표시와 재생 개선
+      zh-Hans: 改进推弦、连音线与渐强的显示与播放
+      zh-Hant: 改進推弦、圓滑線與漸強的顯示與播放
 - version: 1.12.3
   descriptions:
     - en: Fixed playback issues

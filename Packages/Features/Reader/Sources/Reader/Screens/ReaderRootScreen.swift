@@ -22,7 +22,7 @@ public struct ReaderRootScreen: View {
     /// The note-editing injection seam (design spec §9, Option 1). `nil` means this Reader instance never enters edit
     /// mode — the edit button in `ReaderTopBarControls` stays hidden and `startEditing()`/`finishEditing()` are
     /// no-ops.
-    /// The App composition root (Task 15) is the only caller that supplies a non-nil host; the Reader never imports or
+    /// The App composition root is the only caller that supplies a non-nil host; the Reader never imports or
     /// references the Editor feature that owns the other end of the seam.
     private let editingHost: ReaderEditingHost?
     /// Builds the Editor feature's chrome (score-info bar, keyboard, 完了 button) from the current selection. Supplied
@@ -537,7 +537,20 @@ public struct ReaderRootScreen: View {
             ReaderTopBar(topSafeAreaInset: topSafeAreaInset, isEditing: isEditing) {
                 if isEditing {
                     if let editingTopBar {
-                        editingTopBar(topBarEditingContext)
+                        HStack(spacing: 12) {
+                            editingTopBar(topBarEditingContext)
+                            // The display inspector stays reachable mid-edit, at the row's trailing end — hiding a
+                            // staff or switching a clef is part of getting the score into a writable shape, and both
+                            // transforms are edit-compatible. It carries its own glass + shadow because the editor's
+                            // row controls each carry theirs; the pairing has to match to read as one strip.
+                            ReaderDisplayInspectorButton(
+                                viewModel: viewModel,
+                                anchorsInspectorPopovers: anchorsInspectorPopovers,
+                                onConfirmReReadPDF: { isReReadConfirmPresented = true },
+                            )
+                            .interactiveGlassCompat()
+                            .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
+                        }
                     }
                 } else {
                     ReaderTopBarControls(

@@ -29,7 +29,7 @@ struct ScorePrefsEventTests {
         #expect(event.parameters["honor_layout_breaks"] == .bool(false))
     }
 
-    /// A stored value equal to the default still counts as touched — that is the whole point of Task 1's Optionals.
+    /// A stored value equal to the default still counts as touched — that is the whole point of the Optionals.
     @Test func `a deliberately re-chosen default is still reported`() throws {
         let prefs = ReaderPreferences(
             scoreItemID: scoreID, hiddenStaves: [],

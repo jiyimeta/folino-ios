@@ -148,7 +148,7 @@ internal fun PagedScore(
     // was still coasting when the page changed under it.
     LaunchedEffect(pagerState.currentPage) { viewport.reset() }
 
-    // A user-initiated page swipe DURING playback suspends auto-page-turn (Task 5): the reader took
+    // A user-initiated page swipe DURING playback suspends auto-page-turn: the reader took
     // manual control of the page, so the playhead's page must not yank them back until they play again or
     // seek. `interactionSource` only emits DragInteraction for real finger drags — the auto-turn's own
     // programmatic `animateScrollToPage` does NOT, so this never self-suspends. No-op when not playing.
@@ -384,7 +384,7 @@ internal fun PagedScore(
                 showsHint = !pageTapHintDismissed,
                 onAnyZoneTouchDown = onDismissPageTapHint,
                 // An explicit edge-tap page navigation is a manual page turn → suspend auto-page-turn during
-                // playback so the playhead's page doesn't yank the reader back (Task 5; iOS `jumpToPage`).
+                // playback so the playhead's page doesn't yank the reader back (iOS `jumpToPage`).
                 onFirst = {
                     audioVm.suspendPlaybackFollowForManualViewportChange()
                     scope.launch { pagerState.animateScrollToPage(0) }

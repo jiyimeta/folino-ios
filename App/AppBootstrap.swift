@@ -104,6 +104,7 @@ final class AppBootstrap {
                 database: database,
                 scoresDirectory: AppPaths.scoresDirectory,
                 playlistsIndexPublisher: writer,
+                crashReporter: crashReporter ?? NoopCrashReporter(),
             )
             let gateway = LiveScoreFileGateway(crashReporter: crashReporter ?? NoopCrashReporter())
             let originalStore = LiveScoreOriginalStore(scoresDirectory: AppPaths.scoresDirectory, gateway: gateway)

@@ -14,8 +14,8 @@ extension EditorViewModel {
     /// previous note: the key signature's, unless an accidental earlier in the same measure has already respelled
     /// that staff line — and on a transposing staff, the bar that reads it is the WRITTEN one, so C on a B♭
     /// clarinet in concert C major means the C♯ its D-major signature spells, stored as a concert B♮. Add-to-chord
-    /// armed is the one exception: it stacks onto the SELECTED chord (`.addNoteToChord`, Task 7), since what it
-    /// means is "another note in the one I just wrote".
+    /// armed is the one exception: it stacks onto the SELECTED chord (`.addNoteToChord`), since what it means is
+    /// "another note in the one I just wrote".
     ///
     /// Afterwards the selection lands on the note that was written and the caret moves on to the next timed element
     /// (spec §11-5: advance on after keys), so ♯ / ♭ / ⌫ keep addressing the note rather than the empty slot ahead.

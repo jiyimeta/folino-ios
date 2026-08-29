@@ -64,7 +64,7 @@ public struct PointMmWire: Equatable {
 /// A captured, persistable annotation stroke — output of `nativeAnnotationCapture` and the per-stroke element of
 /// `nativeAnnotationDisplayTransforms`'s input. Carries the six `MusicalAnchor` fields plus the normalized `InkStroke`
 /// FINK bytes (`Domain.InkStrokeCodec`). This is the payload shape Sub-plan D persists in Room. `anchorKind` /
-/// `pageIndex` extend the same wire struct to carry PDF page anchors too (Task 10): `anchorKind` is `0` for a musical
+/// `pageIndex` extend the same wire struct to carry PDF page anchors too: `anchorKind` is `0` for a musical
 /// anchor (the original shape; the six `MusicalAnchor` fields are meaningful) or `1` for a page anchor (`pageIndex` is
 /// meaningful, the musical fields are zero). Both new fields default in the memberwise init so every pre-existing
 /// musical call site keeps compiling unchanged. Use the `.page(pageIndex:encodedDrawing:)` convenience for the PDF

@@ -115,7 +115,9 @@ public enum PageAnchoringCore {
     /// distance and resolves to the upper page via `firstIndex`. `nil` only when there are no pages.
     public static func pageIndex(forCentroid centroid: CGPoint, pageFrames: [CGRect]) -> Int? {
         guard !pageFrames.isEmpty else { return nil }
-        if let hit = pageFrames.firstIndex(where: { $0.contains(centroid) }) { return hit }
+        if let hit = pageFrames.firstIndex(where: { $0.contains(centroid) }) {
+            return hit
+        }
         var best = 0
         var bestDist = CGFloat.greatestFiniteMagnitude
         for (i, frame) in pageFrames.enumerated() {
@@ -210,7 +212,7 @@ public enum PageAnchoringCore {
     /// uniform scale — width). The neutral `InkStroke` has no separate transform slot (unlike `PKStroke.transform`),
     /// so normalization is always applied straight to the arrays. Uses `zip` (not indexed access) so a
     /// caller-supplied `InkStroke` with mismatched `x`/`y` counts — never true today via `InkStrokeCodec`, but not
-    /// structurally guaranteed once Task 10 builds these from JNI wire arrays — degrades instead of trapping,
+    /// structurally guaranteed where these are built from JNI wire arrays — degrades instead of trapping,
     /// mirroring `AnnotationAnchoringCore.normalized`'s independent `.map`s. `.squareRoot()` (not the free `sqrt`
     /// function) needs no libm import, which matters on the Android cross-compile toolchain.
     private static func transformed(_ stroke: InkStroke, by transform: CGAffineTransform) -> InkStroke {

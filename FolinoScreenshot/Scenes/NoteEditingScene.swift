@@ -19,7 +19,8 @@ private final class ScreenshotStringsAnchor {}
 /// switches the app already has:
 ///  - `readerAutoEditMeasure` makes the Reader open an edit session on that measure's first note once the score has
 ///    loaded (see `ReaderRootScreen.startScreenshotEditingIfRequested`);
-///  - `editorPadVisible` is the Editor chrome's own `@AppStorage` for the pad, which is off by default.
+///  - `editorPadVisible` is the Editor chrome's own `@AppStorage` for the pad — expanded is the default, but the
+///    scene pins it anyway so a device that once tucked the pad can't capture a padless shot.
 struct NoteEditingScene: View {
     @Environment(\.screenshotIdiom) private var idiom
 

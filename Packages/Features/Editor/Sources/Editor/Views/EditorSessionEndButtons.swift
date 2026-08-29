@@ -7,8 +7,8 @@ import UtilityUI
 //
 // Shared, public types rather than private pieces of `EditorTopBarView` because the App mounts them in TWO separate
 // places depending on the device: the Reader's own `ReaderCutoutTier` (via `ReaderRootScreen.editingCutoutTier`) on a
-// device with one, or inline in `EditorTopBarView`'s own control-tier row where there isn't (review Important 4 —
-// the Reader owns the real cutout-tier layout code, not a re-declared copy).
+// device with one, or inline in `EditorTopBarView`'s own control-tier row where there isn't (the Reader owns the
+// real cutout-tier layout code, not a re-declared copy).
 //
 // Both read `EditorViewModel` directly rather than taking every action as an escaping closure (only leaving the
 // session is truly external — the Reader owns that), so the same instance can be constructed independently in the
@@ -43,7 +43,7 @@ public struct EditorDiscardButton: View {
                 // Still through `discardSessionEdits()`, not straight out: a session with nothing to throw away can
                 // still be carrying history — edit a note, undo it, and both stacks are full at depth zero — and ✕
                 // ends all retained history for the score unconditionally. It has nothing to unwind and writes
-                // nothing, so there is still no confirmation to ask for (review Minor 7).
+                // nothing, so there is still no confirmation to ask for.
                 Task {
                     await viewModel.discardSessionEdits()
                     onExit()

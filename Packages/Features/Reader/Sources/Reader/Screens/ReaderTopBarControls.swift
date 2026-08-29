@@ -6,9 +6,9 @@ import UtilityUI
 /// The Reader's own controls, drawn into `ReaderTopBar`'s control tier: the leading back/sidebar affordance and PDF
 /// badge (`ReaderTopBarControls+Leading.swift`), score actions, note editing, annotation, and the paired inspectors.
 ///
-/// This used to be a `ToolbarContent` (`ReaderToolbar`, deleted alongside `ReaderToolbar+PDF` and
-/// `ReaderToolbarCollapse`) folded by arithmetic because a `ToolbarContent` cannot measure itself. Now that the strip
-/// is a view we draw, `ViewThatFits` answers that question directly — see `body`.
+/// The row folds with `ViewThatFits` — see `body`. That is only possible because the strip is a view we draw: a
+/// `ToolbarContent` cannot measure itself, so the navigation-bar version of this had to fold by arithmetic against a
+/// measured window width instead.
 ///
 /// The inspector pair sits OUTSIDE the `ViewThatFits` ladder on purpose: it never folds, and a candidate swap
 /// (rotation, a split-view resize) would otherwise tear down whichever inspector popover is open. A stable sibling —
@@ -63,9 +63,15 @@ struct ReaderTopBarControls: View {
     }
 
     private var trailingKind: TrailingKind? {
-        if viewModel.displaySource == .originalPDF { return .reduced }
-        if case .loaded = viewModel.loadState { return .full }
-        if case .loadedPDF = viewModel.loadState { return .reduced }
+        if viewModel.displaySource == .originalPDF {
+            return .reduced
+        }
+        if case .loaded = viewModel.loadState {
+            return .full
+        }
+        if case .loadedPDF = viewModel.loadState {
+            return .reduced
+        }
         return nil
     }
 
@@ -301,18 +307,13 @@ struct ReaderTopBarControls: View {
         ) { inspectors.playbackInspector }
     }
 
+    /// Shared with the editing strip — see `ReaderDisplayInspectorButton` for why it is a standalone view.
     private var displayInspectorButton: some View {
-        topBarButton(
-            systemImage: "text.page",
-            label: Text("reader.toolbar.showDisplaySettings", bundle: .module),
-        ) {
-            viewModel.isVisualInspectorPresented.toggle()
-        }
-        .readerHintAnchor(.visualInspectorButton)
-        .inspectorPopover(
-            isPresented: $viewModel.isVisualInspectorPresented,
-            anchored: anchorsInspectorPopovers,
-        ) { inspectors.displayInspector }
+        ReaderDisplayInspectorButton(
+            viewModel: viewModel,
+            anchorsInspectorPopovers: anchorsInspectorPopovers,
+            onConfirmReReadPDF: onConfirmReReadPDF,
+        )
     }
 
     // MARK: - Shared button shape

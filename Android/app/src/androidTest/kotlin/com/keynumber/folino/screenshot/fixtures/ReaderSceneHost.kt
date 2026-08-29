@@ -209,7 +209,7 @@ fun ReaderSceneContent(
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
 
     // Fixed-density render (same pxPerMM on phone and tablet) + report the viewport-derived layout width
-    // to the VM so the score reflows to the device width exactly like production. (Task 7 / iOS parity.)
+    // to the VM so the score reflows to the device width exactly like production. (iOS parity.)
     val fitPxPerMM = if (viewportSize.width > 0) fixedPxPerMm(density.density) else 0f
     LaunchedEffect(viewportSize.width, density.density) {
         if (viewportSize.width > 0) onLayoutWidthMm(layoutWidthMm(viewportSize.width, density.density))

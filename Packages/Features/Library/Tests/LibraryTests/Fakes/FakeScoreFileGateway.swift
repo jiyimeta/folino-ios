@@ -30,8 +30,7 @@ final class FakeScoreFileGateway: ScoreFileGateway, @unchecked Sendable {
             throw error
         }
         // Library tests do not exercise loaded Scores; provide an empty stub. ScoreFileGateway is async but the fake
-        // satisfies both sync and async shapes. Real Score values are exercised by Reader tests via a separate fake
-        // (Task 20).
+        // satisfies both sync and async shapes. Real Score values are exercised by Reader tests via a separate fake.
         throw DomainError.scoreParseFailed(reason: "FakeScoreFileGateway.loadScore stubbed")
     }
 

@@ -527,7 +527,7 @@ private struct ReadyShell: View {
     @ViewBuilder
     private var detail: some View {
         if let item = detailScoreItem {
-            // The detail column's navigation bar IS the Reader's own, and that is now hidden (Task 2) — so there is
+            // The detail column's navigation bar IS the Reader's own, and that is now hidden — so there is
             // no system sidebar toggle left in it. The Reader draws its own instead and flips `columnVisibility`
             // directly; it shows whenever this closure is supplied, in both directions, so it can also collapse an
             // already-open sidebar.

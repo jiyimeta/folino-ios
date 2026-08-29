@@ -187,7 +187,7 @@ struct EditorViewModelPersistenceTests {
         #expect(repository.savedScoreItems.isEmpty)
     }
 
-    // MARK: - Original capture (Task 4)
+    // MARK: - Original capture
 
     @Test func `the first save captures the original before writing`() async throws {
         let dir = makeTempScoresDirectory()
