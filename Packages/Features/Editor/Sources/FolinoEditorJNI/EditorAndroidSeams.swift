@@ -34,8 +34,11 @@ struct HostFileFacts: FileFactsProviding, @unchecked Sendable {
 /// `@WireletProvided` method. Until then nothing calls it — the bridge never schedules a save and never flushes one.
 ///
 /// **Android's `refreshRow` will be a partial update, and that is decided here rather than in SP5.** It writes
-/// exactly the three columns a save derives — `localFileName`, `contentHash`, `sizeBytes` — keyed on the row's id,
-/// which is what `ScoreFileWriting`'s own doc comment asks for ("so the list shows the new size and digest"). That
+/// exactly the two columns Android's library actually stores of the three a save derives — `local_file_name` and
+/// `content_hash` — keyed on the row's id, which is what `ScoreFileWriting`'s own doc comment asks for ("so the list
+/// shows the new size and digest"). `sizeBytes` is deliberately not among them: `score_records` has no such column
+/// and nothing on Android reads a size, and adding one for a value nobody reads would cost a real migration on a
+/// shipped schema. That
 /// decision is what makes the stub row below permanently harmless, and it is the reason no `ScoreItem` wire
 /// projection has to exist: a 20-field hand-maintained duplicate of a Domain type is exactly the drift §5.4 is
 /// about. iOS keeps its whole-row repository write; the seam is per-platform by construction.

@@ -105,7 +105,7 @@ class EditingUiTest {
             // `rememberCoroutineScope()` in production, so pin the same thing here rather than a looser stand-in.
             controllerJob = Job()
             val scope = CoroutineScope(Dispatchers.Main.immediate + controllerJob)
-            bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles()))
+            bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles { _, _, _ -> }))
             relay = EditSessionRelay(bridge, host, RealEditNatives)
             controller = EditSessionController(relay, bridge, scope)
         }

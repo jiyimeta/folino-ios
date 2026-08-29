@@ -683,7 +683,8 @@ private fun LibraryNavGraph(
                 // the editor's audition seam has to sound through the very engine the Reader is playing, since a
                 // preview resolves its NoteID against that engine's score handle.
                 val audioVm: ReaderAudioViewModel = viewModel()
-                val editBridgeVm: EditorBridgeViewModel = viewModel(factory = EditorBridgeVMFactory)
+                val editBridgeVm: EditorBridgeViewModel =
+                    viewModel(factory = remember(context) { EditorBridgeVMFactory(context) })
                 val editScope = rememberCoroutineScope()
                 val editController = remember(editBridgeVm, readerVm, audioVm, editScope) {
                     val bridging = GeneratedEditBridging(editBridgeVm)
@@ -1134,15 +1135,21 @@ private fun ScreenViewEffect(token: String) {
 /**
  * Scopes the editor's generated bridge view model to the Reader's back-stack entry.
  *
- * It needs no `Context`: [EditorRoomFiles] is plain `java.io.File` I/O over paths the caller supplies, which is the
- * whole reason the editor module has no Android dependency to inject. The generated view model releases the Swift
- * `EditorBridge` from its own `onCleared`, so scoping it here — rather than remembering it in the composition — is
- * what makes the native side's lifetime the entry's rather than a recomposition's.
+ * It needs a `Context`. [EditorRoomFiles] is still plain `java.io.File` I/O over the paths the caller supplies, but a
+ * save also puts the two columns it derives back on the library row, and that is Room — bound here to
+ * `RoomLibraryStore.refreshRowAfterSave`, since `:app` is the only module that sees both the editor and the library.
+ *
+ * The generated view model releases the Swift `EditorBridge` from its own `onCleared`, so scoping it to the
+ * back-stack entry — rather than remembering it in the composition — is what makes the native side's lifetime the
+ * entry's rather than a recomposition's.
  */
-internal object EditorBridgeVMFactory : ViewModelProvider.Factory {
+internal class EditorBridgeVMFactory(context: android.content.Context) : ViewModelProvider.Factory {
+    private val rows = com.keynumber.folino.library.RoomLibraryStore(context.applicationContext)
+
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        EditorBridgeViewModel.create(EditorRoomFiles()) as T
+        // A SAM conversion of the method reference — `ScoreRowRefreshing` is a `fun interface`.
+        EditorBridgeViewModel.create(EditorRoomFiles(rows::refreshRowAfterSave)) as T
 }
 
 internal class LibraryVMFactory(private val context: android.content.Context) : ViewModelProvider.Factory {

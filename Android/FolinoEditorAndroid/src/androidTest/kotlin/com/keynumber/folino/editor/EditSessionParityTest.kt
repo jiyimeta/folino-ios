@@ -121,7 +121,7 @@ class EditSessionParityTest {
         onMain {
             // The view model is created on the main thread too: its constructor registers the observation callbacks
             // whose notifications are dispatched there.
-            bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles()))
+            bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles { _, _, _ -> }))
             relay = EditSessionRelay(bridge, host, RealEditNatives)
             relaysToClose.add(relay)
             hostsToRelease.add(host)
@@ -230,7 +230,7 @@ class EditSessionParityTest {
         var opened: OpenResult? = null
         var localFingerprint = 0L
         onMain {
-            val bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles()))
+            val bridge = GeneratedEditBridging(EditorBridgeViewModel.create(EditorRoomFiles { _, _, _ -> }))
             val relay = EditSessionRelay(bridge, first.host, RealEditNatives)
             relaysToClose.add(relay)
             opened = relay.open(file.path, scoresDir.path, "parity-reopen")

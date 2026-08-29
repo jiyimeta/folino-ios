@@ -10,10 +10,15 @@ import java.security.MessageDigest
  * the library think it is looking at a new file. That is why this mirrors the importer's digest rather than picking
  * its own encoding.
  *
- * The library-row refresh is deliberately absent — SP5 owns persistence, and until it lands nothing on the Swift
- * side calls a writer.
+ * The row refresh is delegated rather than performed here: this module does not depend on `:FolinoLibraryAndroid`,
+ * so `:app` supplies the [ScoreRowRefreshing] that owns the database — see that interface for why the update is
+ * partial.
  */
-class EditorRoomFiles : EditorHostFiles {
+class EditorRoomFiles(private val rows: ScoreRowRefreshing) : EditorHostFiles {
+
+    fun refreshRow(id: String, localFileName: String, contentHash: String) =
+        rows.refreshAfterSave(id, localFileName, contentHash)
+
     override fun sha256Hex(path: String): String {
         val file = File(path)
         if (!file.isFile) return ""
