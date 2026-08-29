@@ -38,6 +38,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    // BackHandler, for ending an edit session on the system back gesture (matches :app's version).
+    implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
 
@@ -71,6 +73,10 @@ dependencies {
     // Soundfont download bridge: the reader playback service prefers the downloaded high-quality SF2
     // and hot-swaps the engine onto it via SoundfontController + the generated store view model.
     implementation(project(":FolinoSoundfontAndroid"))
+
+    // The edit session (SP3): the relay, its host contract, and the generated bridge. The Reader owns the
+    // score handle the mirror session lives beside, so it is what implements EditSessionHost.
+    api(project(":FolinoEditorAndroid"))
 
     // Runtime support for the swift-java-generated bindings under java-generated/
     // (FolinoReaderJNI → shared Domain scroll-follow logic). Locally published to

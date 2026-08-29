@@ -1,23 +1,27 @@
+import EditorCore
 import Foundation
+
+// Imported by name because the `ScoreItemID`s below stay qualified: sibling files in this target import Domain,
+// which declares a different type of that name, and keeping one spelling across the target is what stops the two
+// from being confused. Dropping `SheetMusicUI` is what made this explicit — it used to bring the name in.
 import SheetMusicCore
 import SheetMusicLayout
 
-/// Maps a tap point (in the Reader's score-surface / `LayoutDocument` coordinate space) to a selection via
-/// `LayoutDocument.editingHitTest(at:activeVoice:)`. The Pencil hover pre-highlight reuses the same resolution,
-/// unmutated.
+/// Maps a tap point (in the Reader's score-surface / `LayoutDocument` coordinate space) to a selection. Task 16
+/// reuses the same resolution, unmutated, for the Pencil hover pre-highlight.
+///
+/// The policy itself — the hit-test ladder, the 44-point slop box, the active-voice preference and the on-staff gate
+/// that makes a tap on empty paper mean "nothing" — lives in `LayoutDocument.editingHitTest(at:activeVoice:)` as of
+/// swift-sheet-music 1.11.0, so iOS and Android run one implementation. What stays here is the part only this app
+/// knows: which document is on screen, and how to re-address the answer.
 extension EditorViewModel {
-    /// Tap in LayoutDocument coordinates (the Reader's score-surface space). Resolves via `resolvedItem(at:)` and
-    /// applies it as the new selection (`nil` when nothing hit — spec §5.2: tap empty staff = deselect).
+    /// Tap in LayoutDocument coordinates (the Reader's score-surface space). Applies the resolved item as the new
+    /// selection (`nil` when nothing hit — spec §5.2: tap empty staff = deselect).
+    ///
+    /// Selection and the tap's own audition both come from `EditorSessionCore.selectFromTap` — the rule for which
+    /// taps sound is shared with Android rather than restated here.
     public func handleTap(at point: CGPoint) {
-        let item = resolvedItem(at: point)
-        select(item)
-        // Sound what was tapped, exactly as tapping the score does outside edit mode (`setManualCursor` auditions
-        // there). Hearing the note you just aimed at is half of how you know you hit the right one — and it would be
-        // odd for the same tap to speak on one screen and go silent on the other. Never over a running transport,
-        // for the same reason the seek path doesn't: a one-shot preview on top of continuous playback.
-        if case let .note(noteID)? = item, !isPlaybackActive {
-            audition(noteID)
-        }
+        selectFromTap(resolvedItem(at: point))
     }
 
     /// Selects `item` outright — used to carry a selection made outside edit mode (a tap-to-seek on the score) into
@@ -25,7 +29,7 @@ extension EditorViewModel {
     /// starting blank. Ignores an item the current score doesn't contain: positional IDs go stale, and the score may
     /// have moved on between that tap and this session.
     public func selectItem(_ item: SheetMusicCore.ScoreItemID?) {
-        guard let item, let score, let slot = Self.slot(of: item), score[slot] != nil else {
+        guard let item, let score, let slot = EditorSessionCore.slot(of: item), score[slot] != nil else {
             select(nil)
             return
         }
@@ -54,11 +58,6 @@ extension EditorViewModel {
     /// staff-filtered rendition of the score this view model edits, so the result is re-stamped into source
     /// addressing before it leaves (`displayToSourceItem`, identity when nothing is filtered).
     private func resolvedItem(at point: CGPoint) -> SheetMusicCore.ScoreItemID? {
-        displayedItem(at: point).flatMap(displayToSourceItem)
-    }
-
-    /// The hit itself, still in the rendered document's addressing.
-    private func displayedItem(at point: CGPoint) -> SheetMusicCore.ScoreItemID? {
-        documentProvider()?.editingHitTest(at: point, activeVoice: activeVoice)
+        documentProvider()?.editingHitTest(at: point, activeVoice: activeVoice).flatMap(displayToSourceItem)
     }
 }

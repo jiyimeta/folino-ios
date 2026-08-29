@@ -200,8 +200,8 @@ struct EditorPreferenceMigrationTests {
         vm.onPartIndicesRemapped = { settled.append($0 != nil) }
         vm.beginSession(score: EditorFixtures.parts(named: ["Flute", "Violin"]))
         // A revert in progress makes `performSave` return at its entry guard — the save runs, writes nothing, and
-        // the settle still has to happen.
-        vm.isReverting = true
+        // the settle still has to happen. Latched through the core, which owns the flag.
+        vm.core.beginReverting()
 
         vm.removePart(at: 0)
         await vm.partEditCommitTask?.value

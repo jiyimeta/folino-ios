@@ -46,6 +46,18 @@ interface ScoreRecordDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun upsert(record: ScoreRecordEntity)
 
+    /**
+     * The two columns a note-edit save derives, written back without touching the rest of the row.
+     *
+     * A partial update rather than an `upsert`, because the editor's session carries a deliberately partial
+     * `ScoreItem` (`EditorBridge.stubRowPendingSave`) — a whole-row write from that side would blank the user's
+     * title, tags and dates. See `ScoreRowRefreshing` in `:FolinoEditorAndroid`, which is the seam this backs.
+     */
+    @Query(
+        "UPDATE score_records SET local_file_name = :localFileName, content_hash = :contentHash WHERE id = :id",
+    )
+    fun refreshAfterSave(id: String, localFileName: String, contentHash: String)
+
     @Query("DELETE FROM score_records WHERE id = :id")
     fun delete(id: String)
 }
@@ -279,6 +291,20 @@ class RoomLibraryStore(context: Context) : LibraryStore, ReaderPreferencesStore 
         File(context.applicationContext.filesDir, "Scores").apply { mkdirs() }
 
     override fun scoresDirectoryPath(): String = scoresDir.absolutePath
+
+    /**
+     * Puts the two columns a note-edit save derives back on a score's row, leaving the rest of it alone.
+     *
+     * Not part of `LibraryStore` (the `@WireletProvided` seam the Swift library store is injected with): this one is
+     * called by the EDITOR's file seam, through `ScoreRowRefreshing` in `:FolinoEditorAndroid`, which `:app` binds to
+     * this method. Keeping it off the wire interface is what keeps the editor from acquiring a whole library store it
+     * has no business holding.
+     *
+     * Runs on the calling thread, which for a save is the main thread — see this class's note on
+     * `allowMainThreadQueries()`. One `UPDATE` by primary key, once per debounced save.
+     */
+    fun refreshRowAfterSave(id: String, localFileName: String, contentHash: String) =
+        dao.refreshAfterSave(id, localFileName, contentHash)
 
     override fun loadAll(): List<ScoreRecordWire> =
         dao.loadAll().map {

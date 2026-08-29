@@ -1,19 +1,22 @@
 import Domain
 import Foundation
 import SheetMusicCore
-import SheetMusicUI
 
-// Where the selection and the caret land after the score changes underneath them. Split out of `EditorViewModel.swift`
-// to keep that file inside SwiftLint's length budget; this is one subject with one entry point (`rederiveSelection`),
-// which every mutation — apply, undo, redo, discard — calls exactly once.
+/// Where the two markers land, and which note that decision asks to be heard.
+///
+/// Split out of `EditorSessionCore.swift` to keep that file inside SwiftLint's length budget, along the same seam
+/// main drew when it pulled `EditorViewModel+Selection.swift` out of its own view model — and the two halves belong
+/// together for a reason beyond size: `selectFromTap` is exactly the place where placing a marker and deciding to
+/// sound a note are one action.
+extension EditorSessionCore {
+    // MARK: - Selection re-derivation
 
-extension EditorViewModel {
     /// Re-derives the selection and the caret from the engine's post-mutation `lastAffectedLocation`. Engine IDs are
     /// positional, so a stored selection can drift after any mutation — after every apply/undo/redo both are
     /// recomputed against the current score. When no slot was touched (`lastAffectedLocation == nil`) they are
     /// preserved rather than cleared.
     ///
-    /// Which of the two followed the command depends on which one it was aimed at. The keys are split between them
+    /// Which of the two followed the intent depends on which one it was aimed at. The keys are split between them
     /// (duration / tuplet write at the caret, ⌫ / ♯ / ♭ / tie edit the selection), so re-deriving both from the
     /// affected slot would collapse the lead the caret holds during a run of input: a duration key would drag the
     /// selection off the note just written, and ♯ would drag the caret back onto it, making the next letter overwrite
@@ -36,8 +39,8 @@ extension EditorViewModel {
         }
     }
 
-    /// Re-resolves a slot that the command did NOT target against the mutated score. `nil` when the slot was spliced
-    /// away (the caller then falls back to the affected location, so neither marker is left dangling).
+    /// Re-resolves a slot the intent did NOT target against the mutated score. `nil` when the slot was spliced away
+    /// (the caller then falls back to the affected location, so neither marker is left dangling).
     private func rederived(_ slot: VoiceElementID?, in score: Score) -> SheetMusicCore.ScoreItemID? {
         guard let slot else { return nil }
         return SelectionRederivation.item(at: slot, in: score, preferringNoteIndex: nil)
@@ -45,7 +48,7 @@ extension EditorViewModel {
 
     /// The voice slot an item occupies. Tuplet brackets (and clefs, which never reach the selection) don't name a
     /// single slot, so they resolve to `nil`.
-    static func slot(of item: SheetMusicCore.ScoreItemID?) -> VoiceElementID? {
+    public static func slot(of item: SheetMusicCore.ScoreItemID?) -> VoiceElementID? {
         switch item {
         case let .note(id): VoiceElementID(id)
         case let .rest(id): VoiceElementID(id)
@@ -53,8 +56,8 @@ extension EditorViewModel {
         }
     }
 
-    /// The `noteIndexInChord` of the current selection when it is a `.note` anchored at exactly `location`,
-    /// so re-derivation can keep the caret on the same chord tone across edits that add/remove siblings.
+    /// The `noteIndexInChord` of the current selection when it is a `.note` anchored at exactly `location`, so
+    /// re-derivation can keep the caret on the same chord tone across edits that add or remove siblings.
     private func previousNoteIndex(at location: VoiceElementID) -> Int? {
         guard case let .note(noteID)? = selectedItem,
               noteID.staff == location.staff,
@@ -66,20 +69,21 @@ extension EditorViewModel {
     }
 
     /// Picks `item` explicitly — caret and selection land together. Every path that names a target directly (tap,
-    /// ← / →, post-command re-derivation) goes through here; only note input deliberately splits the two, via
-    /// `place(selection:caret:)`. Internal (not private) so the ops extensions in sibling files can drive selection.
-    func select(_ item: SheetMusicCore.ScoreItemID?) {
+    /// ← / →, post-intent re-derivation) goes through here; only note input deliberately splits the two, via
+    /// `place(selection:caret:)`.
+    public func select(_ item: SheetMusicCore.ScoreItemID?) {
         place(selection: item, caret: item)
     }
 
-    /// Sets selection and caret independently and notifies. The only caller that passes different values is note
-    /// input, which leaves the selection on the note it just wrote and moves the caret to the next slot.
-    func place(selection item: SheetMusicCore.ScoreItemID?, caret: SheetMusicCore.ScoreItemID?) {
-        selection = item.map(ScoreSelection.single) ?? .none
+    /// Sets selection and caret independently. Note input passes different values — it leaves the selection on the
+    /// note it just wrote and moves the caret to the next slot — and so does an append that must NOT move either:
+    /// `appendMeasure` restores both to what they named before the insert, since a bar added at the end shifts no
+    /// existing slot and re-deriving would jump both markers onto the new last bar.
+    public func place(selection item: SheetMusicCore.ScoreItemID?, caret: SheetMusicCore.ScoreItemID?) {
         selectedItem = item
         caretItem = caret
         armFromSelectionIfNeeded()
-        onSelectionChanged(selection, caret)
+        selectionRevision += 1
     }
 
     /// Arms the length keys from whatever was just picked, but ONLY while nothing is armed yet — which in practice
@@ -95,5 +99,37 @@ extension EditorViewModel {
         let split = DurationInterpretation.split(chord.duration)
         armedDuration = split.base
         armedDots = split.dots
+    }
+
+    // MARK: - Auditioning (the decision, not the sound)
+
+    /// Marks `noteID` as the note to preview. `EditorViewModel` sounds it; on Android the bridge does.
+    public func audition(_ noteID: NoteID) {
+        guard session != nil else { return }
+        pendingAudition = noteID
+    }
+
+    /// Call-site helper for the pitch-changing ops: previews the current `.note` selection, but only when the last
+    /// `apply` actually mutated the score (`revision` advanced past `previousRevision`). A refused edit — an
+    /// out-of-range shift, say — leaves nothing to sound.
+    func auditionSelectedNote(unlessStillAt previousRevision: Int) {
+        guard revision != previousRevision, case let .note(noteID)? = selectedItem else { return }
+        audition(noteID)
+    }
+
+    /// Selects what a tap on the score resolved to, and previews it when it is a note.
+    ///
+    /// Hearing the note you just aimed at is half of how you know you hit the right one — and it would be odd for
+    /// the same tap to speak on one screen and go silent on the other, which is why tapping outside edit mode
+    /// auditions too (`ReaderPlaybackSession.setManualCursor`). Never over a running transport, for the same reason
+    /// the seek path doesn't: a one-shot preview on top of continuous playback.
+    ///
+    /// This lives here rather than in each host because "which taps sound" is behavior, and behavior is shared:
+    /// iOS reaches it from `EditorViewModel.handleTap`, Android from `EditorBridge.selectItem`. It used to be iOS
+    /// host code only, which is exactly how Android's edit mode ended up silent on tap.
+    public func selectFromTap(_ item: SheetMusicCore.ScoreItemID?) {
+        select(item)
+        guard case let .note(noteID)? = item, !isPlaybackActive else { return }
+        audition(noteID)
     }
 }

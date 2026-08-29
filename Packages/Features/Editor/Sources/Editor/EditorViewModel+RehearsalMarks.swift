@@ -85,7 +85,7 @@ extension EditorViewModel {
     }
 
     private func applyRehearsalMark(_ intent: EditIntent, action: String) -> Bool {
-        guard apply(intent) else { return false }
+        guard apply(intent) != nil else { return false }
         onRehearsalMarkEdited?(action)
         return true
     }

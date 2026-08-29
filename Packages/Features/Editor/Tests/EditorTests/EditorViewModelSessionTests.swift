@@ -70,7 +70,7 @@ struct EditorViewModelSessionTests {
     @Test func `invalid edit is swallowed and mutates nothing`() {
         let vm = makeViewModel()
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
-        // Element 1 is a rest, not a note — SetNotePitch must refuse; the VM must not bump generation.
+        // Element 1 is a rest, not a note — the session must refuse; the VM must not bump generation.
         vm.apply(.setNotePitch(at: EditorFixtures.noteID(element: 1), pitch: 61, tpc: 21, accidental: nil))
         #expect(vm.generation == 0)
         #expect(vm.score == EditorFixtures.fourQuarterRests())

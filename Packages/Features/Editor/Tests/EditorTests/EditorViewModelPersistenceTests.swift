@@ -1,6 +1,7 @@
 import CryptoKit
 import Domain
 @testable import Editor
+import EditorCore
 import Foundation
 import Testing
 
@@ -13,7 +14,7 @@ struct EditorViewModelPersistenceTests {
         let dir = URL(filePath: "/tmp/scores", directoryHint: .isDirectory)
         var item = EditorFixtures.sampleItem()
         item.localFileName = "ABC.mscz"
-        let destination = EditorViewModel.saveDestination(for: item, scoresDirectory: dir)
+        let destination = EditorSessionCore.saveDestination(for: item, scoresDirectory: dir)
         #expect(destination.url == dir.appending(path: "ABC.mscz"))
         #expect(destination.format == .mscz)
         #expect(destination.isSiblingCopy == false)
@@ -23,7 +24,7 @@ struct EditorViewModelPersistenceTests {
         let dir = URL(filePath: "/tmp/scores", directoryHint: .isDirectory)
         var item = EditorFixtures.sampleItem()
         item.localFileName = "ABC.mscx"
-        let destination = EditorViewModel.saveDestination(for: item, scoresDirectory: dir)
+        let destination = EditorSessionCore.saveDestination(for: item, scoresDirectory: dir)
         #expect(destination.url == dir.appending(path: "ABC.mscx"))
         #expect(destination.format == .mscx)
         #expect(destination.isSiblingCopy == false)
@@ -33,7 +34,7 @@ struct EditorViewModelPersistenceTests {
         let dir = URL(filePath: "/tmp/scores", directoryHint: .isDirectory)
         var item = EditorFixtures.sampleItem()
         item.localFileName = "ABC.musicxml"
-        let destination = EditorViewModel.saveDestination(for: item, scoresDirectory: dir)
+        let destination = EditorSessionCore.saveDestination(for: item, scoresDirectory: dir)
         #expect(destination.url == dir.appending(path: "ABC.mscz"))
         #expect(destination.format == .mscz)
         #expect(destination.isSiblingCopy == true)
@@ -43,7 +44,7 @@ struct EditorViewModelPersistenceTests {
         let dir = URL(filePath: "/tmp/scores", directoryHint: .isDirectory)
         var item = EditorFixtures.sampleItem()
         item.localFileName = "ABC.mid"
-        let destination = EditorViewModel.saveDestination(for: item, scoresDirectory: dir)
+        let destination = EditorSessionCore.saveDestination(for: item, scoresDirectory: dir)
         #expect(destination.url == dir.appending(path: "ABC.mscz"))
         #expect(destination.format == .mscz)
         #expect(destination.isSiblingCopy == true)
@@ -59,7 +60,7 @@ struct EditorViewModelPersistenceTests {
         try bytes.write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let facts = try EditorFileFacts.hashAndSize(of: url)
+        let facts = try EditorFileFacts().hashAndSize(of: url)
         #expect(facts.sizeBytes == 5)
         #expect(facts.contentHash == expectedHash)
     }

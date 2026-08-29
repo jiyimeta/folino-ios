@@ -69,7 +69,7 @@ extension EditorViewModel {
         guard let score else { return }
         let selection = selectedItem
         let caret = caretItem
-        guard apply(.addPart(plan: plan, at: score.parts.count)) else { return }
+        guard apply(.addPart(plan: plan, at: score.parts.count)) != nil else { return }
         place(selection: selection, caret: caret)
         onPartsEdited(.add)
         commitPartEdit()
@@ -83,7 +83,7 @@ extension EditorViewModel {
     public func removePart(at index: Int) {
         let selection = selectedItem
         let caret = caretItem
-        guard apply(.removePart(at: index)) else { return }
+        guard apply(.removePart(at: index)) != nil else { return }
         place(
             selection: Self.item(selection, afterRemovingPart: index),
             caret: Self.item(caret, afterRemovingPart: index),
@@ -109,7 +109,7 @@ extension EditorViewModel {
         guard to != from else { return }
         let selection = selectedItem
         let caret = caretItem
-        guard apply(.movePart(from: from, to: to)) else { return }
+        guard apply(.movePart(from: from, to: to)) != nil else { return }
         place(
             selection: Self.item(selection, afterMovingPart: from, to: to),
             caret: Self.item(caret, afterMovingPart: from, to: to),

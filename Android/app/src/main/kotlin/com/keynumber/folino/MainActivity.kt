@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,9 +38,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -48,6 +51,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.keynumber.folino.editor.ConfinedEditSessionOps
+import com.keynumber.folino.editor.DebouncedAutosave
+import com.keynumber.folino.editor.EditSessionController
+import com.keynumber.folino.editor.EditSessionRelay
+import com.keynumber.folino.editor.EditorRoomFiles
+import com.keynumber.folino.editor.GeneratedEditBridging
+import com.keynumber.folino.editor.NoteAuditioning
+import com.keynumber.folino.editor.generated.EditorBridgeViewModel
 import com.keynumber.folino.export.ScoreShareLauncher
 import com.keynumber.folino.library.HiddenStaffEntryWire
 import com.keynumber.folino.library.ReaderPreferencesController
@@ -63,11 +74,14 @@ import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.StaffAddress as ReaderStaffAddress
 import com.keynumber.folino.reader.MixerStripID
+import com.keynumber.folino.reader.PlaylistEntry
 import com.keynumber.folino.reader.ReaderPipController
 import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.PlaylistContinuationMode
 import com.keynumber.folino.reader.DrumKitOption
 import com.keynumber.folino.reader.ReaderScreen
+import com.keynumber.folino.reader.ReaderAudioViewModel
+import com.keynumber.folino.reader.ReaderViewModel
 import com.keynumber.folino.reader.toPref
 import com.keynumber.folino.diagnostics.AndroidAnalytics
 import com.keynumber.folino.diagnostics.CrashReporting
@@ -91,6 +105,10 @@ import com.keynumber.folino.ui.settings.SettingsPrefs
 import com.keynumber.folino.ui.settings.SettingsScreen
 import com.keynumber.folino.ui.settings.VersionHistoryItem
 import com.keynumber.folino.ui.settings.VersionHistoryScreen
+import java.util.concurrent.Executors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -551,7 +569,7 @@ private fun LibraryNavGraph(
                 ),
             ) { entry ->
                 val navId = entry.arguments?.getString("id") ?: ""
-                val title = URLDecoder.decode(entry.arguments?.getString("title") ?: "", "UTF-8")
+                val navTitle = URLDecoder.decode(entry.arguments?.getString("title") ?: "", "UTF-8")
                 val navLocalFileName =
                     URLDecoder.decode(entry.arguments?.getString("localFileName").orEmpty(), "UTF-8")
                 val playlistId = entry.arguments?.getString("playlistId")
@@ -562,6 +580,10 @@ private fun LibraryNavGraph(
                 // which file to open. Seeded from the nav arg; the auto-advance path below re-seeds it
                 // from a Room lookup rather than a Reader-side one (see onRetargetScore).
                 var currentLocalFileName by rememberSaveable(navId) { mutableStateOf(navLocalFileName) }
+                // Also part of the same retarget event. The nav arg only ever describes the score the
+                // Reader was ENTERED on, so reading it directly left the app bar naming the previous
+                // score for the whole of every auto-advanced one.
+                var currentTitle by rememberSaveable(navId) { mutableStateOf(navTitle) }
                 // Reader display mode comes from the Settings → Layout pref (DataStore). Default
                 // "page" matches SettingsPrefs; until the page/horizontal surfaces land, those
                 // modes fall back to vertical scroll inside ReaderScreen.
@@ -650,11 +672,96 @@ private fun LibraryNavGraph(
                 var lastTransposeForAnalytics by remember(currentScoreId) {
                     mutableStateOf(prefsState.transposeSemitones)
                 }
+
+                // ── The note-editing session (SP4) ────────────────────────────────────────────────────
+                // This route is the only layer that sees both the editor's JNI bridge and the Reader, so it is
+                // where the chain is assembled: EditorRoomFiles -> the generated bridge view model ->
+                // GeneratedEditBridging -> EditSessionRelay(bridge, readerVm, audition) -> EditSessionController.
+                // Nothing below constructs a bridge — the Reader receives the controller's state and its ops and
+                // no more, which is what keeps an intent from being applied outside the relay (see
+                // EditSessionRelay's own class doc for why there is no way in from the outside).
+                //
+                // `readerVm` is resolved HERE and passed to ReaderScreen explicitly rather than left to its
+                // `viewModel()` default: the relay's host has to be the very instance the Reader renders from,
+                // since that instance owns the score handle the mirror session is kept identical to. Both resolve
+                // against this back-stack entry's store, so it is the same object either way — passing it makes
+                // that a fact instead of a coincidence.
+                val readerVm: ReaderViewModel = viewModel()
+                // Resolved here for the same reason `readerVm` is, and passed to ReaderScreen for the same reason:
+                // the editor's audition seam has to sound through the very engine the Reader is playing, since a
+                // preview resolves its NoteID against that engine's score handle.
+                val audioVm: ReaderAudioViewModel = viewModel()
+                val editBridgeVm: EditorBridgeViewModel =
+                    viewModel(factory = remember(context) { EditorBridgeVMFactory(context) })
+                val editScope = rememberCoroutineScope()
+                // The editing session's own thread. NOT the main thread: a save encodes the whole score, which
+                // measured 160-230 ms on a Pixel 8a, and every op reaching `EditorBridge` runs synchronously. See
+                // `ConfinedEditSessionOps` for why moving the one thread is the answer rather than making the
+                // bridge concurrent. Single-threaded is load-bearing, not an efficiency choice.
+                val editExecutor = remember {
+                    Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "folino-edit") }
+                }
+                val editController = remember(editBridgeVm, readerVm, audioVm, editScope, editExecutor) {
+                    val bridging = GeneratedEditBridging(editBridgeVm)
+                    // The audition seam (iOS's `NoteAuditioning`): the shared core decides which note to preview
+                    // and after which ops, the relay drains that decision, and this is the sound.
+                    val relay = EditSessionRelay(
+                        bridging,
+                        readerVm,
+                        audition = NoteAuditioning(audioVm::playNotePreview),
+                        // On the editing thread, so the debounce fires the save there rather than posting it back
+                        // to the main thread — which is the whole point of the confinement below. `close()` and
+                        // `flushPendingSave()` reach `flushNow()` already on that thread, so every save the session
+                        // performs runs in exactly one place.
+                        autosave = DebouncedAutosave(
+                            CoroutineScope(editExecutor.asCoroutineDispatcher() + SupervisorJob()),
+                        ) { bridging.flushSave() },
+                    )
+                    EditSessionController(ConfinedEditSessionOps(relay, editExecutor), bridging, editScope)
+                }
+                val editing by editController.ui.collectAsState()
+                // A session must not outlive the screen that opened it: leaving the Reader, or an Activity
+                // recreate, ends both halves rather than leaving the authoritative session open against a bridge
+                // whose UI is gone. The bridge view model itself is scoped to the entry and outlives a recreate,
+                // so without this the Swift side would still believe a session was open while `EditUiState` had
+                // reset to "not editing" — the exact divergence `open()`'s fingerprint check exists to catch, but
+                // reached by a route it should never have to.
+                //
+                // The executor dies with the session, in this order and in this one effect: `end()` blocks until
+                // the confined thread has flushed and closed, and only then is the thread allowed to stop. Shutting
+                // it down from a separate `DisposableEffect` would leave the order to Compose's disposal sequence,
+                // and losing that race means the session's last save never runs.
+                DisposableEffect(editController, editExecutor) {
+                    onDispose {
+                        editController.end()
+                        editExecutor.shutdown()
+                    }
+                }
+                // …and a session must not lose an edit to a process death either. `onDispose` above covers LEAVING
+                // the Reader; this covers being backgrounded while still in it, which is the last moment Android
+                // guarantees before the process can be killed. Two triggers rather than one because neither implies
+                // the other: backgrounding disposes nothing, and leaving never pauses.
+                val editLifecycleOwner = LocalLifecycleOwner.current
+                DisposableEffect(editLifecycleOwner, editController) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_PAUSE) editController.flushPendingSave()
+                    }
+                    editLifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose { editLifecycleOwner.lifecycle.removeObserver(observer) }
+                }
+                // A retarget (playlist auto-advance) swaps the score under the Reader; the session belongs to the
+                // score it was opened for, so it ends with it. One bridge view model serves the whole entry —
+                // `beginSession` takes the score id — rather than one per score, so a long playlist does not
+                // accumulate native bridges.
+                LaunchedEffect(currentScoreId) { editController.end() }
+                val scoresDir = remember(context) { java.io.File(context.filesDir, "Scores") }
+
                 ScreenViewEffect("reader")
                 ReaderScreen(
+                    audioVm = audioVm,
                     scoreId = currentScoreId,
                     localFileName = currentLocalFileName,
-                    title = title,
+                    title = currentTitle,
                     onEditInfo = {
                         AndroidAnalytics.log(AndroidAnalytics.bridge.scoreInfoOpened("readerOverlay"))
                         nav.navigate("editInfo/$currentScoreId")
@@ -827,24 +934,32 @@ private fun LibraryNavGraph(
                     // inside ReaderScreen). The continuation-mode wire value is shown in the inspector;
                     // the auto-advance handler re-reads it fresh from DataStore at each end-of-score.
                     playlistId = playlistId,
-                    // Pairs each queue entry's score id with its real on-disk file name so a playlist
-                    // auto-advance can retarget the Reader (below) the same way the initial open does —
-                    // via a value it's handed, not a lookup the Reader module performs itself.
+                    // Carries every per-score field the Reader displays, so a playlist auto-advance can
+                    // retarget the Reader (below) the same way the initial open does — via values it's
+                    // handed, not lookups the Reader module performs itself. The record fetched here
+                    // already has all of them, so widening this costs nothing.
                     playlistQueueProvider = {
                         playlistId?.let { pid ->
                             withContext(Dispatchers.IO) {
                                 val ids = abRepeatStore.orderedLivePlaylistScoreIds(pid)
                                 val byId = abRepeatStore.loadAll().associateBy { it.id }
-                                ids.map { id -> id to (byId[id]?.localFileName.orEmpty()) }
+                                ids.map { id ->
+                                    PlaylistEntry(
+                                        id = id,
+                                        localFileName = byId[id]?.localFileName.orEmpty(),
+                                        title = byId[id]?.title.orEmpty(),
+                                    )
+                                }
                             }
                         } ?: emptyList()
                     },
                     continuationModeProvider = {
                         PlaylistContinuationMode.fromWire(prefs.playlistContinuationMode.first())
                     },
-                    onRetargetScore = { next, nextLocalFileName ->
-                        currentScoreId = next
-                        currentLocalFileName = nextLocalFileName
+                    onRetargetScore = { next ->
+                        currentScoreId = next.id
+                        currentLocalFileName = next.localFileName
+                        currentTitle = next.title
                     },
                     continuationModeWire = continuationModeWire,
                     onContinuationModeChange = { v -> scope.launch { prefs.setPlaylistContinuationMode(v) } },
@@ -869,6 +984,52 @@ private fun LibraryNavGraph(
                     onAnalyticsTransportNext = { AndroidAnalytics.log(AndroidAnalytics.bridge.transportNext()) },
                     onAnalyticsSeek = { AndroidAnalytics.log(AndroidAnalytics.bridge.seek()) },
                     onBack = { nav.popBackStackIfResumed() },
+                    readerVm = readerVm,
+                    // ── Note editing ──────────────────────────────────────────────────────────────────
+                    editing = editing,
+                    onStartEditing = {
+                        editController.begin(
+                            scorePath = java.io.File(scoresDir, currentLocalFileName).path,
+                            scoresDirectory = scoresDir.path,
+                            scoreId = currentScoreId,
+                        )
+                    },
+                    onEndEditing = { editController.end() },
+                    onDiscardSessionEdits = { editController.discardSessionEdits() },
+                    // Answers false today — Android has no originals store yet. The button is placed so SP5 fills
+                    // the body rather than re-deciding where it goes; the parity ledger holds the row until then.
+                    onRevertToOriginal = { editController.revertToOriginal() },
+                    onUndo = { editController.undo() },
+                    onRedo = { editController.redo() },
+                    // The transport, mirrored into the shared core. `EditorSessionCore.isPlaybackActive` is what
+                    // decides the consequences (it drops the selection when playback starts — iOS's
+                    // `EditorViewModel` mirrors the identical property from its own host); the Reader only reports
+                    // the transition, and this route is the layer that can see both it and the controller.
+                    onPlaybackActiveChange = { active -> editController.setPlaybackActive(active) },
+                    onSetVoice = { voice -> editController.setActiveVoice(voice) },
+                    onTogglePad = { editController.setPadVisible(!editing.isPadVisible) },
+                    onSelectPreviousElement = { editController.selectPreviousElement() },
+                    onSelectNextElement = { editController.selectNextElement() },
+                    // A null hit-test result means the tap landed on paper, and EMPTY bytes are how the shared
+                    // core spells "deselect" (`EditorBridge.selectItem` — deliberate iOS parity, not an
+                    // Android convention). Mapping the two here is what makes a tap on paper clear the
+                    // selection instead of leaving the last note lit with no way to unpick it.
+                    onSelectItem = { bytes -> editController.selectItem(bytes ?: ByteArray(0)) },
+                    onArmDuration = { kind -> editController.armDuration(kind) },
+                    onSetArmedDots = { dots -> editController.setArmedDots(dots) },
+                    onToggleArmedDot = { editController.toggleArmedDot() },
+                    onInputPitch = { letter -> editController.inputPitch(letter) },
+                    onWriteRest = { editController.writeRest() },
+                    onToggleTie = { editController.toggleTie() },
+                    onAppendTiedNote = { editController.appendTiedNote() },
+                    onCreateTuplet = { actualNotes -> editController.createTuplet(actualNotes) },
+                    onRemoveTuplet = { editController.removeTuplet() },
+                    onToggleAddToChord = { editController.toggleAddToChord() },
+                    onSetSelectionDuration = { kind -> editController.setSelectionDuration(kind) },
+                    onSetSelectionDots = { dots -> editController.setSelectionDots(dots) },
+                    onToggleSelectionDot = { editController.toggleSelectionDot() },
+                    onShiftPitch = { semitones -> editController.shiftPitch(semitones) },
+                    onShiftOctave = { octaves -> editController.shiftOctave(octaves) },
                 )
                 if (showShareSheet) {
                     ExportFormatSheet(
@@ -1013,6 +1174,26 @@ private fun ScreenViewEffect(token: String) {
     LaunchedEffect(Unit) {
         AndroidAnalytics.log(AndroidAnalytics.bridge.screen(token))
     }
+}
+
+/**
+ * Scopes the editor's generated bridge view model to the Reader's back-stack entry.
+ *
+ * It needs a `Context`. [EditorRoomFiles] is still plain `java.io.File` I/O over the paths the caller supplies, but a
+ * save also puts the two columns it derives back on the library row, and that is Room — bound here to
+ * `RoomLibraryStore.refreshRowAfterSave`, since `:app` is the only module that sees both the editor and the library.
+ *
+ * The generated view model releases the Swift `EditorBridge` from its own `onCleared`, so scoping it to the
+ * back-stack entry — rather than remembering it in the composition — is what makes the native side's lifetime the
+ * entry's rather than a recomposition's.
+ */
+internal class EditorBridgeVMFactory(context: android.content.Context) : ViewModelProvider.Factory {
+    private val rows = com.keynumber.folino.library.RoomLibraryStore(context.applicationContext)
+
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T =
+        // A SAM conversion of the method reference — `ScoreRowRefreshing` is a `fun interface`.
+        EditorBridgeViewModel.create(EditorRoomFiles(rows::refreshRowAfterSave)) as T
 }
 
 internal class LibraryVMFactory(private val context: android.content.Context) : ViewModelProvider.Factory {

@@ -29,7 +29,7 @@ extension EditorViewModel {
     public func appendMeasure() {
         let selection = selectedItem
         let caret = caretItem
-        guard apply(.insertMeasure(at: measureCount)) else { return }
+        guard apply(.insertMeasure(at: measureCount)) != nil else { return }
         place(selection: selection, caret: caret)
     }
 

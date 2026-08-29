@@ -103,7 +103,7 @@ extension EditorViewModel {
     /// The one apply path the four ops share: land the intent, then either report the change or record why it did
     /// not happen — see the type doc for why `.nothingToApply` records nothing.
     private func applySignature(_ intent: EditIntent, kind: String, action: String) -> Bool {
-        guard apply(intent) else {
+        guard apply(intent) != nil else {
             let refusal = session?.lastRefusal
             lastSignatureRefusal = refusal?.reason == .nothingToApply ? nil : refusal
             return false

@@ -24,8 +24,12 @@ if isAndroid {
     // marshals across JNI; it already cross-compiles as a Domain dependency, so
     // only the `UtilityCore` product is pulled (never UtilityUI, which is SwiftUI).
     packageDependencies += [
-        // swiftlint:disable:next line_length
-        .package(url: "https://github.com/jiyimeta/swift-wirelet.git", revision: "ba1b8e337a508079c5213656e4c01e9edbedc8b4"),
+        // swift-java 0.4.0's SwiftJavaTool is written against swift-subprocess 0.4.x; 0.5.0 removed APIs the
+        // jextract tool needs under swift-6.3.3. Pin to 0.4.0, matching Reader / Editor / Settings — which is
+        // what Editor's copy of this comment already claimed, though this package was in fact missing the pin
+        // and only ever got 0.4.0 by way of whatever the transitive graph happened to resolve.
+        .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "0.4.0"),
+        .package(url: "https://github.com/jiyimeta/swift-wirelet.git", exact: "0.5.0"),
         .package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
             exact: "2.1.0",
@@ -46,8 +50,12 @@ if isAndroid {
                 .product(name: "WireletObservable", package: "swift-wirelet"),
                 .product(name: "WireletProvided", package: "swift-wirelet"),
                 .product(name: "SheetMusicMSCX", package: "swift-sheet-music"),
+                .product(name: "SheetMusicMusicXML", package: "swift-sheet-music"),
                 .product(name: "SheetMusicMIDI", package: "swift-sheet-music"),
                 .product(name: "SheetMusicPDF", package: "swift-sheet-music"),
+                // ssm's one format-dispatch, for every path here that reads a stored score file back without
+                // knowing which of the six formats it is.
+                .product(name: "SheetMusicLoader", package: "swift-sheet-music"),
             ],
             plugins: [
                 .plugin(name: "WireletObservableBridges", package: "swift-wirelet"),

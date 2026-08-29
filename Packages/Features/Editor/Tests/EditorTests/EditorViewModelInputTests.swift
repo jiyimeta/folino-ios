@@ -1,5 +1,6 @@
 import Domain
 @testable import Editor
+@testable import EditorCore
 import Foundation
 import SheetMusicUI
 import Testing
@@ -525,7 +526,7 @@ struct EditorViewModelInputTests {
         vm.beginSession(score: EditorFixtures.chordAtIndex1())
         let location = VoiceElementID(staff: EditorFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 3)
 
-        #expect(vm.referencePitch(before: location) == 60)
+        #expect(vm.core.referencePitch(before: location) == 60)
     }
 
     @Test func `referencePitch is nil when only non-timed elements precede`() {
@@ -533,6 +534,6 @@ struct EditorViewModelInputTests {
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
         let location = VoiceElementID(staff: EditorFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 1)
 
-        #expect(vm.referencePitch(before: location) == nil)
+        #expect(vm.core.referencePitch(before: location) == nil)
     }
 }
