@@ -133,6 +133,7 @@ import io.github.jiyimeta.sheetmusic.compose.render.BandedScorePage
 import io.github.jiyimeta.sheetmusic.compose.render.ScorePage
 import io.github.jiyimeta.sheetmusic.compose.render.bundledFontProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
@@ -726,12 +727,30 @@ fun ReaderScreen(
     // Note the state to skip is PLAYING, not "anything but STOPPED": once a score is prepared the engine sits at
     // PREPARED, so a STOPPED-only gate would never fire at all. That was this fix's own first version, and the
     // device said so — `rev=1 prepared=0 state=PREPARED` with nothing re-prepared.
+    //
+    // It also waits for any preview note to finish, and that wait is the fix for a real bug rather than polish.
+    // Adopting stops the engine, and stopping the engine silences a sounding note — so the preview that a pad key
+    // or a pitch step had just started got cut off about one frame in, while tap-to-select (which applies no
+    // intent, so `carryToMirror` never bumps the revision) sounded correctly. The asymmetry was the tell.
+    //
+    // The engine answers how long that is, rather than this side adding up the preview duration it asked for: a
+    // note stays audible past its nominal length while its release renders, and a wait that stopped at the
+    // note-off simply moved the clip from the middle of the note to the middle of its tail.
+    //
+    // Restarting on every `editRevision` change also coalesces a burst: holding down a pitch stepper no longer
+    // re-decodes the whole score into a sequence per keystroke, only once the user pauses. `preparedEditRevision`
+    // is therefore written AFTER the wait, so a cancelled effect does not mark a revision it never adopted.
+    //
+    // Known gap, and it is narrow: pressing play while a preview is still ringing sounds the pre-edit score,
+    // because the adopt is still pending and `reprepareForEditedScore` then declines while PLAYING. The next
+    // transport change adopts it, exactly as an edit made mid-playback already did.
     var preparedEditRevision by remember(scoreHandle) { mutableIntStateOf(0) }
     val editRevision by readerVm.editRevision.collectAsStateWithLifecycle()
     LaunchedEffect(editRevision, playbackState, scoreHandle) {
         val handle = scoreHandle ?: return@LaunchedEffect
         if (editRevision == preparedEditRevision) return@LaunchedEffect
         if (playbackState == PlaybackState.PLAYING) return@LaunchedEffect
+        delay(audioVm.millisUntilPreviewSilent())
         preparedEditRevision = editRevision
         audioVm.reprepareForEditedScore(handle)
     }
