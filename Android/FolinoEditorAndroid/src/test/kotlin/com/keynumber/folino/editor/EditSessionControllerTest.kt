@@ -58,6 +58,8 @@ private class FakeRelay(private val openResult: OpenResult = OpenResult.OPENED) 
     override fun selectNextElement() { calls += "selectNextElement" }
     override fun setActiveVoice(voice: Int) { calls += "setActiveVoice($voice)" }
     override fun setPlaybackActive(active: Boolean) { calls += "setPlaybackActive($active)" }
+    override fun discardSessionEdits() { calls += "discardSessionEdits()" }
+    override fun revertToOriginal(): Boolean { calls += "revertToOriginal()"; return false }
     override fun undo() { calls += "undo" }
     override fun redo() { calls += "redo" }
 }
@@ -83,6 +85,9 @@ private class FakeProjection : EditProjection {
     override val calloutDurationKind = MutableStateFlow(0)
     override val calloutDots = MutableStateFlow(0)
     override val activeVoice = MutableStateFlow(0)
+    override val sessionHasEdits = MutableStateFlow(false)
+    override val canRevertToOriginal = MutableStateFlow(false)
+    override val sessionEndModeKind = MutableStateFlow(0)
     override val selectedItemFrame = MutableStateFlow<EditBytesWire?>(null)
     override val caretItemFrame = MutableStateFlow<EditBytesWire?>(null)
 }
@@ -197,6 +202,35 @@ class EditSessionControllerTest {
         assertTrue(a != differentDurationKind)
     }
 
+    @Test
+    fun `EditUiState's hand-written equals compares the pad's chord, tie and tuplet fields`() {
+        // The same trap the callout-field test above pins, for the four fields the pad's tuplet / tie /
+        // add-to-chord keys read: a field added to the constructor but forgotten in equals() (or in hashCode())
+        // is silently excluded from equality, and MutableStateFlow would then conflate away the very tick that
+        // lights or dims one of those keys.
+        val a = EditUiState(
+            canAppendTiedNote = true, isCaretInTuplet = true, armedTuplet = 5, isAddToChordArmed = true,
+        )
+        val b = EditUiState(
+            canAppendTiedNote = true, isCaretInTuplet = true, armedTuplet = 5, isAddToChordArmed = true,
+        )
+
+        assertEquals(a, b)
+        assertEquals(a.hashCode(), b.hashCode())
+        assertTrue(a != a.copy(canAppendTiedNote = false))
+        assertTrue(a != a.copy(isCaretInTuplet = false))
+        assertTrue(a != a.copy(armedTuplet = 3))
+        assertTrue(a != a.copy(isAddToChordArmed = false))
+    }
+
+    @Test
+    fun `armedTuplet defaults to the triplet the Swift core also defaults to`() {
+        // Not 0: the pad's tuplet key WEARS this number and passes it to `createTuplet`, and the core refuses
+        // anything below 2 outright — so the pre-first-tick value has to be a size the key can actually write.
+        assertEquals(DEFAULT_TUPLET_SIZE, EditUiState().armedTuplet)
+        assertEquals(3, DEFAULT_TUPLET_SIZE)
+    }
+
     // MARK: - Op delegation — each op method is a one-line forward to the relay
 
     @Test
@@ -213,6 +247,31 @@ class EditSessionControllerTest {
 
         assertEquals(
             listOf("inputPitch(C)", "deleteSelection", "armDuration(4)", "setActiveVoice(2)", "undo", "redo"),
+            relay.calls,
+        )
+    }
+
+    @Test
+    fun `the pad's chord, tie, tuplet and stepper ops reach the relay unchanged`() {
+        // These existed on the controller before any key called them (the pad's tuplet / tie / add-to-chord keys
+        // and its ← / → steppers). Now that the UI drives them, pin that each is still the same one-line forward
+        // — above all `createTuplet`, whose argument is the size the key wears and must not be rewritten here.
+        val relay = FakeRelay()
+        val controller = EditSessionController(relay, FakeProjection(), scope)
+
+        controller.toggleAddToChord()
+        controller.toggleTie()
+        controller.appendTiedNote()
+        controller.createTuplet(5)
+        controller.removeTuplet()
+        controller.selectPreviousElement()
+        controller.selectNextElement()
+
+        assertEquals(
+            listOf(
+                "toggleAddToChord", "toggleTie", "appendTiedNote", "createTuplet(5)", "removeTuplet",
+                "selectPreviousElement", "selectNextElement",
+            ),
             relay.calls,
         )
     }

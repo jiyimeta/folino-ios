@@ -1,5 +1,8 @@
 package com.keynumber.folino.editor
 
+import io.github.jiyimeta.sheetmusic.audio.model.NoteID
+import io.github.jiyimeta.sheetmusic.audio.model.StaffAddress
+import io.github.jiyimeta.sheetmusic.audio.serialization.NoteIDCodec
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -25,6 +28,12 @@ private class FakeBridge : EditBridging {
      * frame, the way a real undo never should. Exercises `replay()`'s drain-and-resync answer to that disagreement.
      */
     var strandFrameOnUndo = false
+
+    /**
+     * What the next [takePendingAudition] answers, then cleared — the shared core's `pendingAudition`, which every
+     * op drains exactly once. Empty means "the core asked for no preview".
+     */
+    var pendingAudition: ByteArray = ByteArray(0)
     private val framesToEmit = mutableListOf<ByteArray>()
 
     override fun engineVersionStamp() = stamp
@@ -33,6 +42,7 @@ private class FakeBridge : EditBridging {
     override fun scoreFingerprint() = fingerprint
     override fun encodeScore() = encoded
     override fun takeRelayFrames(): List<ByteArray> = framesToEmit.toList().also { framesToEmit.clear() }
+    override fun takePendingAudition(): ByteArray = pendingAudition.also { pendingAudition = ByteArray(0) }
     override fun revision() = revision
     override fun appliedIntentCount() = appliedIntentCount
 
@@ -52,6 +62,12 @@ private class FakeBridge : EditBridging {
 
     /** Stands in for an op that touches runtime state but never mutates the score — nothing to relay. */
     override fun setPlaybackActive(active: Boolean) {}
+
+    /** Stands in for the unwind: it moves the score without emitting a single relay frame, which is the whole
+     *  reason the relay reconciles a discard by fingerprint instead of by replaying frames. */
+    var discards = 0
+    override fun discardSessionEdits() { discards += 1 }
+    override fun revertToOriginal() = false
 
     // The remaining `EditBridging` members: this file drives none of them, so empty bodies.
     override fun selectItem(bytes: ByteArray) {}
@@ -160,16 +176,39 @@ private class FakeHost : EditSessionHost {
     override fun requestRelayout() { relayoutCount += 1 }
 }
 
+/** Records what the relay asked to have previewed, and how much had already been relayed when it asked. */
+private class FakeAuditioning(private val natives: FakeNatives) : NoteAuditioning {
+    val previewed = mutableListOf<NoteID>()
+
+    /** `natives.applied.size` at each preview — what pins that the mirror is current BEFORE the note sounds. */
+    val appliedWhenPreviewed = mutableListOf<Int>()
+
+    override fun playPreview(noteId: NoteID) {
+        previewed.add(noteId)
+        appliedWhenPreviewed.add(natives.applied.size)
+    }
+}
+
 /** Bundles one relay with its fakes so each test only states what it overrides. */
 private class Fixture(
     val bridge: FakeBridge = FakeBridge(),
     val natives: FakeNatives = FakeNatives(),
     val host: FakeHost = FakeHost(),
 ) {
-    val relay = EditSessionRelay(bridge, host, natives)
+    val audition = FakeAuditioning(natives)
+    val relay = EditSessionRelay(bridge, host, natives, audition)
 
     fun open(): OpenResult = relay.open("/scores/a.ssm", "/scores", "a")
 }
+
+/** A `NoteID` distinct enough that a wrong one cannot pass for it. */
+private fun sampleNoteID(elementIndex: Int = 3) = NoteID(
+    staff = StaffAddress(partIndex = 0, staffIndexInPart = 0),
+    measureIndex = 2,
+    voiceIndex = 0,
+    elementIndex = elementIndex,
+    noteIndexInChord = 0,
+)
 
 class EditSessionRelayTest {
     // MARK: - The three open() gates
@@ -294,6 +333,71 @@ class EditSessionRelayTest {
         assertEquals(1, f.relay.resyncCount)
     }
 
+    // MARK: - The audition the shared core asks for
+    //
+    // The core decides which note sounds and after which ops (`pendingAudition`); the relay is only the courier.
+    // These pin the two things a courier can get wrong: dropping the request, and delivering it too early.
+
+    @Test fun anOpThatAsksForAPreviewSoundsThatNote() {
+        val f = Fixture()
+        f.open()
+        val noteId = sampleNoteID()
+        f.bridge.pendingAudition = NoteIDCodec.encode(noteId)
+
+        f.relay.inputPitch("C")
+
+        assertEquals(listOf(noteId), f.audition.previewed)
+    }
+
+    @Test fun thePreviewSoundsOnlyAfterTheEditHasReachedTheMirror() {
+        val f = Fixture()
+        f.open()
+        f.bridge.pendingAudition = NoteIDCodec.encode(sampleNoteID())
+
+        f.relay.writeRest() // FakeBridge.writeRest applies TWO intents.
+
+        // The engine resolves the NoteID against the mirror, so a note written by this very op does not exist
+        // there until both frames have landed. Sounding at intent 0 or 1 is silence, not an early note.
+        assertEquals(listOf(2), f.audition.appliedWhenPreviewed)
+    }
+
+    @Test fun anOpThatAppliesNothingStillSoundsItsPreview() {
+        val f = Fixture()
+        f.open()
+        val noteId = sampleNoteID()
+        f.bridge.pendingAudition = NoteIDCodec.encode(noteId)
+
+        // A tap: it selects and asks for a preview without mutating the score, so it produces no relay frames.
+        f.relay.selectItem(byteArrayOf(9))
+
+        assertEquals(listOf(noteId), f.audition.previewed)
+    }
+
+    @Test fun anOpThatAsksForNoPreviewSoundsNothing() {
+        val f = Fixture()
+        f.open()
+
+        f.relay.deleteSelection() // Applies an intent, and the core queues no audition for a delete.
+
+        assertTrue(f.audition.previewed.isEmpty())
+    }
+
+    @Test fun aPreviewRequestIsDrainedEvenWhenItCannotBeSounded() {
+        // A resync that cannot complete closes the session, and a closed session sounds nothing — but the request
+        // must not survive into the next op, which would then preview a note the user never touched.
+        val f = Fixture(
+            bridge = FakeBridge().apply { encoded = ByteArray(0) },
+            natives = FakeNatives().apply { applyAnswers = listOf(false) },
+        )
+        f.open()
+        f.bridge.pendingAudition = NoteIDCodec.encode(sampleNoteID())
+
+        f.relay.inputPitch("C")
+
+        assertTrue(f.audition.previewed.isEmpty())
+        assertEquals(ByteArray(0).size, f.bridge.pendingAudition.size)
+    }
+
     // MARK: - undo/redo's own rules
 
     @Test fun undoChecksTheFingerprintUnconditionally() {
@@ -332,6 +436,58 @@ class EditSessionRelayTest {
         // The mirror must never see the undo at all — the stranded frame is dropped, not replayed.
         assertEquals(0, f.natives.editUndoCalls)
         assertTrue(f.bridge.takeRelayFrames().isEmpty())
+    }
+
+    // MARK: - Discarding a session's edits
+
+    @Test fun aDiscardReconcilesTheMirrorByFingerprintRatherThanByFrames() {
+        // The unwind moves the authoritative score WITHOUT emitting intents, so the mirror is left holding the
+        // edited score and only the fingerprint check can see it. Opening on an agreeing pair and moving the
+        // mirror's digest afterwards is what puts the relay in exactly that position.
+        val f = Fixture()
+        f.open()
+        val resyncsAfterOpen = f.relay.resyncCount
+        f.natives.fingerprint = 999L
+
+        f.relay.discardSessionEdits()
+
+        assertEquals(1, f.bridge.discards)
+        assertEquals(resyncsAfterOpen + 1, f.relay.resyncCount)
+        assertEquals(0, f.natives.applied.size) // never replayed as intents
+    }
+
+    @Test fun aDiscardOnAnAgreeingMirrorCostsNoResync() {
+        val f = Fixture()
+        f.open()
+
+        f.relay.discardSessionEdits()
+
+        assertEquals(1, f.bridge.discards)
+        assertEquals(0, f.relay.resyncCount)
+    }
+
+    @Test fun aDiscardDropsWhateverTheUnwindLeftBehind() {
+        // Neither a stranded frame nor a stale audition may survive a discard: the next op would pick them up and
+        // apply an edit — or sound a note — the user has just thrown away.
+        val f = Fixture()
+        f.open()
+        f.bridge.inputPitch("C") // queues a frame the relay has not drained
+        f.bridge.pendingAudition = NoteIDCodec.encode(sampleNoteID())
+
+        f.relay.discardSessionEdits()
+
+        assertTrue(f.bridge.takeRelayFrames().isEmpty())
+        assertEquals(0, f.bridge.pendingAudition.size)
+        assertTrue(f.audition.previewed.isEmpty())
+    }
+
+    @Test fun revertIsNotAvailableOnAndroidYet() {
+        // Pins the placeholder honestly: the op exists so the UI's placement is settled, and answers false until
+        // Android has an originals store (see the parity ledger).
+        val f = Fixture()
+        f.open()
+
+        assertFalse(f.relay.revertToOriginal())
     }
 
     // MARK: - resync()'s own rules

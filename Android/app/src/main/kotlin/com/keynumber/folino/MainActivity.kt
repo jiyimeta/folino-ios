@@ -53,6 +53,7 @@ import com.keynumber.folino.editor.EditSessionController
 import com.keynumber.folino.editor.EditSessionRelay
 import com.keynumber.folino.editor.EditorRoomFiles
 import com.keynumber.folino.editor.GeneratedEditBridging
+import com.keynumber.folino.editor.NoteAuditioning
 import com.keynumber.folino.editor.generated.EditorBridgeViewModel
 import com.keynumber.folino.export.ScoreShareLauncher
 import com.keynumber.folino.library.HiddenStaffEntryWire
@@ -75,6 +76,7 @@ import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.PlaylistContinuationMode
 import com.keynumber.folino.reader.DrumKitOption
 import com.keynumber.folino.reader.ReaderScreen
+import com.keynumber.folino.reader.ReaderAudioViewModel
 import com.keynumber.folino.reader.ReaderViewModel
 import com.keynumber.folino.reader.toPref
 import com.keynumber.folino.diagnostics.AndroidAnalytics
@@ -666,10 +668,10 @@ private fun LibraryNavGraph(
                 // ── The note-editing session (SP4) ────────────────────────────────────────────────────
                 // This route is the only layer that sees both the editor's JNI bridge and the Reader, so it is
                 // where the chain is assembled: EditorRoomFiles -> the generated bridge view model ->
-                // GeneratedEditBridging -> EditSessionRelay(bridge, readerVm) -> EditSessionController. Nothing
-                // below constructs a bridge — the Reader receives the controller's state and its ops and no more,
-                // which is what keeps an intent from being applied outside the relay (see EditSessionRelay's own
-                // class doc for why there is no way in from the outside).
+                // GeneratedEditBridging -> EditSessionRelay(bridge, readerVm, audition) -> EditSessionController.
+                // Nothing below constructs a bridge — the Reader receives the controller's state and its ops and
+                // no more, which is what keeps an intent from being applied outside the relay (see
+                // EditSessionRelay's own class doc for why there is no way in from the outside).
                 //
                 // `readerVm` is resolved HERE and passed to ReaderScreen explicitly rather than left to its
                 // `viewModel()` default: the relay's host has to be the very instance the Reader renders from,
@@ -677,11 +679,22 @@ private fun LibraryNavGraph(
                 // against this back-stack entry's store, so it is the same object either way — passing it makes
                 // that a fact instead of a coincidence.
                 val readerVm: ReaderViewModel = viewModel()
+                // Resolved here for the same reason `readerVm` is, and passed to ReaderScreen for the same reason:
+                // the editor's audition seam has to sound through the very engine the Reader is playing, since a
+                // preview resolves its NoteID against that engine's score handle.
+                val audioVm: ReaderAudioViewModel = viewModel()
                 val editBridgeVm: EditorBridgeViewModel = viewModel(factory = EditorBridgeVMFactory)
                 val editScope = rememberCoroutineScope()
-                val editController = remember(editBridgeVm, readerVm, editScope) {
+                val editController = remember(editBridgeVm, readerVm, audioVm, editScope) {
                     val bridging = GeneratedEditBridging(editBridgeVm)
-                    EditSessionController(EditSessionRelay(bridging, readerVm), bridging, editScope)
+                    // The audition seam (iOS's `NoteAuditioning`): the shared core decides which note to preview
+                    // and after which ops, the relay drains that decision, and this is the sound.
+                    val relay = EditSessionRelay(
+                        bridging,
+                        readerVm,
+                        audition = NoteAuditioning(audioVm::playNotePreview),
+                    )
+                    EditSessionController(relay, bridging, editScope)
                 }
                 val editing by editController.ui.collectAsState()
                 // A session must not outlive the screen that opened it: leaving the Reader, or an Activity
@@ -700,6 +713,7 @@ private fun LibraryNavGraph(
 
                 ScreenViewEffect("reader")
                 ReaderScreen(
+                    audioVm = audioVm,
                     scoreId = currentScoreId,
                     localFileName = currentLocalFileName,
                     title = currentTitle,
@@ -936,6 +950,10 @@ private fun LibraryNavGraph(
                         )
                     },
                     onEndEditing = { editController.end() },
+                    onDiscardSessionEdits = { editController.discardSessionEdits() },
+                    // Answers false today — Android has no originals store yet. The button is placed so SP5 fills
+                    // the body rather than re-deciding where it goes; the parity ledger holds the row until then.
+                    onRevertToOriginal = { editController.revertToOriginal() },
                     onUndo = { editController.undo() },
                     onRedo = { editController.redo() },
                     // The transport, mirrored into the shared core. `EditorSessionCore.isPlaybackActive` is what
@@ -957,6 +975,11 @@ private fun LibraryNavGraph(
                     onToggleArmedDot = { editController.toggleArmedDot() },
                     onInputPitch = { letter -> editController.inputPitch(letter) },
                     onWriteRest = { editController.writeRest() },
+                    onToggleTie = { editController.toggleTie() },
+                    onAppendTiedNote = { editController.appendTiedNote() },
+                    onCreateTuplet = { actualNotes -> editController.createTuplet(actualNotes) },
+                    onRemoveTuplet = { editController.removeTuplet() },
+                    onToggleAddToChord = { editController.toggleAddToChord() },
                     onSetSelectionDuration = { kind -> editController.setSelectionDuration(kind) },
                     onSetSelectionDots = { dots -> editController.setSelectionDots(dots) },
                     onToggleSelectionDot = { editController.toggleSelectionDot() },

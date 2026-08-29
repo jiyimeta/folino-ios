@@ -98,4 +98,17 @@
     <string name="reader_editing_callout_rest_length">Rest length</string>
     <string name="reader_editing_pitch_up">Raise pitch</string>
     <string name="reader_editing_pitch_down">Lower pitch</string>
+    <string name="reader_editing_voice_label">Voice</string>
+    <string name="reader_editing_tuplet">Tuplet</string>
+    <string name="reader_editing_tuplet_count">%1$d-tuplet</string>
+    <string name="reader_editing_tie">Tie</string>
+    <string name="reader_editing_add_to_chord">Add chord note</string>
+    <string name="reader_editing_previous_element">Previous note</string>
+    <string name="reader_editing_next_element">Next note</string>
+    <string name="reader_editing_discard_title">Discard edits?</string>
+    <string name="reader_editing_discard_body">The notes you entered in this session will be removed. This cannot be undone.</string>
+    <string name="reader_editing_discard_confirm">Discard</string>
+    <string name="reader_editing_discard_keep">Keep editing</string>
+    <string name="reader_editing_more">More</string>
+    <string name="reader_editing_revert">Revert to original score</string>
 </resources>

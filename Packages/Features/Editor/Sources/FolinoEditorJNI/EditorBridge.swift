@@ -84,6 +84,19 @@ public final class EditorBridge {
     // swiftformat:enable redundantType
     public internal(set) var armedTuplet: Int32 = 3
 
+    // swiftformat:disable redundantType
+    /// Whether this session has moved the score away from where it opened — what the discard control is gated on.
+    public internal(set) var sessionHasEdits: Bool = false
+
+    /// Whether the row records an original to go back to. Always `false` on Android today: the core is built with
+    /// no originals store, because there is none — see `revertToOriginal()` below.
+    public internal(set) var canRevertToOriginal: Bool = false
+    // swiftformat:enable redundantType
+
+    /// `EditorSessionEndMode` as a discriminator: 0 = commitUnchanged, 1 = revert, 2 = commitEdited. An integer
+    /// rather than a second spelling of the enum, for the reason `armedDurationKind` is one.
+    public internal(set) var sessionEndModeKind: Int32 = 0
+
     /// The SELECTED element's own length, in the same numbering — what the callout shows. Distinct from the armed
     /// length, which describes the next note rather than this one.
     public internal(set) var calloutDurationKind: Int32 = 0
@@ -176,7 +189,9 @@ public final class EditorBridge {
     /// the caller's "`false` means no session" inference.
     @WireletExpose
     public func beginSession(scorePath: String, scoresDirectory: String, scoreId: String) -> Bool {
-        if core != nil { endSession() }
+        if core != nil {
+            endSession()
+        }
         guard let score = Self.parseScore(atPath: scorePath) else { return false }
         let localFileName = URL(fileURLWithPath: scorePath).lastPathComponent
         let item = Self.stubRowPendingSave(id: scoreId, localFileName: localFileName)
@@ -375,15 +390,19 @@ public final class EditorBridge {
     /// Empty bytes mean the tap landed on paper. That deselects, deliberately: the same "a tap off any staff band
     /// clears the selection" policy iOS has had since the hit-test ladder moved into ssm, and the reason
     /// `editingHitTest` answers "nothing" rather than rescuing every near miss.
+    ///
+    /// `selectFromTap`, not `select`: a tap that lands on a note also previews it, and that rule is the core's so
+    /// that both platforms get one answer to "which taps sound" — see `EditorSessionCore.selectFromTap`. The sound
+    /// itself is the host's, taken from `takePendingAudition()` below.
     @WireletExpose
     public func selectItem(frame: EditBytesWire) {
         guard !frame.bytes.isEmpty else {
-            core?.select(nil)
+            core?.selectFromTap(nil)
             sync()
             return
         }
         guard let item = try? ScoreItemIDCodec.decode(frame.bytes) else { return }
-        core?.select(item)
+        core?.selectFromTap(item)
         sync()
     }
 
@@ -437,6 +456,48 @@ public final class EditorBridge {
         sync()
     }
 
+    // MARK: Ending the session
+
+    // PARITY(android): discard does not persist — the unwound score is not written back, because Android's edit
+    //   sessions have no writer yet (SP5). Delete this marker when SP5 lands and the flush is wired.
+
+    /// Throws this session's edits away: unwind the command stack back to where the session opened.
+    ///
+    /// **Deliberately does NOT save.** iOS follows the unwind with a flush, so the unwound score replaces the edited
+    /// one on disk; Android has no writer at all yet (`UnimplementedScoreWriter` traps on contact), so the flush
+    /// half is SP5's. Until then this is an in-memory unwind — which is still the whole of what the user sees,
+    /// because nothing they did was on disk either.
+    ///
+    /// Produces no relay frames: like undo, the unwind drives `ScoreEditSession` directly rather than through
+    /// `apply`. The host must therefore reconcile the mirror by fingerprint afterwards rather than by replaying
+    /// frames — see `EditSessionRelay.discardSessionEdits`.
+    @WireletExpose
+    public func discardSessionEdits() {
+        core?.markSessionDiscarded()
+        core?.unwindSessionEdits()
+        sync()
+    }
+
+    // PARITY(android): revert to original — needs an Android `ScoreOriginalStore` (sidecar copy + restore), the
+    //   `original*` Room columns and a migration, `RevertPolicy`'s warnings bridged across, and SP5's writer to
+    //   restore through. Delete this marker when that lands.
+
+    /// Restores the file from the copy taken when the score was imported. Answers `false` when it could not.
+    ///
+    /// **Always `false` today.** The core is constructed with no `ScoreOriginalStore` (its `originals` is nil), so
+    /// it throws `EditorRevertUnavailable` — and there is nothing for a store to be built on yet either: Android
+    /// has no sidecar copy, no `original*` columns in the Room row, and no writer to restore through. The op and
+    /// its call site exist now so the placement is settled and SP5 fills the body rather than re-deciding the UI.
+    ///
+    /// It answers rather than traps on purpose. A `preconditionFailure` here would abort the whole process from
+    /// inside a JNI image — the least readable failure available — for a state that is not a plan violation but
+    /// simply "not built yet". The forcing function is the parity marker below, which `Scripts/parity-report.py`
+    /// turns into a ledger row that the `parity-ledger` pre-commit hook will not let rot.
+    @WireletExpose
+    public func revertToOriginal() -> Bool {
+        false
+    }
+
     // MARK: The relay queue
 
     /// Takes the intent frames produced since the last call, in order. The host relays each one to the mirror with
@@ -445,6 +506,36 @@ public final class EditorBridge {
     public func takeRelayFrames() -> [EditBytesWire] {
         defer { relayFrames.removeAll() }
         return relayFrames
+    }
+
+    // MARK: The pending audition
+
+    /// Takes the note the last op decided to preview, as a `NoteID` wire — empty bytes when it decided nothing
+    /// should sound. The Android counterpart of `EditorViewModel.performPendingAudition()`.
+    ///
+    /// The core decides WHICH note sounds and after which ops (`pendingAudition` — set after note input, a pitch or
+    /// octave shift, an accidental and an add-to-chord, and after a tap that lands on a note; never after delete,
+    /// duration, tie, tuplet, undo or redo, which produce no "resulting pitch" worth sounding). Making the sound is
+    /// the host's job, because it needs an audio engine and something to schedule the note-off on, and this image
+    /// has neither — the same split iOS has, with `EditSessionRelay` standing in for `EditorViewModel`.
+    ///
+    /// Synchronous, and deliberately NOT a projection property, for the reason `revisionNow()` spells out: the
+    /// generated view model republishes projections through a posted `Dispatchers.Main` block, so a StateFlow read
+    /// on the relay's own thread would answer with the value from before the op — here that means previewing the
+    /// PREVIOUS note on every key, or nothing at all on the first.
+    @WireletExpose
+    public func takePendingAudition() -> EditBytesWire {
+        guard let noteID = core?.takePendingAudition() else { return EditBytesWire(bytes: Data()) }
+        return EditBytesWire(bytes: PathIDCodecs.encode(noteID))
+    }
+
+    /// `EditorSessionEndMode` → the discriminator `sessionEndModeKind` carries.
+    static func endModeKind(_ mode: EditorSessionEndMode) -> Int32 {
+        switch mode {
+        case .commitUnchanged: 0
+        case .revert: 1
+        case .commitEdited: 2
+        }
     }
 
     /// `NoteDuration` → `NoteDurationWire`'s discriminator. Kept here rather than reaching into ssm's wire struct so
@@ -515,6 +606,9 @@ public final class EditorBridge {
             isAddToChordArmed = false
             calloutDurationKind = 0
             calloutDots = 0
+            sessionHasEdits = false
+            canRevertToOriginal = false
+            sessionEndModeKind = 0
             activeVoice = 0
             selectedItemFrame = nil
             caretItemFrame = nil
@@ -539,6 +633,9 @@ public final class EditorBridge {
         armedTuplet = Int32(core.armedTuplet)
         calloutDurationKind = Self.durationKind(core.selectedDuration?.base)
         calloutDots = Int32(core.selectedDuration?.dots ?? 0)
+        sessionHasEdits = core.sessionHasEdits
+        canRevertToOriginal = core.hasCapturedOriginal
+        sessionEndModeKind = Self.endModeKind(core.sessionEndMode)
         activeVoice = Int32(core.activeVoice)
         selectedItemFrame = Self.frame(for: core.selectedItem)
         caretItemFrame = Self.frame(for: core.caretItem)

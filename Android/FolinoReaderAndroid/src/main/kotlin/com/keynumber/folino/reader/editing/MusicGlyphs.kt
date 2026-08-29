@@ -45,10 +45,15 @@ object MusicGlyphs {
     const val AUGMENTATION_DOT = '\uE1E7'
 
     /** The tie key's glyph — `articLaissezVibrerAbove`; SMuFL has no tie of its own, but a "let vibrate" mark IS
-     * a tie curve with nothing on its far end. Not drawn yet: the pad's tie key is second-pass (writing it needs
-     * `EditProjection.canAppendTiedNote`, which isn't projected into `EditUiState` yet). Kept here so the table
-     * is ready when that lands. */
+     * a tie curve with nothing on its far end. Drawn much larger than the note glyphs and centred on its own ink
+     * rather than on the shared baseline — see `MusicGlyphInkCentered` in `EditingPad.kt`, and iOS's identical
+     * reasoning at `PadKeyGlyph.tieSize`. */
     const val TIE = '\uE4BA' // articLaissezVibrerAbove
+
+    /** A plain black notehead, drawn twice a third apart as the add-to-chord key's mark (`ChordGlyph` in
+     * `EditingPad.kt`). It has no iOS counterpart in `PadGlyphs`: iOS surfaces no add-to-chord key at all, so
+     * this is the one entry in this table that is Android's own rather than a mirror of that one. */
+    const val NOTEHEAD_BLACK = '\uE0A4'
 }
 
 /**

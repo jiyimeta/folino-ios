@@ -17,16 +17,11 @@ import SheetMusicLayout
 extension EditorViewModel {
     /// Tap in LayoutDocument coordinates (the Reader's score-surface space). Applies the resolved item as the new
     /// selection (`nil` when nothing hit — spec §5.2: tap empty staff = deselect).
+    ///
+    /// Selection and the tap's own audition both come from `EditorSessionCore.selectFromTap` — the rule for which
+    /// taps sound is shared with Android rather than restated here.
     public func handleTap(at point: CGPoint) {
-        let item = resolvedItem(at: point)
-        select(item)
-        // Sound what was tapped, exactly as tapping the score does outside edit mode (`setManualCursor` auditions
-        // there). Hearing the note you just aimed at is half of how you know you hit the right one — and it would be
-        // odd for the same tap to speak on one screen and go silent on the other. Never over a running transport,
-        // for the same reason the seek path doesn't: a one-shot preview on top of continuous playback.
-        if case let .note(noteID)? = item, !isPlaybackActive {
-            audition(noteID)
-        }
+        selectFromTap(resolvedItem(at: point))
     }
 
     /// Selects `item` outright — used to carry a selection made outside edit mode (a tap-to-seek on the score) into

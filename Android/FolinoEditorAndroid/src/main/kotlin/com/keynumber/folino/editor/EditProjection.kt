@@ -36,6 +36,15 @@ interface EditProjection {
     val calloutDurationKind: StateFlow<Int>
     val calloutDots: StateFlow<Int>
     val activeVoice: StateFlow<Int>
+
+    /** Whether this session has moved the score away from where it opened — what discard is gated on. */
+    val sessionHasEdits: StateFlow<Boolean>
+
+    /** Whether the row records an original to go back to. Always false on Android today — see `revertToOriginal`. */
+    val canRevertToOriginal: StateFlow<Boolean>
+
+    /** `EditorSessionEndMode`'s discriminator: 0 = commitUnchanged, 1 = revert, 2 = commitEdited. */
+    val sessionEndModeKind: StateFlow<Int>
     val selectedItemFrame: StateFlow<EditBytesWire?>
     val caretItemFrame: StateFlow<EditBytesWire?>
 }

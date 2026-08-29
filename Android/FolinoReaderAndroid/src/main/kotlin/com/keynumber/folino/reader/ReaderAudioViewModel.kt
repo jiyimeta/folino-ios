@@ -14,6 +14,7 @@ import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
 import io.github.jiyimeta.sheetmusic.audio.model.ClefAnchor
 import io.github.jiyimeta.sheetmusic.audio.model.LoopRange
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
+import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import io.github.jiyimeta.sheetmusic.audio.model.RehearsalMarkEntry
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
@@ -482,7 +483,21 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         if (state.value == PlaybackState.PLAYING) return
         val item = (cursor as? ScoreCursor.Item)?.arg0 ?: return
         val noteId = (item as? ScoreItemID.Note)?.arg0 ?: return
-        e.playPreview(noteId, durationMillis = 500L)
+        playNotePreview(noteId)
+    }
+
+    /**
+     * Sounds one note for [PREVIEW_MILLIS], and nothing else — no seek, no cursor move.
+     *
+     * Shared by tap-to-seek above and the note editor's audition seam (`NoteAuditioning`, wired in from the
+     * composition root), which is the whole reason it is its own method: the editor's preview has to be the same
+     * sound and the same length as the reader's, and iOS gets that by both sides calling one `playPreview`.
+     *
+     * [noteId] resolves against the score behind the engine's handle, so an editing caller must have carried its
+     * edit into that score already — see `EditSessionRelay.sound`.
+     */
+    fun playNotePreview(noteId: NoteID) {
+        engine.value?.playPreview(noteId, durationMillis = PREVIEW_MILLIS)
     }
 
     fun preparePlayback(scoreHandle: Long) {
@@ -688,6 +703,12 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
 
         /** Quarter-note beats the lookahead page anchor leads the live cursor. Mirrors iOS `PAGE_LOOKAHEAD_BEATS`. */
         const val PAGE_LOOKAHEAD_BEATS = 1.0
+
+        /**
+         * How long a one-shot note preview sounds. Matches the 0.5 s iOS passes on both of its preview paths
+         * (`ReaderPlaybackSession.setManualCursor` and `EditorViewModel.performPendingAudition`).
+         */
+        const val PREVIEW_MILLIS = 500L
     }
 
     override fun onCleared() {

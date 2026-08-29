@@ -3,6 +3,8 @@ package com.keynumber.folino.editor
 import android.util.Log
 import com.keynumber.folino.editor.generated.EditorBridgeViewModel
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
+import io.github.jiyimeta.sheetmusic.audio.model.NoteID
+import io.github.jiyimeta.sheetmusic.audio.serialization.NoteIDCodec
 
 /**
  * The ssm entry points the relay uses, behind an interface so the JVM tests can drive the policy without a device.
@@ -45,6 +47,12 @@ interface EditBridging {
     fun scoreFingerprint(): Long
     fun encodeScore(): ByteArray
     fun takeRelayFrames(): List<ByteArray>
+
+    /**
+     * The note the last op asked to have previewed, as a `NoteID` wire — empty when it asked for none. Synchronous
+     * for the same reason [revision] and [appliedIntentCount] are; see `EditorBridge.takePendingAudition`.
+     */
+    fun takePendingAudition(): ByteArray
     fun revision(): Int
     fun appliedIntentCount(): Int
 
@@ -71,6 +79,8 @@ interface EditBridging {
     fun selectNextElement()
     fun setActiveVoice(voice: Int)
     fun setPlaybackActive(active: Boolean)
+    fun discardSessionEdits()
+    fun revertToOriginal(): Boolean
     fun undo()
     fun redo()
 }
@@ -109,6 +119,7 @@ class GeneratedEditBridging(private val vm: EditorBridgeViewModel) : EditBridgin
     override fun scoreFingerprint() = vm.scoreFingerprint()
     override fun encodeScore(): ByteArray = vm.encodeScore().bytes
     override fun takeRelayFrames(): List<ByteArray> = vm.takeRelayFrames().map { it.bytes }
+    override fun takePendingAudition(): ByteArray = vm.takePendingAudition().bytes
     override fun revision() = vm.revisionNow()
     override fun appliedIntentCount() = vm.appliedIntentCountNow()
 
@@ -135,6 +146,8 @@ class GeneratedEditBridging(private val vm: EditorBridgeViewModel) : EditBridgin
     override fun selectNextElement() = vm.selectNextElement()
     override fun setActiveVoice(voice: Int) = vm.setVoice(voice)
     override fun setPlaybackActive(active: Boolean) = vm.setPlaybackActive(active)
+    override fun discardSessionEdits() = vm.discardSessionEdits()
+    override fun revertToOriginal() = vm.revertToOriginal()
     override fun undo() = vm.undo()
     override fun redo() = vm.redo()
 
@@ -159,6 +172,9 @@ class GeneratedEditBridging(private val vm: EditorBridgeViewModel) : EditBridgin
     override val calloutDurationKind get() = vm.calloutDurationKind
     override val calloutDots get() = vm.calloutDots
     override val activeVoice get() = vm.activeVoice
+    override val sessionHasEdits get() = vm.sessionHasEdits
+    override val canRevertToOriginal get() = vm.canRevertToOriginal
+    override val sessionEndModeKind get() = vm.sessionEndModeKind
     override val selectedItemFrame get() = vm.selectedItemFrame
     override val caretItemFrame get() = vm.caretItemFrame
 }
@@ -173,6 +189,18 @@ class GeneratedEditBridging(private val vm: EditorBridgeViewModel) : EditBridgin
  * is unavailable because the two engines disagree and could not be reconciled" from every other refusal.
  */
 enum class OpenResult { OPENED, VERSION_SKEW, NO_HANDLE, SCORE_UNREADABLE, MIRROR_REFUSED, RESYNC_FAILED }
+
+/**
+ * Sounds the one-shot pitch preview the shared core asked for. Android's counterpart of iOS's `NoteAuditioning`.
+ *
+ * A seam rather than a direct call for the same reason iOS has one: the DECISION — which note, and after which ops
+ * — belongs to `EditorSessionCore` and is already made by the time this is called; all that is left is an audio
+ * engine, which `:FolinoEditorAndroid` neither owns nor should reach for. The composition root wires this to
+ * `ReaderAudioViewModel.playNotePreview`, and a relay built without one simply stays silent.
+ */
+fun interface NoteAuditioning {
+    fun playPreview(noteId: NoteID)
+}
 
 /**
  * The relay's own surface, behind an interface for the same reason `EditBridging` and `EditNatives` are:
@@ -211,6 +239,8 @@ interface EditSessionOps {
     fun selectNextElement()
     fun setActiveVoice(voice: Int)
     fun setPlaybackActive(active: Boolean)
+    fun discardSessionEdits()
+    fun revertToOriginal(): Boolean
     fun undo()
     fun redo()
 }
@@ -221,7 +251,8 @@ interface EditSessionOps {
  * Editing on Android has an authoritative score in Folino's `.so` and a rendering score behind ssm's handle
  * (spec §4). Keeping them identical is four steps that must always happen together and in order — apply locally,
  * relay every intent that landed, check the two agree, redraw — so they are one private method rather than four a
- * caller could get half right, and every editing op is a named entry point that runs it.
+ * caller could get half right, and every editing op is a named entry point that runs it. A fifth step rides along
+ * at the end: sounding the preview the shared core asked for, which has to come last because it reads the mirror.
  *
  * **The relay owns the bridge.** `bridge` is private, and SP4 gets the ops through this class. A caller holding the
  * view model could apply an intent locally without relaying it: the frames would sit in the queue until the next
@@ -250,6 +281,7 @@ class EditSessionRelay(
     private val bridge: EditBridging,
     private val host: EditSessionHost,
     private val natives: EditNatives = RealEditNatives,
+    private val audition: NoteAuditioning = NoteAuditioning {},
 ) : EditSessionOps {
     /** Resyncs performed this session. Read by the tests, and by SP4's diagnostics. */
     var resyncCount: Int = 0
@@ -343,6 +375,36 @@ class EditSessionRelay(
     override fun setPlaybackActive(active: Boolean) = relay { bridge.setPlaybackActive(active) }
 
     /**
+     * Throws this session's edits away.
+     *
+     * Not a `relay { }` op: the unwind drives `ScoreEditSession` directly rather than through `apply`, so — like
+     * undo — it emits no intent frames, and unlike undo there is no single native call that reproduces it on the
+     * mirror (it is N undos, and sometimes a rebuild from the opening score). So the two copies are reconciled the
+     * one way that always works regardless of how far apart they drifted: compare fingerprints and resync.
+     *
+     * That makes a discard the most expensive op here, which is the right trade — it happens once, deliberately,
+     * and correctness after it matters more than its cost.
+     */
+    override fun discardSessionEdits() {
+        if (!isOpen) return
+        bridge.discardSessionEdits()
+        // Whatever the unwind left behind must not ride along into the mirror as if it were a fresh edit.
+        bridge.takeRelayFrames()
+        bridge.takePendingAudition()
+        verifyOrResync()
+        host.requestRelayout()
+    }
+
+    /**
+     * Restores the file from the copy taken at import. Always `false` today — see `EditorBridge.revertToOriginal`,
+     * which is where the parity marker for the missing Android half lives.
+     */
+    override fun revertToOriginal(): Boolean {
+        if (!isOpen) return false
+        return bridge.revertToOriginal()
+    }
+
+    /**
      * Undo and redo drive the mirror's OWN stacks rather than replaying an inverse: it was fed identical intents, so
      * it has an identical stack. They are also always fingerprint-checked, because they are the two operations whose
      * effect on the mirror is inferred rather than transmitted.
@@ -362,6 +424,16 @@ class EditSessionRelay(
     private fun relay(op: () -> Unit) {
         if (!isOpen) return
         op()
+        // Drained here, before the frames, because `takePendingAudition` empties the core: [carryToMirror] returns
+        // early on an op that applied nothing — a tap, above all — and a request left behind would be picked up by
+        // whichever op ran next and sound the wrong note.
+        val auditionFrame = bridge.takePendingAudition()
+        carryToMirror()
+        sound(auditionFrame)
+    }
+
+    /** Relays whatever the op applied. Split out of [relay] only so its early returns stay early returns. */
+    private fun carryToMirror() {
         val frames = bridge.takeRelayFrames()
         if (frames.isEmpty()) return
         val handle = host.scoreHandle()
@@ -378,6 +450,29 @@ class EditSessionRelay(
             verifyOrResync()
         }
         host.requestRelayout()
+    }
+
+    /**
+     * Sounds a drained audition request — **after** the op's intents have reached the mirror, never before.
+     *
+     * The engine resolves a `NoteID` to a pitch against the score behind the handle (`pitchAndStaffOfNote`), which
+     * is the MIRROR, not the authoritative copy this bridge edits. A note that was just written does not exist
+     * there until `applyEditIntent` has carried it across, so previewing first would silently find nothing and
+     * return — which is a preview that works for retuning an existing note and not for writing a new one, the
+     * hardest kind of gap to notice.
+     *
+     * A session that a failed resync has just closed sounds nothing: its handle has been swapped and the mirror is
+     * no longer known to match.
+     */
+    private fun sound(auditionFrame: ByteArray) {
+        if (!isOpen || auditionFrame.isEmpty()) return
+        val noteId = try {
+            NoteIDCodec.decode(auditionFrame)
+        } catch (e: Exception) {
+            Log.w(TAG, "could not decode the pending audition; skipping the preview", e)
+            return
+        }
+        audition.playPreview(noteId)
     }
 
     private fun replay(mirror: (Long) -> Boolean, local: () -> Unit) {

@@ -175,9 +175,10 @@ extension EditorViewModel {
         syncFromCore()
     }
 
-    /// Internal, for `EditorViewModel+HitTest.swift`'s tap audition.
-    func audition(_ noteID: NoteID) {
-        core.audition(noteID)
+    /// Internal, for `EditorViewModel+HitTest.swift`. Selects and auditions in ONE core call, so the preview the
+    /// core queues is drained by the same `syncFromCore()` that publishes the selection.
+    func selectFromTap(_ item: SheetMusicCore.ScoreItemID?) {
+        core.selectFromTap(item)
         syncFromCore()
     }
 }

@@ -96,11 +96,11 @@ import com.keynumber.folino.editor.caretRectMm
 import com.keynumber.folino.editor.editingHitTestForTap
 import com.keynumber.folino.reader.editing.EDIT_CALLOUT_MINIMUM_WIDTH_MM
 import com.keynumber.folino.reader.editing.EDIT_CARET_MINIMUM_WIDTH_MM
-import com.keynumber.folino.reader.editing.EditingBottomBar
 import com.keynumber.folino.reader.editing.EditingCallout
 import com.keynumber.folino.reader.editing.EditingCaretOverlay
 import com.keynumber.folino.reader.editing.EditingLayoutModeDialog
 import com.keynumber.folino.reader.editing.EditingPad
+import com.keynumber.folino.reader.editing.DiscardEditsDialog
 import com.keynumber.folino.reader.editing.EditingTopBarActions
 import com.keynumber.folino.reader.editing.EditingUnavailableDialog
 import com.keynumber.folino.reader.editing.editingUnavailableReasonFor
@@ -358,6 +358,10 @@ fun ReaderScreen(
      * (via `BackHandler` below) all funnel through this one callback. Flushes nothing on its own; a pending
      * save is a later task's concern (spec §8.4). */
     onEndEditing: () -> Unit = {},
+    /** Throws this session's edits away, back to the score it opened on. */
+    onDiscardSessionEdits: () -> Unit = {},
+    /** Restores the file from the copy taken at import. A no-op on Android today — see the parity ledger. */
+    onRevertToOriginal: () -> Unit = {},
     onUndo: () -> Unit = {},
     onRedo: () -> Unit = {},
     /**
@@ -371,11 +375,14 @@ fun ReaderScreen(
      * see the `LaunchedEffect` below. No-op by default, like every other editing callback.
      */
     onPlaybackActiveChange: (Boolean) -> Unit = {},
-    /** Sets the voice (zero-indexed, 0..3) that new input writes into. */
+    /** Sets the voice (zero-indexed, 0..3) that new input writes into. Reached from the app bar's voice picker
+     * ([com.keynumber.folino.reader.editing.EditingTopBarActions]). */
     onSetVoice: (Int) -> Unit = {},
     /** Shows or hides the note pad; the controller owns whether it's currently visible
-     * ([EditUiState.isPadVisible]), this callback only toggles it. */
+     * ([EditUiState.isPadVisible]), this callback only toggles it. Also an app-bar action. */
     onTogglePad: () -> Unit = {},
+    /** Steps the selection to the previous / next element. On the PAD, not in a bar of its own — see
+     * [com.keynumber.folino.reader.editing.EditingPad]'s class doc. */
     onSelectPreviousElement: () -> Unit = {},
     onSelectNextElement: () -> Unit = {},
     /**
@@ -393,6 +400,17 @@ fun ReaderScreen(
     onToggleArmedDot: () -> Unit = {},
     onInputPitch: (String) -> Unit = {},
     onWriteRest: () -> Unit = {},
+    /** The pad's tie key: ties the selection to an existing same-pitch neighbour (or unties it), and appends a
+     * tied note of the armed length when there is only a rest to write into — see `EditingPad.TieKey` for why
+     * one key carries both, where iOS splits them across the pad and the callout. */
+    onToggleTie: () -> Unit = {},
+    onAppendTiedNote: () -> Unit = {},
+    /** The pad's tuplet key: writes a tuplet of the given size at the caret, or removes the one it sits in. */
+    onCreateTuplet: (Int) -> Unit = {},
+    onRemoveTuplet: () -> Unit = {},
+    /** The pad's add-to-chord key: arms the next pitch key to ADD to the selected chord instead of replacing
+     * the selection. The shared core clears the arm itself once that note lands. */
+    onToggleAddToChord: () -> Unit = {},
     /** The selection callout's keys, forwarded to [ReadyScore] — see its own matching parameters. */
     onSetSelectionDuration: (Int) -> Unit = {},
     onSetSelectionDots: (Int) -> Unit = {},
@@ -837,7 +855,11 @@ fun ReaderScreen(
     // System back ends an edit session instead of leaving the Reader — the same rule the app-bar's own
     // back arrow follows (ReaderTopBar, below). Disabled while not editing so ordinary back-navigation is
     // untouched.
-    BackHandler(enabled = editing.isEditing) { onEndEditing() }
+    // Back with edits to lose asks; back without them ends the session, exactly as the bar's arrow does.
+    var isConfirmingDiscard by remember { mutableStateOf(false) }
+    BackHandler(enabled = editing.isEditing) {
+        if (editing.sessionHasEdits) isConfirmingDiscard = true else onEndEditing()
+    }
 
     // `EditUiState.availability` only turns into a failure value as the RESULT of an `onStartEditing()`
     // attempt (`EditSessionController.begin`): it starts at `AVAILABLE` and stays there until a real
@@ -942,46 +964,62 @@ fun ReaderScreen(
                 },
                 onUndo = onUndo,
                 onRedo = onRedo,
+                onSetVoice = onSetVoice,
+                onTogglePad = onTogglePad,
                 onEndEditing = onEndEditing,
+                canRevertToOriginal = editing.canRevertToOriginal,
+                onRevertToOriginal = onRevertToOriginal,
+                onRequestDiscard = { isConfirmingDiscard = true },
             )
         },
         bottomBar = {
             if (editing.isEditing) {
                 Column {
-                    // Above the fixed row that discloses it, not below: the toggle, the voice selector and the
-                    // steppers keep their place on screen as the pad opens and closes, so the control the user just
-                    // pressed does not move out from under the finger that pressed it.
+                    // The pad is the WHOLE editing bottom bar now. It used to sit above a fixed row carrying the
+                    // voice selector, the pad toggle and the ← / → steppers; that row is gone (the first two are
+                    // app-bar actions — see `EditingTopBarActions` — and the steppers are on the pad itself), so
+                    // nothing is left below the pad but the transport, and the score keeps the band the row used
+                    // to hold for the whole session.
                     if (editing.isPadVisible) {
                         EditingPad(
                             armedDurationKind = editing.armedDurationKind,
                             armedDots = editing.armedDots,
                             canWriteRest = editing.canWriteRest,
+                            canTie = editing.canTie,
+                            isSelectionTied = editing.isSelectionTied,
+                            canAppendTiedNote = editing.canAppendTiedNote,
+                            isCaretInTuplet = editing.isCaretInTuplet,
+                            armedTuplet = editing.armedTuplet,
+                            isAddToChordArmed = editing.isAddToChordArmed,
                             hasEditTarget = editing.hasEditTarget,
                             // Presentation, not policy: the keys go grey while the transport runs, exactly as iOS
                             // greys them (`EditorPadView`'s `.disabled(viewModel.isPlaybackActive || …)`). It is
                             // not redundant with the core dropping the selection — a tap mid-playback selects
                             // again, and this is what keeps the keys inert afterwards. The one value the whole
-                            // screen derives, so the steppers and the callout below say the same thing once.
+                            // screen derives, so the pad's steppers and the callout below say the same thing once
+                            // — including the gating the removed bottom bar spelled as `steppersEnabled`.
                             isPlaybackActive = isPlaying,
                             onArmDuration = onArmDuration,
                             onSetArmedDots = onSetArmedDots,
                             onToggleArmedDot = onToggleArmedDot,
                             onInputPitch = onInputPitch,
                             onWriteRest = onWriteRest,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            onToggleTie = onToggleTie,
+                            onAppendTiedNote = onAppendTiedNote,
+                            onCreateTuplet = onCreateTuplet,
+                            onRemoveTuplet = onRemoveTuplet,
+                            onToggleAddToChord = onToggleAddToChord,
+                            onSelectPreviousElement = onSelectPreviousElement,
+                            onSelectNextElement = onSelectNextElement,
+                            modifier = Modifier
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                // With the bar deleted the pad can be the bottom-most thing on screen, and the
+                                // gesture / navigation bar would otherwise sit on top of its lowest row of keys.
+                                // Only when the seek bar is hidden: `TransportBar` applies the same padding
+                                // itself, and two of them would double the inset.
+                                .then(if (showSeekBar) Modifier else Modifier.navigationBarsPadding()),
                         )
                     }
-                    EditingBottomBar(
-                        activeVoice = editing.activeVoice,
-                        isPadVisible = editing.isPadVisible,
-                        onSetVoice = onSetVoice,
-                        onTogglePad = onTogglePad,
-                        onSelectPreviousElement = onSelectPreviousElement,
-                        onSelectNextElement = onSelectNextElement,
-                        // Stepping the selection would fight a moving playback cursor for the same caret
-                        // — mirrors iOS's `navigationPill.disabled(viewModel.isPlaybackActive)`.
-                        steppersEnabled = !isPlaying,
-                    )
                     if (showSeekBar) {
                         TransportBar(
                             audioVm = audioVm,
@@ -1161,6 +1199,16 @@ fun ReaderScreen(
             },
         )
     }
+    if (isConfirmingDiscard) {
+        DiscardEditsDialog(
+            onDiscard = {
+                isConfirmingDiscard = false
+                onDiscardSessionEdits()
+                onEndEditing()
+            },
+            onKeepEditing = { isConfirmingDiscard = false },
+        )
+    }
     editingUnavailableReason?.let { reason ->
         EditingUnavailableDialog(reason = reason, onDismiss = { editingUnavailableReason = null })
     }
@@ -1268,7 +1316,8 @@ fun ReaderTopBar(
     /** Re-presents the PDF-playback caveat; invoked by the "PDF" label. */
     onShowPdfNotice: () -> Unit = {},
     /** The note-editing session's live state. While [EditUiState.isEditing] is true, this bar's `actions`
-     * are REPLACED by [EditingTopBarActions] (undo / redo / done) rather than joined to the reading set —
+     * are REPLACED by [EditingTopBarActions] (undo / redo / voice / pad / done) rather than joined to the
+     * reading set —
      * the same full swap [annotationMode] does NOT do (annotate only adds a toggle to the existing row);
      * see [EditingTopBarActions]'s own doc for why editing gets the stronger treatment. The back arrow
      * swaps behavior too: it ends the session instead of navigating away, matching the ✓ and the
@@ -1290,8 +1339,17 @@ fun ReaderTopBar(
     onStartEditing: () -> Unit = {},
     onUndo: () -> Unit = {},
     onRedo: () -> Unit = {},
+    /** The editing actions' voice picker and note-pad toggle — both session controls, both app-bar actions
+     * while a session is open; see [EditingTopBarActions] for why they are here and not in a row of their own. */
+    onSetVoice: (Int) -> Unit = {},
+    onTogglePad: () -> Unit = {},
     /** Ends the edit session — the back arrow while editing and the ✓ action both call this. */
     onEndEditing: () -> Unit = {},
+    /** Whether an original is recorded to go back to; gates the overflow's revert item. */
+    canRevertToOriginal: Boolean = false,
+    onRevertToOriginal: () -> Unit = {},
+    /** Called instead of [onEndEditing] when the back arrow is pressed with edits to lose. */
+    onRequestDiscard: () -> Unit = {},
 ) {
     TopAppBar(
         modifier = modifier,
@@ -1302,21 +1360,37 @@ fun ReaderTopBar(
         // presentation. Placed here rather than in `actions` so it reads as a property of THIS document
         // rather than as another command, and so it never competes with the action icons for width.
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    title.ifEmpty { "folino" },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (isPdf) {
-                    Spacer(Modifier.width(8.dp))
-                    ReaderPdfLabel(onClick = onShowPdfNotice)
+            // No title while editing. The bar is a contextual one then — six controls on a 360 dp phone — and a
+            // document title is the first thing a contextual bar gives up (Material replaces it with the mode;
+            // iOS's `EditorTopBarView` drops it outright). You already know which score you are editing: you
+            // opened it. Without this the title ellipsizes to two or three characters and earns none of the width.
+            if (!editing.isEditing) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        title.ifEmpty { "folino" },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (isPdf) {
+                        Spacer(Modifier.width(8.dp))
+                        ReaderPdfLabel(onClick = onShowPdfNotice)
+                    }
                 }
             }
         },
         navigationIcon = {
-            IconButton(onClick = { if (editing.isEditing) onEndEditing() else onBack() }) {
+            // Leaving with edits asks first; leaving without them is just leaving. Back NEVER discards silently —
+            // see `DiscardEditsDialog` for why that rule is what keeps the two platforms teachable to each other.
+            IconButton(
+                onClick = {
+                    when {
+                        editing.isEditing && editing.sessionHasEdits -> onRequestDiscard()
+                        editing.isEditing -> onEndEditing()
+                        else -> onBack()
+                    }
+                },
+            ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
         },
@@ -1325,9 +1399,15 @@ fun ReaderTopBar(
                 EditingTopBarActions(
                     canUndo = editing.canUndo,
                     canRedo = editing.canRedo,
+                    activeVoice = editing.activeVoice,
+                    isPadVisible = editing.isPadVisible,
                     onUndo = onUndo,
                     onRedo = onRedo,
+                    onSetVoice = onSetVoice,
+                    onTogglePad = onTogglePad,
                     onEndEditing = onEndEditing,
+                    canRevertToOriginal = editing.canRevertToOriginal,
+                    onRevertToOriginal = onRevertToOriginal,
                 )
             } else {
                 IconButton(onClick = onShare) {

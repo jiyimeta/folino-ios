@@ -50,7 +50,7 @@ public final class EditorSessionCore {
     /// Bumped by every `place(selection:caret:)`, whether or not the values changed. The host needs the
     /// unconditional signal: the shipped `onSelectionChanged` fires on every placement, and a mirror that only
     /// noticed *differences* would quietly drop the repeats.
-    public private(set) var selectionRevision = 0
+    public internal(set) var selectionRevision = 0
 
     // MARK: - Selection and caret
 
@@ -58,8 +58,8 @@ public final class EditorSessionCore {
     // NEXT note lands; the selection is the note the editing keys act on. Writing a run of notes moves the caret on
     // after each one while the selection stays on the note just written — so ♯ / ♭ / ⌫ keep addressing what you just
     // played rather than the empty slot ahead of it.
-    public private(set) var selectedItem: SheetMusicCore.ScoreItemID?
-    public private(set) var caretItem: SheetMusicCore.ScoreItemID?
+    public internal(set) var selectedItem: SheetMusicCore.ScoreItemID?
+    public internal(set) var caretItem: SheetMusicCore.ScoreItemID?
 
     /// Whether the pad has anything at all to act on. With neither a caret nor a selection there is no slot to write
     /// into and no item to edit, so every key is inert (there is nothing for one to mean).
@@ -71,7 +71,11 @@ public final class EditorSessionCore {
     /// empty selection, which is what gates those three keys: with the caret running ahead of the selection, "there
     /// is a caret" no longer implies "there is a note to sharpen".
     public var isNoteSelected: Bool {
-        if case .note = selectedItem { true } else { false }
+        if case .note = selectedItem {
+            true
+        } else {
+            false
+        }
     }
 
     /// Whether the floating callout has anything to stand beside. The card is pinned to one timed slot and edits
@@ -154,7 +158,7 @@ public final class EditorSessionCore {
 
     /// The note the last op decided should be previewed, or `nil` when it decided nothing should. The host takes it,
     /// clears it, and sounds it through `NoteAuditioning` — the decision is the core's, the audio session is not.
-    public private(set) var pendingAudition: NoteID?
+    public internal(set) var pendingAudition: NoteID?
 
     /// Whether the score has changed since the last successful save. The host debounces on this; `performSave()` is
     /// a no-op while it is false, so a stray flush after a save costs nothing.
@@ -335,115 +339,11 @@ public final class EditorSessionCore {
         revision += 1
         appliedIntentCount += 1
         sessionEditDepth += 1
-        if recordsRelayIntents { relayIntents.append(intent) }
+        if recordsRelayIntents {
+            relayIntents.append(intent)
+        }
         rederiveSelection()
         isDirty = true
         return intent
-    }
-
-    // MARK: - Selection re-derivation
-
-    /// Re-derives the selection and the caret from the engine's post-mutation `lastAffectedLocation`. Engine IDs are
-    /// positional, so a stored selection can drift after any mutation — after every apply/undo/redo both are
-    /// recomputed against the current score. When no slot was touched (`lastAffectedLocation == nil`) they are
-    /// preserved rather than cleared.
-    ///
-    /// Which of the two followed the intent depends on which one it was aimed at. The keys are split between them
-    /// (duration / tuplet write at the caret, ⌫ / ♯ / ♭ / tie edit the selection), so re-deriving both from the
-    /// affected slot would collapse the lead the caret holds during a run of input: a duration key would drag the
-    /// selection off the note just written, and ♯ would drag the caret back onto it, making the next letter overwrite
-    /// what was just sharpened. Whichever one wasn't aimed at keeps its own slot; when the two already share a slot —
-    /// the ordinary case, and every case before the first note of a run — both follow.
-    func rederiveSelection() {
-        guard let session, let location = session.lastAffectedLocation else { return }
-        let score = session.score
-        let affected = SelectionRederivation.item(
-            at: location, in: score, preferringNoteIndex: previousNoteIndex(at: location),
-        )
-        let selectionSlot = Self.slot(of: selectedItem)
-        let caretSlot = Self.slot(of: caretItem)
-        if caretSlot == location, selectionSlot != location {
-            place(selection: rederived(selectionSlot, in: score) ?? affected, caret: affected)
-        } else if selectionSlot == location, caretSlot != location {
-            place(selection: affected, caret: rederived(caretSlot, in: score) ?? affected)
-        } else {
-            select(affected)
-        }
-    }
-
-    /// Re-resolves a slot the intent did NOT target against the mutated score. `nil` when the slot was spliced away
-    /// (the caller then falls back to the affected location, so neither marker is left dangling).
-    private func rederived(_ slot: VoiceElementID?, in score: Score) -> SheetMusicCore.ScoreItemID? {
-        guard let slot else { return nil }
-        return SelectionRederivation.item(at: slot, in: score, preferringNoteIndex: nil)
-    }
-
-    /// The voice slot an item occupies. Tuplet brackets (and clefs, which never reach the selection) don't name a
-    /// single slot, so they resolve to `nil`.
-    public static func slot(of item: SheetMusicCore.ScoreItemID?) -> VoiceElementID? {
-        switch item {
-        case let .note(id): VoiceElementID(id)
-        case let .rest(id): VoiceElementID(id)
-        case .tuplet, .clef, .none: nil
-        }
-    }
-
-    /// The `noteIndexInChord` of the current selection when it is a `.note` anchored at exactly `location`, so
-    /// re-derivation can keep the caret on the same chord tone across edits that add or remove siblings.
-    private func previousNoteIndex(at location: VoiceElementID) -> Int? {
-        guard case let .note(noteID)? = selectedItem,
-              noteID.staff == location.staff,
-              noteID.measureIndex == location.measureIndex,
-              noteID.voiceIndex == location.voiceIndex,
-              noteID.elementIndex == location.elementIndex
-        else { return nil }
-        return noteID.noteIndexInChord
-    }
-
-    /// Picks `item` explicitly — caret and selection land together. Every path that names a target directly (tap,
-    /// ← / →, post-intent re-derivation) goes through here; only note input deliberately splits the two, via
-    /// `place(selection:caret:)`.
-    public func select(_ item: SheetMusicCore.ScoreItemID?) {
-        place(selection: item, caret: item)
-    }
-
-    /// Sets selection and caret independently. The only caller that passes different values is note input, which
-    /// leaves the selection on the note it just wrote and moves the caret to the next slot.
-    func place(selection item: SheetMusicCore.ScoreItemID?, caret: SheetMusicCore.ScoreItemID?) {
-        selectedItem = item
-        caretItem = caret
-        armFromSelectionIfNeeded()
-        selectionRevision += 1
-    }
-
-    /// Arms the length keys from whatever was just picked, but ONLY while nothing is armed yet — which in practice
-    /// means the first note or rest touched in a session. A pad that opens with no length lit has no answer to "what
-    /// will the next note be", and making the first pick supply it beats making the user state it twice; after that
-    /// the armed length is the user's own choice and selecting other notes must not quietly overwrite it.
-    private func armFromSelectionIfNeeded() {
-        guard armedDuration == nil, let score, let slot = Self.slot(of: selectedItem),
-              case let .chord(chord)? = score[slot]
-        else { return }
-        // `.fraction` durations carry their dots (and any tuplet scaling) baked in; split them back into the base
-        // value a key can light plus the dot count the dot key can light.
-        let split = DurationInterpretation.split(chord.duration)
-        armedDuration = split.base
-        armedDots = split.dots
-    }
-
-    // MARK: - Auditioning (the decision, not the sound)
-
-    /// Marks `noteID` as the note to preview. `EditorViewModel` sounds it; on Android the bridge does.
-    public func audition(_ noteID: NoteID) {
-        guard session != nil else { return }
-        pendingAudition = noteID
-    }
-
-    /// Call-site helper for the pitch-changing ops: previews the current `.note` selection, but only when the last
-    /// `apply` actually mutated the score (`revision` advanced past `previousRevision`). A refused edit — an
-    /// out-of-range shift, say — leaves nothing to sound.
-    func auditionSelectedNote(unlessStillAt previousRevision: Int) {
-        guard revision != previousRevision, case let .note(noteID)? = selectedItem else { return }
-        audition(noteID)
     }
 }

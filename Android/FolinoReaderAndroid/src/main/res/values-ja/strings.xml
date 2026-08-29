@@ -93,4 +93,17 @@
     <string name="reader_editing_callout_rest_length">休符の長さ</string>
     <string name="reader_editing_pitch_up">音を上げる</string>
     <string name="reader_editing_pitch_down">音を下げる</string>
+    <string name="reader_editing_voice_label">声部</string>
+    <string name="reader_editing_tuplet">連符</string>
+    <string name="reader_editing_tuplet_count">%1$d連符</string>
+    <string name="reader_editing_tie">タイ</string>
+    <string name="reader_editing_add_to_chord">和音に音を追加</string>
+    <string name="reader_editing_previous_element">前の音符</string>
+    <string name="reader_editing_next_element">次の音符</string>
+    <string name="reader_editing_discard_title">編集を破棄しますか？</string>
+    <string name="reader_editing_discard_body">この編集で入力した音符が取り消されます。元に戻すことはできません。</string>
+    <string name="reader_editing_discard_confirm">破棄</string>
+    <string name="reader_editing_discard_keep">編集を続ける</string>
+    <string name="reader_editing_more">その他</string>
+    <string name="reader_editing_revert">元の楽譜に戻す</string>
 </resources>
