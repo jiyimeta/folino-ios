@@ -22,7 +22,9 @@ final class ReaderViewModel {
         case failed(error: Error)
 
         var score: Score? {
-            if case let .loaded(score) = self { return score }
+            if case let .loaded(score) = self {
+                return score
+            }
             return nil
         }
     }
@@ -80,6 +82,23 @@ final class ReaderViewModel {
     /// Handle to the latest `drawingsDidChange` hop onto the coordinator, awaited by `flushPendingAnnotationSave`.
     @ObservationIgnored var annotationChangeTask: Task<Void, Never>?
 
+    /// Raised when a part-remap re-seed could not read the annotation layer back, and lowered by the next read that
+    /// can. While it stands the ink writer refuses every capture: the model is holding pre-migration anchors that the
+    /// stored layer no longer agrees with, and the mapping has been consumed, so a write would make that permanent.
+    ///
+    /// Deliberately NOT the shared `isPartMigrationPending` hold — that one also gates the preferences writer, and
+    /// leaving it raised to cover this would strand that writer for the rest of the session.
+    @ObservationIgnored var isInkReseedPending = false
+
+    /// Bumped whenever `annotationDrawings` is replaced WHOLESALE from the store rather than by the user's own ink —
+    /// today, the part-index re-seed. The score containers reproject the canvas on it.
+    ///
+    /// A ticket rather than observing `annotationDrawings` directly, which the containers deliberately do not: while
+    /// the user draws, the canvas is the source of truth, and re-seeding it with the round-tripped projection would
+    /// wipe the just-committed stroke (see the comment on `VerticalScoreContainer`'s `.onChange(of: document)`). This
+    /// fires only on the one path where the model really has moved under the canvas and the canvas is wrong.
+    var annotationReseedTicket = 0
+
     /// The display-ready score: the loaded score with clef overrides applied, transposed, and hidden staves filtered.
     /// Cached and recomputed only when its inputs change (load, clef overrides, transpose, hidden staves) via
     /// `recomputeVisibleScore()`, so the transform chain no longer rebuilds on every Reader body evaluation. Settable
@@ -110,9 +129,41 @@ final class ReaderViewModel {
 
     /// Forwards to the preferences store for the extensions that live in other files (`preferencesStore` itself stays
     /// private so the sub-models keep going through their own wiring).
-    func mutatePreferences(_ apply: (inout ReaderPreferences) -> Void) async {
+    func mutatePreferences(_ apply: @escaping (inout ReaderPreferences) -> Void) async {
         await preferencesStore.mutate(apply)
     }
+
+    /// Same forwarding as `mutatePreferences`, for the part-remap reload in `ReaderViewModel+PartRemap.swift`: joins
+    /// every preference write started elsewhere, so re-reading the row can't race one that is still in the air.
+    func flushPendingPreferenceWrites() async {
+        await preferencesStore.flushPendingWrites()
+    }
+
+    /// Lets the writes the store held while a part-index migration was in flight go through, against the row as it
+    /// stands after the reload. See `ReaderPreferencesStore.applyDeferredMutations`.
+    func applyDeferredPreferenceWrites() async {
+        await preferencesStore.applyDeferredMutations()
+    }
+
+    /// Drops them instead, for the reload path that has no migrated row to re-run them against.
+    func discardDeferredPreferenceWrites() {
+        preferencesStore.discardDeferredMutations()
+    }
+
+    /// Wires the hold to whatever the caller knows about the Editor's unsettled part edits. Called by the editing-seam
+    /// wiring, once; a Reader with no editing host never holds.
+    ///
+    /// It governs BOTH of this process's part-indexed writers — the preferences row and the annotation layer. They
+    /// hold for the same reason and for exactly the same window, and one provider is what keeps them from disagreeing
+    /// about whether it is up.
+    func setPartMigrationPendingProvider(_ provider: @escaping @MainActor () -> Bool) {
+        isPartMigrationPending = provider
+        preferencesStore.isMigrationPending = provider
+    }
+
+    /// Whether a part edit's migration is still unsettled — see `setPartMigrationPendingProvider`. Read by
+    /// `annotationDrawingsDidChange`; the preferences store holds its own copy.
+    @ObservationIgnored var isPartMigrationPending: @MainActor () -> Bool = { false }
 
     /// Whether the inspector should show the playlist-continuation control. True only when opened from a playlist.
     var isInPlaylist: Bool {
@@ -441,11 +492,16 @@ final class ReaderViewModel {
             visibleScore = nil
             return
         }
-        let withClefs = score.applying(clefOverrides: layoutModel.staffClefOverrides)
-        // Transpose sits between clef overrides and the hidden-staves filter. It preserves note IDs and ticks, so the
-        // playback cursor translation downstream is unaffected.
-        let transposed = withClefs.transposed(bySemitones: transposeModel.effectiveSemitones)
-        visibleScore = transposed.filtered(hidingStaves: layoutModel.hiddenStaves)
+        // Clef overrides → written-pitch view → transpose → hidden staves. The order and why every step is safe for
+        // the playback cursor are documented on `ReaderDisplayTransforms`, which PiP and the editing page share.
+        // PARITY(android): M2 written-pitch view — Android's render pipeline still needs writtenPitchView() between
+        //   clef overrides and transpose
+        visibleScore = ReaderDisplayTransforms.display(
+            score,
+            clefOverrides: layoutModel.staffClefOverrides,
+            transposeSemitones: transposeModel.effectiveSemitones,
+            hiddenStaves: layoutModel.hiddenStaves,
+        )
     }
 
     /// Rebuild `seekTimeline` from the score the transport drives — the loaded score, or a playable PDF's parsed
@@ -463,8 +519,15 @@ final class ReaderViewModel {
     }
 
     /// Reachable from both load paths; `authoredHiddenStaves` (empty for PDFs) are seeded in `loadOrSeed`.
-    func loadOrSeedPreferences(authoredHiddenStaves: Set<StaffAddress> = []) async {
-        let prefs = await preferencesStore.loadOrSeed(authoredHiddenStaves: authoredHiddenStaves)
+    ///
+    /// A `nil` answer means the LOAD failed (not that there is no row): the sub-models keep whatever they hold
+    /// rather than being re-seeded from a value that was never read. On the part-remap reload path that is what
+    /// stops one unlucky read from distributing defaults over a just-migrated row.
+    @discardableResult
+    func loadOrSeedPreferences(authoredHiddenStaves: Set<StaffAddress> = []) async -> Bool {
+        guard let prefs = await preferencesStore.loadOrSeed(
+            authoredHiddenStaves: authoredHiddenStaves,
+        ) else { return false }
         repeatModel.sync(from: prefs)
         tempoModel.sync(from: prefs)
         masterVolumeModel.sync(from: prefs)
@@ -476,6 +539,7 @@ final class ReaderViewModel {
         // (and the sync itself logs nothing — `sync(from:)` bypasses the models' `onChange`).
         lastTempoMultiplier = tempoModel.effectiveMultiplier
         lastTransposeSemitones = transposeModel.effectiveSemitones
+        return true
     }
 
     func updateLastOpenedAtOnce() async {

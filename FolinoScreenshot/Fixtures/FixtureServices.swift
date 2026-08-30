@@ -199,6 +199,13 @@ struct FixtureMetadataReader: ScoreMetadataReading {
     }
 }
 
+/// No-op `ScoreFileCreator`: scratch creation is never exercised in screenshot scenes.
+struct FixtureCreator: ScoreFileCreator {
+    func createScore(_ score: Score) throws -> ScoreItem {
+        throw DomainError.unsupportedFormat("fixture")
+    }
+}
+
 /// No-op `ScoreOriginalStore`: revert / discard are never exercised in screenshot scenes.
 struct FixtureOriginalStore: ScoreOriginalStore {
     func captureOriginalIfNeeded(for item: ScoreItem) -> ScoreItem {

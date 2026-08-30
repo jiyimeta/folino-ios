@@ -20,14 +20,14 @@ var products: [Product] = [
 
 var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", exact: "0.63.2"),
-    .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
+    .package(url: "https://github.com/groue/GRDB.swift", exact: "7.11.1"),
     .package(
         url: "https://github.com/jiyimeta/swift-sheet-music.git",
-        exact: "2.1.0",
+        exact: "2.2.0",
     ),
     .package(path: "../Domain"),
     .package(path: "../Utility"),
-    .package(url: "https://github.com/firebase/firebase-ios-sdk", from: "11.0.0"),
+    .package(url: "https://github.com/firebase/firebase-ios-sdk", exact: "11.15.0"),
 ]
 
 var targets: [Target] = [

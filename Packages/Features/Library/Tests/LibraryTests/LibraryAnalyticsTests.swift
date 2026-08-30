@@ -41,6 +41,7 @@ struct LibraryAnalyticsTests {
             repository: repo, originalStore: FakeScoreOriginalStore(), importer: importer,
             gateway: FakeScoreFileGateway(),
             shareService: FakeScoreShareService(), metadataReader: FakeScoreMetadataReading(),
+            creator: FakeScoreFileCreator(), scoresDirectory: URL(filePath: "/tmp/folino-tests"),
             analytics: analytics, crashReporter: crashReporter,
         )
         return VMFixture(vm: vm, repo: repo, importer: importer, analytics: analytics, crashReporter: crashReporter)

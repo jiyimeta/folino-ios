@@ -33,8 +33,10 @@ public struct EditorTopBarView: View {
     /// Only two rungs, not three: a `.revert`-only middle rung (revert alone folded into `⋯`, 完了 still a
     /// standalone text button) measures IDENTICAL to `.expanded` whenever revert is showing — swapping one 44×44
     /// icon (`revertButton`) for another (the `⋯` menu) saves nothing, so `ViewThatFits` could never actually pick
-    /// it. `doneButton`'s `minWidth: 60` is what makes `.folded` unconditionally narrower than
-    /// `.expanded` — see the comment there.
+    /// it. `.expanded` carries the instruments button and `measureMenu` (44×44 each) ALONGSIDE the session-end
+    /// control (`endGroup`), while `.folded` merges all three into the one `⋯` (`overflowMenu`) — so `.folded` is
+    /// unconditionally narrower than `.expanded`, by two 44pt controls plus 24pt of spacing, in every
+    /// `sessionEndMode`, not only `.revert`.
     enum Collapse {
         case expanded
         case folded
@@ -55,7 +57,7 @@ public struct EditorTopBarView: View {
     public var body: some View {
         // The shadow matches `ReaderTopBarControls`' so the reading and editing strips read as the same physical
         // surface.
-        revertFailureAlert(on: controlTierRow)
+        drumLayoutSheet(on: measureMenuSheets(on: instrumentsSheet(on: revertFailureAlert(on: controlTierRow))))
             .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
     }
 
@@ -64,25 +66,36 @@ public struct EditorTopBarView: View {
     @ViewBuilder
     private var controlTierRow: some View {
         if hasCutoutTier {
-            // ✕ and the session-end control live in the cutout tier; three controls never risk running out of room,
-            // so no fold.
+            // ✕ and the session-end control live in the cutout tier; the five controls left here (undo, redo,
+            // voice, the instruments sheet, and the measure-actions menu) still sit under this row's width on the
+            // narrowest device that HAS a cutout tier — so no fold is needed here.
+            //
+            // That device is a 375pt notched phone (12/13 mini, 11 Pro, XS), NOT the 393pt modern class:
+            // `ReaderTopBarLayout.hasCutoutTier` keys off the top safe-area inset, which those reach. The budget is
+            // 5×44 + 4×12 = 268pt of controls against 375 − 32 (the strip's own horizontal padding) = 343pt, which
+            // leaves room for whatever `glassEffect` adds around each pill. A device narrower than that has no
+            // cutout tier and takes the folding branch below.
             HStack(spacing: 12) {
                 undoRedoGroup
                 Spacer(minLength: 0)
                 voiceButton
+                instrumentsButton
+                measureMenu
+                    .interactiveGlassCompat()
             }
-        } else if viewModel.sessionEndMode == .revert {
+        } else {
             // `Spacer(minLength: 0)` inside `row(collapse:)` is what lets `ViewThatFits` fold at all — a greedy
             // spacer would make every candidate report that it fits, and the fold would silently never trigger.
+            //
+            // Every `sessionEndMode` goes through the fold now, not only `.revert`: `.expanded` carries the
+            // measure-actions menu ADDITIONALLY to the session-end control, while `.folded` merges both into the
+            // one `⋯` (`overflowMenu`) — so `.expanded` is unconditionally wider than `.folded` in every mode (see
+            // `Collapse`'s own doc comment for the exact margin). Before this menu existed, the checkmark states
+            // measured identically and the fold there was dead code; it is reachable now.
             ViewThatFits(in: .horizontal) {
                 row(collapse: .expanded)
                 row(collapse: .folded)
             }
-        } else {
-            // Only `.revert` is wide enough for the fold to buy anything: in both checkmark states the session-end
-            // control is a 44pt glyph and `⋯` is another one, so `.folded` would measure the same as `.expanded` and
-            // `ViewThatFits` could never select it. A rung that cannot be selected is not a fold level.
-            row(collapse: .expanded)
         }
     }
 
@@ -97,7 +110,12 @@ public struct EditorTopBarView: View {
             voiceButton
             switch collapse {
             case .expanded:
-                endGroup
+                HStack(spacing: 12) {
+                    instrumentsButton
+                    measureMenu
+                        .interactiveGlassCompat()
+                    endGroup
+                }
             case .folded:
                 overflowMenu
                     .interactiveGlassCompat()
@@ -132,9 +150,17 @@ public struct EditorTopBarView: View {
         )
     }
 
-    /// Narrow-width stand-in for revert (if available) and 完了 once they've folded together.
+    /// Narrow-width stand-in for the instruments sheet, the measure actions, revert (if available), and 完了 once
+    /// they've folded together.
     private var overflowMenu: some View {
         Menu {
+            instrumentsMenuRow
+            // Only on a percussion staff: on a pitched one there is no drum layout to edit, and a row that opened a
+            // sheet about keys the pad is not showing would be a puzzle rather than a feature.
+            if viewModel.isDrumStaffActive {
+                drumLayoutMenuRow
+            }
+            measureActionRows
             if viewModel.canRevertToOriginal {
                 revertMenuRow
             }
@@ -144,6 +170,59 @@ public struct EditorTopBarView: View {
         }
         .tint(.primary)
         .accessibilityLabel(L10n.Common.more)
+    }
+
+    /// Stand-in for the measure actions in the layouts that don't fold `overflowMenu`'s revert/done rows in with
+    /// them — the cutout-tier row (no `ViewThatFits` at all) and `row(collapse: .expanded)` (where the session-end
+    /// control keeps its own dedicated space). Both need somewhere for these three rows to live that isn't already
+    /// spoken for.
+    private var measureMenu: some View {
+        Menu {
+            measureActionRows
+        } label: {
+            topBarIcon("ellipsis")
+        }
+        .tint(.primary)
+        .accessibilityLabel(L10n.Common.more)
+    }
+
+    /// Add / insert-before / delete a measure, plus the bar-scoped rows from `measureMenuRows` (the two signature
+    /// changes and the rehearsal mark) — shared by `overflowMenu` and `measureMenu`, which each host these rows
+    /// alongside different neighbours.
+    @ViewBuilder
+    private var measureActionRows: some View {
+        Button {
+            viewModel.appendMeasure()
+        } label: {
+            Label {
+                Text("editor.measure.append", bundle: .module)
+            } icon: {
+                Image(systemName: "plus.rectangle")
+            }
+        }
+        Button {
+            viewModel.insertMeasureBeforeTarget()
+        } label: {
+            Label {
+                Text("editor.measure.insertBefore", bundle: .module)
+            } icon: {
+                Image(systemName: "plus.rectangle.on.rectangle")
+            }
+        }
+        .disabled(viewModel.targetMeasureIndex == nil)
+        // Ahead of the destructive row, not after it: a `Menu` puts its destructive item last everywhere else in
+        // this app, and appending these two below Delete Measure would break that reading.
+        measureMenuRows
+        Button(role: .destructive) {
+            viewModel.deleteTargetMeasure()
+        } label: {
+            Label {
+                Text("editor.measure.delete", bundle: .module)
+            } icon: {
+                Image(systemName: "minus.rectangle")
+            }
+        }
+        .disabled(viewModel.targetMeasureIndex == nil || viewModel.measureCount <= 1)
     }
 
     // MARK: - Voice
@@ -180,8 +259,10 @@ public struct EditorTopBarView: View {
         }
     }
 
-    private func topBarButton(
-        system: String, label: LocalizedStringKey, enabled: Bool, action: @escaping () -> Void,
+    /// Internal rather than private so `EditorTopBarView+Instruments.swift` builds its button out of the same
+    /// pieces as undo and redo instead of restating them.
+    func topBarButton(
+        system: String, label: LocalizedStringKey, enabled: Bool = true, action: @escaping () -> Void,
     ) -> some View {
         Button(action: action) {
             topBarIcon(system)

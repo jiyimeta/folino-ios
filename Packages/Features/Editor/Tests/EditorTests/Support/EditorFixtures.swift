@@ -45,6 +45,32 @@ enum EditorFixtures {
         return Score(division: 480, parts: [part])
     }
 
+    /// One B♭ clarinet staff — `transposeChromatic -2` / `transposeDiatonic -1`, so `writtenPitchOffset` and
+    /// `writtenFifthsOffset` are both +2 — over one 4/4 bar of quarter rests under `concertKey`. At the default
+    /// concert C major the staff READS D major, where C and F are sharp.
+    ///
+    /// Element layout matches `twoMeasuresOfQuarterRests(key:)`'s first bar: [0] keySignature, [1]
+    /// timeSignature(4/4), [2...5] rest(quarter). The key signature is spelled out rather than left implicit
+    /// because the written view shifts key signature ELEMENTS — a bar with none reads C major on both staves and
+    /// the transposition would be invisible.
+    static func clarinetQuarterRests(key concertKey: Int = 0) -> Score {
+        let voice = Voice(elements: [
+            .keySignature(KeySignature(concertKey: concertKey)),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+        ])
+        let staff = Staff(measures: [Measure(voices: [voice])])
+        let part = Part(
+            id: "1",
+            instrument: Instrument(id: "clarinet", transposeDiatonic: -1, transposeChromatic: -2),
+            staves: [staff],
+        )
+        return Score(division: 480, parts: [part])
+    }
+
     /// Same, but element index 1 is a quarter chord on C4 (pitch 60, tpc 14).
     static func chordAtIndex1() -> Score {
         var score = fourQuarterRests()
@@ -146,8 +172,54 @@ enum EditorFixtures {
         return score
     }
 
-    static func restID(measure: Int = 0, element: Int) -> RestID {
-        RestID(staff: staff0, measureIndex: measure, voiceIndex: 0, elementIndex: element)
+    /// `names.count` parts, each one staff of one 4/4 bar of quarter rests, named by `names` — the shape the
+    /// instruments sheet lists. Part ids are the numeric strings a real score carries ("1", "2", …), which is what
+    /// `AddPart.nextPartID` continues from.
+    static func parts(named names: [String]) -> Score {
+        let voice = Voice(elements: [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+        ])
+        let bar = Measure(voices: [voice])
+        let parts = names.enumerated().map { index, name in
+            Part(
+                id: String(index + 1),
+                instrument: Instrument(id: "instrument-\(index)", longName: name),
+                staves: [Staff(measures: [bar])],
+            )
+        }
+        return Score(division: 480, parts: parts)
+    }
+
+    /// `parts(named:)` with one extra staff spliced onto the part at `index` — a piano-shaped row, which is what
+    /// the instruments sheet lays out differently from the single-staff majority.
+    static func parts(named names: [String], twoStavesAt index: Int) -> Score {
+        var score = parts(named: names)
+        guard score.parts.indices.contains(index), let staff = score.parts[index].staves.first else { return score }
+        score.parts[index].staves.append(staff)
+        return score
+    }
+
+    /// A one-staff catalog-style plan, as `ScoreInstrument.partPlan()` produces one.
+    static func partPlan(named name: String, clef: String = "G") -> BlankScoreTemplate.PartPlan {
+        BlankScoreTemplate.PartPlan(
+            instrumentID: "added",
+            longName: name,
+            shortName: nil,
+            staves: [BlankScoreTemplate.StaffPlan(clefType: clef)],
+        )
+    }
+
+    /// `part` defaults to 0, so every single-part fixture's call site reads as it always did; the part-list tests
+    /// pass it to name a rest on a specific instrument.
+    static func restID(part: Int = 0, measure: Int = 0, element: Int) -> RestID {
+        RestID(
+            staff: StaffAddress(partIndex: part, staffIndexInPart: 0),
+            measureIndex: measure, voiceIndex: 0, elementIndex: element,
+        )
     }
 
     static func noteID(measure: Int = 0, element: Int, noteIndex: Int = 0) -> NoteID {

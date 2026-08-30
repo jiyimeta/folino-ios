@@ -14,7 +14,9 @@ extension EditorViewModel {
         autosaveTask?.cancel()
         autosaveTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
-            if Task.isCancelled { return }
+            if Task.isCancelled {
+                return
+            }
             await self?.runSave()
         }
     }
@@ -41,8 +43,20 @@ extension EditorViewModel {
         let task = Task { [weak self] in
             await previous?.value
             guard let self else { return }
-            await core.performSave()
+            // The session is pinned alongside the save, not re-read after it. A `beginSession` landing in one of
+            // `performSave`'s suspension windows installs a session whose part-id baseline is the POST-edit order —
+            // reading `core.session` at the migration would find that one, see identity, and leave the row in the
+            // numbering the file has left.
+            let sessionAtEntry = core.session
+            let wrote = await core.performSave()
             syncFromCore()
+            // The part-index migration rides the save, immediately after it — the closest the score and the row ever
+            // are: the file has just been given the new part order, so a row migrated now describes the file that was
+            // written. It runs ONLY when the write actually landed, because a save that bailed at its entry guard or
+            // failed left the file in the OLD numbering, and migrating the row to the new one would be the very
+            // corruption this exists to prevent.
+            guard wrote, let sessionAtEntry, !sessionAtEntry.isPartMappingIdentity else { return }
+            lastAppliedPartMapping = await migratePartIndexedState(in: sessionAtEntry, for: core.scoreItem.id)
         }
         inFlightSaveTask = task
         await task.value

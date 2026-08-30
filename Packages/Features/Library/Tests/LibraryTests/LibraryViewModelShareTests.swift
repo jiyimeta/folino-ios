@@ -24,7 +24,8 @@ struct LibraryViewModelShareTests {
         let share = FakeScoreShareService()
         let vm = LibraryViewModel(
             repository: repo, originalStore: FakeScoreOriginalStore(), importer: importer, gateway: gateway,
-            shareService: share, metadataReader: FakeScoreMetadataReading(),
+            shareService: share, metadataReader: FakeScoreMetadataReading(), creator: FakeScoreFileCreator(),
+            scoresDirectory: URL(filePath: "/tmp/folino-tests"),
         )
         return (vm, share)
     }

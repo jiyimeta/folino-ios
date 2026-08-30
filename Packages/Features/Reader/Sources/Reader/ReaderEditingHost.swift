@@ -17,8 +17,11 @@ public final class ReaderEditingHost {
     public internal(set) var isEditing = false
 
     /// Written by the App (mirroring EditorViewModel outputs), read by the Reader:
-    /// The editor's live score. While editing the Reader renders THIS raw score (no transpose / hidden staves /
-    /// multi-measure-rest collapse) so positional IDs stay valid.
+    /// The editor's live score, in CONCERT pitch and with every staff present — the shape the file is saved in. The
+    /// Reader draws it through `ReaderRootScreen.editingScore`, which applies clef overrides, the written-pitch view
+    /// and the hidden-staves filter (all of which a `StaffAddress` remap can undo) but not the global transpose or
+    /// multi-measure-rest collapse (which renumber ELEMENTS within a staff, and no remap can undo that), so positional
+    /// IDs stay valid.
     public var editedScore: Score?
     /// Bumped per mutation; included in the vertical container's layout task key.
     public var editGeneration = 0
@@ -83,6 +86,20 @@ public final class ReaderEditingHost {
         return Self.restamping(id, onto: staff)
     }
 
+    /// Whether the reader is currently SHOWING that staff — the same per-score visibility the two re-stamping
+    /// functions above filter against, asked one address at a time.
+    ///
+    /// `public` because the Editor's instruments sheet lists the score's parts with a visibility switch beside each
+    /// staff, and visibility is the Reader's to own: it changes what this device draws, not what the file says. The
+    /// App wires this and `onToggleStaffVisibility` into the Editor's view model, which cannot import Reader.
+    public func isStaffVisible(_ address: StaffAddress) -> Bool {
+        !hiddenStavesProvider().contains(address)
+    }
+
+    /// Flips one staff's visibility in the Reader's layout settings — the very store the Reader's own inspector
+    /// toggles, so the sheet and the inspector can never disagree about what is hidden. Wired by the Reader.
+    public var onToggleStaffVisibility: @MainActor (StaffAddress) -> Void = { _ in }
+
     /// The selection in display addressing — what `ScoreView` and the caret overlay tint. A selection on a hidden
     /// staff collapses to `.none` rather than tinting whatever staff happens to sit at that index now.
     var displaySelection: ScoreSelection {
@@ -138,6 +155,59 @@ public final class ReaderEditingHost {
     /// Filled by the Reader. The App calls it when a revert lands; the Reader adopts the rebuilt row, leaves the
     /// editing session, stops playback and reloads the score from disk.
     public var requestReloadAfterRevert: @MainActor (ScoreItem) -> Void = { _ in }
+
+    /// Filled by the Reader. The App calls it once the save following a part add / remove / reorder has settled; the
+    /// Reader re-seats the same state it holds in memory (hidden staves, clef overrides, mixer strip overlays) from
+    /// the row, and releases the preference writes it held meanwhile.
+    ///
+    /// It carries no mapping on purpose. The Reader re-reads the row the Editor has already rewritten rather than
+    /// applying the permutation a second time — one migration, one place it can be wrong, and no way for the two
+    /// copies to disagree about how far through the mapping they are.
+    public var requestReloadAfterPartRemap: @MainActor () -> Void = {}
+
+    /// Filled by the Reader, awaited by the App at the FRONT of a part edit — after the hold is up, before the
+    /// Editor's migration reads. The Reader lands whatever its own writers still have in the air.
+    ///
+    /// The hold alone is not enough for the ink. Annotation saves are debounced by half a second, so a capture
+    /// registered just before the part edit is still pending when the migration reads: landing after it, that write
+    /// would put the whole layer back into the old numbering with the mapping already consumed. Flushing it here puts
+    /// it on the right side of the read, where the migration rewrites it correctly — which is why this is a drain at
+    /// the front rather than another join at the release.
+    public var prepareForPartMigration: @MainActor () async -> Void = {}
+
+    /// Written by the App, mirroring the Editor: `true` while a part edit's preferences migration has not settled.
+    ///
+    /// While it is up the Reader does not write the per-score preferences row at all — it queues the change and
+    /// re-runs it once this drops. Reading is unaffected; only persistence is held. The window is short by
+    /// construction (a part op flushes its save immediately rather than riding the two-second debounce), but it is
+    /// not empty, and a write landing inside it corrupts the row in one of two ways: stamped in the NEW numbering it
+    /// gets migrated a second time, stamped in the OLD numbering it overwrites the migrated row after the map has
+    /// been consumed. Neither is recoverable, so the conservative move is not to write.
+    ///
+    /// It comes down only on the far side of the Reader's re-read (see `releasePartMappingHoldIfSettled`), never
+    /// when the Editor's save finishes: between those two the row is migrated but this process is still holding the
+    /// pre-migration addresses, which is precisely the state a write must not escape from.
+    public internal(set) var isPartMappingPending = false
+
+    /// Raised by the App the instant the Editor applies a part edit. Raise only — see
+    /// `releasePartMappingHoldIfSettled` for the other end.
+    public func raisePartMappingHold() {
+        isPartMappingPending = true
+    }
+
+    /// Wired by the App to the Editor's `hasUnsettledPartEdits`: `true` when every part edit's save has finished, so
+    /// the hold may come down. The default suits a Reader with no editing host behind it.
+    public var isPartMappingSettled: @MainActor () -> Bool = { true }
+
+    /// Drops the hold, but only if the Editor has nothing further outstanding — a second part edit applied while the
+    /// first one's reload was running has raised the flag again, and that edit's own reload is what will release it.
+    /// Returns whether the hold actually came down, which is what tells the caller it may let its queued writes go.
+    @discardableResult
+    func releasePartMappingHoldIfSettled() -> Bool {
+        guard isPartMappingSettled() else { return false }
+        isPartMappingPending = false
+        return true
+    }
 
     /// Written by the App (measured from the editing chrome), read by the Reader: how much vertical room the editing
     /// cluster occupies at the top and bottom of the screen. The score containers turn these into SCROLL PADDING, not

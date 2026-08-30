@@ -230,6 +230,10 @@ struct VerticalScoreContainer: View {
         // suppress it) would wipe the just-committed stroke. The user-edit path instead keeps `projectedAnnotations`
         // equal to the live drawing (see `annotationSpec`), so `applyDrawing` is a no-op for the user's own ink.
         .onChange(of: document) { _, _ in reprojectAnnotations() }
+        // The one time the MODEL moves under the canvas rather than the other way round: a part add / remove /
+        // reorder rewrites every stroke's anchor, so what is on screen is now drawn against the wrong staves. See
+        // `ReaderViewModel.annotationReseedTicket`.
+        .onChange(of: viewModel.annotationReseedTicket) { _, _ in reprojectAnnotations() }
         .onAppear { reprojectAnnotations() }
     }
 
@@ -253,11 +257,14 @@ struct VerticalScoreContainer: View {
                 projectedAnnotations = drawing
                 // Only the score layer is re-captured. An item read out of a PDF also carries page-anchored ink, which
                 // this canvas can neither show nor describe — committing the capture verbatim would delete it, and the
-                // save coordinator would make that permanent.
+                // save coordinator would make that permanent. Ink on a HIDDEN staff is the same case one level down
+                // (inside the score layer), so it is carried across by hand — see `hiddenAnchors(in:)`.
+                let staffFilter = annotationStaffFilter
                 viewModel.annotationDrawingsDidChange(AnnotationLayers.replacing(
                     .score,
                     in: viewModel.annotationDrawings,
-                    with: AnnotationAnchoring.capture(strokes: drawing.strokes, in: doc),
+                    with: (staffFilter?.hiddenAnchors(in: viewModel.annotationDrawings) ?? [])
+                        + AnnotationAnchoring.capture(strokes: drawing.strokes, in: doc, staffFilter: staffFilter),
                 ))
             },
             state: { annotationCanvasState(viewport: viewport) },
@@ -317,7 +324,16 @@ struct VerticalScoreContainer: View {
 
     private func reprojectAnnotations() {
         guard let doc = document else { projectedAnnotations = PKDrawing(); return }
-        projectedAnnotations = AnnotationAnchoring.display(viewModel.annotationDrawings, in: doc)
+        projectedAnnotations = AnnotationAnchoring.display(
+            viewModel.annotationDrawings, in: doc, staffFilter: annotationStaffFilter,
+        )
+    }
+
+    /// The source↔display staff translation for whatever the reader is currently hiding. Read at call time (not
+    /// stored): hiding a staff relays the score out from under the ink, and the reproject that follows has to see the
+    /// new visibility. `nil` whenever nothing is hidden.
+    private var annotationStaffFilter: AnnotationStaffFilter? {
+        .current(viewModel: viewModel, editingHost: editingHost)
     }
 
     private var scoreOptions: ScoreViewOptions {
@@ -422,7 +438,9 @@ struct VerticalScoreContainer: View {
             )
         }
 
-        if abs(newX - curX) < 0.5, abs(newY - curY) < 0.5 { return }
+        if abs(newX - curX) < 0.5, abs(newY - curY) < 0.5 {
+            return
+        }
 
         pendingScroll = .animated(CGPoint(x: newX, y: newY))
     }

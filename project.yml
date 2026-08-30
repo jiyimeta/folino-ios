@@ -44,22 +44,22 @@ packages:
     path: Packages/Features/Settings
   GRDB:
     url: https://github.com/groue/GRDB.swift
-    from: 7.0.0
+    exactVersion: 7.11.1
   swift-sheet-music:
     url: https://github.com/jiyimeta/swift-sheet-music.git
-    exactVersion: 2.1.0
+    exactVersion: 2.2.0
   SwiftLintPlugins:
     url: https://github.com/SimplyDanny/SwiftLintPlugins
     exactVersion: 0.63.2
   LicenseList:
     url: https://github.com/cybozu/LicenseList
-    from: 2.5.0
+    exactVersion: 2.5.0
   Yams:
     url: https://github.com/jpsim/Yams
-    from: 5.3.0
+    exactVersion: 5.4.0
   firebase-ios-sdk:
     url: https://github.com/firebase/firebase-ios-sdk
-    from: 11.0.0
+    exactVersion: 11.15.0
   ScreenshotKit:
     url: git@github.com:jiyimeta/swift-screenshot-kit.git
     revision: 1ef0c01776140616cb5dc94bf2d6b0614185b756

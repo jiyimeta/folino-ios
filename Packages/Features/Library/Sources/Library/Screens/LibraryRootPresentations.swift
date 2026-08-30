@@ -25,6 +25,9 @@ struct LibraryRootPresentations: ViewModifier {
             .sheet(item: $addToPlaylistTarget) { item in
                 AddToPlaylistScreen(scoreItem: item, library: viewModel)
             }
+            .sheet(isPresented: isNewScoreSheetPresentedBinding) {
+                NewScoreSheet(viewModel: viewModel)
+            }
             .modifier(ImportErrorAlert(viewModel: viewModel))
             .modifier(CreatePlaylistAlert(
                 viewModel: viewModel,
@@ -34,6 +37,15 @@ struct LibraryRootPresentations: ViewModifier {
             .modifier(CreateTagAlert(viewModel: viewModel, isPresented: $isCreatingTag, name: $newTagName))
             .modifier(DuplicateImportAlert(viewModel: viewModel))
             .modifier(SharePreparation(viewModel: viewModel))
+    }
+
+    /// `viewModel` is a plain `let` here (only `SharePreparation` needs `@Bindable`), so the "New score" sheet's
+    /// binding is hand-rolled the same way `ImportErrorAlert.presentationBinding` is below.
+    private var isNewScoreSheetPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.isNewScoreSheetPresented },
+            set: { viewModel.isNewScoreSheetPresented = $0 },
+        )
     }
 }
 
@@ -55,10 +67,16 @@ private struct ImportErrorAlert: ViewModifier {
         }
     }
 
+    /// Gated on `!isNewScoreSheetPresented`: while `NewScoreSheet` is up it owns presenting `currentError` itself
+    /// (SwiftUI won't surface an alert from a view already presenting a sheet), so this root-level alert stays
+    /// suppressed rather than racing the sheet's own alert over the same shared error.
     private var presentationBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.currentError != nil },
-            set: { isPresented in if !isPresented { viewModel.currentError = nil } },
+            get: { viewModel.currentError != nil && !viewModel.isNewScoreSheetPresented },
+            set: { isPresented in
+                guard !isPresented else { return }
+                viewModel.currentError = nil
+            },
         )
     }
 }
@@ -144,7 +162,10 @@ private struct DuplicateImportAlert: ViewModifier {
     private var presentationBinding: Binding<Bool> {
         Binding(
             get: { viewModel.duplicatePrompt != nil },
-            set: { isPresented in if !isPresented { viewModel.duplicatePrompt = nil } },
+            set: { isPresented in
+                guard !isPresented else { return }
+                viewModel.duplicatePrompt = nil
+            },
         )
     }
 }

@@ -38,9 +38,15 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
 
     var storedReaderPreferences: [ScoreItemID: ReaderPreferences] = [:]
     var savedReaderPreferences: [ReaderPreferences] = []
+    /// When set, `loadReaderPreferences` throws this — the case a caller must tell apart from "no row", since a
+    /// failed read must not be answered with a freshly seeded value.
+    var loadError: Error?
 
     func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? {
-        storedReaderPreferences[scoreItemID]
+        if let loadError {
+            throw loadError
+        }
+        return storedReaderPreferences[scoreItemID]
     }
 
     func allReaderPreferences() throws -> [ReaderPreferences] {

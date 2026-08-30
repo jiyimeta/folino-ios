@@ -28,6 +28,8 @@ struct LibraryViewModelRevertTests {
             gateway: FakeScoreFileGateway(),
             shareService: FakeScoreShareService(),
             metadataReader: FakeScoreMetadataReading(),
+            creator: FakeScoreFileCreator(),
+            scoresDirectory: URL(filePath: "/tmp/folino-tests"),
         )
     }
 

@@ -47,6 +47,14 @@ public final class EditorSessionCore {
     /// bridge must re-register its `UndoManager` trampoline on a genuinely NEW edit and not on a replay of one.
     public private(set) var appliedIntentCount = 0
 
+    /// Bumped on every applied, undone or redone intent, for the life of this core, and NEVER reset.
+    ///
+    /// `revision` goes back to zero at `beginSession`, which makes it useless as the "did anything land while I was
+    /// suspended?" sentinel `performSave` needs: a `beginSession` arriving in one of its awaits would move the
+    /// counter backwards and read as a mutation. This one only ever goes up, so comparing it across a suspension
+    /// answers exactly the question asked.
+    public private(set) var mutationTicket = 0
+
     /// Bumped by every `place(selection:caret:)`, whether or not the values changed. The host needs the
     /// unconditional signal: the shipped `onSelectionChanged` fires on every placement, and a mirror that only
     /// noticed *differences* would quietly drop the repeats.
@@ -60,6 +68,18 @@ public final class EditorSessionCore {
     // played rather than the empty slot ahead of it.
     public internal(set) var selectedItem: SheetMusicCore.ScoreItemID?
     public internal(set) var caretItem: SheetMusicCore.ScoreItemID?
+
+    /// Where the caret actually is: a column — `(staff, measureIndex, tick)` — rather than a slot in one voice.
+    ///
+    /// Stored rather than derived from `caretItem`, because a slot cannot express "beat 2 of an empty bar": that
+    /// bar holds one measure rest whose only slot begins at tick 0, and deriving the column would round every
+    /// mid-slot position back to its slot's start, silently undoing the step that put it there. `place` keeps the
+    /// two in step for every ordinary placement; the column stepper sets this directly when it lands between
+    /// onsets.
+    ///
+    /// `caretItem` remains what is DRAWN — the slot covering this column in the caret's own voice — which is what
+    /// the seam renders and what a single-voice staff has always shown.
+    public internal(set) var caretColumn: ScoreColumn?
 
     /// Whether the pad has anything at all to act on. With neither a caret nor a selection there is no slot to write
     /// into and no item to edit, so every key is inert (there is nothing for one to mean).
@@ -108,6 +128,11 @@ public final class EditorSessionCore {
     }
 
     public var activeVoice = 0
+
+    /// The drum pad's keys, in order. Seeded by the host from what it persisted (the layout is global, not
+    /// per-score) and read back through `resolvedDrumPadLayout`, which takes each key's engraving from the open
+    /// score's own kit.
+    public var drumPadLayout = DrumPadLayout.default
 
     /// Mirrored in from the host's transport. Editing and playback coexist — you can hear the passage you're writing
     /// without leaving edit mode — but the pad's keys go inert while the cursor runs: applying an edit mid-playback
@@ -311,6 +336,7 @@ public final class EditorSessionCore {
         guard let session, session.undo() else { return }
         sessionEditDepth -= 1
         revision += 1
+        mutationTicket += 1
         rederiveSelection()
         isDirty = true
     }
@@ -319,6 +345,7 @@ public final class EditorSessionCore {
         guard let session, session.redo() else { return }
         sessionEditDepth += 1
         revision += 1
+        mutationTicket += 1
         rederiveSelection()
         isDirty = true
     }
@@ -337,6 +364,7 @@ public final class EditorSessionCore {
         #endif
         guard let session, session.apply(intent) else { return nil }
         revision += 1
+        mutationTicket += 1
         appliedIntentCount += 1
         sessionEditDepth += 1
         if recordsRelayIntents {

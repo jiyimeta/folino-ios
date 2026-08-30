@@ -3,6 +3,7 @@ import Editor
 import Reader
 import SheetMusicUI
 import SwiftUI
+import UtilityCore
 import UtilityUI
 
 /// Composition-root wrapper that mounts a ReaderRootScreen with the note-editing seam filled in: one
@@ -24,14 +25,24 @@ struct EditableReaderScreen: View {
     @State private var editorViewModel: EditorViewModel
     @State private var isWired = false
     @Environment(\.scenePhase) private var scenePhase
-    /// Second `ChromeBuilder` is the top-strip row; the first is the pad overlay. `CutoutTierBuilder` is last.
+    /// Second `ChromeBuilder` is the top-strip row; the first is the pad overlay. `CutoutTierBuilder` is next, and the
+    /// trailing `Bool` is `startInEditMode`, forwarded straight through to whatever `ReaderRootScreen` the closure
+    /// builds — `ReadyShell.makeReader` is the only writer of that closure, and it owns the actual `ReaderRootScreen`
+    /// construction, so this instance's own `startInEditMode` has to ride along as an argument rather than being
+    /// something this type could apply itself.
     private let readerBuilder: (
-        ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder,
+        ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder, Bool,
     ) -> ReaderRootScreen
     /// Kept only so `wireOnce()` can re-read this instance's row before every edit session (Critical 1 review fix)
     /// — see the comment there. The same instance the App handed to `readerBuilder`'s `ReaderRootScreen`, so its
     /// live cache already carries whatever that Reader (or the Library, via the same shared repository) last wrote.
     private let repository: any ScoreLibraryRepository
+    /// The Editor logs nothing itself — it reports what the user did through closures, and this is where those become
+    /// events. Kept for `wireOnce()`, the same way `repository` is.
+    private let analytics: any Analytics
+    /// One-shot: opens straight into an edit session for a score that was just created (spec: a scratch score should
+    /// land on the editing surface, not the score view). Forwarded into `readerBuilder`; see its doc comment.
+    private let startInEditMode: Bool
 
     init(
         item: ScoreItem,
@@ -41,8 +52,17 @@ struct EditableReaderScreen: View {
         originalStore: any ScoreOriginalStore,
         historyStore: any ScoreEditHistoryStore,
         playbackController: (any PlaybackController)?,
+        // The score's ink, for the Editor's part-index migration only — a part add / remove / reorder renumbers the
+        // staff each stroke is anchored to exactly as it renumbers the preferences row.
+        //
+        // Required here, unlike the Editor view model's own defaulted parameter: every real screen has ink to migrate,
+        // and a default at this layer would let a wiring site forget it and silently ship the bug this exists to fix.
+        // A host that genuinely has no store passes `nil` and says why.
+        annotationStore: (any AnnotationBlobStore)?,
+        analytics: any Analytics = NoopAnalytics(),
+        startInEditMode: Bool = false,
         readerBuilder: @escaping (
-            ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder,
+            ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder, Bool,
         ) -> ReaderRootScreen,
     ) {
         _editorViewModel = State(wrappedValue: EditorViewModel(
@@ -53,8 +73,11 @@ struct EditableReaderScreen: View {
             originalStore: originalStore,
             historyStore: historyStore,
             playback: playbackController,
+            annotationStore: annotationStore,
         ))
         self.repository = repository
+        self.analytics = analytics
+        self.startInEditMode = startInEditMode
         self.readerBuilder = readerBuilder
     }
 
@@ -98,20 +121,20 @@ struct EditableReaderScreen: View {
                     inCutoutBand: true,
                 )),
             )
-        })
-        .onAppear { wireOnce() }
-        // The Reader owns the transport; the Editor only needs to know whether it's running, so the pad can go inert
-        // while the cursor moves. Mirrored here because neither feature imports the other.
-        .onChange(of: editingHost.isPlaying, initial: true) { _, isPlaying in
-            editorViewModel.isPlaybackActive = isPlaying
-        }
-        .onChange(of: scenePhase) { _, phase in
-            // Autosave survives app backgrounding mid-edit (spec §8): flush whenever the scene leaves .active,
-            // regardless of whether an edit session is currently open (flushPendingSave() is a no-op otherwise).
-            if phase != .active {
-                Task { await editorViewModel.flushPendingSave() }
+        }, startInEditMode)
+            .onAppear { wireOnce() }
+            // The Reader owns the transport; the Editor only needs to know whether it's running, so the pad can go
+            // inert while the cursor moves. Mirrored here because neither feature imports the other.
+            .onChange(of: editingHost.isPlaying, initial: true) { _, isPlaying in
+                editorViewModel.isPlaybackActive = isPlaying
             }
-        }
+            .onChange(of: scenePhase) { _, phase in
+                // Autosave survives app backgrounding mid-edit (spec §8): flush whenever the scene leaves .active,
+                // regardless of whether an edit session is currently open (flushPendingSave() is a no-op otherwise).
+                if phase != .active {
+                    Task { await editorViewModel.flushPendingSave() }
+                }
+            }
     }
 
     /// Connects the host (Reader → App) to the view model (App → Editor) exactly once per instance. `.onAppear` can
@@ -158,6 +181,7 @@ struct EditableReaderScreen: View {
         vm.onRevertCompleted = { [weak host] item in
             host?.requestReloadAfterRevert(item)
         }
+        wirePartEditSeams(host: host, vm: vm)
         // Straight from the Reader's overlay into the view model, with no SwiftUI body in between: this fires on every
         // scroll and zoom frame, and anything that read it in a body would re-render the score at that rate.
         host.onSelectionAnchorChanged = { [weak vm] anchor in
@@ -174,6 +198,15 @@ struct EditableReaderScreen: View {
             guard let host else { return item }
             return host.sourceItem(for: item)
         }
+        // The instruments sheet lists the score's parts (the Editor's business) with a visibility switch per staff
+        // (the Reader's). Both halves land in one list, so the two seams meet here — the same place the addressing
+        // conversion above does, and for the same reason: neither feature can see the other.
+        vm.isStaffVisible = { [weak host] address in
+            host?.isStaffVisible(address) ?? true
+        }
+        vm.onToggleStaffVisibility = { [weak host] address in
+            host?.onToggleStaffVisibility(address)
+        }
         vm.onScoreChanged = { [weak host] score in
             guard let host else { return }
             host.editedScore = score
@@ -185,6 +218,49 @@ struct EditableReaderScreen: View {
             guard let host else { return }
             host.selection = selection
             host.caretItem = caret
+        }
+    }
+
+    /// The part add / remove / reorder half of the seam, split out of `wireOnce()` to keep it inside SwiftLint's
+    /// `function_body_length` budget.
+    ///
+    /// The Editor migrates the persisted `ReaderPreferences` row onto the new part numbering, but the Reader is
+    /// holding the very same state in memory — and that copy is what its next preference write would persist. Two
+    /// seams, because the window between the edit and the migration is one the Reader must not write in at all, not
+    /// merely one it has to re-read after: a write stamped in the new numbering that beats the migration is remapped
+    /// a second time onto a different part, and one stamped in the old numbering that follows it overwrites the
+    /// migrated row after the map has been consumed, so nothing ever retries.
+    /// The hold is raised from the Editor and released by the Reader, deliberately asymmetrically: the Editor knows
+    /// when the row stops being trustworthy, but only the Reader knows when its own in-memory copy has caught up.
+    /// `isPartMappingSettled` is how the release asks the Editor whether a LATER part edit has since raised it again.
+    private func wirePartEditSeams(host: ReaderEditingHost, vm: EditorViewModel) {
+        vm.onPartEditApplied = { [weak host] in
+            host?.raisePartMappingHold()
+        }
+        // Between the hold going up and the migration reading: the Reader lands whatever its own writers still have in
+        // the air. The annotation layer needs it — its saves are debounced, so one registered just before the part
+        // edit would otherwise land on the far side of the migration and put the ink back into the old numbering.
+        vm.onPartMigrationWillRun = { [weak host] in
+            await host?.prepareForPartMigration()
+        }
+        // The Editor's own count of what the user changed about the instrumentation. Logged here rather than there:
+        // the Editor has no analytics client, and this is the composition root that owns the one there is.
+        vm.onPartsEdited = { [analytics] action in
+            analytics.log(.scorePartsEdited(action: action.rawValue))
+        }
+        // Same seam, same reason, for the key and time signature sheets.
+        vm.onSignatureChanged = { [analytics] kind, action in
+            analytics.log(.scoreSignatureChanged(kind: kind, action: action))
+        }
+        // Same seam, same reason, for the rehearsal-mark sheet.
+        vm.onRehearsalMarkEdited = { [analytics] action in
+            analytics.log(.scoreRehearsalMarkEdited(action: action))
+        }
+        host.isPartMappingSettled = { [weak vm] in
+            vm?.hasUnsettledPartEdits != true
+        }
+        vm.onPartIndicesRemapped = { [weak host] _ in
+            host?.requestReloadAfterPartRemap()
         }
     }
 }

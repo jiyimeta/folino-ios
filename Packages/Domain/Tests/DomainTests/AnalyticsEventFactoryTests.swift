@@ -21,6 +21,40 @@ struct AnalyticsEventFactoryTests {
         #expect(event.parameters["musescore_version"] == .string("unknown"))
     }
 
+    @Test func `score created carries template id and raw part count`() {
+        let event = AnalyticsEvent.scoreCreated(template: "string-quartet", partCount: 4)
+        #expect(event.name == "score_created")
+        #expect(event.parameters["template"] == .string("string-quartet"))
+        #expect(event.parameters["part_count"] == .int(4))
+    }
+
+    @Test func `score created without a template emits unknown`() {
+        let event = AnalyticsEvent.scoreCreated(template: nil, partCount: 1)
+        #expect(event.parameters["template"] == .string("unknown"))
+        #expect(event.parameters["part_count"] == .int(1))
+    }
+
+    @Test(arguments: ["add", "remove", "reorder"]) func `score parts edited carries the action`(_ action: String) {
+        let event = AnalyticsEvent.scorePartsEdited(action: action)
+        #expect(event.name == "score_parts_edited")
+        #expect(event.parameters["action"] == .string(action))
+    }
+
+    @Test(arguments: ["key", "time"], ["set", "remove"])
+    func `score signature changed carries the kind and the action`(_ kind: String, _ action: String) {
+        let event = AnalyticsEvent.scoreSignatureChanged(kind: kind, action: action)
+        #expect(event.name == "score_signature_changed")
+        #expect(event.parameters["kind"] == .string(kind))
+        #expect(event.parameters["action"] == .string(action))
+    }
+
+    @Test(arguments: ["set", "rename", "remove"])
+    func `rehearsal mark edited carries its action`(_ action: String) {
+        let event = AnalyticsEvent.scoreRehearsalMarkEdited(action: action)
+        #expect(event.name == "score_rehearsal_mark_edited")
+        #expect(event.parameters["action"] == .string(action))
+    }
+
     @Test func `favorite toggled carries enabled source mode`() {
         let event = AnalyticsEvent.favoriteToggled(enabled: true, source: .scoreRowMenu, mode: .single)
         #expect(event.name == "favorite_toggled")
