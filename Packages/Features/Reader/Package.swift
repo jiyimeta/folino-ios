@@ -35,11 +35,21 @@ var targets: [Target] = [
         name: "ReaderAnnotationCore",
         dependencies: ["Domain"],
     ),
+    // The Reader's chrome behavior that both platforms must agree on: the transport's swipe-to-resize thresholds
+    // and rubber band, and the coach-mark engine (one slot, round-robin, per-launch budgets, retire-on-use) with
+    // its bubble geometry. Foundation only — no Domain, no SwiftUI, no CoreGraphics — so the Apple `Reader` target
+    // and the Android `FolinoReaderJNI` bridge share one copy rather than two implementations that resemble each
+    // other. Same shape and same reasons as `ReaderAnnotationCore`, including no SwiftLint build-tool plugin (it is
+    // cross-compiled for Android; the pre-commit hook lints it on the host instead).
+    .target(
+        name: "ReaderInteractionCore",
+    ),
     .target(
         name: "Reader",
         dependencies: [
             "Domain",
             "ReaderAnnotationCore",
+            "ReaderInteractionCore",
             "ScoreUI",
             .product(name: "UtilityCore", package: "Utility"),
             .product(name: "UtilityUI", package: "Utility"),
@@ -53,7 +63,7 @@ var targets: [Target] = [
     ),
     .testTarget(
         name: "ReaderTests",
-        dependencies: ["Reader", "ReaderAnnotationCore"],
+        dependencies: ["Reader", "ReaderAnnotationCore", "ReaderInteractionCore"],
         resources: [.process("Resources")],
     ),
 ]
@@ -86,6 +96,7 @@ if isAndroid {
             dependencies: [
                 "Domain",
                 "ReaderAnnotationCore",
+                "ReaderInteractionCore",
                 .product(name: "SwiftJava", package: "swift-java"),
                 .product(name: "Wirelet", package: "swift-wirelet"),
                 .product(name: "WireletObservable", package: "swift-wirelet"),

@@ -135,7 +135,7 @@ internal fun isEditDrivenRecompute(editRevision: Int, previousEditRevision: Int)
  * closing it: both leave a compute that was already in flight free to land afterwards. Comparing keys does close it,
  * because the comparison happens under the same lock every writer holds — and because every reader that does NOT
  * compute the layout itself first goes through the one entry point that makes the comparison,
- * [ReaderViewModel.withVerticalLayout] (with [ReaderViewModel.tryWithVerticalLayout] as its non-suspending fast
+ * [ReaderViewModel.withReaderLayout] (with [ReaderViewModel.tryWithReaderLayout] as its non-suspending fast
  * path), rather than each remembering to. ([ReaderViewModel.pagedProgramAndBreaks] is the exception that proves the
  * rule: it computes and paginates inside one locked section, so what it reads is what it just wrote.)
  */
@@ -159,8 +159,8 @@ internal data class CachedLayoutKey(
 internal fun needsLayoutRepair(cached: CachedLayoutKey?, wanted: CachedLayoutKey): Boolean = cached != wanted
 
 /**
- * A value produced by a guarded read of the engine's layout cache ([ReaderViewModel.withVerticalLayout] /
- * [ReaderViewModel.tryWithVerticalLayout]), boxed so that a `null` the body itself returned — a tap that hit paper,
+ * A value produced by a guarded read of the engine's layout cache ([ReaderViewModel.withReaderLayout] /
+ * [ReaderViewModel.tryWithReaderLayout]), boxed so that a `null` the body itself returned — a tap that hit paper,
  * a caret rect the engine had no answer for — stays distinguishable from a `null` meaning the guard could not run at
  * all (no handle, no measured width, a failed repair, or, for the fast path, a lock another layout call was holding).
  * Callers act on the first and fall back on the second; conflating them would deselect on a missed guard.
@@ -984,6 +984,10 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
                 val optsBytes = opts.encode()
                 val programBytes = computeLayoutLocked(h, pageWidthMm, pageHeightMm, opts)
                 if (programBytes.isEmpty()) return@withLock null
+                // Record what the paged document IS, so a later guarded read (the editing hit test, the caret, the
+                // selection tint) can address it — see [readerLayoutKeyLocked]. Set only after the compute has
+                // actually succeeded, so the key never names a document the cache does not hold.
+                _pagedLayoutSize = pageWidthMm to pageHeightMm
                 val program = try {
                     DrawProgramReader.decode(programBytes)
                 } catch (e: Exception) {
@@ -1004,7 +1008,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
      * That write is exactly the one [CachedLayoutKey] exists for: PiP auto-enters on backgrounding, so this can run
      * — with HORIZONTAL options — in the middle of an edit session on the vertical surface, leaving a document
      * behind that the tint, the editing hit test and the caret frame would otherwise replay. Nothing is gated here;
-     * going through [computeLayoutLocked] records what was cached, and [withVerticalLayout] repairs it before any of
+     * going through [computeLayoutLocked] records what was cached, and [withReaderLayout] repairs it before any of
      * those three reads it.
      */
     suspend fun horizontalProgram(): DrawProgram? {
@@ -1034,23 +1038,49 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
     }
 
     /**
-     * The vertical surface's layout key as the recompute loop would compute it right now, paired with the handle it
-     * addresses — or null when there is nothing to lay out yet (no score, or a viewport that has not been measured).
+     * The RECOMPUTE LOOP's layout key as it would compute it right now, paired with the handle it addresses — or
+     * null when there is nothing to lay out yet (no score, or a viewport that has not been measured).
+     *
+     * It is not "the vertical layout", despite what this used to be called: [_layoutOptions] carries the reader's
+     * current [ReaderLayoutMode], so this key describes the vertical document in vertical mode and the horizontal
+     * one in horizontal mode — in both cases exactly the document those surfaces have on screen, because both draw
+     * the program the loop publishes. Page mode is the exception and does not belong here: [pagedProgramAndBreaks]
+     * lays out at the viewport's own height rather than [PAGE_HEIGHT_MM], so in PAGE mode this answers with the size
+     * that surface last laid out at ([_pagedLayoutSize]) instead — which is what lets the hit test, the caret and
+     * the tint work there too rather than resolving against a document nobody is looking at.
+     *
+     * Null in page mode until [pagedProgramAndBreaks] has run once. That is the honest answer, not a gap: before the
+     * first paginate there is no paged document to address, and a reader that got the loop's key instead would name
+     * elements at the wrong Y.
      *
      * **Call only with [layoutMutex] held.** Reading `_scoreHandle` under that lock is also what makes the handle
      * safe to dereference: [replaceScoreHandle] publishes under this same lock, and a retired handle is freed only
      * from [computeLayoutLocked], which likewise holds it — so whatever this returns cannot be freed until the caller
      * lets go.
      */
-    private fun verticalLayoutKeyLocked(): Pair<Long, CachedLayoutKey>? {
+    private fun readerLayoutKeyLocked(): Pair<Long, CachedLayoutKey>? {
         val h = _scoreHandle.value ?: return null
+        val options = _layoutOptions.value
+        if (options.mode == ReaderLayoutMode.PAGE) {
+            val paged = _pagedLayoutSize ?: return null
+            return h to CachedLayoutKey(h, paged.first, paged.second, options)
+        }
         val width = _layoutWidthMm.value ?: return null
-        return h to CachedLayoutKey(h, width, PAGE_HEIGHT_MM, _layoutOptions.value)
+        return h to CachedLayoutKey(h, width, PAGE_HEIGHT_MM, options)
     }
 
     /**
-     * Runs [body] against the score handle with the engine's single-slot layout cache **guaranteed to hold this
-     * (vertical) surface's own layout**, repairing it first if some other writer got there last.
+     * The page size [pagedProgramAndBreaks] last laid out at, so [readerLayoutKeyLocked] can name the paged
+     * document. Written only from inside that function's own locked section — one writer, and it cannot disagree
+     * with what is actually cached — and read only under [layoutMutex], which is why it is a plain field rather
+     * than a flow.
+     */
+    private var _pagedLayoutSize: Pair<Double, Double>? = null
+
+    /**
+     * Runs [body] against the score handle with the engine's single-slot layout cache **guaranteed to hold the
+     * document the recompute loop publishes** — the one the vertical and horizontal surfaces both draw — repairing
+     * it first if some other writer got there last.
      *
      * This is the one door to that cache for a reader that does not compute the layout itself, and all three such
      * readers go through here — the selection tint ([setEditSelection]), the editing hit test, and the caret /
@@ -1075,10 +1105,10 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
      * [layoutMutex]'s own doc for why the reverse ordering would turn [replaceScoreHandle]'s `runBlocking` from a
      * bounded stall into a deadlock. Returns null when the guard could not run at all; see [LayoutRead].
      */
-    internal suspend fun <T> withVerticalLayout(body: (Long) -> T): LayoutRead<T>? =
+    internal suspend fun <T> withReaderLayout(body: (Long) -> T): LayoutRead<T>? =
         withContext(Dispatchers.Default) {
             layoutMutex.withLock {
-                val (h, wanted) = verticalLayoutKeyLocked() ?: return@withLock null
+                val (h, wanted) = readerLayoutKeyLocked() ?: return@withLock null
                 if (needsLayoutRepair(cachedLayoutKey, wanted)) {
                     // A PiP pass (or a paged fetch) got here last and left its own document in the slot. Put this
                     // surface's layout back before replaying it.
@@ -1091,23 +1121,23 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
         }
 
     /**
-     * [withVerticalLayout]'s non-suspending fast path, for a caller that cannot suspend and must not lag: the tap
+     * [withReaderLayout]'s non-suspending fast path, for a caller that cannot suspend and must not lag: the tap
      * handler inside `detectTapGestures`.
      *
      * Runs [body] inline — same thread, same frame — but only when both cheap conditions hold: [layoutMutex] is free
      * right now (`tryLock`, never a wait), and the cache already holds this surface's layout. That is the case on
      * every ordinary tap, so selecting a note stays as immediate as it was before the guard existed. It returns null
-     * the moment either fails, and the caller falls back to [withVerticalLayout] on a coroutine.
+     * the moment either fails, and the caller falls back to [withReaderLayout] on a coroutine.
      *
      * Deliberately never repairs. A repair is a full `nativeComputeLayout`, which is exactly the work that must not
      * happen on the main thread; the rare tap that needs one pays a hop instead of dropping a frame. Nothing is held
      * across a suspension point here either — the lock is taken and released within one synchronous block — so this
      * cannot deadlock against [replaceScoreHandle]'s `runBlocking` on that same thread.
      */
-    internal fun <T> tryWithVerticalLayout(body: (Long) -> T): LayoutRead<T>? {
+    internal fun <T> tryWithReaderLayout(body: (Long) -> T): LayoutRead<T>? {
         if (!layoutMutex.tryLock()) return null
         try {
-            val (h, wanted) = verticalLayoutKeyLocked() ?: return null
+            val (h, wanted) = readerLayoutKeyLocked() ?: return null
             if (needsLayoutRepair(cachedLayoutKey, wanted)) return null
             return LayoutRead(body(h))
         } finally {
@@ -1127,7 +1157,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
      * to cache rather than caching a stale document. Leave the current program alone and wait; the loop is already
      * on its way, and its own publish will carry the selection once [requestRelayout] has driven it.
      *
-     * **Handle safety and the cached layout** are both [withVerticalLayout]'s to uphold — see its own doc. It reads
+     * **Handle safety and the cached layout** are both [withReaderLayout]'s to uphold — see its own doc. It reads
      * the handle under [layoutMutex] (so a resync cannot free it mid-encode), and it re-establishes this surface's
      * own layout before the encode replays it, which is what stops a PiP pass's HORIZONTAL document being published
      * as this surface's program. In the ordinary case nothing is repaired and the tint stays the single cheap JNI
@@ -1150,8 +1180,12 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
             // Cheap early-out so a PDF (or a not-yet-laid-out score) never pays the JNI round trip at all. The
             // authoritative check is the identical one below, after the hop — see this function's own doc.
             if (_state.value !is ReaderState.Ready) return@launch
+            // The paged surface does not read `_state` — it owns its own paginated pages — so it tints itself
+            // through [pagedTintedProgram]. Publishing here as well would put a PAGED program into `_state` for a
+            // surface that is not on screen, which the recompute loop would then have to undo.
+            if (_layoutOptions.value.mode == ReaderLayoutMode.PAGE) return@launch
             val selectionBytes = selectionTintPayload(ids, argb)
-            val programBytes = withVerticalLayout { h ->
+            val programBytes = withReaderLayout { h ->
                 SheetMusicJNI.nativeEncodeDrawProgram(h, selectionBytes)
             }?.value ?: return@launch
             if (programBytes.isEmpty()) return@launch
@@ -1167,6 +1201,34 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
             }
             if (_state.value !is ReaderState.Ready) return@launch
             _state.value = ReaderState.Ready(program)
+        }
+    }
+
+    /**
+     * [setEditSelection]'s paged twin: the tinted program for the surface that owns its own pages.
+     *
+     * The same single cheap `nativeEncodeDrawProgram` replay — no relayout, so selecting a note does not
+     * re-paginate the score — differing only in where the answer goes. `setEditSelection` publishes into `_state`
+     * because the vertical and horizontal surfaces draw it; the paged surface draws what
+     * [pagedProgramAndBreaks] gave it, so it takes the program back and swaps its own pages.
+     *
+     * The guard is what makes the replay land on the PAGED document: [readerLayoutKeyLocked] answers with
+     * [_pagedLayoutSize] in page mode, so a repair reproduces the pagination on screen rather than the loop's
+     * continuous layout. Returns null when there is nothing to tint yet (no paged layout, or a decode that failed),
+     * and the caller keeps the untinted pages it already has.
+     */
+    internal suspend fun pagedTintedProgram(ids: List<ScoreItemID>, argb: UInt): DrawProgram? {
+        val programBytes = withReaderLayout { h ->
+            SheetMusicJNI.nativeEncodeDrawProgram(h, selectionTintPayload(ids, argb))
+        }?.value ?: return null
+        if (programBytes.isEmpty()) return null
+        return try {
+            DrawProgramReader.decode(programBytes)
+        } catch (e: Exception) {
+            // Same call as [setEditSelection]'s decode and the same judgement: a highlight that failed to apply is
+            // not worth blanking a perfectly good page for.
+            Log.e(TAG, "Could not decode the tinted paged draw program: ${e.message}")
+            null
         }
     }
 
@@ -1413,9 +1475,9 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
      * task is not the place to invent; it is carried as a finding rather than fixed here.
      *
      * What taking [layoutMutex] here still buys is correctness of the layout cache, not memory safety:
-     * [startRecomputeLoop], [pagedProgramAndBreaks], [horizontalProgram] and [withVerticalLayout] (the tint, the
+     * [startRecomputeLoop], [pagedProgramAndBreaks], [horizontalProgram] and [withReaderLayout] (the tint, the
      * editing hit test and the caret frame) all take this lock immediately before their native call and either
-     * abandon the pass if the handle they captured no longer matches what is published, or — as [withVerticalLayout]
+     * abandon the pass if the handle they captured no longer matches what is published, or — as [withReaderLayout]
      * does — read the published handle under the lock in the first place, so no compute straddles the swap and
      * publishes a document engraved from the old score after the new one is live. See [layoutMutex]'s own doc for
      * why the capture and the native call can otherwise straddle a resync even with the lock in place.

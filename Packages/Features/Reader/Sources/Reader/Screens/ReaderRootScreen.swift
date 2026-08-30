@@ -5,6 +5,7 @@
 // type_body_length budgets.
 
 import Domain
+import ReaderInteractionCore
 import ScoreUI
 import SheetMusicCore
 import SwiftUI

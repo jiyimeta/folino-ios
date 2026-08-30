@@ -1,5 +1,6 @@
 import CoreGraphics
 @testable import Reader
+import ReaderInteractionCore
 import Testing
 
 struct TransportModeSwipeTests {

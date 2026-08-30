@@ -62,6 +62,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.keynumber.folino.reader.editing.rememberBravuraTypeface
+import com.keynumber.folino.reader.hints.ReaderFeatureHint
+import com.keynumber.folino.reader.hints.ReaderHintController
 import com.keynumber.folino.reader.ui.CollapsibleHeader
 import com.keynumber.folino.reader.ui.InspectorRow
 import com.keynumber.folino.reader.ui.InspectorSliderHeight
@@ -500,6 +502,8 @@ private fun StaffControls(
         )
         IconButton(
             onClick = {
+                // Retires the "hide the parts you are not playing" coach mark — this is the feature it points at.
+                ReaderHintController.markUsed(ReaderFeatureHint.STAFF_VISIBILITY)
                 onChange(
                     options.copy(
                         hiddenStaves = options.hiddenStaves.toMutableSet().apply {

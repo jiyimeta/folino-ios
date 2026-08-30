@@ -1,3 +1,4 @@
+import ReaderInteractionCore
 import SheetMusicCore
 import SwiftUI
 

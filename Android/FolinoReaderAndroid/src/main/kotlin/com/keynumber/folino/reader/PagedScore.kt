@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,11 +30,21 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
+import com.keynumber.folino.editor.EditUiState
+import com.keynumber.folino.editor.caretRectMm
+import com.keynumber.folino.editor.editingHitTestForTap
+import com.keynumber.folino.reader.editing.EDIT_CALLOUT_MINIMUM_WIDTH_MM
+import com.keynumber.folino.reader.editing.EDIT_CARET_MINIMUM_WIDTH_MM
+import com.keynumber.folino.reader.editing.EditingCallout
+import com.keynumber.folino.reader.editing.EditingCaretOverlay
 import com.keynumber.folino.reader.ink.AnnotationLayers
 import com.keynumber.folino.reader.ink.AnnotationSurfaceState
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
+import io.github.jiyimeta.sheetmusic.audio.model.EditCaretFrame
+import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.serialization.DecodedFrameCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
+import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreItemIDCodec
 import io.github.jiyimeta.sheetmusic.compose.cursor.LoopHighlightOverlay
 import io.github.jiyimeta.sheetmusic.compose.cursor.PlaybackCursorOverlay
 import io.github.jiyimeta.sheetmusic.compose.draw.model.EncodablePage
@@ -71,6 +82,28 @@ internal fun PagedScore(
     pageTurnButtonsVisible: Boolean = true,
     /** Annotation layers + capture pipeline, owned by ReaderScreen. Null ⇒ no annotation here. */
     annotation: AnnotationSurfaceState? = null,
+    /**
+     * Editing seam — the same set the other two surfaces take; see [ReadyScore]'s parameter docs.
+     *
+     * Page mode edits the same way they do, with two differences this surface has to carry itself. Its document is
+     * PAGINATED (`pagedProgramAndBreaks` lays out at the viewport's height, not A4), so every guarded read has to
+     * address that document rather than the recompute loop's — which is what
+     * [ReaderViewModel.readerLayoutKeyLocked] now does in page mode. And it does not read `_state`, so the
+     * selection tint comes back through [ReaderViewModel.pagedTintedProgram] instead of being published for it.
+     *
+     * [selectionTintArgb] is the reader's accent, resolved once by [ReaderScreen] so every surface tints alike.
+     */
+    editing: EditUiState = EditUiState(),
+    onSelectItem: (ByteArray?) -> Unit = {},
+    onTapSeekItem: (ByteArray) -> Unit = {},
+    onSetSelectionDuration: (Int) -> Unit = {},
+    onSetSelectionDots: (Int) -> Unit = {},
+    onToggleSelectionDot: () -> Unit = {},
+    onShiftPitch: (Int) -> Unit = {},
+    onShiftOctave: (Int) -> Unit = {},
+    layoutGeneration: Int = 0,
+    isPlaybackActive: Boolean = false,
+    selectionTintArgb: UInt = 0u,
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -81,6 +114,14 @@ internal fun PagedScore(
     // pager never renders a page before its boundary exists (two separate states updated by two
     // sequential native calls is what crashed the page-mode switch).
     var pagedData by remember { mutableStateOf<PagedData?>(null) }
+    // Suppresses the "clear the tint" re-encode until there is something to clear, so a score that is only read
+    // pays no JNI round trip at all — the same guard the vertical surface's tint uses one level up.
+    var hasTintedPagedSelection by remember { mutableStateOf(false) }
+
+    // See [ReadyScore]'s identical pair: the tap callbacks are read at call time so a fresh lambda per
+    // recomposition does not restart the gesture detector mid-tap.
+    val currentOnSelectItem by rememberUpdatedState(onSelectItem)
+    val currentOnTapSeekItem by rememberUpdatedState(onTapSeekItem)
 
     // `deferRaster = false`: a page is about a screenful, so re-recording it per pinch frame is fine —
     // which is what this surface already did. Underfill is START on both axes: a page is viewport-sized
@@ -124,7 +165,10 @@ internal fun PagedScore(
     // Build the per-page program + page breaks whenever the viewport dimensions OR display options
     // change (incl. device rotation and any inspector edit that affects pagination). Width is now
     // included in the key so a wider viewport (e.g. landscape or tablet) triggers a reflow.
-    LaunchedEffect(scoreHandle, viewportWidthMm, viewportHeightMm, layoutOptions) {
+    // `layoutGeneration` joins the keys because an EDIT re-lays-out the score: the recompute loop bumps it and
+    // republishes its own program, but this surface draws pages it paginated itself, so without this the note you
+    // just wrote would not appear until something else moved.
+    LaunchedEffect(scoreHandle, viewportWidthMm, viewportHeightMm, layoutOptions, layoutGeneration) {
         if (scoreHandle != null && viewportHeightMm > 0.0) {
             // One atomic native pass: the program + its matching page breaks are computed under a single
             // lock so the recompute loop can't clobber the shared layout cache between them (that mismatch
@@ -136,6 +180,28 @@ internal fun PagedScore(
             // Publish only when consistent (one boundary per page edge); on a transient inconsistency keep
             // the prior good data rather than blanking the view.
             if (consistent) pagedData = PagedData(pages, breaks)
+        }
+    }
+
+    // The selection tint, kept OUT of the effect above on purpose: that one re-paginates, and re-engraving the
+    // score on every tap is exactly the cost `setEditSelection` exists to avoid. This is the same single cheap
+    // re-encode of the already-cached paged document, and it swaps only the pages — the breaks it was paginated
+    // with are unchanged, because nothing about the layout moved.
+    //
+    // It follows `layoutGeneration` too: the effect above republishes UNTINTED pages after every relayout, so the
+    // tint has to be re-applied on top, which is the same order the vertical surface's tint runs in.
+    val selectedItemBytes = if (editing.isEditing) editing.selectedItem else null
+    LaunchedEffect(scoreHandle, selectedItemBytes, layoutGeneration, selectionTintArgb, pagedData?.breaks) {
+        if (scoreHandle == null || pagedData == null) return@LaunchedEffect
+        val ids = if (editing.isEditing) decodeSelectedItems(selectedItemBytes) else emptyList()
+        if (ids.isEmpty() && !hasTintedPagedSelection) return@LaunchedEffect
+        hasTintedPagedSelection = ids.isNotEmpty()
+        val tinted = readerVm.pagedTintedProgram(ids, selectionTintArgb) ?: return@LaunchedEffect
+        val current = pagedData ?: return@LaunchedEffect
+        // Only swap when the re-encode produced the same page count the breaks describe — the same consistency
+        // rule the fetch above applies, for the same reason.
+        if (tinted.pages.size == current.pages.size) {
+            pagedData = PagedData(tinted.pages, current.breaks)
         }
     }
 
@@ -242,7 +308,16 @@ internal fun PagedScore(
                     // overlay that lays those zones out. The page content is drawn page-local (from y=0) and translated
                     // by panOffset; the hit-test wants ABSOLUTE document mm, so fold this page's band
                     // top (pageTopPx) into the content offset — identical to the overlay's panOffset.
-                    .pointerInput(scoreHandle, fitPxPerMM, layoutOptions, pageIndex, scale, annotationMode) {
+                    .pointerInput(
+                        scoreHandle,
+                        fitPxPerMM,
+                        layoutOptions,
+                        pageIndex,
+                        scale,
+                        annotationMode,
+                        editing.isEditing,
+                        editing.activeVoice,
+                    ) {
                         // While annotating, a tap is the start of a stroke — never a seek.
                         if (annotationMode) return@pointerInput
                         val handle = scoreHandle ?: return@pointerInput
@@ -250,7 +325,9 @@ internal fun PagedScore(
                         val optionsBytes = layoutOptions.encode()
                         val navZoneWidthPx = size.width * PAGE_NAV_ZONE_WIDTH_FRACTION
                         detectTapGestures { offset ->
-                            // Ignore taps inside either edge nav zone — those belong to PageTapOverlay.
+                            // Ignore taps inside either edge nav zone — those belong to PageTapOverlay. This
+                            // holds while editing too: turning the page has to stay reachable, and iOS likewise
+                            // never lets an edit tap take the page-turn region.
                             if (offset.x < navZoneWidthPx || offset.x > size.width - navZoneWidthPx) {
                                 return@detectTapGestures
                             }
@@ -258,15 +335,52 @@ internal fun PagedScore(
                             // `pointerInput`, which only restarts its handler when a KEY changes, and a pan
                             // changes none of them. A captured `Offset` would go stale the moment the reader
                             // pans, and the tap would seek to the wrong note with nothing to show for it.
+                            //
+                            // `pageTopPx` is what turns a page-local tap into ABSOLUTE document mm — the same
+                            // conversion the cursor and annotation overlays make, and the only thing page mode
+                            // needs that the other two surfaces do not.
+                            val contentOffsetPx =
+                                Offset(-viewport.offsetX, -viewport.offsetY - pageTopPx)
+                            if (editing.isEditing) {
+                                // Editing replaces tap-to-seek here as it does on the other surfaces — see
+                                // [ReadyScore]'s tap branch for why the read is guarded and has a fast path.
+                                val hitTest: (Long) -> ByteArray? = { h ->
+                                    editingHitTestForTap(
+                                        tap = offset,
+                                        contentOffsetPx = contentOffsetPx,
+                                        pxPerMM = fitPxPerMM,
+                                        scale = viewport.scale,
+                                        scoreHandle = h,
+                                        activeVoice = editing.activeVoice,
+                                        layoutOptionsBytes = optionsBytes,
+                                    )
+                                }
+                                val immediate = readerVm.tryWithReaderLayout(hitTest)
+                                if (immediate != null) {
+                                    currentOnSelectItem(immediate.value)
+                                } else {
+                                    scope.launch {
+                                        readerVm.withReaderLayout(hitTest)?.let {
+                                            currentOnSelectItem(it.value)
+                                        }
+                                    }
+                                }
+                                return@detectTapGestures
+                            }
                             val cursor = nearestCursorForTap(
                                 tap = offset,
-                                contentOffsetPx = Offset(-viewport.offsetX, -viewport.offsetY - pageTopPx),
+                                contentOffsetPx = contentOffsetPx,
                                 pxPerMM = fitPxPerMM,
                                 scale = viewport.scale,
                                 scoreHandle = handle,
                                 layoutOptionsBytes = optionsBytes,
                             ) ?: return@detectTapGestures
                             audioVm.handleTap(cursor)
+                            // Remember what the playhead landed on, so a later edit session opens there — see
+                            // [ReadyScore]'s note, incl. why a bare `.Beat` cursor leaves the last one standing.
+                            (cursor as? ScoreCursor.Item)?.let {
+                                currentOnTapSeekItem(ScoreItemIDCodec.encode(it.arg0))
+                            }
                         }
                     }
                     // Pan, pinch, and fling live INSIDE the pager page (not as a sibling overlay), so
@@ -309,9 +423,68 @@ internal fun PagedScore(
                 val bPending by audioVm.repeatPendingB.collectAsStateWithLifecycle()
                 val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
                 scoreHandle?.let { h ->
+                    // The editing caret and callout, with this page's band shift folded into `panOffset` exactly
+                    // as the cursor and annotation overlays fold it. A caret belonging to another page lands
+                    // outside the band and is cut by the page Box's `clipToBounds`, which is what iOS's paged
+                    // surface does with its own `.clipped()`.
+                    val caretItem = if (editing.isEditing) editing.caretItem else null
+                    var caretRect by remember { mutableStateOf<EditCaretFrame?>(null) }
+                    LaunchedEffect(h, caretItem, layoutGeneration) {
+                        caretRect = caretItem?.let { item ->
+                            readerVm.withReaderLayout { handle ->
+                                caretRectMm(handle, item, EDIT_CARET_MINIMUM_WIDTH_MM)
+                            }?.value
+                        }
+                    }
+                    EditingCaretOverlay(
+                        rectMm = caretRect,
+                        pxPerMM = fitPxPerMM,
+                        scale = scale,
+                        panOffset = Offset(panOffset.x, panOffset.y - pageTopPx),
+                        color = abAccent.copy(alpha = ON_SCREEN_CURSOR_ALPHA),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    val selectedItem = if (editing.isEditing) editing.selectedItem else null
+                    var calloutRect by remember { mutableStateOf<EditCaretFrame?>(null) }
+                    LaunchedEffect(h, selectedItem, layoutGeneration) {
+                        calloutRect = selectedItem?.let { item ->
+                            readerVm.withReaderLayout { handle ->
+                                caretRectMm(handle, item, EDIT_CALLOUT_MINIMUM_WIDTH_MM)
+                            }?.value
+                        }
+                    }
+                    if (editing.isEditing && editing.hasSelectionCallout) {
+                        EditingCallout(
+                            rectMm = calloutRect,
+                            isNoteSelected = editing.isNoteSelected,
+                            durationKind = editing.calloutDurationKind,
+                            dots = editing.calloutDots,
+                            isPlaybackActive = isPlaybackActive,
+                            pxPerMM = fitPxPerMM,
+                            scale = scale,
+                            // A page has no fixed vertical inset; the band shift rides in the pan offset below,
+                            // which is where every other page-mode overlay carries it too.
+                            vPadPx = 0f,
+                            viewportPanPx = Offset(viewport.offsetX, viewport.offsetY + pageTopPx),
+                            viewportSizePx = viewportSize,
+                            // Deliberately zero, unlike the scrolling surfaces. Page mode must not reserve room
+                            // for the editing chrome: that inset feeds the viewport height this surface
+                            // PAGINATES from, so reserving it would re-flow the whole score the moment the pad
+                            // moved. iOS draws the same line (`horizontalEditingInsets` is horizontal-only).
+                            bottomClearancePx = 0f,
+                            onSetDuration = onSetSelectionDuration,
+                            onSetDots = onSetSelectionDots,
+                            onToggleDot = onToggleSelectionDot,
+                            onShiftPitch = onShiftPitch,
+                            onShiftOctave = onShiftOctave,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                     PlaybackCursorOverlay(
                         scoreHandle = h,
-                        cursorFlow = audioVm.currentCursor,
+                        // `displayCursor` while editing, so the drawn playhead steps aside for the caret — see
+                        // [ReadyScore]'s note; the two are the same accent column.
+                        cursorFlow = if (editing.isEditing) audioVm.displayCursor else audioVm.currentCursor,
                         pxPerMM = fitPxPerMM,
                         scale = scale,
                         panOffset = Offset(panOffset.x, panOffset.y - pageTopPx),
