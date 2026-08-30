@@ -1,5 +1,6 @@
 import ScreenshotKit
 import SwiftUI
+import UtilityUI
 
 enum ScreenshotScene: CaseIterable {
     case reader
@@ -24,7 +25,14 @@ enum ScreenshotScene: CaseIterable {
         }
     }
 
-    /// The scene, with the idiom it should render for already installed.
+    /// The scene, with the idiom it should render for already installed, and the window's top safe area pinned to 0.
+    ///
+    /// **The inset is pinned for the same reason the idiom is installed here** — a scene is drawn into a mock device
+    /// frame, not into the window. A screen that puts controls inside the top safe area (the Reader's cutout tier:
+    /// ✕ and 完了 while editing) would place them in the window's 62pt band, which inside the frame is exactly where
+    /// the screen's own control strip sits — the two came out overlapping. The frames draw no status-bar band
+    /// (`innerStatusBarHeight: 0`, deliberate: the strip and the white score page read as one surface), so 0 is the
+    /// truth here, and the controls fold into the strip the way they do on a phone with no cutout.
     ///
     /// The idiom is applied HERE, in app code, and not by the capture test: `ScreenshotKit` is statically linked into
     /// both the app and the test bundle, so each binary has its own `ScreenshotIdiomKey` metadata. An
@@ -33,7 +41,9 @@ enum ScreenshotScene: CaseIterable {
     /// deliverables framed with the iPhone layout.
     @MainActor
     var view: some View {
-        sceneBody.environment(\.screenshotIdiom, ScreenshotEnvironment.idiom)
+        sceneBody
+            .environment(\.screenshotIdiom, ScreenshotEnvironment.idiom)
+            .environment(\.windowTopSafeAreaInsetOverride, 0)
     }
 
     @MainActor @ViewBuilder
