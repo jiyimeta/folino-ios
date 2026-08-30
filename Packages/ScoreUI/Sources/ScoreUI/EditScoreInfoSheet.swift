@@ -44,21 +44,23 @@ public struct EditScoreInfoSheet: View {
                 }
             }
             .navigationTitle(Text("scoreUI.editInfo.title", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { toolbarContent }
-            .task { await loadOnce() }
-            .interactiveDismissDisabled(hasChanges)
-            .alert(
-                Text("scoreUI.editInfo.discardAlert.title", bundle: .module),
-                isPresented: $showDiscardConfirmation,
-            ) {
-                Button(role: .cancel) {} label: {
-                    Text("scoreUI.editInfo.discardAlert.keepEditing", bundle: .module)
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+                .toolbar { toolbarContent }
+                .task { await loadOnce() }
+                .interactiveDismissDisabled(hasChanges)
+                .alert(
+                    Text("scoreUI.editInfo.discardAlert.title", bundle: .module),
+                    isPresented: $showDiscardConfirmation,
+                ) {
+                    Button(role: .cancel) {} label: {
+                        Text("scoreUI.editInfo.discardAlert.keepEditing", bundle: .module)
+                    }
+                    Button(role: .destructive) { dismiss() } label: {
+                        Text("scoreUI.editInfo.discardAlert.discard", bundle: .module)
+                    }
                 }
-                Button(role: .destructive) { dismiss() } label: {
-                    Text("scoreUI.editInfo.discardAlert.discard", bundle: .module)
-                }
-            }
         }
     }
 

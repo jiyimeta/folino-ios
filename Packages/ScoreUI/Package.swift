@@ -8,7 +8,7 @@ let swiftLintPlugins: [Target.PluginUsage] = [
 let package = Package(
     name: "ScoreUI",
     defaultLocalization: "en",
-    platforms: [.iOS(.v18)],
+    platforms: [.iOS(.v18), .macOS(.v14)],
     products: [
         .library(name: "ScoreUI", targets: ["ScoreUI"]),
     ],
