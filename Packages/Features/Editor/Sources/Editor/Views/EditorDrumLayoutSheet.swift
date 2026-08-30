@@ -26,6 +26,7 @@ struct EditorDrumLayoutSheet: View {
     var body: some View {
         NavigationStack {
             form
+            // Gap recorded on EditorInstrumentsSheet.swift's PARITY(macos) marker, not duplicated here.
             #if os(iOS)
             .environment(\.editMode, .constant(.active))
             #endif

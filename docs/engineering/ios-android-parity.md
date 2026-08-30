@@ -1,9 +1,9 @@
-# iOS / Android parity ledger
+# iOS / Android / macOS parity ledger
 
-Folino ships on two platforms, and one of them regularly lands a feature first.
-This file records what is **deliberately** owed to the other platform, so a
-half-crossed feature is a tracked debt rather than something rediscovered months
-later by a user.
+Folino ships on three platforms — iOS, Android, and (as of sub-project Ⅲa) macOS —
+and they regularly land a feature unevenly. This file records what is
+**deliberately** owed to whichever platform is behind, so a half-crossed feature
+is a tracked debt rather than something rediscovered months later by a user.
 
 It is not a TODO list. Only record a gap that is real and intended — an ordinary
 "would be nice" belongs in the roadmap, and a bug belongs in an issue. A ledger
@@ -20,10 +20,10 @@ Leave a marker where the code diverges — not here:
 public static let showAllMeasureNumbers = "readerShowAllMeasureNumbers"
 ```
 
-Format: `PARITY(<platform>): <title> — <what the other platform still needs>`,
-where `<platform>` is the platform the work is **owed to**. The separator is an
-em dash (` -- ` also works). A continuation line repeats the comment token and
-indents.
+Format: `PARITY(<android|ios|macos>): <title> — <what the other platform still needs>`,
+where `<platform>` is the platform the work is **owed to** — `macos` is a valid
+value alongside `android` and `ios`. The separator is an em dash (` -- ` also
+works). A continuation line repeats the comment token and indents.
 
 `Scripts/parity-report.py` collects the markers into the generated block below,
 and the `parity-ledger` pre-commit hook rewrites it and fails if it had drifted —
@@ -78,7 +78,7 @@ Nothing is currently owed to iOS.
 | dotted-duration menu glyph | `Packages/Features/Editor/Sources/Editor/Views/EditorPadButtons.swift:8` | iOS rasterizes because a UIKit `Menu` row will not draw a custom View or apply a custom font. AppKit menus have no such restriction, so the Mac pad should draw the glyph as a View rather than port the rasterizer. |
 | pad-tuck-handle preview background | `Packages/Features/Editor/Sources/Editor/Views/EditorPadTuckHandle.swift:65` | `.systemGroupedBackground` has no macOS analogue, so the preview stands in with `.windowBackgroundColor`, a provisional pick until Reader's own port settles what a Mac grouped surface should read as. |
 | A–B repeat row glyph | `Packages/Features/Settings/Sources/Settings/Screens/ReaderModeSettingRows.swift:52` | iOS rasterizes because a Menu row will not draw a custom View; the Mac menu has no such restriction, so the two branches are expected to stay different. |
-| version-history row background | `Packages/Features/Settings/Sources/Settings/VersionHistory/VersionHistoryScreen.swift:93` | iOS uses the grouped-list "secondary system background" gray; macOS substitutes the window background color, the platform's closest system-provided neutral fill. |
+| version-history row background | `Packages/Features/Settings/Sources/Settings/VersionHistory/VersionHistoryScreen.swift:97` | iOS uses the grouped-list "secondary system background" gray, a raised card on top of the grouped-list base. macOS substitutes `.underPageBackgroundColor`, a provisional pick until Reader's own port settles what a Mac grouped surface should read as. |
 | feedback mail composer | `Packages/Features/Settings/Sources/Settings/Views/FeedbackMailView.swift:3` | macOS has no MessageUI. The Mac path is an `NSWorkspace.open` of a `mailto:` URL built from the same subject and body; until then `canSendMail` is false and the row disables itself, exactly as on an iPhone with no mail account configured. |
 | loop-bounds mapping | `Packages/Infrastructure/Sources/Audio/LivePlaybackController+LoopBounds.swift:1` | depends on the gated LivePlaybackController; ports once that type does. |
 | note preview forwarding | `Packages/Infrastructure/Sources/Audio/LivePlaybackController+Preview.swift:1` | depends on the gated LivePlaybackController; ports once that type does. |
@@ -87,7 +87,6 @@ Nothing is currently owed to iOS.
 | live playback controller | `Packages/Infrastructure/Sources/Audio/LivePlaybackController.swift:1` | macOS needs the AVAudioSession-free equivalent (no session category, NSImage-backed now-playing artwork, and CoreAudio default-device observation in place of route notifications). |
 | offline audio export | `Packages/Infrastructure/Sources/Audio/LiveScoreAudioExporter.swift:1` | macOS needs the AVAudioSession-free equivalent of `.hostManaged` export. |
 | output-route disconnect watcher | `Packages/Infrastructure/Sources/Audio/OutputRouteDisconnectWatcher.swift:1` | macOS needs CoreAudio default-device-change observation in place of `AVAudioSession.routeChangeNotification`. |
-| edit-info sheet title display mode | `Packages/ScoreUI/Sources/ScoreUI/EditScoreInfoSheet.swift:47` | no macOS analogue; navigationTitle alone sets the sheet title there. Revisit only if a Mac port wants inline-vs-large-title parity with the iOS sheet. |
 | system share sheet | `Packages/Utility/Sources/UtilityUI/ActivityViewControllerRepresentable.swift:1` | macOS needs an NSSharingServicePicker equivalent, wired into ScoreShareTarget's call sites. |
 | screen corner radius | `Packages/Utility/Sources/UtilityUI/Device+CornerRadius.swift:21` | DeviceKit has no macOS device geometry to read, so `screenCornerRadius` returns 0 there. Revisit only if a Mac window ever needs concentric corner nesting against real display bezel geometry. |
 | per-screen light/dark scoping | `Packages/Utility/Sources/UtilityUI/HostingAppearance.swift:53` | macOS would set NSAppearance on the hosting view instead of UITraitOverrides. |

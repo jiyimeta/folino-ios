@@ -44,25 +44,21 @@ public struct EditScoreInfoSheet: View {
                 }
             }
             .navigationTitle(Text("scoreUI.editInfo.title", bundle: .module))
-            // PARITY(macos): edit-info sheet title display mode — no macOS analogue; navigationTitle alone sets the
-            //   sheet title there. Revisit only if a Mac port wants inline-vs-large-title parity with the iOS sheet.
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
-                .toolbar { toolbarContent }
-                .task { await loadOnce() }
-                .interactiveDismissDisabled(hasChanges)
-                .alert(
-                    Text("scoreUI.editInfo.discardAlert.title", bundle: .module),
-                    isPresented: $showDiscardConfirmation,
-                ) {
-                    Button(role: .cancel) {} label: {
-                        Text("scoreUI.editInfo.discardAlert.keepEditing", bundle: .module)
-                    }
-                    Button(role: .destructive) { dismiss() } label: {
-                        Text("scoreUI.editInfo.discardAlert.discard", bundle: .module)
-                    }
+            .inlineNavigationTitleCompat()
+            .toolbar { toolbarContent }
+            .task { await loadOnce() }
+            .interactiveDismissDisabled(hasChanges)
+            .alert(
+                Text("scoreUI.editInfo.discardAlert.title", bundle: .module),
+                isPresented: $showDiscardConfirmation,
+            ) {
+                Button(role: .cancel) {} label: {
+                    Text("scoreUI.editInfo.discardAlert.keepEditing", bundle: .module)
                 }
+                Button(role: .destructive) { dismiss() } label: {
+                    Text("scoreUI.editInfo.discardAlert.discard", bundle: .module)
+                }
+            }
         }
     }
 
