@@ -28,7 +28,7 @@ folino for macOS is **not** a document-based app in the `NSDocument` sense. Scor
 
 **The cost, and how it is paid.** The one workflow that gets longer is "receive an `.mscz` over Drive/AirDrop, edit it, send it back": open → edit → export, rather than open → edit → ⌘S. This is absorbed **as a per-score attribute, not as a second mode**: an imported score remembers its *origin* (a security-scoped bookmark) and mirrors saves back to it. On by default, switchable per score. The library stays the single truth; the origin is only a write target. This respects the standing "never split the experience into two modes" rule (`feedback_no_experience_divergence`).
 
-**Consequence that must be stated plainly:** deciding that the library is shared makes **personal cloud sync (collaboration SP2) a hard prerequisite for macOS**. A Mac whose library cannot show the scores already on the user's iPad is an island, which contradicts the reason this decision was made. See §9.
+**Consequence that must be stated plainly:** deciding that the library is shared makes **personal cloud sync (collaboration SP2) a hard prerequisite for *shipping* macOS**. A Mac whose library cannot show the scores already on the user's iPad is an island, which contradicts the reason this decision was made. It is not a prerequisite for *building* macOS: the seam is a Domain protocol, so the two tracks develop independently and meet at the release. See §9.
 
 ---
 
@@ -282,16 +282,17 @@ Not building 38 dedicated command UIs for iPhone in v1 is a **scheduling** decis
 
 | | Sub-project | Depends on |
 | --- | --- | --- |
-| **0** | **SP0 addressing decision** — write the "all element references funnel through one codec seam" constraint into Ⅰ's spec; schedule SP0's body immediately before SP6 (§6.1) | — |
-| **Ⅵa** | **Keep the collaboration branch current** — absorb `main` into `worktree-group-sharing-collab` on a schedule. **Do not merge to `main`.** | — |
-| **Ⅵb** | **SP2, personal cloud sync** — a hard prerequisite for macOS (§1) | Ⅵa |
+| **0a** | **SP0 addressing decision** — write the "all element references funnel through one codec seam" constraint into Ⅰ's spec; schedule SP0's body immediately before SP6 (§6.1) | — |
+| **0b** | **Lift `DrawingAnchor.authorUID` / `.isPrivate` out of SP5 onto `main`** — additive `Codable` fields, inert without sync; unblocks Ⅴ | — |
+| **Ⅵa** | **Keep the collaboration branch current** — absorb `main` into `worktree-group-sharing-collab` on a schedule. **Do not merge to `main` until the whole release bundle is ready.** | — |
+| **Ⅵb** | **SP2, personal cloud sync** — required for macOS to *ship*, not to build (§1) | Ⅵa |
 | **Ⅵc** | **Revise the collaboration spec for macOS** + SP3–SP5 (groups, sharing, shared/private annotations) | Ⅵb |
-| **Ⅰ** | **ssm: ~38 edit commands** + wire intents + replay goldens; correct `edit-commands.md` §C | 0 |
+| **Ⅰ** | **ssm: ~38 edit commands** + wire intents + replay goldens; correct `edit-commands.md` §C | 0a |
 | **Ⅱ** | **ssm: macOS foundations** — hit-testing / selection / caret / playback cursor on the page deck; fixed-width vertical **as an option**; `MSCZWriter` extra entries; `AVAudioEngineConfigurationChange` | — |
 | **Ⅲa** | **folino packages on macOS** — platform declarations + UIKit separation | — |
 | **Ⅲb** | **Mac app shell** — new target, window/tab/menu bar/panel skeleton, `Infrastructure.Audio` on macOS; revise `module-architecture.md` | Ⅲa |
 | **Ⅳ** | **Mac editing UI** — palette / inspector / mixer / piano / drum pad, command registry and search, key map; iPad menu bar and the iPhone search floor; PARITY bookkeeping | Ⅲb, Ⅱ (consumes Ⅰ incrementally) |
-| **Ⅴ** | **`.folino` format + Mac annotation canvas** — container spec, UTType declaration, three exports, author snapshot, reconciliation rules | Ⅱ, Ⅲb, Ⅵc |
+| **Ⅴ** | **`.folino` format + Mac annotation canvas** — container spec, UTType declaration, three exports, author snapshot, reconciliation rules | 0b, Ⅱ, Ⅲb |
 | **Ⅷ** | **Mac distribution** — App Sandbox + security-scoped bookmark persistence (what §1's origin mirroring actually requires), signing, notarization / App Store submission, a mac release lane, Mac screenshots | Ⅲb |
 | **Ⅶ** | **folino Pro (M5 IAP)** — ships with collaboration; iOS↔Mac universal purchase | Ⅵc, Ⅷ |
 
@@ -303,11 +304,18 @@ Not building 38 dedicated command UIs for iPhone in v1 is a **scheduling** decis
 
 **Ⅲa is smaller than it looks.** `Utility`, `Domain`, and `Library` already declare `.macOS(.v14)`; six packages are iOS-only. Of 845 source files, 46 import UIKit or PencilKit, and the structural work concentrates in Reader's UIKit scroll hosts and Utility's representables. `ScoreUI` imports UIKit in zero files — a one-line `platforms:` change. Within Infrastructure the non-portable surface is **three files, all under `Audio/`** (`LivePlaybackController.swift`, `LiveScoreAudioExporter.swift`, `OutputRouteDisconnectWatcher.swift` — `AVAudioSession`, `MPMediaItemArtwork`, route-change notifications); Persistence, Soundfonts, and ScoreFiles are portable.
 
-**Ⅵ is not merged to `main` yet.** The branch is **26 ahead / 301 behind** as of 2026-08-31. Merging now would invoke the spec's own release-timing commitment — "do not cut a release from `main` between SP1 and SP2" — and freeze iOS and Android releases until SP2 lands. Instead the branch absorbs `main` on a schedule (Ⅵa), which fixes the drift while leaving `main` releasable, and pays the conflict cost incrementally on the branch, where it belongs. Known collision points: `SettingsSheet.swift`, `Packages/Infrastructure/Package.swift`.
+**The collaboration branch merges to `main` exactly once, at the end.** It is **26 ahead / 301 behind** as of 2026-08-31, and it stays unmerged until the entire release bundle — SP2, SP3–SP5, Pro, and macOS — is ready to ship together.
 
-**The merge happens when SP2 is complete** — at that point SP1 and SP2 land together and the release-timing commitment is satisfied by construction. Ⅵc then starts from a fresh worktree branched off `main`, absorbing `main` frequently, per the repo's standing practice. No sub-project in this document is developed on `main` itself.
+The reason is stronger than the spec's own release-timing commitment ("do not cut a release from `main` between SP1 and SP2"). **SP2 cannot ship without Pro**: the Pro tier table puts a small personal-sync quota in Free and the full quota in Pro, so personal sync going out requires the entitlement to exist, and M5 (IAP) is scheduled to launch with cloud/collab. Merging at SP2 would therefore place an unshippable feature on `main` — satisfying the commitment's letter while defeating its purpose, which is that **`main` must stay releasable for a hotfix at any moment**. Instead the branch absorbs `main` on a schedule (Ⅵa) and pays its conflict cost incrementally, where it belongs. Known collision points: `SettingsSheet.swift`, `Packages/Infrastructure/Package.swift`.
 
-**The critical path is not Ⅵ alone.** `Ⅵa → Ⅵb → Ⅵc` and `Ⅲa → Ⅲb → Ⅳ` run in parallel, and the longer of the two decides the date. Ⅷ and Ⅶ close it out. Both tracks can start immediately.
+Two measures keep a long-lived branch cheap, and both are prerequisites for this plan:
+
+- **The macOS work targets the Domain protocol, not SP2's implementation.** `Domain/Protocols/CloudSync.swift` already exists (`start` / `stop` / `syncNow` / `state`), and folino uses pure constructor injection, so the Mac shell composes against today's placeholder and SP2 drops in at the App composition root. macOS needs sync to *ship*, not to *build*. Consequently **Ⅲa, Ⅲb, Ⅳ, and Ⅷ merge to `main` incrementally** — a new macOS target promises nothing to existing iOS users and does not block an iOS hotfix. Only the collaboration branch is long-lived.
+- **`DrawingAnchor`'s `authorUID` / `isPrivate` fields are lifted out of SP5 and land on `main` early.** They are additive `Codable` fields under the append-only extension contract and are inert without sync (a missing author reads as "mine"). This **removes Ⅴ's dependency on Ⅵc**: `.folino` can be specified and built on `main`, and the collaboration branch simply absorbs it.
+
+What remains on the branch is then the smallest possible set: the SP2–SP5 implementations and Pro. No sub-project in this document is developed on `main` itself — every one uses its own worktree and absorbs `main` frequently.
+
+**The critical path is not Ⅵ alone.** `Ⅵa → Ⅵb → Ⅵc` (on the branch) and `Ⅲa → Ⅲb → Ⅳ` (merging to `main` incrementally) run in parallel, and the longer of the two decides the date. Ⅷ and Ⅶ close it out, and the single collaboration merge is the last act. Both tracks can start immediately.
 
 ---
 
