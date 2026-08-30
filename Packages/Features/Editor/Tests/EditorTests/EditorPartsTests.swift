@@ -35,6 +35,21 @@ struct EditorPartsTests {
         #expect(viewModel.partRows.last?.staffAddresses == [StaffAddress(partIndex: 2, staffIndexInPart: 0)])
     }
 
+    /// Does the rename reach the SCORE, not just the row it was typed into — the thing the reader's first-system
+    /// label and the inspector both read.
+    @Test
+    func `renamePart writes both names onto the score`() throws {
+        let viewModel = makeViewModel()
+        viewModel.beginSession(score: EditorFixtures.parts(named: ["Flute", "Oboe"]))
+
+        viewModel.renamePart(at: 0, longName: "なおき", shortName: "な")
+
+        let score = try #require(viewModel.score)
+        #expect(score.parts[0].instrument.longName == "なおき")
+        #expect(score.parts[0].instrument.shortName == "な")
+        #expect(viewModel.partRows.map(\.name) == ["なおき", "Oboe"])
+    }
+
     @Test
     func `removePart is refused on a score's last part`() {
         let viewModel = makeViewModel()

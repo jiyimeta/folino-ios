@@ -34,6 +34,10 @@ extension EditorViewModel {
         /// know in a score that carried no track name. Separate from `name` because a renamed part ("なおき") says
         /// nothing about the instrument it plays, and the sheet has to.
         public let instrumentName: String?
+        /// The abbreviation engraved at the left of every system after the first, or `nil` for a part that carries
+        /// none — which engraves no label there at all, and is a thing a score can want to say. Read straight off
+        /// the instrument rather than through `staffDisplayName`, which has no short form to fall back through.
+        public let shortName: String?
         /// The part's staves, in order — one visibility toggle each. A piano has two, most instruments one.
         public let staffAddresses: [StaffAddress]
     }
@@ -48,6 +52,7 @@ extension EditorViewModel {
                 index: index,
                 name: score.staffDisplayName(at: StaffAddress(partIndex: index, staffIndexInPart: 0)),
                 instrumentName: instrumentDisplayName(of: part),
+                shortName: part.instrument.shortName,
                 staffAddresses: part.staves.indices.map {
                     StaffAddress(partIndex: index, staffIndexInPart: $0)
                 },
@@ -122,6 +127,34 @@ extension EditorViewModel {
         )
         onPartsEdited(.reorder)
         commitPartEdit()
+    }
+
+    /// Renames the part at `index`: the long name engraved on the first system, and the abbreviation engraved on
+    /// every system after it. Both together, so taking a rename back cannot leave the score half-renamed.
+    ///
+    /// An empty name is stored as "no name" — for the abbreviation that is a real setting (no label from the
+    /// second system on), and for the long name it is what the engine already means by absent. Trimming here
+    /// rather than at the field keeps "  " from becoming a name made of spaces.
+    ///
+    /// Unlike the other three part edits this needs no `commitPartEdit()`: that machinery exists to settle the
+    /// preferences row against part RENUMBERING, and a rename moves no index. For the same reason the selection
+    /// and caret are simply restored — nothing shifted, so the markers captured before still name the same slots,
+    /// and without this the intent's `affectedLocation` would pull the caret onto the renamed part's first bar
+    /// (the trap `appendMeasure` documents).
+    public func renamePart(at index: Int, longName: String, shortName: String?) {
+        let trimmedLong = longName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedShort = shortName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let selection = selectedItem
+        let caret = caretItem
+        let intent = EditIntent.setPartNames(
+            at: index,
+            longName: trimmedLong.isEmpty ? nil : trimmedLong,
+            shortName: (trimmedShort?.isEmpty ?? true) ? nil : trimmedShort,
+        )
+        // `nil` is the engine reporting a rename to the names the part already has — nothing happened, so there is
+        // nothing to place or save.
+        guard apply(intent) != nil else { return }
+        place(selection: selection, caret: caret)
     }
 
     // MARK: - Settling a part edit against the preferences row

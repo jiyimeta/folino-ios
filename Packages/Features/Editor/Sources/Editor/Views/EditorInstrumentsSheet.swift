@@ -29,6 +29,15 @@ struct EditorInstrumentsSheet: View {
     /// index: the dialog has to say the part's name, and the index alone would make that a second lookup that could
     /// disagree with what was swiped.
     @State private var partPendingRemoval: EditorViewModel.PartRow?
+    /// In-progress name edits, by part id. A row reads the score until it is typed into, and goes back to reading
+    /// it once the draft is written — so an undo, or an edit arriving from elsewhere, is never masked by a stale
+    /// buffer for a row nobody is editing.
+    @State private var nameDrafts: [String: String] = [:]
+    /// Which row's name field holds focus, by part id. Leaving a field is what commits it.
+    @FocusState private var focusedPartID: String?
+    /// The row whose abbreviation the alert is editing, and that edit's text.
+    @State private var shortNameTarget: String?
+    @State private var shortNameText = ""
 
     var body: some View {
         List {
@@ -74,10 +83,28 @@ struct EditorInstrumentsSheet: View {
         // list the way the Reader's inspectors name theirs, and every action here is already written to the score
         // by the time you see it, so there is nothing for a "done" to confirm. Swipe down closes it.
         .presentationDetents([.medium, .large])
+        // Leaving a field is what writes it. Watched here rather than per row, because the value that changes is
+        // one piece of state: the row losing focus is the PREVIOUS value, and the row gaining it is the new one.
+        .onChange(of: focusedPartID) { previous, _ in
+            guard let previous, let row = viewModel.partRows.first(where: { $0.id == previous }) else { return }
+            commitName(row)
+        }
         // Both presentations hang off this view's ROOT, never off a `Section` or a row: a modifier attached inside
         // the list is torn down the moment the list rebuilds — which adding or deleting a part does — and the sheet
         // closes on the frame it opened (repo gotcha).
         .sheet(isPresented: $isCatalogPresented) { catalogSheet }
+        .alert(
+            Text("editor.instruments.shortName", bundle: .module),
+            isPresented: shortNamePresentationBinding,
+        ) {
+            TextField(text: $shortNameText) {
+                Text("editor.instruments.shortName", bundle: .module)
+            }
+            Button { shortNameTarget = nil } label: { L10n.Common.cancel }
+            Button(action: commitShortName) { L10n.Common.ok }
+        } message: {
+            Text("editor.instruments.shortName.message", bundle: .module)
+        }
         .confirmationDialog(
             deletionTitle,
             isPresented: isRemovalConfirmationPresented,
@@ -152,20 +179,66 @@ struct EditorInstrumentsSheet: View {
         return Text("editor.instruments.showStaff \(staffNumber)", bundle: .module)
     }
 
-    /// The part's name with the instrument it plays beside it — "なおき  ピアノ".
+    /// The part's name, editable in place, with its abbreviation and the instrument it plays beside it —
+    /// "[なおき]  (な)  ピアノ".
     ///
-    /// A score whose parts were renamed lists as names that say nothing about what is playing them, which is the
-    /// case this exists for. Hidden when the part is simply named after its instrument, where it would only repeat
-    /// the line it sits on.
+    /// A score whose parts were renamed lists as names that say nothing about what plays them, which is what the
+    /// instrument name is for; it is hidden when it would only repeat the field. The abbreviation is a chip rather
+    /// than a second field, the same control the creation wizard uses for the same setting.
+    ///
+    /// The field writes on COMMIT, not per keystroke: every write here is a score edit with its own undo entry,
+    /// and a name typed letter by letter would fill the stack with one entry per character.
     private func partName(_ row: EditorViewModel.PartRow) -> some View {
         HStack(spacing: 8) {
-            Text(row.name)
+            TextField(text: nameBinding(row)) {
+                Text("editor.instruments.partName", bundle: .module)
+            }
+            .focused($focusedPartID, equals: row.id)
+            .onSubmit { commitName(row) }
+            shortNameChip(row)
             if let instrumentName = row.instrumentName, instrumentName != row.name {
                 Text(instrumentName)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// The row's field text: the draft while it is being typed, the score's own name otherwise. Keyed by part id
+    /// rather than index — the list can be reordered while a field holds focus.
+    private func nameBinding(_ row: EditorViewModel.PartRow) -> Binding<String> {
+        Binding(
+            get: { nameDrafts[row.id] ?? row.name },
+            set: { nameDrafts[row.id] = $0 },
+        )
+    }
+
+    /// Writes the draft to the score and drops it, so the row goes back to reading the score. Re-resolved by id,
+    /// because the index the row was drawn with can have moved under a reorder or an undo since.
+    private func commitName(_ row: EditorViewModel.PartRow) {
+        guard let draft = nameDrafts.removeValue(forKey: row.id),
+              let current = viewModel.partRows.first(where: { $0.id == row.id })
+        else { return }
+        viewModel.renamePart(at: current.index, longName: draft, shortName: current.shortName)
+    }
+
+    /// The part's abbreviation, shown and edited in one control — see the creation wizard's copy for why a chip
+    /// rather than a second field. An em dash stands in for a part that carries none, which is a real setting:
+    /// no label at all from the second system on.
+    private func shortNameChip(_ row: EditorViewModel.PartRow) -> some View {
+        Button {
+            shortNameTarget = row.id
+            shortNameText = row.shortName ?? ""
+        } label: {
+            Text(row.shortName ?? "—")
+                .font(.caption)
+                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Color(.tertiarySystemFill), in: .capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("editor.instruments.shortName", bundle: .module))
     }
 
     // MARK: - Toolbar / catalog
@@ -197,6 +270,26 @@ struct EditorInstrumentsSheet: View {
 
     private var deletionTitle: Text {
         Text("editor.instruments.delete.title \(partPendingRemoval?.name ?? "")", bundle: .module)
+    }
+
+    private var shortNamePresentationBinding: Binding<Bool> {
+        Binding(
+            get: { shortNameTarget != nil },
+            set: { isPresented in
+                guard !isPresented else { return }
+                shortNameTarget = nil
+            },
+        )
+    }
+
+    /// Writes the edited abbreviation, keeping the long name as it stands. Re-resolved by id for the reason the
+    /// deletion dialog is: the alert is modal to this sheet but not to the score.
+    private func commitShortName() {
+        defer { shortNameTarget = nil }
+        guard let shortNameTarget,
+              let row = viewModel.partRows.first(where: { $0.id == shortNameTarget })
+        else { return }
+        viewModel.renamePart(at: row.index, longName: row.name, shortName: shortNameText)
     }
 
     private var isRemovalConfirmationPresented: Binding<Bool> {
