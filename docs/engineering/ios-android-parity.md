@@ -72,6 +72,12 @@ Nothing is currently owed to iOS.
 
 ### Owed to macOS
 
-Nothing is currently owed to macOS.
+| Item | Where it diverges | What macOS still needs |
+| --- | --- | --- |
+| system share sheet | `Packages/Utility/Sources/UtilityUI/ActivityViewControllerRepresentable.swift:5` | macOS needs an NSSharingServicePicker equivalent, wired into |
+| screen corner radius | `Packages/Utility/Sources/UtilityUI/Device+CornerRadius.swift:21` | DeviceKit has no macOS device geometry to read, so |
+| per-screen light/dark scoping | `Packages/Utility/Sources/UtilityUI/HostingAppearance.swift:53` | macOS would set NSAppearance on the hosting view instead of |
+| interactive pop gesture | `Packages/Utility/Sources/UtilityUI/InteractivePopGestureEnabler.swift:6` | no macOS analogue; the modifier is a no-op there. Revisit only if the |
+| window-coordinate frame probe | `Packages/Utility/Sources/UtilityUI/WindowFrameReader.swift:35` | macOS needs the NSView equivalent before any Mac code can measure |
 
 <!-- /generated:parity -->

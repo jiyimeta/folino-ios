@@ -1,15 +1,17 @@
 import SwiftUI
 
-/// Availability-guarded substitutes for the iOS 26 Liquid Glass APIs. Each helper applies the real glass treatment on
-/// iOS 26+ and a frosted `.regularMaterial` fallback on iOS 18, so call sites stay one-liners instead of inline
-/// `#available` ladders. The iOS 26-only symbols (`Glass`, `.glassProminent`) appear only inside the
-/// `if #available(iOS 26, *)` branches, which keeps this file compiling at the iOS 18 deployment floor.
+/// Availability-guarded substitutes for the iOS/macOS 26 Liquid Glass APIs. Each helper applies the real glass
+/// treatment on iOS 26+ / macOS 26+ and a frosted `.regularMaterial` fallback below that, so call sites stay
+/// one-liners instead of inline `#available` ladders. The 26-only symbols (`Glass`, `.glassProminent`) appear only
+/// inside the `if #available(iOS 26, macOS 26, *)` branches, which keeps this file compiling at the iOS 18 / macOS 14
+/// deployment floors. `macOS 26` has to be spelled out explicitly here — `#available(iOS 26, *)` alone treats every
+/// non-iOS platform as unconditionally available, which would call the macOS-26-only glass APIs on macOS 14.
 extension View {
     /// `.glassEffect(.regular.interactive())` on iOS 26+; a `.regularMaterial` capsule background on iOS 18. The
     /// fallback shape is `Capsule()` because that is `glassEffect`'s default shape.
     @ViewBuilder
     public func interactiveGlassCompat() -> some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             glassEffect(.regular.interactive())
         } else {
             background(.regularMaterial, in: Capsule())
@@ -20,7 +22,7 @@ extension View {
     /// shape on iOS 18.
     @ViewBuilder
     public func interactiveGlassCompat<S: Shape>(in shape: S) -> some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             glassEffect(.regular.interactive(), in: shape)
         } else {
             background(.regularMaterial, in: shape)
@@ -34,7 +36,7 @@ extension View {
     /// under a strong tint reads as muddy, and the point of tinting this control is that it is unmistakable.
     @ViewBuilder
     public func tintedGlassCompat<S: Shape>(_ tint: Color, in shape: S) -> some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             glassEffect(.regular.tint(tint).interactive(), in: shape)
         } else {
             background(tint, in: shape)
@@ -45,7 +47,7 @@ extension View {
     /// same shape on iOS 18.
     @ViewBuilder
     public func regularGlassCompat<S: Shape>(in shape: S) -> some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             glassEffect(.regular, in: shape)
         } else {
             background(.regularMaterial, in: shape)
@@ -56,7 +58,7 @@ extension View {
     /// pre-glass prominent treatment.
     @ViewBuilder
     public func glassProminentButtonStyleCompat() -> some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             buttonStyle(.glassProminent)
         } else {
             buttonStyle(.borderedProminent)

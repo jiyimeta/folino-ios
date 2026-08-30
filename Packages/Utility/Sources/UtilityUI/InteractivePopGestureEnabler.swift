@@ -1,5 +1,10 @@
 import SwiftUI
+
+#if os(iOS)
 import UIKit
+
+// PARITY(macos): interactive pop gesture — no macOS analogue; the modifier is a no-op there. Revisit only if the
+// Mac shell ever adopts a navigation stack with a swipe-back affordance.
 
 /// Restores the edge-swipe-back gesture on a screen that hides the navigation bar.
 ///
@@ -136,10 +141,18 @@ public struct InteractivePopGestureEnabler: UIViewControllerRepresentable {
         }
     }
 }
+#endif
 
 extension View {
     /// Attach to a screen that hides the navigation bar but still wants edge-swipe back.
+    ///
+    /// On macOS this is a no-op.
+    @ViewBuilder
     public func restoresInteractivePopGesture() -> some View {
+        #if os(iOS)
         background(InteractivePopGestureEnabler().frame(width: 0, height: 0))
+        #else
+        self
+        #endif
     }
 }

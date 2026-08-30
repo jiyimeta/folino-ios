@@ -6,11 +6,23 @@ import Foundation
 public enum DeviceMetrics {
     /// Physical screen corner radius of the current device, in points. `0` for square-cornered
     /// devices (e.g. iPhone SE). Useful for nesting a rounded card concentrically inside the screen.
+    ///
+    /// On macOS this is always `0` — DeviceKit gates its whole iPhone/iPad `Device` case set behind
+    /// `#if os(iOS)`, so there is no per-device geometry to read here.
     public static var screenCornerRadius: CGFloat {
+        #if os(iOS)
         Device.current.cornerRadius
+        #else
+        0
+        #endif
     }
 }
 
+// PARITY(macos): screen corner radius — DeviceKit has no macOS device geometry to read, so
+// `screenCornerRadius` returns 0 there. Revisit only if a Mac window ever needs concentric corner
+// nesting against real display bezel geometry.
+
+#if os(iOS)
 extension Device {
     /// Physical screen corner radius in points. Values mirror Apple's display geometry per device;
     /// `0` for square-cornered devices. Copied from the shared Recordia implementation.
@@ -80,3 +92,4 @@ private func withAssertionFailure<V>(_ message: String, _ value: () -> V) -> V {
     assertionFailure(message)
     return value()
 }
+#endif
