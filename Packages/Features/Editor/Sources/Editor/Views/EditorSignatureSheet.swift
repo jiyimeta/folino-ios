@@ -58,7 +58,7 @@ struct EditorSignatureSheet<Picker: View>: View {
                 }
             }
             .navigationTitle(Text(title, bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar { toolbarContent }
         }
         // Both presentations hang off the sheet's ROOT rather than off the Section or row that raises them — a

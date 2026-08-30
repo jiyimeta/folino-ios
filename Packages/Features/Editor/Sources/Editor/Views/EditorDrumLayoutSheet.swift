@@ -1,5 +1,6 @@
 import EditorCore
 import SwiftUI
+import UtilityUI
 
 /// Editing the drum pad's key layout: which instruments, in what order, on how many rows, in which voice
 /// (drum note entry's §5.6).
@@ -25,15 +26,17 @@ struct EditorDrumLayoutSheet: View {
     var body: some View {
         NavigationStack {
             form
-                .environment(\.editMode, .constant(.active))
-                .navigationTitle(Text("editor.drum.layout.title", bundle: .module))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar { toolbarContent }
-                .sheet(item: pickingKey) { key in
-                    EditorDrumInstrumentPicker(current: key.pitch) { pitch in
-                        replace(key, withPitch: pitch)
-                    }
+            #if os(iOS)
+            .environment(\.editMode, .constant(.active))
+            #endif
+            .navigationTitle(Text("editor.drum.layout.title", bundle: .module))
+            .inlineNavigationTitleCompat()
+            .toolbar { toolbarContent }
+            .sheet(item: pickingKey) { key in
+                EditorDrumInstrumentPicker(current: key.pitch) { pitch in
+                    replace(key, withPitch: pitch)
                 }
+            }
         }
     }
 
@@ -182,7 +185,7 @@ struct EditorDrumInstrumentPicker: View {
                 .buttonStyle(.plain)
             }
             .navigationTitle(Text("editor.drum.layout.instrument", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
         }
     }
 }

@@ -53,7 +53,7 @@ struct EditorInstrumentsSheet: View {
                 .deleteDisabled(!viewModel.canRemovePart)
             }
             .navigationTitle(Text("editor.instruments.title", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar { toolbarContent }
         }
         // Both presentations hang off this view's ROOT, never off a `Section` or a row: a modifier attached inside
@@ -120,13 +120,18 @@ struct EditorInstrumentsSheet: View {
 
     // MARK: - Toolbar / catalog
 
+    // PARITY(macos): instrument and drum-row reordering — the iOS sheets open reordering through EditButton and an
+    //   always-active edit mode, neither of which exists on macOS. A Mac list reorders by drag without an edit
+    //   mode, so the fix is an affordance, not a port. Deleting a drum row is unavailable on macOS until then.
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         // Reordering needs edit mode, and nothing else in this sheet does — same placement reasoning as the new-score
         // wizard's instrumentation section, one level up because here the list IS the sheet.
-        ToolbarItem(placement: .topBarLeading) {
+        #if os(iOS)
+        ToolbarItem(placement: .topBarLeadingCompat) {
             EditButton()
         }
-        ToolbarItem(placement: .topBarTrailing) {
+        #endif
+        ToolbarItem(placement: .topBarTrailingCompat) {
             Button { isCatalogPresented = true } label: {
                 Image(systemName: "plus")
             }
@@ -151,7 +156,7 @@ struct EditorInstrumentsSheet: View {
                 isCatalogPresented = false
             }
             .navigationTitle(Text("editor.instruments.add", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { isCatalogPresented = false } label: { L10n.Common.cancel }
