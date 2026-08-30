@@ -500,6 +500,19 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         engine.value?.playPreview(noteId, durationMillis = PREVIEW_MILLIS)
     }
 
+    /**
+     * How much longer a preview note stays audible, in milliseconds; `0` when none is.
+     *
+     * Exists for [reprepareForEditedScore]'s caller. Adopting an edited score stops the engine, and stopping the
+     * engine silences a preview — so an edit that sounds a preview must not adopt until that preview is done, or
+     * the user hears their own note cut off after a few milliseconds.
+     *
+     * The engine is asked rather than [PREVIEW_MILLIS] added to a timestamp here, because a note is still audible
+     * after its nominal duration: its release renders out over a tail this side cannot know. A wait derived from
+     * [PREVIEW_MILLIS] alone let the adopt land squarely inside that tail and clipped it.
+     */
+    fun millisUntilPreviewSilent(): Long = engine.value?.millisUntilPreviewSilent() ?: 0L
+
     fun preparePlayback(scoreHandle: Long) {
         // Claim the handle FIRST — before anything in this function reads it, not merely before the coroutine can
         // suspend. `loadRehearsalMarks` below is already a dereference (`nativeRehearsalMarks`), and this function
