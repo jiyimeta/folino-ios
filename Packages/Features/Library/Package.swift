@@ -32,7 +32,7 @@ if isAndroid {
         .package(url: "https://github.com/jiyimeta/swift-wirelet.git", exact: "0.5.0"),
         .package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
-            exact: "2.2.0",
+            exact: "2.3.0",
         ),
         .package(path: "../../Domain"),
         .package(path: "../../Utility"),
