@@ -226,7 +226,7 @@ extension AnalyticsEvent {
         ])
     }
 
-    /// Logged when the drift guard trips; `reason` is `page_count` or `page_size` (see `driftReason`).
+    /// Logged when the drift guard trips; `reason` is `page_count`, `page_size`, or `unreadable_base_pdf`.
     public static func annotatedExportDrifted(reason: String) -> AnalyticsEvent {
         AnalyticsEvent(name: "annotated_export_drifted", parameters: ["reason": .string(reason)])
     }

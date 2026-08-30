@@ -119,7 +119,7 @@ public struct LiveScoreShareService: ScoreShareService {
             // `item.localFileName` is not what's missing — it's the score file, which exists. There is no original
             // PDF at all (never was, or `sourcePDFFileName` was cleared), so there's no on-disk name to report;
             // name the thing that's actually absent.
-            throw DomainError.scoreFileNotFound(name: "\(item.title) (original PDF)")
+            throw DomainError.scoreWriteFailed(reason: "annotated export: the item has no original PDF")
         }
         let url = scoresDirectory.appending(path: name)
         guard let basePDF = try? Data(contentsOf: url) else {

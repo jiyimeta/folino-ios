@@ -226,6 +226,17 @@ outright and is the better end state, but it puts an ssm release on this
 feature's critical path for five lines that two guards already cover. Left as a
 follow-up.
 
+The runtime guard compares the produced PDF's page count and every page's media
+box against the plan. Those catch a pagination change. They do **not** catch a
+change to the three mirrored lines that determine *within-page* geometry
+(`ScoreViewOptions`, `availableWidth`, `LayoutEngine.layout`): if swift-sheet-music
+changed how `availableWidth` is derived, every system could shift horizontally
+while the page count and page size stayed identical — the guard would pass and the
+ink would land in the wrong column. Closing that properly means removing the
+mirroring rather than guarding it harder, i.e. adding a `plan()` entry point to
+swift-sheet-music that returns the layout and pagination the exporter is about to
+use, which the existing "follow-up" note already proposes.
+
 ## Rendering the ink
 
 `PKDrawing.image(from:scale:)`, cropped to the ink's bounds, drawn into the PDF

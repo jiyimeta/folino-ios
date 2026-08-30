@@ -419,9 +419,8 @@ struct LiveScoreShareServiceTests {
         do {
             _ = try await rig.svc.prepareShare(item: rig.item, format: .annotatedOriginalPDF)
             Issue.record("expected throw")
-        } catch let DomainError.scoreFileNotFound(name) {
-            #expect(name != rig.item.localFileName)
-            #expect(name.contains(rig.item.title))
+        } catch let DomainError.scoreWriteFailed(reason) {
+            #expect(reason == "annotated export: the item has no original PDF")
         } catch {
             Issue.record("unexpected error: \(error)")
         }
