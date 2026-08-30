@@ -1,6 +1,7 @@
 import Domain
 import SettingsLogic
 import SwiftUI
+import UtilityUI
 
 /// The Settings sheet's about section: version history, third-party licenses, and the feedback-mail entry point.
 ///
@@ -18,7 +19,7 @@ struct AboutSettingsSection<LicenseContent: View>: View {
             NavigationLink {
                 versionHistoryDestination
                     .navigationTitle(Text("settings.versionHistory.title", bundle: .module))
-                    .navigationBarTitleDisplayMode(.inline)
+                    .inlineNavigationTitleCompat()
             } label: {
                 Label {
                     Text("settings.versionHistory.title", bundle: .module)
@@ -30,7 +31,7 @@ struct AboutSettingsSection<LicenseContent: View>: View {
             NavigationLink {
                 licenseContent()
                     .navigationTitle(Text("settings.about.licenses", bundle: .module))
-                    .navigationBarTitleDisplayMode(.inline)
+                    .inlineNavigationTitleCompat()
             } label: {
                 Label {
                     Text("settings.about.licenses", bundle: .module)

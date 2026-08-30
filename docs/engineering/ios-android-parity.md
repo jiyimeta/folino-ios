@@ -74,6 +74,9 @@ Nothing is currently owed to iOS.
 
 | Item | Where it diverges | What macOS still needs |
 | --- | --- | --- |
+| A–B repeat row glyph | `Packages/Features/Settings/Sources/Settings/Screens/ReaderModeSettingRows.swift:52` | iOS rasterizes because a Menu row will not draw a custom View; the Mac menu has no such restriction, so the two branches are expected to stay different. |
+| version-history row background | `Packages/Features/Settings/Sources/Settings/VersionHistory/VersionHistoryScreen.swift:93` | iOS uses the grouped-list "secondary system background" gray; macOS substitutes the window background color, the platform's closest system-provided neutral fill. |
+| feedback mail composer | `Packages/Features/Settings/Sources/Settings/Views/FeedbackMailView.swift:3` | macOS has no MessageUI. The Mac path is an `NSWorkspace.open` of a `mailto:` URL built from the same subject and body; until then `canSendMail` is false and the row disables itself, exactly as on an iPhone with no mail account configured. |
 | loop-bounds mapping | `Packages/Infrastructure/Sources/Audio/LivePlaybackController+LoopBounds.swift:1` | depends on the gated LivePlaybackController; ports once that type does. |
 | note preview forwarding | `Packages/Infrastructure/Sources/Audio/LivePlaybackController+Preview.swift:1` | depends on the gated LivePlaybackController; ports once that type does. |
 | soundfont-reload rebuild | `Packages/Infrastructure/Sources/Audio/LivePlaybackController+Reload.swift:1` | depends on the gated LivePlaybackController; ports once that type does. |

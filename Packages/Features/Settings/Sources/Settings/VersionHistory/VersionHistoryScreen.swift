@@ -90,9 +90,17 @@ public struct VersionHistoryScreen: View {
         .background(rowBackground(for: entry.version), in: RoundedRectangle(cornerRadius: 10))
     }
 
+    // PARITY(macos): version-history row background — iOS uses the grouped-list "secondary system background" gray;
+    //   macOS substitutes the window background color, the platform's closest system-provided neutral fill.
     private func rowBackground(for version: AppVersion) -> Color {
         let isMajorRelease = version.minor == 0 && version.patch == 0
-        guard isMajorRelease else { return Color(.secondarySystemBackground) }
+        guard isMajorRelease else {
+            #if os(iOS)
+            return Color(.secondarySystemBackground)
+            #else
+            return Color(nsColor: .windowBackgroundColor)
+            #endif
+        }
         return colorScheme == .dark
             ? Color.yellow.opacity(0.18)
             : Color.blue.opacity(0.12)
