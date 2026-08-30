@@ -80,6 +80,20 @@ struct EngravedExportLayoutTests {
 
     @Test
     @MainActor
+    func `the last page keeps its full margin-derived height, unlike earlier clamped pages`() throws {
+        let score = Self.score(measures: 240)
+        let options = EngravedExportLayout.exportOptions(title: "T")
+        let resolved = EngravedExportLayout.resolve(score: score, options: options)
+        let lastIndex = resolved.pages.count - 1
+        #expect(lastIndex > 0)
+        let margins = PDFExporter.resolve(options: options, score: score).page.margins(forPageIndex: lastIndex)
+        let expectedHeight = max(1, resolved.pageSize.height - margins.top - margins.bottom)
+        let lastPage = try #require(resolved.pages.last)
+        #expect(abs(lastPage.usableHeight - expectedHeight) < 0.01)
+    }
+
+    @Test
+    @MainActor
     func `the layout document carries every measure so anchors can resolve`() {
         let resolved = EngravedExportLayout.resolve(
             score: Self.score(measures: 12), options: EngravedExportLayout.exportOptions(title: "T"),
