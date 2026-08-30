@@ -24,7 +24,7 @@ struct EditorDrumPadRows: View {
     let moreKey: AnyView
 
     var body: some View {
-        ForEach(Array(rows.enumerated()), id: \.offset) { index, keys in
+        ForEach(Array(layout.rows.enumerated()), id: \.offset) { index, keys in
             HStack(spacing: 4) {
                 ForEach(keys) { key in
                     EditorDrumPadKeyButton(
@@ -38,39 +38,15 @@ struct EditorDrumPadRows: View {
                 if index == 0 {
                     restKey
                 }
-                if index == rows.count - 1 {
+                if index == layout.rows.count - 1 {
                     moreKey
                 }
             }
         }
     }
 
-    /// The one- or two-letter mark that separates drums drawn with the same picture, worked out from what the pad
-    /// actually holds rather than hardcoded: the four rack toms share one drawing and the two floor toms another,
-    /// so a letter is information only when more than one of a kind is on the pad. The default layout has one floor
-    /// tom, which is why it wears nothing.
     private var shellLabels: [Int: String] {
-        let families = [[50: "H", 48: "HM", 47: "M", 45: "L"], [43: "H", 41: "L"]]
-        var labels: [Int: String] = [:]
-        for family in families {
-            let present = layout.keys.map(\.pitch).filter { family[$0] != nil }
-            guard present.count > 1 else { continue }
-            for pitch in present {
-                labels[pitch] = family[pitch]
-            }
-        }
-        return labels
-    }
-
-    /// The keys split across `layout.rowCount` rows, the earlier rows taking the extra key when the split is
-    /// uneven — a row that is one key longer reads better at the top than at the bottom, where the rest key
-    /// already makes the last row wider.
-    private var rows: [[DrumPadKey]] {
-        guard layout.rowCount > 1, !layout.keys.isEmpty else { return [layout.keys] }
-        let perRow = Int(ceil(Double(layout.keys.count) / Double(layout.rowCount)))
-        return stride(from: 0, to: layout.keys.count, by: perRow).map {
-            Array(layout.keys[$0 ..< min($0 + perRow, layout.keys.count)])
-        }
+        DrumKeyLabel.shellLabels(for: layout.keys.map(\.pitch))
     }
 }
 
@@ -89,7 +65,7 @@ struct EditorDrumPadKeyButton: View {
 
     /// How tall the pictogram is drawn inside the 44 pt key. The rest is breathing room; on a phone the icon
     /// narrows further because the keys share the row's width, which is why it is a maximum and not a size.
-    private static let iconHeight: CGFloat = 34
+    private static let iconHeight: CGFloat = 30
 
     var body: some View {
         Button {
@@ -105,6 +81,10 @@ struct EditorDrumPadKeyButton: View {
 
     /// The pictogram for the instrument, or — for a drum nothing is drawn for, which a user-edited layout can hold
     /// — the notehead-and-name face the pad wore before the icons existed.
+    ///
+    /// No voice badge. It used to number every key written into voice 2 — in practice just the pedal hi-hat and the
+    /// kick — but a numeral floating over a drawing reads as part of the drawing, and which voice a drum belongs to
+    /// is already visible in the score itself as the stem direction.
     @ViewBuilder private var face: some View {
         if let icon = DrumInstrumentIcon.forPitch(key.pitch) {
             DrumInstrumentIconView(icon: icon, label: label)
@@ -112,7 +92,6 @@ struct EditorDrumPadKeyButton: View {
                     maxWidth: isFlexible ? .infinity : Self.iconHeight,
                     maxHeight: Self.iconHeight,
                 )
-                .overlay(alignment: .topTrailing) { voiceBadge }
         } else {
             legacyFace
         }
@@ -125,16 +104,6 @@ struct EditorDrumPadKeyButton: View {
                 .font(.system(size: 9, weight: .medium))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-        }
-        .overlay(alignment: .topTrailing) { voiceBadge }
-    }
-
-    @ViewBuilder private var voiceBadge: some View {
-        if key.voiceIndex > 0 {
-            Text(verbatim: "\(key.voiceIndex + 1)")
-                .font(.system(size: 8, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
         }
     }
 }
@@ -171,6 +140,25 @@ struct EditorDrumNoteheadGlyph: View {
 /// `editor.drum.*` keys. A pitch with no entry of its own falls back to the GM name the key carries, which is
 /// English — better than an empty key face, and only reachable for an instrument the layout editor put there.
 enum DrumKeyLabel {
+    /// The one- or two-letter mark that separates drums drawn with the same picture, worked out from what the pad
+    /// actually holds rather than hardcoded: the four rack toms share one drawing and the two floor toms another,
+    /// so a letter is information only when more than one of a kind is on the pad. The default layout has one floor
+    /// tom, which is why it wears nothing.
+    ///
+    /// Deliberately not localized. `H` / `M` / `L` are read as a scale, not as English, the way a pitch letter is.
+    static func shellLabels(for pitches: [Int]) -> [Int: String] {
+        let families = [[50: "H", 48: "HM", 47: "M", 45: "L"], [43: "H", 41: "L"]]
+        var labels: [Int: String] = [:]
+        for family in families {
+            let present = pitches.filter { family[$0] != nil }
+            guard present.count > 1 else { continue }
+            for pitch in present {
+                labels[pitch] = family[pitch]
+            }
+        }
+        return labels
+    }
+
     static func short(for key: DrumPadKey) -> String {
         shortKeys[key.pitch].map { String(localized: String.LocalizationValue($0), bundle: .module) } ?? key.name
     }
@@ -196,9 +184,30 @@ enum DrumKeyLabel {
         61: "editor.drum.short.bongoLow",
     ]
 
-    private static let nameKeys: [Int: String] = shortKeys.mapValues {
-        $0.replacingOccurrences(of: "editor.drum.short.", with: "editor.drum.name.")
-    }
+    /// The full names, following MuseScore's drumset so a chart written there and the same chart here call the same
+    /// drum the same thing.
+    ///
+    /// Not derived from `shortKeys` any more. Two pairs of pitches share a key face but are separate instruments —
+    /// 35/36 (acoustic bass drum, bass drum 1) and 38/40 (acoustic snare, electric snare) — and with one of each
+    /// pair on the pad and the other in the pad's ⋯ menu, a shared name made the menu row unreadable: it listed a
+    /// "bass drum" that was not the bass drum already on the pad. MuseScore separates them, so this follows it,
+    /// down to numbering the cymbals it numbers.
+    private static let nameKeys: [Int: String] = [
+        35: "editor.drum.name.bassDrumAcoustic", 36: "editor.drum.name.bassDrum",
+        37: "editor.drum.name.sideStick", 38: "editor.drum.name.snare",
+        39: "editor.drum.name.handClap", 40: "editor.drum.name.snareElectric",
+        41: "editor.drum.name.floorTomLow", 42: "editor.drum.name.hiHatClosed",
+        43: "editor.drum.name.floorTomHigh", 44: "editor.drum.name.hiHatPedal",
+        45: "editor.drum.name.tomLow", 46: "editor.drum.name.hiHatOpen",
+        47: "editor.drum.name.tomMid", 48: "editor.drum.name.tomHiMid",
+        49: "editor.drum.name.crash", 50: "editor.drum.name.tomHigh",
+        51: "editor.drum.name.ride", 52: "editor.drum.name.chinese",
+        53: "editor.drum.name.rideBell", 54: "editor.drum.name.tambourine",
+        55: "editor.drum.name.splash", 56: "editor.drum.name.cowbell",
+        57: "editor.drum.name.crash2", 58: "editor.drum.name.vibraslap",
+        59: "editor.drum.name.ride2", 60: "editor.drum.name.bongoHigh",
+        61: "editor.drum.name.bongoLow",
+    ]
 }
 
 #if DEBUG

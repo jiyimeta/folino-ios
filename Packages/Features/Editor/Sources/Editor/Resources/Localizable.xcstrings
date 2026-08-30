@@ -379,6 +379,176 @@
         }
       }
     },
+    "editor.discardAlert.discard": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard Changes"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変更を破棄"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "변경 사항 폐기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "放弃更改"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "捨棄變更"
+          }
+        }
+      }
+    },
+    "editor.discardAlert.keepEditing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep Editing"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "編集を続ける"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "계속 편집"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续编辑"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "繼續編輯"
+          }
+        }
+      }
+    },
+    "editor.discardAlert.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard changes?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変更を破棄しますか？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "변경 사항을 폐기하시겠습니까?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "放弃更改？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要捨棄變更嗎？"
+          }
+        }
+      }
+    },
+    "editor.drum.layout.addInstrument": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Instrument"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "楽器を追加"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "악기 추가"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加乐器"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加入樂器"
+          }
+        }
+      }
+    },
+    "editor.drum.layout.addRow": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Row"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "行を追加"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "줄 추가"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加行"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加入列"
+          }
+        }
+      }
+    },
     "editor.drum.layout.cancel": {
       "localizations": {
         "en": {
@@ -617,36 +787,70 @@
         }
       }
     },
-    "editor.drum.layout.rows": {
+    "editor.drum.layout.removeRow": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rows"
+            "value": "Remove Row"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "行数"
+            "value": "行を削除"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "행 수"
+            "value": "줄 삭제"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "行数"
+            "value": "删除行"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "行數"
+            "value": "刪除列"
+          }
+        }
+      }
+    },
+    "editor.drum.layout.row %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Row %lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 行目"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld번째 줄"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %lld 行"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %lld 列"
           }
         }
       }
@@ -685,7 +889,7 @@
         }
       }
     },
-    "editor.drum.layout.voiceBadge": {
+    "editor.drum.layout.voiceBadge %lld": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -724,31 +928,65 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bass Drum"
+            "value": "Bass Drum 1"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "バスドラム"
+            "value": "バスドラム1"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "베이스 드럼"
+            "value": "베이스 드럼 1"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "低音大鼓"
+            "value": "低音大鼓 1"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "大鼓"
+            "value": "大鼓 1"
+          }
+        }
+      }
+    },
+    "editor.drum.name.bassDrumAcoustic": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acoustic Bass Drum"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アコースティックバスドラム"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "어쿠스틱 베이스 드럼"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原声低音大鼓"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原聲大鼓"
           }
         }
       }
@@ -798,7 +1036,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ロウボンゴ"
+            "value": "ローボンゴ"
           }
         },
         "ko": {
@@ -894,31 +1132,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crash Cymbal"
+            "value": "Crash Cymbal 1"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "クラッシュシンバル"
+            "value": "クラッシュシンバル1"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "크래시 심벌"
+            "value": "크래시 심벌 1"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "强音钹"
+            "value": "强音钹 1"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "強音鈸"
+            "value": "強音鈸 1"
           }
         }
       }
@@ -934,7 +1172,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "クラッシュシンバル 2"
+            "value": "クラッシュシンバル2"
           }
         },
         "ko": {
@@ -1002,7 +1240,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ロウフロアタム"
+            "value": "ローフロアタム"
           }
         },
         "ko": {
@@ -1166,31 +1404,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ride Cymbal"
+            "value": "Ride Cymbal 1"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ライドシンバル"
+            "value": "ライドシンバル1"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "라이드 심벌"
+            "value": "라이드 심벌 1"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "叮叮钹"
+            "value": "叮叮钹 1"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "叮叮鈸"
+            "value": "叮叮鈸 1"
           }
         }
       }
@@ -1206,7 +1444,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ライドシンバル 2"
+            "value": "ライドシンバル2"
           }
         },
         "ko": {
@@ -1302,31 +1540,65 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Snare Drum"
+            "value": "Acoustic Snare"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "スネアドラム"
+            "value": "アコースティックスネア"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "스네어 드럼"
+            "value": "어쿠스틱 스네어 드럼"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "军鼓"
+            "value": "原声军鼓"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "小鼓"
+            "value": "原聲小鼓"
+          }
+        }
+      }
+    },
+    "editor.drum.name.snareElectric": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Electric Snare"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エレクトリックスネア"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "일렉트릭 스네어 드럼"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电子军鼓"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "電子小鼓"
           }
         }
       }
@@ -1478,7 +1750,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ロウタム"
+            "value": "ロータム"
           }
         },
         "ko": {
@@ -1512,7 +1784,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ロウミッドタム"
+            "value": "ローミッドタム"
           }
         },
         "ko": {
