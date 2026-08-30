@@ -32,6 +32,13 @@ struct AnnotatedExportAvailabilityTests {
     }
 
     @Test
+    func `an original PDF on disk without page ink offers the engraved row only, never the original`() {
+        #expect(AnnotatedExportAvailability.formats(
+            hasMusicalInk: true, hasPageInk: false, hasOriginalPDF: true, isEngravable: true,
+        ) == [.annotatedPDF])
+    }
+
+    @Test
     func `a converted PDF item annotated on both sources offers both rows in order`() {
         #expect(AnnotatedExportAvailability.formats(
             hasMusicalInk: true, hasPageInk: true, hasOriginalPDF: true, isEngravable: true,
