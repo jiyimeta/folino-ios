@@ -70,4 +70,8 @@ line of source represents. Keep each to a sentence and delete it when it closes.
 
 Nothing is currently owed to iOS.
 
+### Owed to macOS
+
+Nothing is currently owed to macOS.
+
 <!-- /generated:parity -->
