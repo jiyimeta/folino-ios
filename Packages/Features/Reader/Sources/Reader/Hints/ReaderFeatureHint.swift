@@ -17,7 +17,7 @@ enum ReaderFeatureHint: String, CaseIterable {
     /// A compact pill gives no hint that anything larger exists, and the moment it matters most is right after the
     /// user has just shrunk it — which is exactly when a once-per-launch budget would already be spent.
     case transportExpand
-    /// The note-editing entry point (`square.and.pencil`).
+    /// The note-editing entry point (`music.quarternote.3`).
     case noteEditing
     /// The ink-annotation toggle (`pencil.tip.crop.circle`).
     case annotation

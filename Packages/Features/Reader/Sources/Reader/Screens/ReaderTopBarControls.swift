@@ -222,7 +222,10 @@ struct ReaderTopBarControls: View {
     /// a frame for the hint to point at.
     private func noteEditingButton(action: @escaping () -> Void) -> some View {
         topBarButton(
-            systemImage: "square.and.pencil",
+            // Notes, not a pencil-on-a-page: `square.and.pencil` is the compose glyph everywhere else in iOS
+            // (Mail, Notes), so it read as "make a new score" on a screen where a score is already open. This
+            // button writes notes into the one you are looking at, and the pad it opens is full of them.
+            systemImage: "music.quarternote.3",
             label: Text("reader.toolbar.edit.start", bundle: .module),
             action: action,
         )
@@ -234,7 +237,7 @@ struct ReaderTopBarControls: View {
             Label {
                 Text("reader.toolbar.edit.start", bundle: .module)
             } icon: {
-                Image(systemName: "square.and.pencil")
+                Image(systemName: "music.quarternote.3")
             }
         }
     }

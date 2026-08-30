@@ -1,5 +1,6 @@
 import Domain
 import Foundation
+import ScoreUI
 import SheetMusicCore
 
 /// Instrumentation — the parts a score is written for, add / remove / reorder, as the instruments sheet drives them.
@@ -29,6 +30,10 @@ extension EditorViewModel {
         /// What to call it, through `Score.staffDisplayName(at:)` so the sheet, the Reader's inspector and the mixer
         /// all name the same part the same way (instrument long name → track name → "Staff N").
         public let name: String
+        /// What it *is*, named in the reader's language — `nil` for an instrument id this build's catalog does not
+        /// know in a score that carried no track name. Separate from `name` because a renamed part ("なおき") says
+        /// nothing about the instrument it plays, and the sheet has to.
+        public let instrumentName: String?
         /// The part's staves, in order — one visibility toggle each. A piano has two, most instruments one.
         public let staffAddresses: [StaffAddress]
     }
@@ -42,6 +47,7 @@ extension EditorViewModel {
                 id: part.id,
                 index: index,
                 name: score.staffDisplayName(at: StaffAddress(partIndex: index, staffIndexInPart: 0)),
+                instrumentName: instrumentDisplayName(of: part),
                 staffAddresses: part.staves.indices.map {
                     StaffAddress(partIndex: index, staffIndexInPart: $0)
                 },

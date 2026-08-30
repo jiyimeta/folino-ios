@@ -61,6 +61,9 @@ struct EditorSignatureSheet<Picker: View>: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
         }
+        // Half height, and only half: this sheet asks one short question about one bar, and the score it is asking
+        // about stays visible behind it — which is most of the point, since the change lands on what you can see.
+        .presentationDetents([.medium])
         // Both presentations hang off the sheet's ROOT rather than off the Section or row that raises them — a
         // modifier attached inside the form is torn down when the form rebuilds, and the removal Section is exactly
         // the thing that disappears once the removal lands (repo gotcha, same as the instruments sheet's).
@@ -103,8 +106,8 @@ struct EditorSignatureSheet<Picker: View>: View {
             Button { dismiss() } label: { L10n.Common.cancel }
         }
         ToolbarItem(placement: .confirmationAction) {
-            Button { finish(apply()) } label: {
-                Text("editor.signature.apply", bundle: .module)
+            EditorConfirmButton(label: Text("editor.signature.apply", bundle: .module)) {
+                finish(apply())
             }
         }
     }
