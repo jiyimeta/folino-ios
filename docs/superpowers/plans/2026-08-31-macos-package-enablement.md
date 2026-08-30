@@ -43,7 +43,7 @@
 | `Packages/ScoreUI/Package.swift` | ScoreUI manifest | Add `.macOS(.v15)` |
 | `Packages/Utility/Sources/UtilityUI/PlatformToolbarCompat.swift` | Compat helpers for iOS-only toolbar / title / text-input modifiers | Create |
 | `Packages/{Utility,Domain,ScoreUI}/Package.swift` | Manifests that already shipped `.macOS(.v14)` | Raise to `.macOS(.v15)` |
-| `Packages/Features/Library/Package.swift` | Library manifest | **Remove** its `.macOS` declaration — deferred to Ⅲb |
+| `Packages/Features/Library/Package.swift` | Library manifest | **Keeps** its `.macOS` declaration — an Android-JNI-host build floor, not macOS product support; the package itself is deferred to Ⅲb |
 | `Packages/Infrastructure/Package.swift` | Infrastructure manifest | Add `.macOS(.v15)` |
 | `Packages/Infrastructure/Sources/Audio/` — `LivePlaybackController.swift` + its `+LoopBounds` / `+Preview` / `+Reload` / `+Transpose` extensions, `LiveScoreAudioExporter.swift`, `OutputRouteDisconnectWatcher.swift` (**seven files**) | AVAudioSession / MPMediaItemArtwork / route watching | Gate to iOS; record the macOS gap |
 | `Packages/Features/ImportExport/Package.swift` + `Sources/ImportExportShareUI/{ShareSession,ShareRootView,PlaylistPickerSection}.swift` | Share flow | Add `.macOS(.v15)`; drop a dead `import UIKit`; compat helpers |
@@ -379,7 +379,8 @@ Three things that every remaining task depends on, in one commit each.
 
 **Files:**
 - Modify: `Packages/Utility/Package.swift`, `Packages/Domain/Package.swift`, `Packages/ScoreUI/Package.swift` (`.v14` → `.v15`)
-- Modify: `Packages/Features/Library/Package.swift` (remove the `.macOS` declaration)
+- Modify: `Packages/Features/Library/Package.swift` (keep the `.macOS` declaration — it is an Android-JNI-host build
+  floor, not macOS product support; see Step 3)
 - Create: `Packages/Utility/Sources/UtilityUI/PlatformToolbarCompat.swift`
 
 **Interfaces:**
@@ -407,15 +408,26 @@ swift build --package-path Packages/ScoreUI
 ```
 Expected: `Build complete!` for all three. (`Domain` declares `.macOS(.v14)` today with `.iOS(.v18)`; keep its `.iOS` value as it is.)
 
-- [ ] **Step 3: Remove Library's macOS declaration**
+- [ ] **Step 3: Leave Library's macOS declaration alone**
 
-`Packages/Features/Library/Package.swift`:
+**A controller ruling on an earlier draft of this step removed `.macOS` from `Packages/Features/Library/Package.swift`
+on the theory that a manifest declaring a platform it cannot build is rot. That was wrong, and it broke
+`FOLINO_ANDROID=1 swift build --package-path Packages/Features/Library`:** `FolinoLibraryJNI`, the Android
+cross-compile target in this same manifest, depends on `Domain` and `UtilityCore`, both of which declare
+`.macOS(.v15)` (Task 4 Step 1 above raises them to that floor), and that Android graph's host tests build for
+macOS. Without a `.macOS` floor at or above that on `Library` itself, the manifest fails to resolve on the Android
+path with "the library 'FolinoLibraryJNI' requires macos 10.13, but depends on the product 'Domain' which requires
+macos 15.0" — Utility's `platforms:` comment documents the identical reasoning for the identical shape.
+
+So `Packages/Features/Library/Package.swift` keeps:
 
 ```swift
-    platforms: [.iOS(.v18)],
+    platforms: [.iOS(.v18), .macOS(.v15)],
 ```
 
-A manifest that claims a platform it cannot build is the exact rot this plan exists to delete — `Utility` was in that state. Ⅲb restores the line when it becomes true.
+with a comment explaining that this is a build floor for the Android JNI host tests, not macOS product support,
+and that `Library` is still absent from `Scripts/build-macos-packages.sh` (Task 9) and still deferred to Ⅲb — the
+declaration being present does not mean the package compiles as a macOS SwiftUI product.
 
 - [ ] **Step 4: Write the compat helpers**
 
@@ -879,7 +891,7 @@ git commit -m "chore(macos): add a build gate for the macOS-enabled packages"
 **The criterion.** Ⅲa is a package whose implementation can be gated behind a **preserved public signature**. Ⅲb is a package where an iOS-only type is **woven into a signature or into stored state**, so the macOS form is new design rather than a gate.
 
 - **`Reader`** — 14 UIKit and 11 PencilKit files. Gating them would leave the package compiling but empty of every reading surface, which is not a useful state. Its macOS form is an AppKit `NSScrollView` host modeled on ssm's `MagnifyingScoreScrollView`; that is Ⅲb/Ⅳ work.
-- **`Features/Library`** — moved here after measurement: 33 errors across 15 files, and `EditMode` is not a call-site detail but part of view *signatures* — `ScoreListScreen.swift:14` (`@State private var editMode: EditMode`) binds to `ScoreListView.swift:41` (`@Binding var editMode: EditMode`), crossing a screen/view boundary, with `PlaylistDetailView`, `RecentlyDeletedScreen`, and `RecentlyDeletedView` in the same shape. There is no signature to preserve, so this plan's method does not apply; macOS multi-select is `List(selection:)` with a different interaction model, which is design work. Its `.macOS` platform declaration is **removed** by Task 4 so the manifest stops claiming a platform it cannot build. Ⅲb also owes it `ScoreListView.swift:118`'s `if #available(iOS 26, *)` → `if #available(iOS 26, macOS 26, *)`.
+- **`Features/Library`** — moved here after measurement: 33 errors across 15 files, and `EditMode` is not a call-site detail but part of view *signatures* — `ScoreListScreen.swift:14` (`@State private var editMode: EditMode`) binds to `ScoreListView.swift:41` (`@Binding var editMode: EditMode`), crossing a screen/view boundary, with `PlaylistDetailView`, `RecentlyDeletedScreen`, and `RecentlyDeletedView` in the same shape. There is no signature to preserve, so this plan's method does not apply; macOS multi-select is `List(selection:)` with a different interaction model, which is design work. Its `.macOS` platform declaration **stays** — it predates this plan (commit `08be80c1`) as a build floor for `FolinoLibraryJNI`'s Android host tests, the same reason `Utility` and `Domain` declare one, and removing it breaks `FOLINO_ANDROID=1 swift build --package-path Packages/Features/Library`. The declaration is not evidence the package is macOS-enabled: `Library` is still absent from `Scripts/build-macos-packages.sh`, and it still does not compile as a macOS SwiftUI product. Ⅲb also owes it `ScoreListView.swift:118`'s `if #available(iOS 26, *)` → `if #available(iOS 26, macOS 26, *)`.
 - **Migrating toolbar sites to semantic placements** (`.cancellationAction` / `.confirmationAction`). The better end state, and it earns real Esc / Return key equivalents on Mac sheets — but it changes iOS appearance per site and needs per-site preview verification. Ⅲa uses neutral compat helpers; Ⅲb migrates one screen at a time.
 - **AppKit implementations of anything gated here.** Ⅲa's deliverable is "it compiles". Each gap is recorded as a `PARITY(macos)` row, and Ⅲb consumes that list as its own to-do.
 - **The Mac app target, `project.yml`, window/tab/menu bar.** All Ⅲb.

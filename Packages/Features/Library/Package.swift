@@ -98,7 +98,16 @@ if isAndroid {
 let package = Package(
     name: "Library",
     defaultLocalization: "en",
-    platforms: [.iOS(.v18)],
+    // macOS is declared purely as a build floor, not as product support: this is NOT a macOS-enabled package —
+    // it is absent from Scripts/build-macos-packages.sh and its SwiftUI product does not compile for macOS (its
+    // EditMode-driven multi-select is woven into view signatures, deferred to sub-project IIIb). The floor exists
+    // because `FolinoLibraryJNI`, the Android cross-compile target above, depends on Domain and UtilityCore, both
+    // of which declare `.macOS(.v15)`, and that Android graph's host tests build for macOS. Mirrors Utility and
+    // Domain, which are in the same graph for the same reason. Do not remove this as unused platform support:
+    // removing it once already broke `FOLINO_ANDROID=1 swift build --package-path Packages/Features/Library` with
+    // "the library 'FolinoLibraryJNI' requires macos 10.13, but depends on the product 'Domain' which requires
+    // macos 15.0" (and seven more of the same shape).
+    platforms: [.iOS(.v18), .macOS(.v15)],
     products: products,
     dependencies: packageDependencies,
     targets: targets,
