@@ -63,13 +63,21 @@ public struct DrumPadLayout: Sendable, Equatable, Codable {
         self.rowCount = min(max(rowCount, 1), 3)
     }
 
-    /// Fifteen instruments over two rows: a realistic kit with room to spare, cymbals and snare first because that
-    /// is where a correcting pass spends its time.
+    /// Fourteen instruments over two rows, laid out the way the kit is: cymbals above, drums below, each row
+    /// running left to right across the player's setup.
+    ///
+    /// Seven and seven, because the pad's two rows each close with a key of their own — the rest above, the menu of
+    /// drums the pad does not show below — so an even split is what makes both rows the same width.
+    ///
+    /// Four toms, not GM's six. A kit with six toms is rare, and the two that go (hi-mid 48 and low floor 41) are
+    /// the two a chart is least likely to use; a file that does use them still plays and still engraves, it just
+    /// reaches them through the menu instead of a key. Both crashes are here because the pair is what the tilt in
+    /// their icons is for.
     ///
     /// Every pitch is one `GMDrumset` names, so no key can render as an unnamed drum, and the voices are GM's own
     /// split — which is `DrumVoicePreset.handsAndFeet`, the preset most drum charts imply.
     public static let `default` = DrumPadLayout(
-        keys: [42, 46, 51, 49, 38, 37, 50, 48, 47, 45, 43, 41, 36, 44, 56].compactMap { DrumPadKey(gmPitch: $0) },
+        keys: [42, 46, 44, 49, 57, 51, 56, 38, 37, 50, 47, 45, 43, 36].compactMap { DrumPadKey(gmPitch: $0) },
         rowCount: 2,
     )
 

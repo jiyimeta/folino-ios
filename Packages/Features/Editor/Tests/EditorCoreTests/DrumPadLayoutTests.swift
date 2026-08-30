@@ -7,14 +7,29 @@ struct DrumPadLayoutTests {
     private static let staff = EditorCoreFixtures.staff0
 
     @Test
-    func `the default layout is a realistic kit, cymbals first`() {
+    func `the default layout is a realistic kit, cymbals above drums`() {
         let layout = DrumPadLayout.default
-        #expect(layout.keys.map(\.pitch) == [42, 46, 51, 49, 38, 37, 50, 48, 47, 45, 43, 41, 36, 44, 56])
+        #expect(layout.keys.map(\.pitch) == [42, 46, 44, 49, 57, 51, 56, 38, 37, 50, 47, 45, 43, 36])
         #expect(layout.rowCount == 2)
+        // Seven and seven: each row of the pad closes with a key of its own (the rest above, the ⋯ menu below),
+        // so an even split is what makes the two rows the same width.
+        #expect(layout.keys.count.isMultiple(of: layout.rowCount))
         // Every pitch is one the GM table names, so no key can render as "Drum 63".
         for key in layout.keys {
             #expect(GMDrumset.entries[key.pitch] != nil)
         }
+    }
+
+    /// Four toms, not GM's six: the two that go are the ones a chart is least likely to use, and a file that does
+    /// use them reaches them through the pad's ⋯ menu instead.
+    @Test
+    func `the default layout leaves the hi-mid and low floor toms off`() {
+        let pitches = Set(DrumPadLayout.default.keys.map(\.pitch))
+        #expect(!pitches.contains(48))
+        #expect(!pitches.contains(41))
+        #expect(pitches.isSuperset(of: [50, 47, 45, 43]))
+        // Both crashes, because the pair is what the mirrored tilt in their icons is for.
+        #expect(pitches.isSuperset(of: [49, 57]))
     }
 
     @Test

@@ -17,7 +17,11 @@ struct EditorDrumPadRows: View {
     let isFlexible: Bool
     let press: (DrumPadKey) -> Void
     /// The rest key, handed in whole so this view does not need to know what the pad's other rows are made of.
+    /// It closes the FIRST row, opposite the menu, so the two keys that are not instruments bracket the kit rather
+    /// than crowding one end of it.
     let restKey: AnyView
+    /// The menu of drums this layout leaves off, closing the last row.
+    let moreKey: AnyView
 
     var body: some View {
         ForEach(Array(rows.enumerated()), id: \.offset) { index, keys in
@@ -25,16 +29,37 @@ struct EditorDrumPadRows: View {
                 ForEach(keys) { key in
                     EditorDrumPadKeyButton(
                         key: key,
+                        label: shellLabels[key.pitch],
                         isLit: litPitches.contains(key.pitch),
                         isFlexible: isFlexible,
                         press: press,
                     )
                 }
-                if index == rows.count - 1 {
+                if index == 0 {
                     restKey
+                }
+                if index == rows.count - 1 {
+                    moreKey
                 }
             }
         }
+    }
+
+    /// The one- or two-letter mark that separates drums drawn with the same picture, worked out from what the pad
+    /// actually holds rather than hardcoded: the four rack toms share one drawing and the two floor toms another,
+    /// so a letter is information only when more than one of a kind is on the pad. The default layout has one floor
+    /// tom, which is why it wears nothing.
+    private var shellLabels: [Int: String] {
+        let families = [[50: "H", 48: "HM", 47: "M", 45: "L"], [43: "H", 41: "L"]]
+        var labels: [Int: String] = [:]
+        for family in families {
+            let present = layout.keys.map(\.pitch).filter { family[$0] != nil }
+            guard present.count > 1 else { continue }
+            for pitch in present {
+                labels[pitch] = family[pitch]
+            }
+        }
+        return labels
     }
 
     /// The keys split across `layout.rowCount` rows, the earlier rows taking the extra key when the split is
@@ -56,9 +81,15 @@ struct EditorDrumPadRows: View {
 /// be toggles at all: a lit key means "this is here", so pressing it takes it away.
 struct EditorDrumPadKeyButton: View {
     let key: DrumPadKey
+    /// The letter on the drum's shell, for the toms the pad holds more than one of. Nil everywhere else.
+    var label: String?
     let isLit: Bool
     let isFlexible: Bool
     let press: (DrumPadKey) -> Void
+
+    /// How tall the pictogram is drawn inside the 44 pt key. The rest is breathing room; on a phone the icon
+    /// narrows further because the keys share the row's width, which is why it is a maximum and not a size.
+    private static let iconHeight: CGFloat = 34
 
     var body: some View {
         Button {
@@ -72,7 +103,22 @@ struct EditorDrumPadKeyButton: View {
         .accessibilityAddTraits(isLit ? [.isSelected] : [])
     }
 
-    private var face: some View {
+    /// The pictogram for the instrument, or — for a drum nothing is drawn for, which a user-edited layout can hold
+    /// — the notehead-and-name face the pad wore before the icons existed.
+    @ViewBuilder private var face: some View {
+        if let icon = DrumInstrumentIcon.forPitch(key.pitch) {
+            DrumInstrumentIconView(icon: icon, label: label)
+                .frame(
+                    maxWidth: isFlexible ? .infinity : Self.iconHeight,
+                    maxHeight: Self.iconHeight,
+                )
+                .overlay(alignment: .topTrailing) { voiceBadge }
+        } else {
+            legacyFace
+        }
+    }
+
+    private var legacyFace: some View {
         VStack(spacing: 1) {
             EditorDrumNoteheadGlyph(headType: key.headType)
             Text(DrumKeyLabel.short(for: key))
@@ -80,15 +126,15 @@ struct EditorDrumPadKeyButton: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
-        .overlay(alignment: .topTrailing) {
-            // Only voice 2 and up wear the badge: voice 1 is the default every pitched key is in too, and badging
-            // it would put a number on almost every key for no information.
-            if key.voiceIndex > 0 {
-                Text(verbatim: "\(key.voiceIndex + 1)")
-                    .font(.system(size: 8, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-            }
+        .overlay(alignment: .topTrailing) { voiceBadge }
+    }
+
+    @ViewBuilder private var voiceBadge: some View {
+        if key.voiceIndex > 0 {
+            Text(verbatim: "\(key.voiceIndex + 1)")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
         }
     }
 }
