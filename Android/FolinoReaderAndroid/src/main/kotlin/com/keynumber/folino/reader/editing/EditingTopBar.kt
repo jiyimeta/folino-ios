@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
@@ -26,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -106,19 +108,28 @@ fun EditingTopBarActions(
         // Done fills in once this session has actually changed something.
         //
         // The pair it belongs to is ✕ / Done — throw this session's work away, or keep it — and while nothing has
-        // been written the two do the same thing, which is exactly when a flat text button beside a flat ✕ reads
-        // as one control duplicated. The moment there IS something to keep, saying so is what tells them apart.
-        // iOS makes the same state visible in its own vocabulary: its trailing checkmark goes yellow on
-        // `commitEdited` because "the colour says the score is not what it was when you opened it". Material's
-        // way of saying a control now commits something real is emphasis, so the button fills.
-        if (sessionHasEdits) {
-            FilledTonalButton(onClick = onEndEditing) {
-                Text(stringResource(R.string.reader_editing_done), fontWeight = FontWeight.SemiBold)
-            }
-        } else {
-            TextButton(onClick = onEndEditing) {
-                Text(stringResource(R.string.reader_editing_done), fontWeight = FontWeight.SemiBold)
-            }
+        // been written the two do the same thing, which is exactly when a flat label beside a flat ✕ reads as one
+        // control duplicated. The moment there IS something to keep, saying so is what tells them apart. iOS makes
+        // the same state visible in its own vocabulary: its trailing checkmark goes yellow on `commitEdited`
+        // because "the colour says the score is not what it was when you opened it". Material's way of saying a
+        // control now commits something real is emphasis, so the button fills.
+        //
+        // **One button whose COLOURS change, never two different buttons.** `TextButton` and `FilledTonalButton`
+        // carry different content padding, so swapping between them resized the control — and this row is laid out
+        // from the trailing edge, so every icon in it shifted the instant the first note landed. A state change
+        // must not move anything the user is aiming at.
+        FilledTonalButton(
+            onClick = onEndEditing,
+            colors = if (sessionHasEdits) {
+                ButtonDefaults.filledTonalButtonColors()
+            } else {
+                ButtonDefaults.filledTonalButtonColors(
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                )
+            },
+        ) {
+            Text(stringResource(R.string.reader_editing_done), fontWeight = FontWeight.SemiBold)
         }
     }
 }

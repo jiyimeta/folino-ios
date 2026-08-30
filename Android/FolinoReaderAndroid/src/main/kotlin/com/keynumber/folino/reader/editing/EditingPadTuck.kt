@@ -75,6 +75,21 @@ internal val PAD_TUCK_HORIZONTAL_MARGIN: Dp = 8.dp
 private val TUCK_SPRING = spring<Float>(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow)
 
 /**
+ * How long a release's vertical velocity is allowed to carry the pad when deciding which end to dock at.
+ *
+ * Deliberately NOT the platform fling decay, which the sideways tuck does use. `splineBasedDecay` models a scroll
+ * coasting to rest and projects several screens' worth of travel; handed to a rule that asks "which half did the
+ * pad land in", it re-docked on any upward nudge — the keys flew across the score without being asked to. A dock
+ * is not a scroll. Moving the pad to the other end of the music should take the intent of actually dragging it
+ * most of the way there, so the projection here is the small, deliberate one UIKit's `predictedEndTranslation`
+ * hands iOS rather than Android's fling model.
+ *
+ * A TUCK keeps the fling decay, because the two gestures want opposite things: a dismissal should commit on a
+ * flick, and its own rule already guards against a vertical throw's sideways drift.
+ */
+private const val DOCK_PROJECTION_SECONDS = 0.25f
+
+/**
  * The note-input pad's placement layer: the PiP-style side tuck and the top / bottom dock, both driven by one
  * drag. Pull the card far enough toward a side edge and it parks past that edge with [PAD_TUCK_PEEK] of it still
  * showing; drag or tap the sliver to bring it back. Drag it up or down and it re-docks to the nearer end of the
@@ -381,7 +396,9 @@ fun BoxScope.EditingPadTuck(
                         // Compose's stand-in for UIKit's `predictedEndTranslation`: run the release velocity
                         // through the platform fling decay and take where the translation would have coasted to.
                         val projectedX = decay.calculateTargetValue(translation.x, velocity.x)
-                        val projectedY = decay.calculateTargetValue(translation.y, velocity.y)
+                        // The vertical one is damped much harder than the platform fling — see
+                        // `DOCK_PROJECTION_SECONDS` for why a dock and a dismissal want different projections.
+                        val projectedY = translation.y + velocity.y * DOCK_PROJECTION_SECONDS
                         val threshold = currentGeometry.threshold(currentViewportWidth, currentViewportHeight)
                         // The dock re-derives on every release, tucked or not: a sliver slid along its edge has
                         // still changed which end of the score it is parked at, and pulling it out later has to
