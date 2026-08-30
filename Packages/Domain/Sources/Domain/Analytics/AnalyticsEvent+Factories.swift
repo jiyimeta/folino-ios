@@ -226,6 +226,11 @@ extension AnalyticsEvent {
         ])
     }
 
+    /// Logged when the drift guard trips; `reason` is `page_count` or `page_size` (see `driftReason`).
+    public static func annotatedExportDrifted(reason: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "annotated_export_drifted", parameters: ["reason": .string(reason)])
+    }
+
     // MARK: Settings / app
 
     public static func settingChanged(key: String, value: String) -> AnalyticsEvent {

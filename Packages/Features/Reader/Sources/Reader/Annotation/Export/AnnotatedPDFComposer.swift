@@ -101,8 +101,9 @@ enum AnnotatedPDFComposer {
     }
 
     /// Builds this page's `PKDrawing` in page-local UIKit coordinates, rasterizes the ink's bounding box and draws it
-    /// into the PDF page. The context is in PDF orientation (bottom-left origin, y up), so the image lands under a
-    /// flip; everything above it is untouched by the flip because it is scoped to a `saveGState`.
+    /// into the PDF page. The context is in PDF orientation (bottom-left origin, y up), so the destination rect is
+    /// converted from `bounds`' top-left / y-down frame rather than flipping the CTM — see the comment at the
+    /// `draw(cgImage:in:)` call below for why.
     private static func drawInk(
         _ placements: [InkPlacement],
         drawings: [DrawingAnchor],
@@ -139,10 +140,13 @@ enum AnnotatedPDFComposer {
         }
         guard let cgImage = image?.cgImage else { return }
 
-        context.saveGState()
-        context.translateBy(x: 0, y: pageSize.height)
-        context.scaleBy(x: 1, y: -1)
-        context.draw(cgImage, in: bounds)
-        context.restoreGState()
+        // The PDF context is bottom-left / y-up; `bounds` is top-left / y-down. Convert the rect rather than
+        // flipping the CTM: `draw(_:in:)` puts the image's first row at the rect's max-y in USER space, so a
+        // flipped CTM positions the box correctly but mirrors the image inside it.
+        let inkRect = CGRect(
+            x: bounds.minX, y: pageSize.height - bounds.maxY,
+            width: bounds.width, height: bounds.height,
+        )
+        context.draw(cgImage, in: inkRect)
     }
 }

@@ -129,38 +129,58 @@ struct AnnotatedPDFComposerTests {
         #expect(try Self.xObjectCount(of: document, page: 2) == 0)
     }
 
-    @Test
-    @MainActor
-    func `ink lands where it was drawn, not mirrored by the coordinate flip`() throws {
-        // A short (20pt) horizontal stroke centered 40pt below the UIKit-space (top-left origin, y-down) top edge,
-        // 60pt wide, so a sample taken dead-center is robustly inside the ink regardless of PencilKit's own edge
-        // softening. `sp: 1, px: 0, py: 0` is the identity transform, so this placement lands at exactly x = 200,
-        // y = 40 in page-local UIKit space with no extra arithmetic to track. The two points must be distinct — an
-        // earlier version of this test used a single stationary point twice and PencilKit rendered no ink at all
-        // for the resulting zero-length path, which would have made the test pass for the wrong reason (nothing to
-        // sample) rather than the right one.
-        let stroke = InkStroke(
+    /// Two strokes in one page-local UIKit-space (top-left origin, y-down) drawing whose combined bounding box is
+    /// tall and vertically *asymmetric*: `strokeMark` is a short, wide capsule near the box's own top; `strokeAnchor`
+    /// sits far below it but shifted well off to one side in x, so it extends the box downward without adding any
+    /// ink under `sampleX`. That asymmetry is the point — a horizontal capsule centered in its own bounding box (the
+    /// fixture this replaced) is vertically symmetric, so mirroring it top-to-bottom *inside that box* changes
+    /// nothing either sample point can see, even though the box's own placement on the page is unaffected by the
+    /// bug this is meant to catch. With this fixture, the two samples below are dead-center on `strokeMark`'s
+    /// (ink) and comfortably below it under `sampleX` (background) — content that must trade places if the ink
+    /// image is flipped within its own box, and must not if it isn't.
+    private static let sampleX: CGFloat = 200
+
+    private static func asymmetricFixture() -> [DrawingAnchor] {
+        let strokeMark = InkStroke(
             tool: .pen, colorRGBA: 0x0000_00FF, baseWidthSp: 60, opacity: 1,
             x: [190, 210], y: [40, 40], width: [60, 60],
             force: [1, 1], azimuth: [0, 0], altitude: [.pi / 2, .pi / 2], timeMillis: [0, 1],
         )
-        let drawings = [
-            DrawingAnchor(kind: .page(PageAnchor(pageIndex: 0)), encodedDrawing: InkStrokeCodec.encode(stroke)),
+        let strokeAnchor = InkStroke(
+            tool: .pen, colorRGBA: 0x0000_00FF, baseWidthSp: 60, opacity: 1,
+            x: [350, 370], y: [280, 280], width: [60, 60],
+            force: [1, 1], azimuth: [0, 0], altitude: [.pi / 2, .pi / 2], timeMillis: [0, 1],
+        )
+        return [
+            DrawingAnchor(kind: .page(PageAnchor(pageIndex: 0)), encodedDrawing: InkStrokeCodec.encode(strokeMark)),
+            DrawingAnchor(kind: .page(PageAnchor(pageIndex: 0)), encodedDrawing: InkStrokeCodec.encode(strokeAnchor)),
         ]
-        let placements = [
+    }
+
+    private static func asymmetricPlacements() -> [InkPlacement] {
+        [
             InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 1, px: 0, py: 0)),
+            InkPlacement(pageIndex: 0, drawingIndex: 1, transform: StrokeTransform(sp: 1, px: 0, py: 0)),
         ]
+    }
+
+    @Test
+    @MainActor
+    func `ink lands where it was drawn, not mirrored by the coordinate flip`() throws {
         let base = try Self.baseDocument(pages: 1)
-        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements)
+        let out = try AnnotatedPDFComposer.compose(
+            basePDF: base, drawings: Self.asymmetricFixture(), placements: Self.asymmetricPlacements(),
+        )
         let page = try #require(try Self.open(out).page(at: 1))
 
-        // A correct flip puts a mark drawn 40pt from the UIKit top edge 40pt from the PDF page's top edge too —
-        // i.e. near PDF-space y = 600 - 40 = 560, not mirrored down near y = 40. `mirrored` is `expected` reflected
-        // about the page's vertical center (y = 300): an inverted flip, or a scale/translate applied in the wrong
-        // order, would move the ink there instead, and the two points are far enough apart (520pt) that both can
-        // never read as ink at once.
-        let expected = CGPoint(x: 200, y: 560)
-        let mirrored = CGPoint(x: 200, y: 40)
+        // `expected` is dead-center on `strokeMark`, mapped straight across the page/PDF-space flip (600 - 40).
+        // `mirrored` sits well below it under the same x, still inside the combined bounding box (it's within
+        // `strokeAnchor`'s extended box, but away from `strokeAnchor`'s own ink at x = 350...370) — so it reads as
+        // background under a correct flip. A composer that mirrors the ink image *inside its own bounding box*
+        // (rather than only flipping the box's position) would swap what shows at these two points instead of just
+        // moving the box, which is exactly the bug an earlier, vertically symmetric fixture could not see.
+        let expected = CGPoint(x: Self.sampleX, y: 560)
+        let mirrored = CGPoint(x: Self.sampleX, y: 320)
         let context = try Self.rasterize(page, size: CGSize(width: 400, height: 600), scale: 2)
         #expect(try Self.redChannel(of: context, at: expected, scale: 2) < 128, "expected ink near the top edge")
         #expect(try Self.redChannel(of: context, at: mirrored, scale: 2) > 200, "expected blank page near the bottom")
@@ -195,21 +215,11 @@ struct AnnotatedPDFComposerTests {
         let rotationCorrected = markCenter.applying(transform)
         let unrotatedPosition = markCenter // where an un-adjusted `drawPDFPage` would leave it
 
-        // A stroke placed the same way as `ink lands where it was drawn...` above — rotation must not perturb
-        // the ink math at all, since `pageSize` stays the source's raw (unrotated) box size either way.
-        let stroke = InkStroke(
-            tool: .pen, colorRGBA: 0x0000_00FF, baseWidthSp: 60, opacity: 1,
-            x: [190, 210], y: [40, 40], width: [60, 60],
-            force: [1, 1], azimuth: [0, 0], altitude: [.pi / 2, .pi / 2], timeMillis: [0, 1],
+        // The same asymmetric fixture as `ink lands where it was drawn...` above — rotation must not perturb the
+        // ink math at all, since `pageSize` stays the source's raw (unrotated) box size either way.
+        let out = try AnnotatedPDFComposer.compose(
+            basePDF: base, drawings: Self.asymmetricFixture(), placements: Self.asymmetricPlacements(),
         )
-        let drawings = [
-            DrawingAnchor(kind: .page(PageAnchor(pageIndex: 0)), encodedDrawing: InkStrokeCodec.encode(stroke)),
-        ]
-        let placements = [
-            InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 1, px: 0, py: 0)),
-        ]
-
-        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements)
         let page = try #require(try Self.open(out).page(at: 1))
 
         // Destination media box keeps the source's raw (unrotated) size — no page-size swap.
@@ -226,8 +236,14 @@ struct AnnotatedPDFComposerTests {
             try Self.redChannel(of: context, at: unrotatedPosition, scale: 2) > 200,
             "expected blank page at the un-rotated position — drawPDFPage must honor /Rotate",
         )
-        #expect(try Self.redChannel(of: context, at: CGPoint(x: 200, y: 560), scale: 2) < 128, "ink near top edge")
-        #expect(try Self.redChannel(of: context, at: CGPoint(x: 200, y: 40), scale: 2) > 200, "no ink near bottom")
+        #expect(
+            try Self.redChannel(of: context, at: CGPoint(x: Self.sampleX, y: 560), scale: 2) < 128,
+            "ink near top edge",
+        )
+        #expect(
+            try Self.redChannel(of: context, at: CGPoint(x: Self.sampleX, y: 320), scale: 2) > 200,
+            "no ink at the mirror-vulnerable point inside the box",
+        )
     }
 
     @Test
@@ -329,6 +345,34 @@ struct ReaderAnnotatedPDFRendererTests {
             score: Self.score(measures: 240), title: "T", drawings: drawings,
         )
         #expect(data == stub)
+    }
+
+    @Test
+    func `a base PDF that disagrees with the plan logs the drift instead of failing silently`() async throws {
+        // A one-page stub for a score that paginates to several — same mismatch as the "comes back unstamped"
+        // test above, but this one asserts on the signal that mismatch is supposed to leave behind: without it,
+        // "the user drew nothing", "no anchor resolved" and "the guard tripped" are indistinguishable.
+        let stub = try AnnotatedPDFComposerTests.baseDocumentForGuardTest()
+        let analytics = SpyAnalytics()
+        let renderer = ReaderAnnotatedPDFRenderer(pdfRenderer: StubPDFRenderer(data: stub), analytics: analytics)
+        let drawings = [AnnotatedPDFComposerTests.drawingForGuardTest()]
+        _ = try await renderer.renderAnnotatedEngravedPDF(
+            score: Self.score(measures: 240), title: "T", drawings: drawings,
+        )
+        let event = try #require(analytics.event(named: "annotated_export_drifted"))
+        #expect(event.parameters["reason"] == .string("page_count"))
+    }
+
+    @Test
+    func `an agreeing base PDF logs nothing`() async throws {
+        // The real engraving path — its own output always agrees with the layout mirror, so this is the negative
+        // case for the drift signal above.
+        let analytics = SpyAnalytics()
+        let renderer = ReaderAnnotatedPDFRenderer(pdfRenderer: CoreGraphicsPDFRendererStub(), analytics: analytics)
+        _ = try await renderer.renderAnnotatedEngravedPDF(
+            score: Self.score(measures: 8), title: "T", drawings: [],
+        )
+        #expect(analytics.event(named: "annotated_export_drifted") == nil)
     }
 
     @Test

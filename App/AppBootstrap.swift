@@ -208,7 +208,9 @@ final class AppBootstrap {
             gateway: gateway,
             audioExporter: audioExporter,
             pdfRenderer: CoreGraphicsPDFRenderer(),
-            annotatedPDFRenderer: ReaderAnnotatedPDFRenderer(pdfRenderer: CoreGraphicsPDFRenderer()),
+            annotatedPDFRenderer: ReaderAnnotatedPDFRenderer(
+                pdfRenderer: CoreGraphicsPDFRenderer(), analytics: analytics ?? NoopAnalytics(),
+            ),
             annotationStore: annotationStore,
         )
         metadataReader = LiveScoreMetadataReader(

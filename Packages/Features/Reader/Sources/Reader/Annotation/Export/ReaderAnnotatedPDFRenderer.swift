@@ -3,6 +3,7 @@ import Domain
 import Foundation
 import ReaderAnnotationCore
 import SheetMusicCore
+import UtilityCore
 
 /// `AnnotatedPDFRendering` for iOS. Composes the three halves of the feature: `EngravedExportLayout` reconstructs the
 /// pages the exporter will produce, `AnnotatedExportPlanner` decides which stored drawing lands where, and
@@ -12,11 +13,16 @@ import SheetMusicCore
 /// needs PencilKit, both of which already live here. Infrastructure reaches it through the Domain protocol only.
 public struct ReaderAnnotatedPDFRenderer: AnnotatedPDFRendering {
     private let pdfRenderer: any ScorePDFRenderer
+    private let analytics: any Analytics
 
-    /// - Parameter pdfRenderer: the plain engraving-to-PDF path — the same renderer the unannotated `.pdf` share
-    ///   uses, so the annotated export's pages are the pages the plain export would have produced.
-    public init(pdfRenderer: any ScorePDFRenderer) {
+    /// - Parameters:
+    ///   - pdfRenderer: the plain engraving-to-PDF path — the same renderer the unannotated `.pdf` share uses, so
+    ///     the annotated export's pages are the pages the plain export would have produced.
+    ///   - analytics: where `annotated_export_drifted` is logged when `driftReason` trips. Defaults to a no-op so
+    ///     tests and other callers that don't care about the signal need not supply one.
+    public init(pdfRenderer: any ScorePDFRenderer, analytics: any Analytics = NoopAnalytics()) {
         self.pdfRenderer = pdfRenderer
+        self.analytics = analytics
     }
 
     public func renderAnnotatedEngravedPDF(
@@ -27,7 +33,10 @@ public struct ReaderAnnotatedPDFRenderer: AnnotatedPDFRendering {
             let layout = EngravedExportLayout.resolve(
                 score: score, options: EngravedExportLayout.exportOptions(title: title),
             )
-            guard agrees(basePDF: basePDF, layout: layout) else { return [] }
+            if let reason = driftReason(basePDF: basePDF, layout: layout) {
+                analytics.log(.annotatedExportDrifted(reason: reason))
+                return []
+            }
             return AnnotatedExportPlanner.planEngraved(
                 drawings: drawings,
                 resolver: LayoutDocumentAnchorResolver(document: layout.document),
@@ -63,16 +72,31 @@ public struct ReaderAnnotatedPDFRenderer: AnnotatedPDFRendering {
     }
 
     /// The drift guard. `EngravedExportLayout` mirrors five lines of `PDFExporter.export`; if a swift-sheet-music
-    /// change moved the pagination, the page count or the page size stops matching and the ink would land on the
-    /// wrong page or the wrong spot. Returning `false` here ships the plain engraving instead — a share that is not
-    /// annotated is a far better failure than one annotated in the wrong place.
-    private func agrees(basePDF: Data, layout: EngravedExportLayout.Resolved) -> Bool {
-        guard let provider = CGDataProvider(data: basePDF as CFData),
-              let document = CGPDFDocument(provider),
-              document.numberOfPages == layout.pages.count,
-              let first = document.page(at: 1)
-        else { return false }
-        let box = first.getBoxRect(.mediaBox)
-        return abs(box.width - layout.pageSize.width) < 1 && abs(box.height - layout.pageSize.height) < 1
+    /// change moved the pagination, the page count or a page's size stops matching and the ink would land on the
+    /// wrong page or the wrong spot. A non-`nil` result ships the plain engraving instead of stamping — a share
+    /// that is not annotated is a far better failure than one annotated in the wrong place — and is also the
+    /// `"reason"` logged on `annotated_export_drifted`.
+    ///
+    /// Every page's media box is checked, not just the first: a page-1-only check would miss a layout where an
+    /// interior page shifted width while page 1 and the overall page count happened to still agree.
+    ///
+    /// This cannot catch a swift-sheet-music change that reflows systems *within* an unchanged page count and page
+    /// size (e.g. a shift in `availableWidth`) — that gap is a spec-level limitation, recorded there rather than
+    /// solved here.
+    private func driftReason(basePDF: Data, layout: EngravedExportLayout.Resolved) -> String? {
+        guard let provider = CGDataProvider(data: basePDF as CFData), let document = CGPDFDocument(provider) else {
+            return "unreadable_base_pdf"
+        }
+        guard document.numberOfPages == layout.pages.count, document.numberOfPages > 0 else {
+            return "page_count"
+        }
+        for pageNumber in 1 ... document.numberOfPages {
+            guard let page = document.page(at: pageNumber) else { return "page_count" }
+            let box = page.getBoxRect(.mediaBox)
+            guard abs(box.width - layout.pageSize.width) < 1, abs(box.height - layout.pageSize.height) < 1 else {
+                return "page_size"
+            }
+        }
+        return nil
     }
 }
