@@ -1,3 +1,7 @@
+// PARITY(macos): live playback controller — macOS needs the AVAudioSession-free equivalent (no session category,
+//   NSImage-backed now-playing artwork, and CoreAudio default-device observation in place of route notifications).
+
+#if os(iOS)
 // swiftlint:disable file_length
 import AVFoundation
 import Domain
@@ -213,7 +217,9 @@ public final class LivePlaybackController: Domain.PlaybackController {
             // Only what the user actually chose. `prepare(score:)` has already seeded every strip from the
             // score, so an absent field means "leave the engine's own value alone" — sending a filler here
             // would overwrite the score with a default.
-            if let volume = state.volume { engine.setVolume(forChannel: channel, to: Float(volume)) }
+            if let volume = state.volume {
+                engine.setVolume(forChannel: channel, to: Float(volume))
+            }
             if let program = state.gmProgram {
                 engine.setProgram(forChannel: channel, to: UInt8(clamping: program))
             }
@@ -513,3 +519,4 @@ extension String {
         isEmpty ? nil : self
     }
 }
+#endif

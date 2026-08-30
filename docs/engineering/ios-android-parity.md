@@ -74,6 +74,13 @@ Nothing is currently owed to iOS.
 
 | Item | Where it diverges | What macOS still needs |
 | --- | --- | --- |
+| loop-bounds mapping | `Packages/Infrastructure/Sources/Audio/LivePlaybackController+LoopBounds.swift:1` | depends on the gated LivePlaybackController; ports once that type does. |
+| note preview forwarding | `Packages/Infrastructure/Sources/Audio/LivePlaybackController+Preview.swift:1` | depends on the gated LivePlaybackController; ports once that type does. |
+| soundfont-reload rebuild | `Packages/Infrastructure/Sources/Audio/LivePlaybackController+Reload.swift:1` | depends on the gated LivePlaybackController; ports once that type does. |
+| transpose forwarding | `Packages/Infrastructure/Sources/Audio/LivePlaybackController+Transpose.swift:1` | depends on the gated LivePlaybackController; ports once that type does. |
+| live playback controller | `Packages/Infrastructure/Sources/Audio/LivePlaybackController.swift:1` | macOS needs the AVAudioSession-free equivalent (no session category, NSImage-backed now-playing artwork, and CoreAudio default-device observation in place of route notifications). |
+| offline audio export | `Packages/Infrastructure/Sources/Audio/LiveScoreAudioExporter.swift:1` | macOS needs the AVAudioSession-free equivalent of `.hostManaged` export. |
+| output-route disconnect watcher | `Packages/Infrastructure/Sources/Audio/OutputRouteDisconnectWatcher.swift:1` | macOS needs CoreAudio default-device-change observation in place of `AVAudioSession.routeChangeNotification`. |
 | edit-info sheet title display mode | `Packages/ScoreUI/Sources/ScoreUI/EditScoreInfoSheet.swift:47` | no macOS analogue; navigationTitle alone sets the sheet title there. Revisit only if a Mac port wants inline-vs-large-title parity with the iOS sheet. |
 | system share sheet | `Packages/Utility/Sources/UtilityUI/ActivityViewControllerRepresentable.swift:1` | macOS needs an NSSharingServicePicker equivalent, wired into ScoreShareTarget's call sites. |
 | screen corner radius | `Packages/Utility/Sources/UtilityUI/Device+CornerRadius.swift:21` | DeviceKit has no macOS device geometry to read, so `screenCornerRadius` returns 0 there. Revisit only if a Mac window ever needs concentric corner nesting against real display bezel geometry. |
