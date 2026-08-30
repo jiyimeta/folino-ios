@@ -1,5 +1,6 @@
 import Domain
 import Foundation
+import ReaderInteractionCore
 import SheetMusicAudio
 import SheetMusicCore
 import SheetMusicLayoutApple

@@ -17,7 +17,11 @@
     <!-- 與 iOS 的 "reader.pdf.settingsNote" 譯文相同。 -->
     <string name="reader_pdf_settings_note">PDF 樂譜不支援譜表大小、隱藏譜表等顯示調整，但可以使用播放設定。</string>
     <string name="reader_display_settings">顯示設定</string>
+    <string name="reader_playback_settings">播放設定</string>
     <string name="reader_share">共用</string>
+    <string name="reader_back">返回</string>
+    <string name="reader_annotate_start">開始標注</string>
+    <string name="reader_annotate_stop">停止標注</string>
     <string name="reader_staff_hide">隱藏譜表</string>
     <string name="reader_staff_show">顯示譜表</string>
     <string name="reader_clef_choose">選擇譜號</string>
@@ -82,7 +86,6 @@
     <string name="reader_editing_voice">聲部 %1$d</string>
     <string name="reader_editing_unavailable_version">無法編輯：此樂譜正由不同版本的引擎繪製。</string>
     <string name="reader_editing_unavailable_diverged">此樂譜目前無法編輯。</string>
-    <string name="reader_editing_unavailable_layout_mode">音符編輯僅在垂直捲動版面下可用。請在顯示設定中切換版面。</string>
     <string name="reader_editing_duration_whole">全音符</string>
     <string name="reader_editing_duration_half">二分音符</string>
     <string name="reader_editing_duration_quarter">四分音符</string>
@@ -111,4 +114,25 @@
     <string name="reader_editing_more">更多</string>
     <string name="reader_editing_revert">還原為原始樂譜</string>
     <string name="reader_editing_saved_as_mscz">編輯內容將儲存為原始檔案旁的 MuseScore (.mscz) 副本。</string>
+    <!-- Reader coach marks. Copy is the same feature's copy on iOS
+         (Reader/Resources/Localizable.xcstrings, reader.hint.*) — the one deliberate change is the
+         annotation message, which names a stylus rather than Apple Pencil. Which of these is offered,
+         when, and when it retires is decided by the shared ReaderHintEngine, not here. -->
+    <string name="reader_hint_transport_collapse_title">向右滑動可縮小顯示</string>
+    <string name="reader_hint_transport_collapse_message">將播放控制項下方向右滑動，即可切換為小尺寸顯示。</string>
+    <string name="reader_hint_transport_expand_title">向左滑動可放大顯示</string>
+    <string name="reader_hint_transport_expand_message">將播放控制項向左滑動，即可切換為大尺寸顯示。</string>
+    <string name="reader_hint_note_editing_title">編輯音符</string>
+    <string name="reader_hint_note_editing_message">可直接改寫樂譜中的音符。選取音符即可更改音高、時值、臨時記號等，也可以輸入新的音符。</string>
+    <string name="reader_hint_annotation_title">在樂譜上書寫</string>
+    <string name="reader_hint_annotation_message_tablet">可用觸控筆或手指直接在樂譜上做筆記。</string>
+    <string name="reader_hint_annotation_message_phone">可用手指直接在樂譜上做筆記。</string>
+    <string name="reader_hint_staff_visibility_title">隱藏聲部</string>
+    <string name="reader_hint_staff_visibility_message">在顯示設定中隱藏不演奏的聲部，讓自己的聲部顯示得更大。</string>
+    <string name="reader_hint_metronome_title">節拍器</string>
+    <string name="reader_hint_metronome_message">在播放設定中可切換是否播放節拍器。</string>
+    <string name="reader_hint_repeat_playback_title">重複與 A–B 循環</string>
+    <string name="reader_hint_repeat_playback_message">在播放設定中可設定整首重複，或只循環想要練習的片段的 A–B 循環。</string>
+    <string name="reader_hint_mixer_title">各聲部音量</string>
+    <string name="reader_hint_mixer_message">在播放設定中可調整各聲部的音量，或用靜音/獨奏只聽想聽的聲部。</string>
 </resources>

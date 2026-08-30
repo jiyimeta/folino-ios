@@ -56,6 +56,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.keynumber.folino.reader.hints.ReaderFeatureHint
+import com.keynumber.folino.reader.hints.ReaderHintController
 import com.keynumber.folino.reader.ui.CollapsibleHeader
 import com.keynumber.folino.reader.ui.InspectorRow
 import com.keynumber.folino.reader.ui.InspectorSectionHeader
@@ -232,7 +234,16 @@ fun PlaybackInspectorContent(
                         // writes the global flag; the Reader screen pushes that value into the engine
                         // via [ReaderAudioViewModel.setMetronomeEnabled] (which also survives a
                         // soundfont hot-swap re-push).
-                        Switch(checked = metronomeEnabled, onCheckedChange = onMetronomeChange, enabled = controlsEnabled)
+                        Switch(
+                            checked = metronomeEnabled,
+                            // The coach mark that points at this button retires for good the first time the
+                            // metronome is actually switched, taught or not.
+                            onCheckedChange = {
+                                ReaderHintController.markUsed(ReaderFeatureHint.METRONOME)
+                                onMetronomeChange(it)
+                            },
+                            enabled = controlsEnabled,
+                        )
                     }
                 }
                 item {
@@ -252,7 +263,14 @@ fun PlaybackInspectorContent(
                 }
                 item {
                     InspectorRow(label = stringResource(R.string.reader_repeat_label), leadingIcon = Icons.Default.Repeat) {
-                        RepeatModePicker(selected = repeatMode, enabled = controlsEnabled, onSelect = { audioVm.setRepeatMode(it) })
+                        RepeatModePicker(
+                            selected = repeatMode,
+                            enabled = controlsEnabled,
+                            onSelect = {
+                                ReaderHintController.markUsed(ReaderFeatureHint.REPEAT_PLAYBACK)
+                                audioVm.setRepeatMode(it)
+                            },
+                        )
                     }
                 }
                 if (isInPlaylist) {
@@ -363,12 +381,21 @@ fun PlaybackInspectorContent(
                                 gmInstruments = gmInstruments,
                                 drumKits = drumKits,
                                 drumKitFamilyNames = drumKitFamilyNames,
+                                // Any of the three retires the mixer coach mark — balancing, muting and soloing
+                                // are the feature it describes.
                                 onVolume = { strip, v ->
+                                    ReaderHintController.markUsed(ReaderFeatureHint.MIXER)
                                     engine?.setStaffVolume(strip.partIndex, strip.instrumentOrdinal, v)
                                     onPersistStripVolume(strip, v)
                                 },
-                                onMute = { strip, m -> engine?.setStaffMuted(strip.partIndex, strip.instrumentOrdinal, m) },
-                                onSolo = { strip, s -> engine?.setStaffSoloed(strip.partIndex, strip.instrumentOrdinal, s) },
+                                onMute = { strip, m ->
+                                    ReaderHintController.markUsed(ReaderFeatureHint.MIXER)
+                                    engine?.setStaffMuted(strip.partIndex, strip.instrumentOrdinal, m)
+                                },
+                                onSolo = { strip, s ->
+                                    ReaderHintController.markUsed(ReaderFeatureHint.MIXER)
+                                    engine?.setStaffSoloed(strip.partIndex, strip.instrumentOrdinal, s)
+                                },
                                 onProgram = { strip, program ->
                                     engine?.setStaffProgram(strip.partIndex, strip.instrumentOrdinal, program)
                                     onPersistStripProgram(strip, program)

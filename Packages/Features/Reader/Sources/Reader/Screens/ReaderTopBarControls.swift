@@ -1,4 +1,5 @@
 import Domain
+import ReaderInteractionCore
 import ScoreUI
 import SwiftUI
 import UtilityUI

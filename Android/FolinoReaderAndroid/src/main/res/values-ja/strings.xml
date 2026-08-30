@@ -11,13 +11,17 @@
     <string name="reader_pref_honor_breaks">楽譜の改行・改ページに従う</string>
     <string name="reader_pref_collapse_rests">複数小節休符をまとめる</string>
     <string name="reader_pref_show_invisible">非表示要素を表示</string>
-    <string name="reader_pref_show_seek_bar">シークバーを表示</string>
+    <string name="reader_pref_show_seek_bar">シークバー表示</string>
     <string name="reader_pref_auto_follow">自動スクロール</string>
     <string name="reader_pref_page_turn_buttons">ページめくりボタン</string>
     <!-- iOS の "reader.pdf.settingsNote" と同一訳文。 -->
     <string name="reader_pdf_settings_note">PDF 楽譜では譜表サイズや譜表の非表示などの表示調整は利用できませんが、再生設定は利用できます。</string>
     <string name="reader_display_settings">表示設定</string>
+    <string name="reader_playback_settings">再生設定</string>
     <string name="reader_share">共有</string>
+    <string name="reader_back">戻る</string>
+    <string name="reader_annotate_start">書き込みを開始</string>
+    <string name="reader_annotate_stop">書き込みを終了</string>
     <string name="reader_staff_hide">譜表を非表示</string>
     <string name="reader_staff_show">譜表を表示</string>
     <string name="reader_clef_choose">音部記号を選択</string>
@@ -82,7 +86,6 @@
     <string name="reader_editing_voice">声部 %1$d</string>
     <string name="reader_editing_unavailable_version">編集を利用できません。この楽譜は別のバージョンのエンジンで描画されています。</string>
     <string name="reader_editing_unavailable_diverged">この楽譜は現在編集できません。</string>
-    <string name="reader_editing_unavailable_layout_mode">音符の編集は「縦スクロール」表示でのみ行えます。表示設定でレイアウトを切り替えてください。</string>
     <string name="reader_editing_duration_whole">全音符</string>
     <string name="reader_editing_duration_half">2分音符</string>
     <string name="reader_editing_duration_quarter">4分音符</string>
@@ -111,4 +114,25 @@
     <string name="reader_editing_more">その他</string>
     <string name="reader_editing_revert">元の楽譜に戻す</string>
     <string name="reader_editing_saved_as_mscz">編集内容は元のファイルの隣に MuseScore (.mscz) 形式のコピーとして保存されます。</string>
+    <!-- Reader coach marks. Copy is the same feature's copy on iOS
+         (Reader/Resources/Localizable.xcstrings, reader.hint.*) — the one deliberate change is the
+         annotation message, which names a stylus rather than Apple Pencil. Which of these is offered,
+         when, and when it retires is decided by the shared ReaderHintEngine, not here. -->
+    <string name="reader_hint_transport_collapse_title">右にスワイプで小さく表示</string>
+    <string name="reader_hint_transport_collapse_message">再生コントロールの下部を右にスワイプすると、小さい表示に切り替えられます。</string>
+    <string name="reader_hint_transport_expand_title">左にスワイプで大きく表示</string>
+    <string name="reader_hint_transport_expand_message">再生コントロールを左にスワイプすると、大きい表示に切り替えられます。</string>
+    <string name="reader_hint_note_editing_title">音符を編集</string>
+    <string name="reader_hint_note_editing_message">楽譜の音符を直接書き換えられます。音符を選び、音の高さ・長さ・臨時記号などを変更できます。新しく音符を入力することも可能です。</string>
+    <string name="reader_hint_annotation_title">楽譜に書き込む</string>
+    <string name="reader_hint_annotation_message_tablet">スタイラスや指で、楽譜に直接メモを書き込めます。</string>
+    <string name="reader_hint_annotation_message_phone">指で楽譜に直接メモを書き込めます。</string>
+    <string name="reader_hint_staff_visibility_title">パートを非表示</string>
+    <string name="reader_hint_staff_visibility_message">表示設定から、演奏しないパートを隠し、自分のパートだけを大きく表示できます。</string>
+    <string name="reader_hint_metronome_title">メトロノーム</string>
+    <string name="reader_hint_metronome_message">再生設定から、メトロノームを鳴らすかどうかを切り替えられます。</string>
+    <string name="reader_hint_repeat_playback_title">リピート・A–B ループ</string>
+    <string name="reader_hint_repeat_playback_message">再生設定から、曲全体のリピートや、練習したい範囲だけを繰り返す A–B ループを設定できます。</string>
+    <string name="reader_hint_mixer_title">パートごとの音量</string>
+    <string name="reader_hint_mixer_message">再生設定から、パートごとの音量を調整したり、ミュート/ソロで聴きたいパートだけを鳴らせます。</string>
 </resources>

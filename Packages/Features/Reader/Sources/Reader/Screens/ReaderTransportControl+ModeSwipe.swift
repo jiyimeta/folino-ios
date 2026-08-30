@@ -1,3 +1,4 @@
+import ReaderInteractionCore
 import SwiftUI
 
 /// The transport's swipe-to-switch-mode gesture: how the control tracks the finger, when it flips the card under it,
