@@ -38,11 +38,16 @@ struct LiveScoreShareServiceTests {
         }
     }
 
-    /// `AnnotationStore` returning a fixed layer, so availability can be driven without a database.
+    /// `AnnotationStore` returning a fixed layer, so availability can be driven without a database. `error`, when
+    /// set, is thrown instead — simulating a genuine store read failure, distinct from a legitimately empty layer.
     private final class FakeAnnotationStore: Domain.AnnotationStore, @unchecked Sendable {
         var layer: AnnotationLayer?
+        var error: Error?
         func annotationLayer(forScoreItem id: Domain.ScoreItemID) throws -> AnnotationLayer? {
-            layer
+            if let error {
+                throw error
+            }
+            return layer
         }
 
         func saveAnnotationLayer(_ layer: AnnotationLayer) throws {}
@@ -349,6 +354,76 @@ struct LiveScoreShareServiceTests {
         let rig = try Self.makeRig(scoreData: Fixtures.minimalMSCZData(), localFileName: "s.mscz")
         await #expect(throws: DomainError.self) {
             try await rig.svc.prepareShare(item: rig.item, format: .annotatedPDF)
+        }
+    }
+
+    @Test
+    func `a genuine annotation store failure is distinct from an empty layer`() async throws {
+        // `requireDrawings` must not fold "the store threw" and "the store returned nothing" into the same "no
+        // annotations" error — a genuine read failure should surface as itself.
+        let rig = try Self.makeRig(scoreData: Fixtures.minimalMSCZData(), localFileName: "s.mscz")
+        rig.annotations.error = DomainError.persistenceFailed(reason: "disk error")
+        do {
+            _ = try await rig.svc.prepareShare(item: rig.item, format: .annotatedPDF)
+            Issue.record("expected throw")
+        } catch DomainError.persistenceFailed(reason: "disk error") {
+            // Expected: the store's own error, not "annotated export: the item has no annotations".
+        } catch {
+            Issue.record("unexpected error: \(error)")
+        }
+    }
+
+    // MARK: - annotatedOriginalPDF route
+
+    @Test
+    func `the original-PDF annotated share reads the file beside the item and writes the suffixed name`() async throws {
+        // `localFileName` itself is the PDF (an unconverted-PDF item): `originalPDFFileName` falls back to it, and
+        // the Rig already writes `scoreData` there — this is the only reason the unconverted-PDF row works, per the
+        // doc comment on `ScoreItem.originalPDFFileName`.
+        let pdfBytes = Data("%PDF-1.4\n%%EOF".utf8)
+        let rig = try Self.makeRig(scoreData: pdfBytes, localFileName: "s.pdf")
+        rig.annotations.layer = Self.layer(for: rig.item.id, drawings: [Self.pageDrawing()])
+
+        let url = try await rig.svc.prepareShare(item: rig.item, format: .annotatedOriginalPDF)
+
+        #expect(url.lastPathComponent == "T (original annotated).pdf")
+        #expect(rig.annotated.calls == [.original])
+        #expect(try Data(contentsOf: url) == rig.annotated.data)
+    }
+
+    @Test
+    func `the original-PDF annotated share throws when the original PDF is missing from disk`() async throws {
+        // `sourcePDFFileName` names a sidecar that was never written — the on-disk read must fail rather than
+        // silently produce an empty/garbage export.
+        let rig = try Self.makeRig(scoreData: Fixtures.minimalMSCZData(), localFileName: "s.mscz")
+        var item = rig.item
+        item.sourcePDFFileName = "missing.pdf"
+
+        do {
+            _ = try await rig.svc.prepareShare(item: item, format: .annotatedOriginalPDF)
+            Issue.record("expected throw")
+        } catch let DomainError.scoreFileNotFound(name) {
+            #expect(name == "missing.pdf")
+        } catch {
+            Issue.record("unexpected error: \(error)")
+        }
+    }
+
+    @Test
+    func `the original-PDF share names the item, not the score file, when there is no original PDF`() async throws {
+        // Neither `sourcePDFFileName` nor a `.pdf` `localFileName` — this item never had an original PDF at all, so
+        // there is no on-disk name to report. The thrown error must not claim the (perfectly present) score file
+        // is what's missing.
+        let rig = try Self.makeRig(scoreData: Fixtures.minimalMSCZData(), localFileName: "s.mscz")
+
+        do {
+            _ = try await rig.svc.prepareShare(item: rig.item, format: .annotatedOriginalPDF)
+            Issue.record("expected throw")
+        } catch let DomainError.scoreFileNotFound(name) {
+            #expect(name != rig.item.localFileName)
+            #expect(name.contains(rig.item.title))
+        } catch {
+            Issue.record("unexpected error: \(error)")
         }
     }
 }

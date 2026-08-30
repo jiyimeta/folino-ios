@@ -116,7 +116,10 @@ public struct LiveScoreShareService: ScoreShareService {
 
     private func writeAnnotatedOriginalPDF(item: ScoreItem) async throws -> URL {
         guard let name = item.originalPDFFileName else {
-            throw DomainError.scoreFileNotFound(name: item.localFileName)
+            // `item.localFileName` is not what's missing — it's the score file, which exists. There is no original
+            // PDF at all (never was, or `sourcePDFFileName` was cleared), so there's no on-disk name to report;
+            // name the thing that's actually absent.
+            throw DomainError.scoreFileNotFound(name: "\(item.title) (original PDF)")
         }
         let url = scoresDirectory.appending(path: name)
         guard let basePDF = try? Data(contentsOf: url) else {
@@ -131,8 +134,13 @@ public struct LiveScoreShareService: ScoreShareService {
 
     /// An annotated export with no ink is a bug, not a valid share — the row is only offered when the item has some,
     /// so reaching here means the layer went away between the menu opening and the tap.
+    ///
+    /// Reads the store directly rather than through `drawings(for:)`: that helper's `try?` degrade-to-no-ink is
+    /// right for `availableFormats`, where a store hiccup should just leave the menu unflagged, but on the export
+    /// path it would make a genuine read failure indistinguishable from a legitimately empty layer — both would
+    /// throw the same "no annotations" error. Letting the store's own error propagate here keeps the two apart.
     private func requireDrawings(for item: ScoreItem) async throws -> [DrawingAnchor] {
-        let drawings = await drawings(for: item)
+        let drawings = try await annotationStore.annotationLayer(forScoreItem: item.id)?.drawings ?? []
         guard !drawings.isEmpty else {
             throw DomainError.scoreWriteFailed(reason: "annotated export: the item has no annotations")
         }
