@@ -15,7 +15,10 @@
 ## Global Constraints
 
 - **Deployment floor: iOS 18.0.** iOS-26-only API stays behind the compat helpers in `Packages/Utility/Sources/UtilityUI/GlassEffectCompat.swift`, in the same `if #available(iOS 26, *)` shape.
-- **macOS floor: `.macOS(.v14)`** — the value `Utility`, `Domain`, and `Library` already declare. Every package this plan touches uses exactly `.macOS(.v14)`.
+- **macOS floor: `.macOS(.v15)`** — every package this plan touches, including the three that already shipped `.macOS(.v14)` (`Utility`, `Domain`, `ScoreUI`). **v14 cannot work**: 81 ssm source files carry `@available(macOS 15.0, *)`, among them `PDFExporter` (`SheetMusicPDF/PDFExporter.swift:33`), which `Infrastructure/ScoreFiles/CoreGraphicsPDFRenderer.swift:11` calls unconditionally; `Editor/EditorViewModel+HitTest.swift:59` is the same shape. There are no macOS users to exclude — the app has never shipped.
+- **iOS-only SwiftUI API needs no import, and is the larger surface than UIKit.** `EditMode` / `EditButton` / `\.editMode`, `.topBarLeading`, `.topBarTrailing`, `.navigationBarTitleDisplayMode`, `.textInputAutocapitalization`, `ToolbarSpacer`, and `Color(.secondarySystemBackground)` / `Color(uiColor:)` are all unavailable on macOS. Never conclude a package is portable from an import count.
+- **The house pattern for those sites is a compat helper in `UtilityUI`**, shaped exactly like `GlassEffectCompat`: iOS keeps its call byte-for-byte, macOS gets a neutral substitute. **Do not migrate call sites to semantic toolbar placements** (`.cancellationAction` / `.confirmationAction`) in this plan — that is the better end state but it changes iOS appearance per site, so it is sequenced into Ⅲb one screen at a time.
+- **`if #available(iOS 26, *)` does not guard macOS.** The `*` wildcard is satisfied on every platform not named, so an iOS-26-only API inside such a block fails to compile on macOS at any floor below 26. Write `if #available(iOS 26, macOS 26, *)`.
 - **`swift build --package-path Packages/<X>` is the macOS gate** and works today on a macOS host. (`swift test` remains unusable for iOS-destination package tests — the SwiftLint plugin needs an iOS Simulator destination via `xcodebuild`. That restriction is unchanged and unaffected.)
 - **No iOS regression.** Every task verifies that the iOS build still passes before committing.
 - **Access control:** new symbols get no access modifier; promote to `public` only when something outside the module references it.
@@ -37,13 +40,15 @@
 | `Packages/Utility/Sources/UtilityUI/WindowSafeAreaReader.swift` | Top safe-area probe | Gate impl; macOS no-op |
 | `Packages/Utility/Sources/UtilityUI/WindowFrameReader.swift` | Frame in window coordinates | Gate impl; macOS no-op |
 | `Packages/Utility/Sources/UtilityUI/InteractivePopGestureEnabler.swift` | Restores the iOS back-swipe | Gate type; macOS no-op modifier |
-| `Packages/ScoreUI/Package.swift` | ScoreUI manifest | Add `.macOS(.v14)` |
-| `Packages/Features/Library/Sources/Library/Screens/LibraryRootPresentations.swift:187` | Share-sheet presentation | Gate the call site |
-| `Packages/Infrastructure/Package.swift` | Infrastructure manifest | Add `.macOS(.v14)` |
-| `Packages/Infrastructure/Sources/Audio/{LivePlaybackController,LiveScoreAudioExporter,OutputRouteDisconnectWatcher}.swift` | AVAudioSession / MPMediaItemArtwork / route watching | Gate to iOS; record the macOS gap |
-| `Packages/Features/ImportExport/Package.swift` + `Sources/ImportExportShareUI/ShareSession.swift` | Share flow | Add `.macOS(.v14)`; gate |
-| `Packages/Features/Settings/Package.swift` + `Sources/Settings/Screens/ReaderModeSettingRows.swift` | Settings rows with a raster glyph | Add `.macOS(.v14)`; gate the `UIImage` helper |
-| `Packages/Features/Editor/Package.swift` + `Sources/Editor/Views/EditorPadButtons.swift` | Pad glyphs built from `UIImage`/`UIFont` | Add `.macOS(.v14)`; gate |
+| `Packages/ScoreUI/Package.swift` | ScoreUI manifest | Add `.macOS(.v15)` |
+| `Packages/Utility/Sources/UtilityUI/PlatformToolbarCompat.swift` | Compat helpers for iOS-only toolbar / title / text-input modifiers | Create |
+| `Packages/{Utility,Domain,ScoreUI}/Package.swift` | Manifests that already shipped `.macOS(.v14)` | Raise to `.macOS(.v15)` |
+| `Packages/Features/Library/Package.swift` | Library manifest | **Remove** its `.macOS` declaration — deferred to Ⅲb |
+| `Packages/Infrastructure/Package.swift` | Infrastructure manifest | Add `.macOS(.v15)` |
+| `Packages/Infrastructure/Sources/Audio/` — `LivePlaybackController.swift` + its `+LoopBounds` / `+Preview` / `+Reload` / `+Transpose` extensions, `LiveScoreAudioExporter.swift`, `OutputRouteDisconnectWatcher.swift` (**seven files**) | AVAudioSession / MPMediaItemArtwork / route watching | Gate to iOS; record the macOS gap |
+| `Packages/Features/ImportExport/Package.swift` + `Sources/ImportExportShareUI/{ShareSession,ShareRootView,PlaylistPickerSection}.swift` | Share flow | Add `.macOS(.v15)`; drop a dead `import UIKit`; compat helpers |
+| `Packages/Features/Settings/Package.swift` + `Sources/Settings/{Screens/ReaderModeSettingRows,Screens/AboutSettingsSection,Screens/SettingsSheet,Views/FeedbackMailView,VersionHistory/VersionHistoryScreen}.swift` | Settings rows, mail composer, version history | Add `.macOS(.v15)`; gate `MessageUI` and the `UIImage` / `Color(.system…)` uses; compat helpers |
+| `Packages/Features/Editor/Package.swift` + `Sources/Editor/Views/{EditorPadButtons,EditorInstrumentsSheet,EditorDrumLayoutSheet,EditorRehearsalMarkSheet,EditorSignatureSheet,EditorPadTuckHandle}.swift` | Pad glyphs, sheets | Add `.macOS(.v15)`; gate the raster glyph, the two `EditMode` sites and `Color(uiColor:)`; compat helpers |
 | `Scripts/build-macos-packages.sh` | One command that builds every macOS-enabled package | Create |
 
 ---
@@ -349,7 +354,7 @@ Expected: FAIL with the `requires macos 10.13` resolution errors quoted above.
 - [ ] **Step 2: Add the platform**
 
 ```swift
-    platforms: [.iOS(.v18), .macOS(.v14)],
+    platforms: [.iOS(.v18), .macOS(.v15)],
 ```
 
 - [ ] **Step 3: Run the build to verify it passes**
@@ -366,67 +371,147 @@ git commit -m "build(scoreui): declare macOS 14 support"
 
 ---
 
-## Task 4: Library compiles for macOS
+## Task 4: Raise the floor to macOS 15, add the toolbar compat helpers, and defer Library
 
-`Library` already declares `.macOS(.v14)` and imports no UIKit itself, but it presents the iOS-only share sheet at one call site.
+> **This task replaced the original Task 4 ("Library compiles for macOS") after measurement.** `Library` needs 33 fixes across 15 files, and `EditMode` appears in view *signatures* — `ScoreListScreen.swift:14` as `@State`, `ScoreListView.swift:41` as `@Binding`, crossing a screen/view boundary. There is no public signature to preserve, so the plan's method does not apply. Library moves to Ⅲb alongside Reader. See "Out of scope" at the end.
+
+Three things that every remaining task depends on, in one commit each.
 
 **Files:**
-- Modify: `Packages/Features/Library/Sources/Library/Screens/LibraryRootPresentations.swift:187`
+- Modify: `Packages/Utility/Package.swift`, `Packages/Domain/Package.swift`, `Packages/ScoreUI/Package.swift` (`.v14` → `.v15`)
+- Modify: `Packages/Features/Library/Package.swift` (remove the `.macOS` declaration)
+- Create: `Packages/Utility/Sources/UtilityUI/PlatformToolbarCompat.swift`
 
 **Interfaces:**
-- Consumes: Task 2's iOS-gated `ActivityViewControllerRepresentable`, Task 3's macOS-capable `ScoreUI`.
-- Produces: `Library` building on macOS.
+- Consumes: Tasks 2 and 3.
+- Produces, for Tasks 5–8:
+  - `ToolbarItemPlacement.topBarLeadingCompat` / `.topBarTrailingCompat`
+  - `View.inlineNavigationTitleCompat() -> some View`
+  - `View.wordCapitalizationCompat() -> some View`
 
-- [ ] **Step 1: Run the build to see it fail**
+- [ ] **Step 1: Raise the three landed manifests to `.macOS(.v15)`**
 
-Run: `swift build --package-path Packages/Features/Library`
-Expected: FAIL — `cannot find 'ActivityViewControllerRepresentable' in scope` at `LibraryRootPresentations.swift:187`.
-
-- [ ] **Step 2: Gate the call site**
-
-Read the surrounding presentation closure first, then wrap only the presented content:
+In each of `Packages/Utility/Package.swift`, `Packages/Domain/Package.swift`, `Packages/ScoreUI/Package.swift`:
 
 ```swift
-                #if os(iOS)
-                    ActivityViewControllerRepresentable(items: target.urls)
-                #else
-                    // PARITY(macos): library share sheet — presents nothing until the Mac shell has an
-                    //   NSSharingServicePicker path.
-                    EmptyView()
-                #endif
+    platforms: [.iOS(.v18), .macOS(.v15)],
 ```
 
-If the enclosing modifier is a `.sheet(item:)` whose content closure is not a `@ViewBuilder`, add `@ViewBuilder` to the helper that produces it rather than restructuring the presentation.
+- [ ] **Step 2: Verify all three still build**
 
-- [ ] **Step 3: Run the build to verify it passes**
+Run each of:
+```
+swift build --package-path Packages/Utility
+swift build --package-path Packages/Domain
+swift build --package-path Packages/ScoreUI
+```
+Expected: `Build complete!` for all three. (`Domain` declares `.macOS(.v14)` today with `.iOS(.v18)`; keep its `.iOS` value as it is.)
 
-Run: `swift build --package-path Packages/Features/Library`
+- [ ] **Step 3: Remove Library's macOS declaration**
+
+`Packages/Features/Library/Package.swift`:
+
+```swift
+    platforms: [.iOS(.v18)],
+```
+
+A manifest that claims a platform it cannot build is the exact rot this plan exists to delete — `Utility` was in that state. Ⅲb restores the line when it becomes true.
+
+- [ ] **Step 4: Write the compat helpers**
+
+Create `Packages/Utility/Sources/UtilityUI/PlatformToolbarCompat.swift`. Read `GlassEffectCompat.swift` first and match its shape and doc-comment density.
+
+```swift
+import SwiftUI
+
+// PARITY(macos): toolbar placement and title display mode — these substitute neutral macOS behavior so shared
+//   screens compile. Ⅲb migrates each call site to a semantic placement (.cancellationAction /
+//   .confirmationAction), which is what actually earns Esc / Return key equivalents on a Mac sheet.
+
+extension ToolbarItemPlacement {
+    /// `.topBarLeading` on iOS; `.navigation` on macOS, which is the leading edge of a Mac toolbar.
+    public static var topBarLeadingCompat: ToolbarItemPlacement {
+        #if os(iOS)
+            .topBarLeading
+        #else
+            .navigation
+        #endif
+    }
+
+    /// `.topBarTrailing` on iOS; `.primaryAction` on macOS, which is the trailing edge of a Mac toolbar.
+    public static var topBarTrailingCompat: ToolbarItemPlacement {
+        #if os(iOS)
+            .topBarTrailing
+        #else
+            .primaryAction
+        #endif
+    }
+}
+
+extension View {
+    /// `.navigationBarTitleDisplayMode(.inline)` on iOS; a no-op on macOS, which has no large-title collapse.
+    @ViewBuilder
+    public func inlineNavigationTitleCompat() -> some View {
+        #if os(iOS)
+            navigationBarTitleDisplayMode(.inline)
+        #else
+            self
+        #endif
+    }
+
+    /// `.textInputAutocapitalization(.words)` on iOS; a no-op on macOS, which has no software keyboard to steer.
+    @ViewBuilder
+    public func wordCapitalizationCompat() -> some View {
+        #if os(iOS)
+            textInputAutocapitalization(.words)
+        #else
+            self
+        #endif
+    }
+}
+```
+
+- [ ] **Step 5: Verify Utility still builds on both platforms**
+
+Run: `swift build --package-path Packages/Utility`
 Expected: `Build complete!`
 
-- [ ] **Step 4: Verify iOS is not regressed**
-
-Run the `xcodebuild` command from Task 2 Step 5.
+Then the `xcodebuild` command from Task 2 Step 6.
 Expected: `BUILD SUCCEEDED`.
 
-- [ ] **Step 5: Regenerate the ledger and commit**
+- [ ] **Step 6: Regenerate the ledger and commit, as three commits**
 
 ```bash
 python3 Scripts/parity-report.py
-git add Packages/Features/Library docs/engineering/ios-android-parity.md
-git commit -m "feat(library): compile for macOS with the share sheet gated"
+git add Packages/Utility/Package.swift Packages/Domain/Package.swift Packages/ScoreUI/Package.swift
+git commit -m "build: raise the macOS floor to 15 to match ssm's API availability"
+
+git add Packages/Features/Library/Package.swift
+git commit -m "build(library): drop the macOS declaration until IIIb makes it true"
+
+git add Packages/Utility/Sources/UtilityUI/PlatformToolbarCompat.swift docs/engineering/ios-android-parity.md
+git commit -m "feat(utility): add toolbar and title compat helpers for macOS"
 ```
 
 ---
 
 ## Task 5: Infrastructure compiles for macOS
 
-Persistence, Soundfonts, and ScoreFiles are portable. The non-portable surface is exactly three files under `Audio/`, which use `AVAudioSession` (iOS-only), `MPMediaItemArtwork` built from `UIImage`, and route-change notifications. **Their macOS replacements belong to Ⅲb**, and the route-following work itself is Ⅱ's ssm change — so here they are gated, not ported.
+Persistence, CloudSync, Soundfonts, CrashReporting, and Analytics build unmodified. **ScoreFiles builds too — but only at the `.macOS(.v15)` floor**, because `CoreGraphicsPDFRenderer.swift:11` calls `PDFExporter`, which ssm marks `@available(macOS 15.0, *)` (`SheetMusicPDF/PDFExporter.swift:33`).
+
+The non-portable surface is **seven files** under `Audio/`, which use `AVAudioSession` (iOS-only), `MPMediaItemArtwork` built from `UIImage`, and route-change notifications. **Their macOS replacements belong to Ⅲb**, and the route-following work itself is Ⅱ's ssm change — so here they are gated, not ported.
 
 **Files:**
 - Modify: `Packages/Infrastructure/Package.swift:144`
 - Modify: `Packages/Infrastructure/Sources/Audio/LivePlaybackController.swift`
+- Modify: `Packages/Infrastructure/Sources/Audio/LivePlaybackController+LoopBounds.swift`
+- Modify: `Packages/Infrastructure/Sources/Audio/LivePlaybackController+Preview.swift`
+- Modify: `Packages/Infrastructure/Sources/Audio/LivePlaybackController+Reload.swift`
+- Modify: `Packages/Infrastructure/Sources/Audio/LivePlaybackController+Transpose.swift`
 - Modify: `Packages/Infrastructure/Sources/Audio/LiveScoreAudioExporter.swift`
 - Modify: `Packages/Infrastructure/Sources/Audio/OutputRouteDisconnectWatcher.swift`
+
+The four `LivePlaybackController+…` files extend the gated type, so they must be gated in the same commit or the build fails on them instead.
 
 **Interfaces:**
 - Consumes: Tasks 2 and 3.
@@ -435,13 +520,13 @@ Persistence, Soundfonts, and ScoreFiles are portable. The non-portable surface i
 - [ ] **Step 1: Add the platform and run the build to see it fail**
 
 ```swift
-    platforms: [.iOS(.v18), .macOS(.v14)],
+    platforms: [.iOS(.v18), .macOS(.v15)],
 ```
 
 Run: `swift build --package-path Packages/Infrastructure`
 Expected: FAIL — `no such module 'UIKit'` and/or `cannot find 'AVAudioSession' in scope` in the three `Audio/` files.
 
-- [ ] **Step 2: Gate each of the three files at file scope**
+- [ ] **Step 2: Gate each of the seven files at file scope**
 
 Wrap each file's entire contents in `#if os(iOS) … #endif`, indenting the body one level (the repo's existing convention — see `PlaybackEngine+AudioSession.swift` in ssm for the shape). Put one marker above each guard, for example:
 
@@ -478,37 +563,44 @@ git commit -m "feat(infrastructure): compile for macOS with the Audio adapters g
 
 ## Task 6: ImportExport compiles for macOS
 
-One file, `ImportExportShareUI/ShareSession.swift`, imports UIKit.
+**`ShareSession.swift`'s `import UIKit` is dead** — measured: the file uses no UIKit symbol (`NSItemProvider` is Foundation). Deleting the import is the whole of that file's change; there is nothing to gate and nothing to split. The real work is five iOS-only SwiftUI modifier sites.
 
 **Files:**
 - Modify: `Packages/Features/ImportExport/Package.swift:10`
-- Modify: `Packages/Features/ImportExport/Sources/ImportExportShareUI/ShareSession.swift`
+- Modify: `Packages/Features/ImportExport/Sources/ImportExportShareUI/ShareSession.swift` — delete `import UIKit`
+- Modify: `Packages/Features/ImportExport/Sources/ImportExportShareUI/ShareRootView.swift:45,47,56,237,239,244`
+- Modify: `Packages/Features/ImportExport/Sources/ImportExportShareUI/PlaylistPickerSection.swift:48`
 
 **Interfaces:**
-- Consumes: Tasks 2 and 3.
+- Consumes: Tasks 2, 3, and **Task 4's compat helpers** (`ToolbarItemPlacement.topBarLeadingCompat` / `.topBarTrailingCompat`, `View.inlineNavigationTitleCompat()`, `View.wordCapitalizationCompat()`).
 - Produces: `ImportExport` building on macOS.
 
 - [ ] **Step 1: Add the platform and run the build to see it fail**
 
 ```swift
-    platforms: [.iOS(.v18), .macOS(.v14)],
+    platforms: [.iOS(.v18), .macOS(.v15)],
 ```
 
 Run: `swift build --package-path Packages/Features/ImportExport`
-Expected: FAIL — `no such module 'UIKit'` at `ShareSession.swift:5`.
+Expected: FAIL — `no such module 'UIKit'` at `ShareSession.swift:5`, then (once that clears) `'topBarLeading' is unavailable in macOS` and siblings in `ShareRootView.swift` and `PlaylistPickerSection.swift`.
 
-- [ ] **Step 2: Read the file and decide gate vs. port**
+- [ ] **Step 2: Delete the dead import, then apply the compat helpers**
 
-Run: `cat Packages/Features/ImportExport/Sources/ImportExportShareUI/ShareSession.swift`
+In `ShareSession.swift`, delete the `import UIKit` line. Confirm first that nothing in the file references a UIKit symbol:
 
-If the UIKit use is confined to presenting the share sheet, gate the whole file with the file-scope `#if os(iOS)` pattern from Task 5 and this marker:
+Run: `grep -n "UI[A-Z]" Packages/Features/ImportExport/Sources/ImportExportShareUI/ShareSession.swift`
+Expected: no hits. If there are hits, stop and report — the measurement this task rests on was wrong.
 
-```swift
-// PARITY(macos): share session — the Mac path needs NSSharingServicePicker; the session's URL preparation is
-//   portable and should be lifted out of this file when that lands.
-```
+Then, in `ShareRootView.swift` and `PlaylistPickerSection.swift`, replace each iOS-only modifier with its Task 4 compat helper:
 
-If the file also contains **portable** logic (temporary-file staging, filename construction), **split it**: move the portable half to a new `ShareSessionFiles.swift` with no guard, and gate only the presentation half. That logic is shared with Android per the parity rule and must not sit behind an iOS guard.
+| Was | Becomes |
+| --- | --- |
+| `.navigationBarTitleDisplayMode(.inline)` | `.inlineNavigationTitleCompat()` |
+| `ToolbarItem(placement: .topBarLeading)` | `ToolbarItem(placement: .topBarLeadingCompat)` |
+| `ToolbarItem(placement: .topBarTrailing)` | `ToolbarItem(placement: .topBarTrailingCompat)` |
+| `.textInputAutocapitalization(.words)` | `.wordCapitalizationCompat()` |
+
+No `PARITY(macos)` marker is needed at these call sites — Task 4's helper file carries the one marker for the whole class. Do not add per-site markers; they would multiply one gap into twenty ledger rows.
 
 - [ ] **Step 3: Run the build to verify it passes**
 
@@ -525,31 +617,47 @@ Expected: `BUILD SUCCEEDED`.
 ```bash
 python3 Scripts/parity-report.py
 git add Packages/Features/ImportExport docs/engineering/ios-android-parity.md
-git commit -m "feat(importexport): compile for macOS with the share session gated"
+git commit -m "feat(importexport): compile for macOS"
 ```
 
 ---
 
 ## Task 7: Settings compiles for macOS
 
-`ReaderModeSettingRows.swift` builds a raster glyph: `UIImage(named: "repeat_a_b", in: .module, with: nil)` at line 47 and an `extension UIImage { func resized(to:) }` at lines 155–160.
+Four distinct problems, not one. `ReaderModeSettingRows.swift` builds a raster glyph (`UIImage(named: "repeat_a_b", in: .module, with: nil)` at line 47, `extension UIImage { func resized(to:) }` at 155–160). `FeedbackMailView.swift` **imports `MessageUI`** and wraps `MFMailComposeViewController` — a framework macOS does not have at all. `VersionHistoryScreen.swift:95` uses the UIColor shorthand `Color(.secondarySystemBackground)`. And four toolbar/title sites need Task 4's helpers.
 
 **Files:**
 - Modify: `Packages/Features/Settings/Package.swift:111`
 - Modify: `Packages/Features/Settings/Sources/Settings/Screens/ReaderModeSettingRows.swift`
+- Modify: `Packages/Features/Settings/Sources/Settings/Views/FeedbackMailView.swift`
+- Modify: `Packages/Features/Settings/Sources/Settings/Screens/AboutSettingsSection.swift:21,33,51`
+- Modify: `Packages/Features/Settings/Sources/Settings/Screens/SettingsSheet.swift:50,58`
+- Modify: `Packages/Features/Settings/Sources/Settings/VersionHistory/VersionHistoryScreen.swift:95`
 
 **Interfaces:**
-- Consumes: Tasks 2 and 3.
+- Consumes: Tasks 2, 3, and **Task 4's compat helpers**.
 - Produces: `Settings` building on macOS.
 
 - [ ] **Step 1: Add the platform and run the build to see it fail**
 
 ```swift
-    platforms: [.iOS(.v18), .macOS(.v14)],
+    platforms: [.iOS(.v18), .macOS(.v15)],
 ```
 
 Run: `swift build --package-path Packages/Features/Settings`
-Expected: FAIL — `no such module 'UIKit'` at `ReaderModeSettingRows.swift:3`.
+Expected: FAIL — `no such module 'UIKit'` at `ReaderModeSettingRows.swift:3` and `no such module 'MessageUI'` at `FeedbackMailView.swift`.
+
+- [ ] **Step 1a: Gate the mail composer**
+
+`FeedbackMailView.swift` wraps `MFMailComposeViewController`. Gate the whole file with the file-scope `#if os(iOS)` pattern, and give macOS a stub that keeps the two call sites compiling — `AboutSettingsSection.swift:51` reads `FeedbackMailView.canSendMail`, and `FeedbackMailPresentation.swift:21` presents the view.
+
+Read both call sites first. The macOS stub must make `canSendMail` return `false`, which rides the **existing** iOS behavior for a device with no mail account: the row disables itself. That is why a stub is right here and wrong for `Infrastructure.Audio` — this one has a real, already-implemented "unavailable" state to fall into.
+
+```swift
+// PARITY(macos): feedback mail composer — macOS has no MessageUI. The Mac path is an `NSWorkspace.open` of a
+//   `mailto:` URL built from the same subject and body; until then `canSendMail` is false and the row disables
+//   itself, exactly as on an iPhone with no mail account configured.
+```
 
 - [ ] **Step 2: Replace the raster path with a cross-platform one where possible**
 
@@ -600,22 +708,45 @@ git commit -m "feat(settings): compile for macOS"
 
 `EditorPadButtons.swift` imports UIKit for `dotsImage(count:) -> UIImage` (line 157) and its `imageCache` (line 174). Per `reference_note_editing_durable`, the raster path exists because **`Menu` rows draw only text and images — a custom `View` row icon is not drawn, and a custom font does not apply**. That constraint is real on iOS and must not be optimized away.
 
+Three more things beyond the rasterizer, measured: two `EditMode` sites, one UIColor shorthand, and the usual toolbar/title modifiers.
+
 **Files:**
 - Modify: `Packages/Features/Editor/Package.swift:139`
-- Modify: `Packages/Features/Editor/Sources/Editor/Views/EditorPadButtons.swift`
+- Modify: `Packages/Features/Editor/Sources/Editor/Views/EditorPadButtons.swift` — the `UIImage` rasterizer
+- Modify: `Packages/Features/Editor/Sources/Editor/Views/EditorInstrumentsSheet.swift:56,126,127,129,154` — `EditButton()` plus toolbar/title
+- Modify: `Packages/Features/Editor/Sources/Editor/Views/EditorDrumLayoutSheet.swift:28,30,185` — `.environment(\.editMode, .constant(.active))` plus title
+- Modify: `Packages/Features/Editor/Sources/Editor/Views/EditorRehearsalMarkSheet.swift:64` and `EditorSignatureSheet.swift:61` — title only
+- Modify: `Packages/Features/Editor/Sources/Editor/Views/EditorPadTuckHandle.swift:68` — `Color(uiColor: .systemGroupedBackground)`
 
 **Interfaces:**
-- Consumes: Tasks 2 and 3.
+- Consumes: Tasks 2, 3, and **Task 4's compat helpers**.
 - Produces: `Editor` building on macOS. `EditorCore` is already platform-neutral and needs no change.
 
 - [ ] **Step 1: Add the platform and run the build to see it fail**
 
 ```swift
-    platforms: [.iOS(.v18), .macOS(.v14)],
+    platforms: [.iOS(.v18), .macOS(.v15)],
 ```
 
 Run: `swift build --package-path Packages/Features/Editor`
-Expected: FAIL — `no such module 'UIKit'` at `EditorPadButtons.swift:3`.
+Expected: FAIL — `no such module 'UIKit'` at `EditorPadButtons.swift:3`, then `EditButton`/`editMode`/`topBarLeading`/`navigationBarTitleDisplayMode` unavailability, then `EditorViewModel+HitTest.swift:59` if the floor is not `.v15` (`editingHitTest(at:activeVoice:)` is `@available(macOS 15.0, *)` in ssm).
+
+- [ ] **Step 1a: Gate the two `EditMode` sites**
+
+Both are **affordance-level, not screen-level** — this is why `Editor` stays in Ⅲa while `Library` does not. Neither holds `EditMode` in a property or a binding; both are local to a view body.
+
+- `EditorInstrumentsSheet.swift:127` — `EditButton()` exists only to open `.onMove` reordering. Deletion goes through swipe + `confirmationDialog` and does not depend on edit mode. Gate the `ToolbarItem` containing it; staff-visibility toggles, the add-instrument button, and Done all still work on macOS.
+- `EditorDrumLayoutSheet.swift:28` — `.environment(\.editMode, .constant(.active))` keeps reorder handles and delete minuses permanently visible. Gate the modifier; row tap-to-reinstrument, the voice badge, the row-count Stepper, the preset Picker, and Cancel/Done all still work.
+
+One marker covers both:
+
+```swift
+// PARITY(macos): instrument and drum-row reordering — the iOS sheets open reordering through EditButton and an
+//   always-active edit mode, neither of which exists on macOS. A Mac list reorders by drag without an edit mode,
+//   so the fix is an affordance, not a port. Deleting a drum row is unavailable on macOS until then.
+```
+
+Runtime behavior of `.onMove` / `.onDelete` on a macOS `List` without a selection is **unverified**; Ⅲb confirms it on a real Mac before writing the affordance.
 
 - [ ] **Step 2: Gate only the raster helpers**
 
@@ -674,7 +805,9 @@ Without one command, the macOS build silently rots the first time someone adds a
 #!/usr/bin/env bash
 # Builds every folino package that is expected to compile for macOS, in dependency order.
 # Reader is deliberately absent: its UIKit scroll host and PencilKit canvas have no macOS
-# implementation yet (sub-project IIIb of docs/superpowers/specs/2026-08-31-macos-app-design.md).
+# implementation yet, and Features/Library, whose EditMode-driven selection is woven into view
+# signatures rather than call sites (sub-project IIIb of
+# docs/superpowers/specs/2026-08-31-macos-app-design.md).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -684,7 +817,6 @@ PACKAGES=(
   Packages/Domain
   Packages/ScoreUI
   Packages/Infrastructure
-  Packages/Features/Library
   Packages/Features/ImportExport
   Packages/Features/Settings
   Packages/Features/Editor
@@ -744,7 +876,11 @@ git commit -m "chore(macos): add a build gate for the macOS-enabled packages"
 
 ## Out of scope, and why
 
+**The criterion.** Ⅲa is a package whose implementation can be gated behind a **preserved public signature**. Ⅲb is a package where an iOS-only type is **woven into a signature or into stored state**, so the macOS form is new design rather than a gate.
+
 - **`Reader`** — 14 UIKit and 11 PencilKit files. Gating them would leave the package compiling but empty of every reading surface, which is not a useful state. Its macOS form is an AppKit `NSScrollView` host modeled on ssm's `MagnifyingScoreScrollView`; that is Ⅲb/Ⅳ work.
+- **`Features/Library`** — moved here after measurement: 33 errors across 15 files, and `EditMode` is not a call-site detail but part of view *signatures* — `ScoreListScreen.swift:14` (`@State private var editMode: EditMode`) binds to `ScoreListView.swift:41` (`@Binding var editMode: EditMode`), crossing a screen/view boundary, with `PlaylistDetailView`, `RecentlyDeletedScreen`, and `RecentlyDeletedView` in the same shape. There is no signature to preserve, so this plan's method does not apply; macOS multi-select is `List(selection:)` with a different interaction model, which is design work. Its `.macOS` platform declaration is **removed** by Task 4 so the manifest stops claiming a platform it cannot build. Ⅲb also owes it `ScoreListView.swift:118`'s `if #available(iOS 26, *)` → `if #available(iOS 26, macOS 26, *)`.
+- **Migrating toolbar sites to semantic placements** (`.cancellationAction` / `.confirmationAction`). The better end state, and it earns real Esc / Return key equivalents on Mac sheets — but it changes iOS appearance per site and needs per-site preview verification. Ⅲa uses neutral compat helpers; Ⅲb migrates one screen at a time.
 - **AppKit implementations of anything gated here.** Ⅲa's deliverable is "it compiles". Each gap is recorded as a `PARITY(macos)` row, and Ⅲb consumes that list as its own to-do.
 - **The Mac app target, `project.yml`, window/tab/menu bar.** All Ⅲb.
 - **`AVAudioEngineConfigurationChange` route following.** That is Ⅱ, in ssm.

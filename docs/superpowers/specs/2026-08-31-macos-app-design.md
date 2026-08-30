@@ -301,8 +301,8 @@ Not building 38 dedicated command UIs for iPhone in v1 is a **scheduling** decis
 | **Ⅵc** | **Revise the collaboration spec for macOS** + SP3–SP5 (groups, sharing, shared/private annotations) | Ⅵb |
 | **Ⅰ** | **ssm: ~38 edit commands** + wire intents + replay goldens; correct `edit-commands.md` §C | 0a |
 | **Ⅱ** | **ssm: macOS foundations** — hit-testing / selection / caret / playback cursor on the page deck; fixed-width vertical **as an option**; `MSCZWriter` extra entries; `AVAudioEngineConfigurationChange` | — |
-| **Ⅲa** | **folino packages on macOS** — platform declarations + UIKit separation | — |
-| **Ⅲb** | **Mac app shell** — new target, window/tab/menu bar/panel skeleton, `Infrastructure.Audio` on macOS; revise `module-architecture.md` | Ⅲa |
+| **Ⅲa** | **folino packages on macOS** — `.macOS(.v15)` declarations, UIKit separation, iOS-only SwiftUI behind UtilityUI compat helpers. Covers Utility, ScoreUI, Infrastructure, ImportExport, Settings, Editor | — |
+| **Ⅲb** | **Mac app shell** — new target, window/tab/menu bar/panel skeleton, `Infrastructure.Audio` on macOS, **and the macOS form of `Reader` and `Library`**; revise `module-architecture.md` | Ⅲa |
 | **Ⅳ** | **Mac editing UI** — palette / inspector / mixer / piano / drum pad, command registry and search, key map; iPad menu bar and the iPhone search floor; PARITY bookkeeping | Ⅲb, Ⅱ (consumes Ⅰ incrementally) |
 | **Ⅴ** | **`.folino` format + Mac annotation canvas** — container spec, UTType declaration, three exports, author snapshot, reconciliation rules | 0b, Ⅱ, Ⅲb |
 | **Ⅷ** | **Mac distribution** — App Sandbox + security-scoped bookmark persistence (what §1's origin mirroring actually requires), signing, notarization / App Store submission, a mac release lane, Mac screenshots | Ⅲb |
@@ -312,9 +312,24 @@ Not building 38 dedicated command UIs for iPhone in v1 is a **scheduling** decis
 
 **Ⅲ does not depend on Ⅱ.** ssm declares `.macOS(.v14)` (`Package.swift:662`) and CI runs `swift build` + `swift test` on a `macos-15` runner (`ci.yml`), so `SheetMusicUI` is already gated to compile and run on macOS. A Mac shell that *displays* scores stands today. Ⅱ gates **Ⅳ and Ⅴ**, not Ⅲ.
 
+**But ssm's manifest floor is not its API floor.** 81 ssm source files carry `@available(macOS 15.0, *)` — the whole `SheetMusicUI` rendering stack, the PDF path, hit-testing, and `SheetMusicLayoutApple`. `PDFExporter` (`SheetMusicPDF/PDFExporter.swift:33`) is one of them, and `Infrastructure/ScoreFiles/CoreGraphicsPDFRenderer.swift:11` calls it unconditionally. **Every folino package therefore declares `.macOS(.v15)`, not `.macOS(.v14)`.** Sprinkling `@available` at the call sites instead would break down as soon as Reader arrives. There are no macOS users to exclude — the app has never shipped.
+
+**Ⅲa and Ⅲb divide on a testable criterion**, not on a feeling about which packages matter:
+
+> **Ⅲa** is a package whose implementation can be gated behind a **preserved public signature**.
+> **Ⅲb** is a package where an iOS-only type is **woven into a signature or into stored state**, so the macOS form is new design rather than a gate.
+
+By that criterion `Reader` is Ⅲb (its files *are* the reading surface) and so is **`Features/Library`**: `EditMode` appears in `ScoreListScreen.swift:14` as `@State` and in `ScoreListView.swift:41` as `@Binding`, crossing a screen/view boundary, so there is no signature to preserve. `Features/Editor` stays in Ⅲa — its two `EditMode` uses are local to view bodies and gate to an affordance gap, not a missing screen.
+
 **Ⅳ does not wait for all of Ⅰ.** 36 edit commands already exist. The registry, search, panels, and key map stand on those, and Ⅰ's output is consumed incrementally.
 
-**Ⅲa is smaller than it looks.** `Utility`, `Domain`, and `Library` already declare `.macOS(.v14)`; six packages are iOS-only. Of 845 source files, 46 import UIKit or PencilKit, and the structural work concentrates in Reader's UIKit scroll hosts and Utility's representables. `ScoreUI` imports UIKit in zero files — a one-line `platforms:` change. Within Infrastructure the non-portable surface is **three files, all under `Audio/`** (`LivePlaybackController.swift`, `LiveScoreAudioExporter.swift`, `OutputRouteDisconnectWatcher.swift` — `AVAudioSession`, `MPMediaItemArtwork`, route-change notifications); Persistence, Soundfonts, and ScoreFiles are portable.
+**Ⅲa is bigger than an import count suggests.** Counting `import UIKit` finds 46 of 845 source files, but **iOS-only SwiftUI API needs no import** and is the larger surface: `EditMode` / `EditButton`, `.topBarLeading` / `.topBarTrailing`, `.navigationBarTitleDisplayMode`, `.textInputAutocapitalization`, `ToolbarSpacer`, and the `Color(.secondarySystemBackground)` UIColor shorthands. Measured after the fact, by building each package: Library 13 files, Editor 4, ImportExport 2, Settings 2, Infrastructure 0.
+
+Two more things an import count misses. `Settings` imports **`MessageUI`** (`FeedbackMailView.swift`), which macOS has no counterpart for. And within `Infrastructure` the non-portable surface is **seven files under `Audio/`**, not three — `LivePlaybackController` plus its four `+LoopBounds` / `+Preview` / `+Reload` / `+Transpose` extensions, `LiveScoreAudioExporter`, and `OutputRouteDisconnectWatcher`. Persistence, CloudSync, Soundfonts, CrashReporting, and Analytics build unmodified at the v15 floor; ScoreFiles does too, but only at v15.
+
+The house pattern for the SwiftUI half is a **compat helper in `UtilityUI`**, shaped exactly like `GlassEffectCompat` — iOS keeps its call byte-for-byte and macOS gets a neutral substitute. Migrating those sites to semantic toolbar placements (`.cancellationAction` / `.confirmationAction`) is the better end state and buys real Mac keyboard behavior, but it changes iOS appearance per site and needs per-site preview verification, so it is sequenced into Ⅲb one screen at a time.
+
+**A trap worth naming once:** `if #available(iOS 26, *)` treats macOS as satisfied through the `*` wildcard, so an iOS-26-only API inside such a block fails to compile on macOS at any floor below 26. This already existed in `GlassEffectCompat` and still exists at `Library/Views/ScoreListView.swift:118`. Every one of these becomes `if #available(iOS 26, macOS 26, *)`.
 
 **The collaboration branch merges to `main` exactly once, at the end.** It is **26 ahead / 301 behind** as of 2026-08-31, and it stays unmerged until the entire release bundle — SP2, SP3–SP5, Pro, and macOS — is ready to ship together.
 
