@@ -1,25 +1,25 @@
-@testable import Editor
-import SwiftUI
+@testable import EditorCore
+import Foundation
 import Testing
 
 @Suite("EditorPadTuckGeometry")
-struct EditorPadTuckTests {
+struct EditorPadTuckGeometryTests {
     /// iPhone 16 Pro portrait-ish viewport.
-    private let viewport = CGSize(width: 402, height: 874)
-    private var threshold: CGFloat {
-        EditorPadTuckGeometry.threshold(in: viewport)
+    private let viewportWidth: Double = 402
+    private let viewportHeight: Double = 874
+    private var threshold: Double {
+        EditorPadTuckGeometry.threshold(viewportWidth: viewportWidth, viewportHeight: viewportHeight)
     }
 
     @Test func `threshold is a fifth of the short side`() {
         #expect(threshold == 402 * 0.2)
         // Rotating the same screen must not change the felt distance.
-        let landscape = CGSize(width: 874, height: 402)
-        #expect(EditorPadTuckGeometry.threshold(in: landscape) == threshold)
+        #expect(EditorPadTuckGeometry.threshold(viewportWidth: 874, viewportHeight: 402) == threshold)
     }
 
     @Test func `rest offset parks the pad's card just past the edge`() {
-        let padWidth: CGFloat = 380
-        let margin: CGFloat = 12
+        let padWidth: Double = 380
+        let margin: Double = 12
         let trailing = EditorPadTuckGeometry.restOffsetX(
             side: .trailing, viewportWidth: 402, padWidth: padWidth, margin: margin,
         )
@@ -33,17 +33,38 @@ struct EditorPadTuckTests {
         #expect((402 + padWidth) / 2 - margin + leading == 0)
     }
 
-    /// A release velocity pointing more sideways than vertically — the quick short hide-flick's shape.
-    private let sidewaysFlick = CGSize(width: 900, height: 200)
+    /// The one thing the two platforms do differently: Android leaves a sliver of the card itself showing rather
+    /// than parking it fully offscreen behind a tab.
+    @Test func `peek leaves exactly that much of the card on screen`() {
+        let padWidth: Double = 380
+        let margin: Double = 8
+        let peek: Double = 24
+        let trailing = EditorPadTuckGeometry.restOffsetX(
+            side: .trailing, viewportWidth: 402, padWidth: padWidth, margin: margin, peek: peek,
+        )
+        // The card's leading edge stops `peek` short of the screen's trailing edge.
+        #expect((402 - padWidth) / 2 + margin + trailing == 402 - peek)
+        let leading = EditorPadTuckGeometry.restOffsetX(
+            side: .leading, viewportWidth: 402, padWidth: padWidth, margin: margin, peek: peek,
+        )
+        #expect((402 + padWidth) / 2 - margin + leading == peek)
+        // A zero peek is the tab-and-nothing-else park, unchanged.
+        #expect(EditorPadTuckGeometry.restOffsetX(
+            side: .trailing, viewportWidth: 402, padWidth: padWidth, margin: margin, peek: 0,
+        ) == EditorPadTuckGeometry.restOffsetX(
+            side: .trailing, viewportWidth: 402, padWidth: padWidth, margin: margin,
+        ))
+    }
 
     @Test func `short drag repositions instead of tucking`() {
+        // A release velocity pointing more sideways than vertically — the quick short hide-flick's shape.
         #expect(EditorPadTuckGeometry.tuckDestination(
             translationX: threshold - 1, projectedTranslationX: threshold - 1,
-            velocity: sidewaysFlick, threshold: threshold,
+            velocityX: 900, velocityY: 200, threshold: threshold,
         ) == nil)
         #expect(EditorPadTuckGeometry.tuckDestination(
             translationX: 1 - threshold, projectedTranslationX: 1 - threshold,
-            velocity: sidewaysFlick, threshold: threshold,
+            velocityX: 900, velocityY: 200, threshold: threshold,
         ) == nil)
     }
 
@@ -51,11 +72,11 @@ struct EditorPadTuckTests {
         // The finger actually covered the distance — velocity direction doesn't matter (the diagonal corner throw).
         #expect(EditorPadTuckGeometry.tuckDestination(
             translationX: threshold, projectedTranslationX: threshold,
-            velocity: CGSize(width: 300, height: -1200), threshold: threshold,
+            velocityX: 300, velocityY: -1200, threshold: threshold,
         ) == .trailing)
         #expect(EditorPadTuckGeometry.tuckDestination(
             translationX: -threshold, projectedTranslationX: -threshold,
-            velocity: CGSize(width: -300, height: -1200), threshold: threshold,
+            velocityX: -300, velocityY: -1200, threshold: threshold,
         ) == .leading)
     }
 
@@ -63,7 +84,7 @@ struct EditorPadTuckTests {
         // Short actual travel, but the release velocity points sideways: the deliberate hide-flick.
         #expect(EditorPadTuckGeometry.tuckDestination(
             translationX: threshold / 3, projectedTranslationX: threshold + 50,
-            velocity: sidewaysFlick, threshold: threshold,
+            velocityX: 900, velocityY: 200, threshold: threshold,
         ) == .trailing)
     }
 
@@ -72,7 +93,7 @@ struct EditorPadTuckTests {
         // the velocity points up — this is a dock move, not a dismissal.
         #expect(EditorPadTuckGeometry.tuckDestination(
             translationX: 25, projectedTranslationX: threshold + 40,
-            velocity: CGSize(width: 350, height: -1400), threshold: threshold,
+            velocityX: 350, velocityY: -1400, threshold: threshold,
         ) == nil)
     }
 
@@ -95,9 +116,9 @@ struct EditorPadTuckTests {
     }
 
     @Test func `restore preview aligns the card's inner edge with the handle's inner edge`() {
-        let padWidth: CGFloat = 380
-        let handleWidth: CGFloat = 36
-        let margin: CGFloat = 12
+        let padWidth: Double = 380
+        let handleWidth: Double = 36
+        let margin: Double = 12
         // Trailing tuck: for any shared translation t, the CARD's leading edge (frame leading (W - p) / 2 plus
         // margin plus base plus t) must equal the handle's leading edge (W - handleWidth plus t) — t cancels, so
         // verify the bases.
@@ -122,5 +143,53 @@ struct EditorPadTuckTests {
         #expect(!EditorPadTuckGeometry.handleVisible(side: .trailing, translationX: -threshold, threshold: threshold))
         // And an outward wobble keeps it visible.
         #expect(EditorPadTuckGeometry.handleVisible(side: .trailing, translationX: 30, threshold: threshold))
+    }
+
+    /// The JNI boundary speaks integers; the round trip has to be exact or Kotlin's tuck side silently flips.
+    @Test func `tuck side survives the JNI discriminator round trip`() {
+        for side in EditorPadTuckSide.allCases {
+            #expect(EditorPadTuckSide(rawIndex: side.rawIndex) == side)
+        }
+    }
+
+    @Test func `placement survives the JNI discriminator round trip`() {
+        for placement in EditorPadPlacement.allCases {
+            #expect(EditorPadPlacement(rawIndex: placement.rawIndex) == placement)
+        }
+    }
+
+    // MARK: - The vertical dock
+
+    @Test func `the parked center sits half a pad in from the docked edge`() {
+        let padHeight: Double = 120
+        #expect(EditorPadTuckGeometry.parkedCenterY(
+            placement: .bottom, viewportHeight: viewportHeight, padHeight: padHeight,
+        ) == viewportHeight - padHeight / 2)
+        #expect(EditorPadTuckGeometry.parkedCenterY(
+            placement: .top, viewportHeight: viewportHeight, padHeight: padHeight,
+        ) == padHeight / 2)
+    }
+
+    /// A short flick must not fly the pad across the screen: the decision is where the pad's own center LANDED,
+    /// not how far the finger travelled.
+    @Test func `a small nudge leaves the dock where it was`() {
+        let padHeight: Double = 120
+        let parked = EditorPadTuckGeometry.parkedCenterY(
+            placement: .bottom, viewportHeight: viewportHeight, padHeight: padHeight,
+        )
+        #expect(EditorPadPlacement.nearest(toCenterY: parked - 40, in: viewportHeight) == .bottom)
+        // Past the midpoint it re-docks, and the midpoint itself belongs to the bottom (`<` is strict).
+        #expect(EditorPadPlacement.nearest(toCenterY: viewportHeight / 2, in: viewportHeight) == .bottom)
+        #expect(EditorPadPlacement.nearest(toCenterY: viewportHeight / 2 - 1, in: viewportHeight) == .top)
+    }
+
+    @Test func `a throw from the bottom to the top re-docks`() {
+        let padHeight: Double = 120
+        let parked = EditorPadTuckGeometry.parkedCenterY(
+            placement: .bottom, viewportHeight: viewportHeight, padHeight: padHeight,
+        )
+        // Projected travel far enough up to carry the pad's center into the upper half.
+        let landed = parked - viewportHeight * 0.6
+        #expect(EditorPadPlacement.nearest(toCenterY: landed, in: viewportHeight) == .top)
     }
 }

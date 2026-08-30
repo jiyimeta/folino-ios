@@ -92,7 +92,6 @@ data class EditUiState(
      * toggle like the durations, not an action, which is why the key lights the same way they do. */
     val isAddToChordArmed: Boolean = false,
     val activeVoice: Int = 0,
-    val isPadVisible: Boolean = false,
     val selectedItem: ByteArray? = null,
     val caretItem: ByteArray? = null,
     /** Whether this session has moved the score away from where it opened — what the discard prompt is gated on. */
@@ -131,9 +130,12 @@ data class EditUiState(
             armedTuplet == other.armedTuplet &&
             isAddToChordArmed == other.isAddToChordArmed &&
             activeVoice == other.activeVoice &&
-            isPadVisible == other.isPadVisible &&
             sessionHasEdits == other.sessionHasEdits &&
             canRevertToOriginal == other.canRevertToOriginal &&
+            // Omitting this one silently cost the notice it exists for: a debounced save flips ONLY this flag, so
+            // the folded state compared equal, `MutableStateFlow` conflated it, and the "saved as .mscz" Snackbar
+            // never fired. A hand-written `equals` has to list every field or it is a filter, not an equality.
+            didSaveAsSiblingMSCZ == other.didSaveAsSiblingMSCZ &&
             sessionEndMode == other.sessionEndMode &&
             selectedItem.contentEquals(other.selectedItem) &&
             caretItem.contentEquals(other.caretItem)
@@ -159,9 +161,9 @@ data class EditUiState(
         result = 31 * result + armedTuplet.hashCode()
         result = 31 * result + isAddToChordArmed.hashCode()
         result = 31 * result + activeVoice.hashCode()
-        result = 31 * result + isPadVisible.hashCode()
         result = 31 * result + sessionHasEdits.hashCode()
         result = 31 * result + canRevertToOriginal.hashCode()
+        result = 31 * result + didSaveAsSiblingMSCZ.hashCode()
         result = 31 * result + sessionEndMode.hashCode()
         result = 31 * result + selectedItem.contentHashCode()
         result = 31 * result + caretItem.contentHashCode()
@@ -283,7 +285,11 @@ class EditSessionController(
         val selectionAndCommands = combine(
             projection.canUndo,
             projection.canRedo,
-            projection.hasEditTarget,
+            // The relay's, NOT `projection.hasEditTarget` — same value from the same core, delivered by a channel
+            // that cannot lose the false → true. See `EditorBridge.hasEditTargetNow` for the one that can, and why
+            // this property in particular never recovers when it does: a pad that will not light produces no next
+            // op to correct it with.
+            relay.hasEditTarget,
             projection.isNoteSelected,
         ) { canUndo, canRedo, hasEditTarget, isNoteSelected ->
             SelectionAndCommands(canUndo, canRedo, hasEditTarget, isNoteSelected)
@@ -385,8 +391,15 @@ class EditSessionController(
 
     // MARK: - Lifecycle
 
-    fun begin(scorePath: String, scoresDirectory: String, scoreId: String) {
-        val result = relay.open(scorePath, scoresDirectory, scoreId)
+    /** [carriedItem] is the element the reader's last tap-to-seek landed on, so the session opens on the note the
+     * reader was looking at; empty (the default) opens blank. See [EditSessionOps.open]. */
+    fun begin(
+        scorePath: String,
+        scoresDirectory: String,
+        scoreId: String,
+        carriedItem: ByteArray = ByteArray(0),
+    ) {
+        val result = relay.open(scorePath, scoresDirectory, scoreId, carriedItem)
         _ui.update { it.copy(isEditing = result == OpenResult.OPENED, availability = result.toAvailability()) }
     }
 
@@ -402,14 +415,10 @@ class EditSessionController(
      */
     fun flushPendingSave() = relay.flushPendingSave()
 
-    // MARK: - The pad disclosure
-    //
-    // Controller-local UI state, not engine state — see the class doc — so it is the one field here that does not
-    // delegate to the relay.
-
-    fun setPadVisible(visible: Boolean) {
-        _ui.update { it.copy(isPadVisible = visible) }
-    }
+    // The pad's out / tucked state used to live here, as the one field that did not delegate to the relay. It is a
+    // persisted READER preference now (`SettingsPrefs.editorPadExpanded` / `editorPadTuckSide`), not session state:
+    // someone who pushes the keyboard aside means it for the next score too, and iOS reaches the same conclusion —
+    // its own flag is `@AppStorage`, never on `EditorViewModel`.
 
     // MARK: - The editing ops
     //

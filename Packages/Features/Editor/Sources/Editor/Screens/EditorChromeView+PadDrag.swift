@@ -1,3 +1,4 @@
+import EditorCore
 import SwiftUI
 
 /// The drag half of the editing cluster: the one gesture that repositions the pad between its docks AND tucks /
@@ -129,7 +130,10 @@ extension EditorChromeView {
     }
 
     /// The cluster's resting y-center at a dock — the reference both dock decisions measure landings against.
+    /// The formula is `EditorPadTuckGeometry`'s, so Android's own dock answers the same gesture the same way.
     private func parkedCenterY(of placement: EditorPadPlacement, viewportHeight: CGFloat) -> CGFloat {
-        placement == .bottom ? viewportHeight - clusterSize.height / 2 : clusterSize.height / 2
+        EditorPadTuckGeometry.parkedCenterY(
+            placement: placement, viewportHeight: viewportHeight, padHeight: clusterSize.height,
+        )
     }
 }

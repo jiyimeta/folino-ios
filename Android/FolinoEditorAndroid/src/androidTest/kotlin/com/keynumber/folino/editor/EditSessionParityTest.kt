@@ -272,6 +272,14 @@ class EditSessionParityTest {
      * The only test here that deliberately stays off the main thread: it drives no relay and no bridge — just fifty
      * `nativeScoreFingerprint` calls against a handle of its own — so the threading rule has nothing to say about
      * it, and pinning the main thread for fifty ~2ms walks would be inviting the watchdog for no gain.
+     *
+     * **The bound is the DESIGN limit, not the measurement.** It used to be 2000us, which is where the walk was
+     * first measured (1908us / 1911us on a Pixel 8a), and a bound sitting on top of the value it measures decides
+     * on CPU-governor noise rather than on anything about the code: the same device, same engine and same
+     * `parity.mscz` read 2044us and 2023us months later and failed a suite that had nothing wrong with it.
+     * `FINGERPRINT_SAMPLE_EVERY`'s own comment names the number that actually matters — a walk past ~4ms is where
+     * the amortized half-millisecond budget breaks and the sampling interval has to be recomputed — so that is
+     * what this asserts. The measured value still goes to logcat, which is where a slow creep gets noticed.
      */
     @Test fun fingerprintWalkIsCheapEnoughToSample() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -282,7 +290,11 @@ class EditSessionParityTest {
         val perWalkMicros = (System.nanoTime() - started) / 50 / 1_000
         android.util.Log.i("EditSessionParity", "stableFingerprint walk: ${perWalkMicros}us")
         SheetMusicJNI.nativeReleaseScore(handle)
-        assertTrue("fingerprint walk unexpectedly slow: ${perWalkMicros}us", perWalkMicros < 2_000)
+        assertTrue(
+            "fingerprint walk ${perWalkMicros}us is past the ~4ms where FINGERPRINT_SAMPLE_EVERY stops paying " +
+                "for itself — recompute the amortized cost and raise the interval",
+            perWalkMicros < 4_000,
+        )
     }
 
     /** The mirror's digest, read on the relay's own thread like every other bridge/handle read here. */

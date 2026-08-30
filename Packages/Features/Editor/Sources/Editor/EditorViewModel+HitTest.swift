@@ -24,16 +24,14 @@ extension EditorViewModel {
         selectFromTap(resolvedItem(at: point))
     }
 
-    /// Selects `item` outright — used to carry a selection made outside edit mode (a tap-to-seek on the score) into
-    /// the session that follows, so entering edit mode picks up where the reader's finger left off instead of
-    /// starting blank. Ignores an item the current score doesn't contain: positional IDs go stale, and the score may
-    /// have moved on between that tap and this session.
+    /// Carries a selection made outside edit mode (a tap-to-seek on the score) into the session that follows, so
+    /// entering edit mode picks up where the reader's finger left off instead of starting blank.
+    ///
+    /// The rules — drop an ID this score no longer contains, and don't audition — are the core's, so Android's
+    /// `EditorBridge.selectCarriedItem` gets the same answer. See `EditorSessionCore.selectCarriedItem`.
     public func selectItem(_ item: SheetMusicCore.ScoreItemID?) {
-        guard let item, let score, let slot = EditorSessionCore.slot(of: item), score[slot] != nil else {
-            select(nil)
-            return
-        }
-        select(item)
+        core.selectCarriedItem(item)
+        syncFromCore()
     }
 
     /// A tap on the paper outside the engraved area. Same outcome as a tap on empty staff space — nothing is

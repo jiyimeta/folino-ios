@@ -62,8 +62,17 @@ class ConfinedEditSessionOps(
 
     // MARK: - Blocking
 
-    override fun open(scorePath: String, scoresDirectory: String, scoreId: String): OpenResult =
-        await { delegate.open(scorePath, scoresDirectory, scoreId) }
+    override fun open(
+        scorePath: String,
+        scoresDirectory: String,
+        scoreId: String,
+        carriedItem: ByteArray,
+    ): OpenResult = await { delegate.open(scorePath, scoresDirectory, scoreId, carriedItem) }
+
+    /** A plain read of the delegate's flow — no hop. It is a `StateFlow` the delegate writes on THIS executor and
+     * Compose collects on the main thread, which is what a `StateFlow` is for; confining the read would only add
+     * a blocking round trip to a value that is already published safely. */
+    override val hasEditTarget get() = delegate.hasEditTarget
 
     override fun close() = await { delegate.close() }
 

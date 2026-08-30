@@ -50,10 +50,6 @@ private const val READER_SCORE_ID = "00000000-0000-0000-0000-0000000000b0"
 // AbRepeat (40), and Pip (60); Library (50) has no score.
 internal const val SCREENSHOT_STAFF_SIZE = 18.0
 
-// Title shown in the Reader top app bar for the score-rendering scenes — the bundled mock score's
-// title (Now_is_the_time.mscz). Hard-coded so the scenes that host the real `ReaderTopBar` read the
-// same label production would show for this score.
-internal const val READER_SCENE_TITLE = "Now is the time"
 
 // A loaded, laid-out Reader scene: the real ReaderViewModel driven to Ready over the bundled score.
 // Holds whatever a screenshot scene needs to render the page (state + scoreHandle + the effective

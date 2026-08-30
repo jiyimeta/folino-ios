@@ -75,6 +75,10 @@
     <string name="reader_editing_undo">取り消す</string>
     <string name="reader_editing_redo">やり直す</string>
     <string name="reader_editing_pad">音符パッド</string>
+    <string name="reader_editing_discard_action">変更を破棄</string>
+    <string name="reader_editing_pad_hide">音符キーボードを隠す</string>
+    <string name="reader_editing_pad_show">音符キーボードを表示</string>
+    <string name="reader_editing_pad_move">編集コントロールを移動</string>
     <string name="reader_editing_voice">声部 %1$d</string>
     <string name="reader_editing_unavailable_version">編集を利用できません。この楽譜は別のバージョンのエンジンで描画されています。</string>
     <string name="reader_editing_unavailable_diverged">この楽譜は現在編集できません。</string>

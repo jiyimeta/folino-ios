@@ -62,6 +62,10 @@ private class FakeBridge : EditBridging {
     override fun revision() = revision
     override fun appliedIntentCount() = appliedIntentCount
 
+    /** What the authoritative core would answer. A test sets it to stand in for "an op left something selected". */
+    var editTarget = false
+    override fun hasEditTargetNow() = editTarget
+
     override fun undo() {
         if (refuseUndo) return
         if (strandFrameOnUndo) willApply(1) else revision += 1
@@ -84,6 +88,10 @@ private class FakeBridge : EditBridging {
     var discards = 0
     override fun discardSessionEdits() { discards += 1 }
     override fun revertToOriginal() = false
+
+    /** The bytes `open` carried into the session, so a test can assert what the reader's last tap handed over. */
+    var carriedItems = mutableListOf<ByteArray>()
+    override fun selectCarriedItem(bytes: ByteArray) { carriedItems += bytes }
 
     // The remaining `EditBridging` members: this file drives none of them, so empty bodies.
     override fun selectItem(bytes: ByteArray) {}
@@ -237,7 +245,8 @@ private class Fixture(
     val autosave = FakeAutosave(bridge.lifecycleLog)
     val relay = EditSessionRelay(bridge, host, natives, audition, autosave)
 
-    fun open(): OpenResult = relay.open("/scores/a.ssm", "/scores", "a")
+    fun open(carriedItem: ByteArray = ByteArray(0)): OpenResult =
+        relay.open("/scores/a.ssm", "/scores", "a", carriedItem)
 }
 
 /** A `NoteID` distinct enough that a wrong one cannot pass for it. */
@@ -317,6 +326,36 @@ class EditSessionRelayTest {
         f.open()
 
         assertEquals(endsAfterFirstOpen + 1, f.natives.ends)
+    }
+
+    @Test fun openingCarriesTheReadersLastTapIntoTheSession() {
+        val f = Fixture()
+        val tapped = byteArrayOf(7, 8, 9)
+
+        f.open(tapped)
+
+        assertEquals(1, f.bridge.carriedItems.size)
+        assertArrayEquals(tapped, f.bridge.carriedItems.single())
+    }
+
+    /** Empty is "carry nothing", and it still has to reach the core — that is the deliberate deselect a cold
+     * session opens with, not a call worth skipping. */
+    @Test fun openingWithNothingRememberedStillTellsTheCore() {
+        val f = Fixture()
+
+        f.open()
+
+        assertArrayEquals(ByteArray(0), f.bridge.carriedItems.single())
+    }
+
+    /** A refused open must not place a selection: there is no session for it to land in, and on the mirror-refused
+     * path the local session has already been ended again. */
+    @Test fun aRefusedOpenCarriesNothing() {
+        val f = Fixture(natives = FakeNatives().apply { beginAnswer = false })
+
+        f.open(byteArrayOf(1, 2))
+
+        assertEquals(0, f.bridge.carriedItems.size)
     }
 
     // MARK: - Relaying an op
@@ -619,6 +658,53 @@ class EditSessionRelayTest {
         // The funnel is the choke point — iOS's op funnel arms unconditionally too, and for the same reason its own
         // doc gives: the timer must not be skippable for one op and not another.
         assertEquals(3, f.autosave.arms)
+    }
+
+    // MARK: - The pad's gate
+    //
+    // Read from the core after every op rather than observed off the projection — see
+    // `EditorBridge.hasEditTargetNow` for the update the observable channel can drop, and why this is the one
+    // property that never recovers from it (a dead pad emits no next op to correct itself with).
+
+    @Test fun openingPublishesTheGateTheCarriedSelectionLeft() {
+        val f = Fixture(bridge = FakeBridge().apply { editTarget = true })
+
+        f.open(byteArrayOf(1, 2))
+
+        assertTrue(f.relay.hasEditTarget.value)
+    }
+
+    @Test fun everyOpRefreshesTheGate() {
+        val f = Fixture()
+        f.open()
+        assertFalse(f.relay.hasEditTarget.value)
+
+        // The op is what changed the core's answer; the relay must go and ask rather than wait to be told.
+        f.bridge.editTarget = true
+        f.relay.selectItem(byteArrayOf(3))
+
+        assertTrue(f.relay.hasEditTarget.value)
+    }
+
+    @Test fun closingClearsTheGate() {
+        val f = Fixture(bridge = FakeBridge().apply { editTarget = true })
+        f.open()
+        assertTrue(f.relay.hasEditTarget.value)
+
+        // The bridge would still answer true — a torn-down session has no target regardless of what it says.
+        f.relay.close()
+
+        assertFalse(f.relay.hasEditTarget.value)
+    }
+
+    /** Opening a session is not an edit, and carrying the reader's last tap into it is part of opening. iOS says
+     * the same at the same moment, in `EditorViewModel.beginSession`. */
+    @Test fun carryingASelectionIntoAFreshSessionArmsNothing() {
+        val f = Fixture()
+
+        f.open(byteArrayOf(1, 2, 3))
+
+        assertEquals(0, f.autosave.arms)
     }
 
     @Test fun anOpBeforeTheSessionOpensArmsNothing() {

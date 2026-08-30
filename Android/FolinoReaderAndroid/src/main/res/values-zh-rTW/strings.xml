@@ -75,6 +75,10 @@
     <string name="reader_editing_undo">撤銷</string>
     <string name="reader_editing_redo">重做</string>
     <string name="reader_editing_pad">音符面板</string>
+    <string name="reader_editing_discard_action">放棄更改</string>
+    <string name="reader_editing_pad_hide">隱藏音符鍵盤</string>
+    <string name="reader_editing_pad_show">顯示音符鍵盤</string>
+    <string name="reader_editing_pad_move">移動編輯控制項</string>
     <string name="reader_editing_voice">聲部 %1$d</string>
     <string name="reader_editing_unavailable_version">無法編輯：此樂譜正由不同版本的引擎繪製。</string>
     <string name="reader_editing_unavailable_diverged">此樂譜目前無法編輯。</string>

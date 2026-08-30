@@ -5,6 +5,9 @@ import com.keynumber.folino.editor.generated.EditorBridgeViewModel
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.serialization.NoteIDCodec
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * The ssm entry points the relay uses, behind an interface so the JVM tests can drive the policy without a device.
@@ -59,7 +62,18 @@ interface EditBridging {
     fun revision(): Int
     fun appliedIntentCount(): Int
 
+    /** The pad's gate, read synchronously rather than off the observable projection — see
+     * `EditorBridge.hasEditTargetNow` for the update this channel can otherwise lose, and why this is the one
+     * property that never recovers from losing it. */
+    fun hasEditTargetNow(): Boolean
+
     fun selectItem(bytes: ByteArray)
+
+    /** Selects an element chosen OUTSIDE the session — the reader's last tap-to-seek. Empty bytes mean nothing was
+     * remembered. Distinct from [selectItem] because the two differ in shared BEHAVIOR, not in plumbing: a carried
+     * ID is dropped when this score no longer contains it, and it sounds nothing (a tap asked to hear that note;
+     * opening a session did not). See `EditorSessionCore.selectCarriedItem`. */
+    fun selectCarriedItem(bytes: ByteArray)
     fun inputPitch(letter: String)
     fun deleteSelection()
     fun writeRest()
@@ -126,8 +140,10 @@ class GeneratedEditBridging(private val vm: EditorBridgeViewModel) : EditBridgin
     override fun takePendingAudition(): ByteArray = vm.takePendingAudition().bytes
     override fun revision() = vm.revisionNow()
     override fun appliedIntentCount() = vm.appliedIntentCountNow()
+    override fun hasEditTargetNow() = vm.hasEditTargetNow()
 
     override fun selectItem(bytes: ByteArray) = vm.selectItem(EditBytesWire(bytes))
+    override fun selectCarriedItem(bytes: ByteArray) = vm.selectCarriedItem(EditBytesWire(bytes))
     override fun inputPitch(letter: String) = vm.inputPitch(letter)
     override fun deleteSelection() = vm.deleteSelection()
     override fun writeRest() = vm.writeRest()
@@ -218,11 +234,34 @@ fun interface NoteAuditioning {
  * so add one here whenever the relay grows a new op the controller needs to reach.
  */
 interface EditSessionOps {
-    fun open(scorePath: String, scoresDirectory: String, scoreId: String): OpenResult
+    /**
+     * Opens a session over the score at [scorePath].
+     *
+     * [carriedItem] is the element the reader's last tap-to-seek landed on, as `ScoreItemID` bytes — the session
+     * opens on it, so edit mode starts where the finger left off rather than on an inert pad. Empty means nothing
+     * was remembered, which is also what a cold open gets.
+     *
+     * It is a parameter of OPENING rather than an op of its own because that is what it is: iOS carries the same
+     * value across the same seam at the same moment (`ReaderEditingHost.pendingSelection` handed to
+     * `EditorViewModel.selectItem` inside `onBeginEditing`). Whether the ID still names anything is not decided
+     * here — `EditorSessionCore.selectCarriedItem` decides it for both platforms.
+     */
+    fun open(
+        scorePath: String,
+        scoresDirectory: String,
+        scoreId: String,
+        carriedItem: ByteArray = ByteArray(0),
+    ): OpenResult
+
     fun close()
 
     /** Writes any pending edit now, without ending the session. Driven from the Reader's `onPause`. */
     fun flushPendingSave()
+
+    /** Whether the pad has anything to act on — refreshed from the core after every op rather than observed, for
+     * the reason `EditorBridge.hasEditTargetNow` gives. The controller folds THIS into its state instead of the
+     * projection's own `hasEditTarget`; the value is identical, the delivery is not. */
+    val hasEditTarget: StateFlow<Boolean>
 
     fun selectItem(bytes: ByteArray)
     fun inputPitch(letter: String)
@@ -302,6 +341,23 @@ class EditSessionRelay(
     private var appliedSinceCheck = 0
     private var isOpen = false
 
+    private val _hasEditTarget = MutableStateFlow(false)
+
+    /**
+     * Whether the pad has anything to act on, refreshed from the authoritative core after every op and at open —
+     * the SAME answer `EditProjection.hasEditTarget` carries, taken through a channel that cannot silently drop
+     * an update. See `EditorBridge.hasEditTargetNow` for the one it can.
+     *
+     * The value is still the core's; nothing here decides it. What changes is only when Kotlin learns it, and
+     * "right after the op that could have changed it" is a strictly better moment than "whenever an observation
+     * notification happens to land".
+     */
+    override val hasEditTarget: StateFlow<Boolean> = _hasEditTarget.asStateFlow()
+
+    private fun refreshEditTarget() {
+        _hasEditTarget.value = if (isOpen) bridge.hasEditTargetNow() else false
+    }
+
     // MARK: - Lifecycle
 
     /**
@@ -331,7 +387,12 @@ class EditSessionRelay(
      * file-parsed score into the handle, which is also the correct semantics: what the mirror holds beyond the file
      * was never persisted, so the file is the truth.
      */
-    override fun open(scorePath: String, scoresDirectory: String, scoreId: String): OpenResult {
+    override fun open(
+        scorePath: String,
+        scoresDirectory: String,
+        scoreId: String,
+        carriedItem: ByteArray,
+    ): OpenResult {
         if (isOpen) close()
         val handle = host.scoreHandle()
         if (handle == 0L) return OpenResult.NO_HANDLE
@@ -348,6 +409,20 @@ class EditSessionRelay(
         // not when it can be skipped.
         verifyOrResync()
         host.requestRelayout()
+        // After the resync, never before it: a resync can swap the handle out from under the host, and a selection
+        // placed against the score that lost is a selection nothing can see. Unconditional rather than gated on
+        // non-empty bytes — empty means "carry nothing", which the core reads as a deliberate deselect and is the
+        // correct opening state for a cold session either way.
+        //
+        // Straight to the bridge, NOT through `relay {}`: that funnel arms the autosave, and opening a session is
+        // not an edit. iOS is explicit about the same thing at the same moment ("Opening a session is not an edit:
+        // match the counter first so `syncFromCore` neither announces a score nor arms the autosave timer for it").
+        // Nothing the funnel does is owed here anyway — placing a selection emits no intent and queues no
+        // audition, which is exactly what makes carrying one different from a tap.
+        if (isOpen) bridge.selectCarriedItem(carriedItem)
+        // A carried selection arms the pad before the reader has touched anything, so the gate has to be right
+        // from the first frame of the session rather than from the first op.
+        refreshEditTarget()
         return if (isOpen) OpenResult.OPENED else OpenResult.RESYNC_FAILED
     }
 
@@ -360,6 +435,7 @@ class EditSessionRelay(
         natives.endEditSession(host.scoreHandle())
         bridge.endSession()
         isOpen = false
+        refreshEditTarget()
     }
 
     /**
@@ -465,6 +541,10 @@ class EditSessionRelay(
         val auditionFrame = bridge.takePendingAudition()
         carryToMirror()
         sound(auditionFrame)
+        // Last, and from the one place no op can skip: whatever the op did to the caret or the selection, the pad's
+        // gate is now whatever the core says it is. See `hasEditTarget` above for why this cannot ride the
+        // projection like the rest.
+        refreshEditTarget()
     }
 
     /** Relays whatever the op applied. Split out of [relay] only so its early returns stay early returns. */
@@ -623,7 +703,10 @@ class EditSessionRelay(
          * `stableFingerprint` walks the whole value tree, so it is the one thing here whose cost grows with the
          * score. Task 9's device test (`EditSessionParityTest.fingerprintWalkIsCheapEnoughToSample`) measured one
          * walk on `parity.mscz` — a real 127-measure, 6-part arrangement — on a physical Pixel 8a at **~1.9ms**
-         * (1908us and 1911us across two runs), under the ~2ms line this comment used to guess at. At
+         * (1908us and 1911us across two runs), under the ~2ms line this comment used to guess at. The same
+         * device, engine and score read **2044us and 2023us** on 2026-08-30 — the walk did not change, the
+         * machine's mood did, which is why the test's bound is the ~4ms design limit below and not the
+         * measurement. At
          * `FINGERPRINT_SAMPLE_EVERY = 8` that amortizes to ~239us per applied intent, comfortably under the
          * half-millisecond budget, so eight stays unchanged. Raise it (recomputing the amortized cost against a
          * fresh measurement) only if a future score/device combination pushes the walk itself past ~4ms. Session

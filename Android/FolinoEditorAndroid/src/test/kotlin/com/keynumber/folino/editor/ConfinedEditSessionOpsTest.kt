@@ -3,6 +3,7 @@ package com.keynumber.folino.editor
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -40,13 +41,21 @@ class ConfinedEditSessionOpsTest {
             synchronized(this) { inFlight = false }
         }
 
-        override fun open(scorePath: String, scoresDirectory: String, scoreId: String): OpenResult {
+        override fun open(
+            scorePath: String,
+            scoresDirectory: String,
+            scoreId: String,
+            carriedItem: ByteArray,
+        ): OpenResult {
             record("open")
             return openResult
         }
 
         override fun close() = record("close")
         override fun flushPendingSave() = record("flushPendingSave")
+
+        /** Read straight through, never confined — see `ConfinedEditSessionOps.hasEditTarget`. */
+        override val hasEditTarget = MutableStateFlow(false)
         override fun revertToOriginal(): Boolean {
             record("revertToOriginal")
             return false

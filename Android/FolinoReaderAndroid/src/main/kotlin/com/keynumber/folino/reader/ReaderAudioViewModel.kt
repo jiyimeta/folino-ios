@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -78,6 +79,48 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
     val currentCursor: StateFlow<ScoreCursor?> = _engine
         .flatMapLatest { it?.currentCursor ?: emptyFlow() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Whether an edit selection has taken the drawn playhead off the score — see [displayCursor]. */
+    private val _displayCursorHidden = MutableStateFlow(false)
+
+    /**
+     * What the SCORE should draw a playhead at — [currentCursor], suppressed while an edit selection is standing
+     * in for it. The engine's own position is untouched, so the transport, auto-scroll and PiP all keep reading
+     * [currentCursor] and playback resumes from where it always would.
+     *
+     * Mirrors iOS's `ReaderPlaybackSession.displayCursor` / `hideDisplayedCursor()`, and exists for the reason
+     * stated there: two marks on the same staff, one for "playback is here" and one for "you are editing this",
+     * read as one confused mark — and on Android they are literally the same translucent accent column (see
+     * `EditingCaretOverlay`). The score can only carry one "you are here" at a time.
+     *
+     * The suppression never applies while playing, for the same reason iOS's guard doesn't: a moving playhead is
+     * the one thing on the staff you cannot do without.
+     */
+    val displayCursor: StateFlow<ScoreCursor?> =
+        combine(currentCursor, state, _displayCursorHidden) { cursor, playback, hidden ->
+            if (hidden && playback != PlaybackState.PLAYING) null else cursor
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    init {
+        // Any real cursor move brings the playhead back, whoever caused it — a seek, a measure step, playback
+        // advancing, a rehearsal-mark jump. iOS gets this for free by NULLING its stored cursor and letting the
+        // next engine push refill it; this is the same rule spelled out, and it is why the suppression is a flag
+        // rather than "hide this particular value": a transport that lands back on the very cursor the selection
+        // hid emits nothing new to compare against, and the playhead would stay invisible for no reason the
+        // reader could see. `drop(1)` skips the replayed current value, which is not a move.
+        viewModelScope.launch {
+            currentCursor.drop(1).collect { _displayCursorHidden.value = false }
+        }
+    }
+
+    /**
+     * Takes the drawn playhead off the score — called when an edit selection lands on a note, which is the moment
+     * the score gains a second "you are here". No-op while playing.
+     */
+    fun hideDisplayedCursor() {
+        if (state.value == PlaybackState.PLAYING) return
+        _displayCursorHidden.value = true
+    }
 
     /**
      * Lookahead anchor for vertical-mode auto-scroll: the cursor [SCROLL_LOOKAHEAD_BEATS] quarter-note
@@ -479,6 +522,9 @@ class ReaderAudioViewModel(application: Application) : AndroidViewModel(applicat
         // A tap-to-place-cursor is an explicit manual set → resume follow (clears any suspension from the
         // reader having scrolled away during playback) so the view re-centers this target and keeps up.
         resumePlaybackFollow()
+        // Explicitly as well as through the collector in `init`: this seek can land on the cursor the engine is
+        // already reporting, which emits nothing for that collector to see.
+        _displayCursorHidden.value = false
         e.seek(to = cursor)
         if (state.value == PlaybackState.PLAYING) return
         val item = (cursor as? ScoreCursor.Item)?.arg0 ?: return
