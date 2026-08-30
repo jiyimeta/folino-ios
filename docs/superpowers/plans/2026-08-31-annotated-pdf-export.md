@@ -2177,8 +2177,11 @@ app holds real libraries and handwriting.
 Ask them to confirm, and report exactly what they answer:
 
 1. Open a multi-page score, annotate a few bars with Apple Pencil, leave
-   annotation mode, then Share. A **PDF (annotated)** row appears under the
-   plain PDF row.
+   annotation mode, then Share **from the Reader's own top bar** — the share icon
+   at normal width, or the ellipsis menu at narrow width. A **PDF (annotated)**
+   row appears under the plain PDF row. (No new code was needed for this: both
+   Reader entry points already call the same `ScoreShareService` the Library row
+   menu does.)
 2. Export it and open the file in Files. The ink is on the right bars; the
    notation is crisp at 400 % zoom (vector), the ink softens (raster, expected).
 3. Print it. The ink is legible.
@@ -2188,6 +2191,16 @@ Ask them to confirm, and report exactly what they answer:
    appear; each export carries only its own ink.
 6. Note whether the exported ink sits where expected given that it re-flows into
    the export's page layout rather than the reading layout.
+7. **Share immediately after drawing.** Draw one stroke, leave annotation mode,
+   and open the share menu as fast as you can. The annotated row must still be
+   there. `AnnotationSaveCoordinator` debounces its writes by 500 ms while
+   `availableFormats` reads the store the moment the menu opens, so a fast enough
+   tap could in principle read a layer that has not been written yet. Almost
+   certainly unreachable by hand — but if the row is missing, the fix is to flush
+   the coordinator when annotation mode ends, not to wait longer.
+8. Reach the same export from the Library row menu and confirm the file is
+   identical — both paths go through one `ScoreShareService`, so a difference
+   would mean the Reader is passing a different item.
 
 - [ ] **Step 3: Update the memory index**
 
