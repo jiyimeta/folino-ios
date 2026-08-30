@@ -111,10 +111,14 @@ CoreGraphics, and is cross-compiled into `FolinoReaderJNI` for Android. A new
 
 ```swift
 public struct InkPlacement: Equatable, Sendable {
+    /// Index of the destination page.
     public let pageIndex: Int
-    /// Geometry already in the destination page's coordinate space, points,
-    /// origin top-left.
-    public let stroke: InkStroke
+    /// Index into the `drawings` array that was planned — the caller decodes
+    /// that drawing's own bytes.
+    public let drawingIndex: Int
+    /// Places the drawing's stored (normalized) geometry into the destination
+    /// page's own coordinate space: points, origin top-left, y down.
+    public let transform: StrokeTransform
 }
 
 public enum AnnotatedExportPlanner {
@@ -143,16 +147,26 @@ public struct EngravedPagePlacement: Equatable, Sendable {
 }
 ```
 
-`planEngraved` is `AnnotationAnchoringCore.partitionByPage` over each page's
-band, then `AnnotationAnchoringCore.display` for the surviving anchors, then
-`place` and a translation by `(offsetX, offsetY)`. `planPaged` is
-`PageAnchoringCore.displayTransforms` with the destination page rects — the
-normalization is a fraction of page width, so a stroke lands at the right spot
-and the right size whatever the page's absolute size is.
+`planEngraved` resolves each `.musical` anchor, keeps it when the resolved point
+falls in a page's `[startY, startY + usableHeight)` band, and returns that
+page's `StrokeTransform` with `(offsetX, offsetY)` folded into the translation.
+`planPaged` is `PageAnchoringCore.displayStrokeTransforms` with the destination
+page rects — the normalization is a fraction of page width, so a stroke lands at
+the right spot and the right size whatever the page's absolute size is.
+
+**The planner returns a transform, not transformed geometry, on purpose.** A
+pixel-erased stroke carries a PencilKit `mask` that `InkStroke` cannot represent,
+so those drawings are stored as legacy `PKDrawing` archives
+(`InkStrokePencilKitBridge.decodeStoredDrawing` reads both formats). Handing back
+a transform lets the iOS renderer decode whichever format the drawing is in and
+apply the transform with `PKDrawing.transform(using:)` — exactly what
+`AnnotationAnchoring.displayPaged` already does for the Reader — instead of
+silently dropping erased ink. `StrokeTransform` (uniform scale + translate) is
+the same shape the Android JNI seam already consumes.
 
 Neither function touches a graphics framework. Android's implementation of this
 feature calls the same two functions and differs only in what it does with the
-returned `InkStroke`s.
+returned transforms.
 
 **No staff filter.** Stored anchors are in source addressing; a PDF export
 engraves the unfiltered score, so the two addressings coincide and the resolver
@@ -252,18 +266,16 @@ mapping is exact rather than reconstructed.
 ## Module placement
 
 Projecting musical ink needs swift-sheet-music's `LayoutDocument`, and
-rasterizing it needs PencilKit. Both live in the Reader package today, and
+rasterizing it needs PencilKit. Both live in the Reader target today, together
+with `LayoutDocumentAnchorResolver` and `InkStrokePencilKitBridge`, and
 `Infrastructure → Feature` is forbidden. So:
 
-- **New target `ReaderAnnotationExport`** in the Reader package (Apple-only,
-  alongside the existing non-UI `ReaderAnnotationCore` / `ReaderInteractionCore`
-  targets), exported as its own product. Depends on `Domain`,
-  `ReaderAnnotationCore`, `SheetMusicPDF`, `SheetMusicLayoutApple`,
-  `SheetMusicUI`, PencilKit.
-- `LayoutDocumentAnchorResolver` (23 lines) and `InkStrokePencilKitBridge` move
-  down from `Sources/Reader` into it; the `Reader` target depends on the new
-  target and imports them. No duplication, and the Reader keeps behaving
-  identically.
+- **The renderer lives in the `Reader` target**, under
+  `Sources/Reader/Annotation/Export/`, beside the `AnnotationAnchoring` logic it
+  mirrors. A separate target was considered and rejected: it would buy tidiness
+  at the cost of moving two files and widening their access, while `Reader`
+  already hosts exactly this kind of non-UI anchoring logic. `Reader` gains one
+  dependency, `SheetMusicPDF`.
 - **New Domain protocol:**
 
   ```swift
@@ -277,9 +289,10 @@ rasterizing it needs PencilKit. Both live in the Reader package today, and
   }
   ```
 
-  `ReaderAnnotationExport` implements it; `LiveScoreShareService` takes it as
-  `any AnnotatedPDFRendering` and never sees a Feature type. This is the same
-  seam `ScorePDFRenderer` and `ScoreAudioExporter` already use.
+  `Reader`'s `ReaderAnnotatedPDFRenderer` implements it;
+  `LiveScoreShareService` takes it as `any AnnotatedPDFRendering` and never sees
+  a Feature type. This is the same seam `ScorePDFRenderer` and
+  `ScoreAudioExporter` already use.
 - `LiveScoreShareService` additionally takes `any AnnotationStore`, so
   `availableFormats(for:)` can ask whether the item has ink. The menu already
   loads per-item options lazily on first open, so this is one indexed read at
@@ -345,7 +358,7 @@ Consequences worth naming:
 - Empty inputs and an out-of-range `pageIndex` produce no placement rather than
   trapping.
 
-**ReaderAnnotationExport (iOS simulator).**
+**Reader (iOS simulator).**
 
 - The layout mirror agrees with the real export: render a multi-page fixture
   through `CoreGraphicsPDFRenderer`, and assert the planner's page count and
