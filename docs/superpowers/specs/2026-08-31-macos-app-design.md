@@ -196,7 +196,7 @@ Also in the model with no command yet: `Dynamic`, `Fermata`, `StaffText`, `Tempo
 | Spanners | `SetSlur` `SetHairpin` `SetPedal` `SetVolta` `SetOttava` `SetTextLine` `SetTrill` `SetVibrato` `SetPalmMute` `SetLetRing` |
 | Harmony | `SetChordSymbol` |
 
-Each consumes a wire intent for Android (25–28 are spent; this claims roughly 29–66) plus replay goldens.
+Each consumes a wire intent for Android plus replay goldens. **Indices 0–29 are spent** — the highest is `29 = setPartNames` (`EditIntentCodec.swift:64`), added after M6 — so these are numbered **from 30**, appended in `EditIntentWire`'s declaration order and never renumbered.
 
 ### 6.1 The stable-ID constraint this creates
 
@@ -204,7 +204,19 @@ Each consumes a wire intent for Android (25–28 are spent; this claims roughly 
 
 Landing 38 commands roughly doubles the surface a future SP0 must retrofit, and bakes positional addressing permanently into the wire format.
 
-**Decision:** SP0's body is **not** pulled ahead of macOS — it gates R3 (note editing on group scores), not the Mac release. Instead, **the edit-command sub-project carries a binding design constraint: every new intent must funnel element references through a single codec seam**, so the later retrofit is mechanical rather than 60–100 individual rewrites. This constraint is a required section of that sub-project's spec, and SP0's body is scheduled immediately before SP6.
+**Decision:** SP0's body is **not** pulled ahead of macOS — it gates R3 (note editing on group scores), not the Mac release, and is scheduled immediately before SP6. Instead the edit-command sub-project carries a binding design constraint, stated concretely below.
+
+**The mechanism that makes this work.** Wirelet's TLV, per the generated code in `WireFormatMacro.swift`, can append an `Optional` field to an existing struct with **zero byte movement** — a nil optional emits no tag at all (`:84-89`), absence on the wire decodes as nil without a missing-field check (`:131`), and unknown tags are skipped (`:126`). But it can **never** compatibly turn a bare scalar field into a struct, because the tag's wire type changes from varint to length-delimited. **Nesting every reference is therefore the seam itself.**
+
+**Half the seam already exists.** `SheetMusicEditWire/Path/PathIDCodecs.swift` holds shared mirrors for `VoiceElementID`, `RestID`, `NoteID`, and `TupletID`, plus `StaffAddressCodec.swift`, and every existing intent embeds element references as those nested structs. What has no seam is **measure, part, and voice references**, which travel as bare zig-zag varints scattered across a dozen payload structs — and the majority of the new commands (layout breaks, tempo, jumps and markers, barlines, range operations, spanner endpoints, voice moves) carry exactly those.
+
+**The constraint, therefore:** every new intent expresses **every** score location as a member of a closed reference family — the existing `VoiceElementID` / `NoteID` / `RestID` / `TupletID` / `StaffAddress`, plus `MeasureRef`, `PartRef`, `VoiceRef`, and `VoiceElementRange` added by that sub-project. A location never travels as a bare `Int`, an index pair, or a per-intent shape. Each family member has exactly one `@WireFormat` mirror under `Path/`, embedded as a nested field even for a single-integer reference. A shape the family lacks is added to the family once, never spelled inline. Each mirror documents its next unassigned tag as reserved for SP0's optional stable identity. Planners and commands resolve references only through per-type `Score` accessors, so SP0 rewires resolution in one place per reference kind.
+
+**What this buys, measured:** SP0's addressing retrofit becomes an append to roughly nine shared types and six accessors, with the 38 intents, planners, commands, and goldens untouched — `O(reference kinds)` instead of `O(intents)`. The acceptance check is running the existing replay-golden suites **without re-recording**: intent bytes stay byte-identical while the stable field is nil.
+
+**Two honest boundaries.** The seam does **not** shrink SP0's own body — minting identities at creation, tombstones, persistence, and resolution policy are unchanged in size, and the ordering constraint against SP6's op log is untouched. And `Score.stableFingerprint` is a hand-written field walk, so SP0 must not feed identity into it; identity is not content, and adding a combine line there would break every golden chain.
+
+**A constraint that does not apply today, and why it is still respected.** Intent bytes are **never persisted** — the only consumers are the Android JNI bridge, the Wasm bridge, and tests; what gets saved is MSCZ/MSCX. The Android relay additionally gates on an `engineVersionStamp` mismatch, and folino for Android has not shipped to Play yet, so there is no distributed binary to stay compatible with. The layout discipline is kept anyway because it is what makes the committed replay goldens meaningful: a golden that moves is supposed to mean something broke.
 
 ---
 
