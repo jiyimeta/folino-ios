@@ -1,6 +1,7 @@
 import CoreGraphics
 import Domain
 import Foundation
+import PDFKit
 import PencilKit
 @testable import Reader
 @testable import ReaderAnnotationCore
@@ -40,6 +41,17 @@ struct AnnotatedPDFComposerTests {
     private static func open(_ data: Data) throws -> CGPDFDocument {
         let provider = try #require(CGDataProvider(data: data as CFData))
         return try #require(CGPDFDocument(provider))
+    }
+
+    /// Sets `degrees` as the first page's `/Rotate` entry. `CGContext` (used to author the fixtures above) has no
+    /// way to write `/Rotate` itself, so this goes through PDFKit instead: open the plain fixture, set
+    /// `PDFPage.rotation`, and re-serialize — the simplest way to get a real rotated fixture without hand-writing
+    /// PDF syntax.
+    private static func rotated(_ data: Data, degrees: Int) throws -> Data {
+        let document = try #require(PDFDocument(data: data))
+        let page = try #require(document.page(at: 0))
+        page.rotation = degrees
+        return try #require(document.dataRepresentation())
     }
 
     private static func xObjectCount(of document: CGPDFDocument, page index: Int) throws -> Int {
@@ -150,6 +162,70 @@ struct AnnotatedPDFComposerTests {
         let context = try Self.rasterize(page, size: CGSize(width: 400, height: 600), scale: 2)
         #expect(try Self.redChannel(of: context, at: expected, scale: 2) < 128, "expected ink near the top edge")
         #expect(try Self.redChannel(of: context, at: mirrored, scale: 2) > 200, "expected blank page near the bottom")
+    }
+
+    @Test
+    @MainActor
+    func `a rotated source page exports upright, with ink still where it was drawn`() throws {
+        // A 40×40 mark near the unrotated page's top-right corner — well off the page's center — so a 90°
+        // rotation moves it to a clearly different spot rather than leaving it roughly in place.
+        let markRect = CGRect(x: 300, y: 500, width: 40, height: 40)
+        let unrotated = NSMutableData()
+        let consumer = try #require(CGDataConsumer(data: unrotated))
+        var box = CGRect(origin: .zero, size: CGSize(width: 400, height: 600))
+        let markContext = try #require(CGContext(consumer: consumer, mediaBox: &box, nil))
+        markContext.beginPDFPage(nil)
+        markContext.setFillColor(gray: 0, alpha: 1)
+        markContext.fill(markRect)
+        markContext.endPDFPage()
+        markContext.closePDF()
+        let base = try Self.rotated(unrotated as Data, degrees: 90)
+
+        // Predict where the mark should land using the SAME CoreGraphics API the composer concatenates —
+        // `getDrawingTransform` — rather than hand-deriving the rotation/fit math, so this is decisive about
+        // whether the composer applies that transform at all, without being fragile to its exact geometry.
+        let sourcePage = try #require(try Self.open(base).page(at: 1))
+        let destinationBox = CGRect(origin: .zero, size: sourcePage.getBoxRect(.mediaBox).size)
+        let transform = sourcePage.getDrawingTransform(
+            .mediaBox, rect: destinationBox, rotate: 0, preserveAspectRatio: true,
+        )
+        let markCenter = CGPoint(x: markRect.midX, y: markRect.midY)
+        let rotationCorrected = markCenter.applying(transform)
+        let unrotatedPosition = markCenter // where an un-adjusted `drawPDFPage` would leave it
+
+        // A stroke placed the same way as `ink lands where it was drawn...` above — rotation must not perturb
+        // the ink math at all, since `pageSize` stays the source's raw (unrotated) box size either way.
+        let stroke = InkStroke(
+            tool: .pen, colorRGBA: 0x0000_00FF, baseWidthSp: 60, opacity: 1,
+            x: [190, 210], y: [40, 40], width: [60, 60],
+            force: [1, 1], azimuth: [0, 0], altitude: [.pi / 2, .pi / 2], timeMillis: [0, 1],
+        )
+        let drawings = [
+            DrawingAnchor(kind: .page(PageAnchor(pageIndex: 0)), encodedDrawing: InkStrokeCodec.encode(stroke)),
+        ]
+        let placements = [
+            InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 1, px: 0, py: 0)),
+        ]
+
+        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements)
+        let page = try #require(try Self.open(out).page(at: 1))
+
+        // Destination media box keeps the source's raw (unrotated) size — no page-size swap.
+        let outBox = page.getBoxRect(.mediaBox)
+        #expect(abs(outBox.width - 400) < 0.5)
+        #expect(abs(outBox.height - 600) < 0.5)
+
+        let context = try Self.rasterize(page, size: destinationBox.size, scale: 2)
+        #expect(
+            try Self.redChannel(of: context, at: rotationCorrected, scale: 2) < 128,
+            "expected the mark at the rotation-corrected position",
+        )
+        #expect(
+            try Self.redChannel(of: context, at: unrotatedPosition, scale: 2) > 200,
+            "expected blank page at the un-rotated position — drawPDFPage must honor /Rotate",
+        )
+        #expect(try Self.redChannel(of: context, at: CGPoint(x: 200, y: 560), scale: 2) < 128, "ink near top edge")
+        #expect(try Self.redChannel(of: context, at: CGPoint(x: 200, y: 40), scale: 2) > 200, "no ink near bottom")
     }
 
     @Test

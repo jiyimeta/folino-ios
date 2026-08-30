@@ -57,12 +57,29 @@ enum AnnotatedPDFComposer {
             // already-validated `1...source.numberOfPages` range `CGPDFDocument` reports for itself — but the
             // API is optional-returning, so this stays a defensive skip rather than a force-unwrap.
             guard let page = source.page(at: pageNumber) else { continue }
-            var box = page.getBoxRect(.mediaBox)
+
+            // The destination page is declared at a clean zero origin, sized to match the source's own media
+            // box. A PDF's MediaBox may legally carry a non-zero origin; the Reader's own page geometry
+            // (`PagedPDFContainer`, `PDFPageView`, `VerticalPDFContainer`) never references that origin — it
+            // treats a page as size-only — so pinning the destination to zero keeps this composer's `pageSize`
+            // and the ink math in `drawInk` (both already origin-agnostic) in the same frame the Reader itself
+            // anchored the ink against, rather than importing the source box's own coordinate system.
+            var destinationBox = CGRect(origin: .zero, size: page.getBoxRect(.mediaBox).size)
             context.beginPDFPage([
-                kCGPDFContextMediaBox as String: Data(bytes: &box, count: MemoryLayout<CGRect>.size),
+                kCGPDFContextMediaBox as String: Data(bytes: &destinationBox, count: MemoryLayout<CGRect>.size),
             ] as CFDictionary)
 
+            // `drawPDFPage` replays only the content stream — it does not honor the page's `/Rotate` entry, so
+            // an un-adjusted call would draw a rotated source page sideways. `getDrawingTransform` supplies
+            // exactly the rotation (and, for a source box whose aspect doesn't match its rotated content, the
+            // same fit/letterbox) CoreGraphics itself applies when presenting the page — mirroring what
+            // `PDFPageRasterizer` already does for the on-screen page (`PDFPageRasterizer.swift:36-39`), which
+            // is also what the Reader anchored the ink against. So the exported page keeps the same frame the
+            // ink was placed relative to. For an unrotated page (`/Rotate` absent or 0) this is the identity.
             context.saveGState()
+            context.concatenate(page.getDrawingTransform(
+                .mediaBox, rect: destinationBox, rotate: 0, preserveAspectRatio: true,
+            ))
             context.drawPDFPage(page)
             context.restoreGState()
 
@@ -75,7 +92,7 @@ enum AnnotatedPDFComposer {
             }
 
             if let placements = inkByPage[pageNumber - 1] {
-                drawInk(placements, drawings: drawings, pageSize: box.size, into: context)
+                drawInk(placements, drawings: drawings, pageSize: destinationBox.size, into: context)
             }
             context.endPDFPage()
         }
