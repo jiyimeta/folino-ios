@@ -5,13 +5,15 @@ import PDFKit
 import PencilKit
 @testable import Reader
 @testable import ReaderAnnotationCore
+import SheetMusicCore
+import SheetMusicPDF
 import Testing
 import UIKit
 
 @Suite("AnnotatedPDFComposer")
 struct AnnotatedPDFComposerTests {
     /// A two-page PDF with real vector content: a filled rectangle and a line per page.
-    private static func baseDocument(pages: Int, size: CGSize = CGSize(width: 400, height: 600)) throws -> Data {
+    static func baseDocument(pages: Int, size: CGSize = CGSize(width: 400, height: 600)) throws -> Data {
         let data = NSMutableData()
         let consumer = try #require(CGDataConsumer(data: data))
         var box = CGRect(origin: .zero, size: size)
@@ -29,7 +31,7 @@ struct AnnotatedPDFComposerTests {
     }
 
     /// One stored drawing whose geometry is a short diagonal in normalized space.
-    private static func drawing(kind: DrawingAnchorKind) -> DrawingAnchor {
+    static func drawing(kind: DrawingAnchorKind) -> DrawingAnchor {
         let stroke = InkStroke(
             tool: .pen, colorRGBA: 0xFF00_00FF, baseWidthSp: 0.2, opacity: 1,
             x: [0, 0.1, 0.2], y: [0, 0.1, 0.2], width: [0.2, 0.2, 0.2],
@@ -259,5 +261,82 @@ struct AnnotatedPDFComposerTests {
         #expect(throws: DomainError.self) {
             try AnnotatedPDFComposer.compose(basePDF: Data([0x25, 0x21]), drawings: [], placements: [])
         }
+    }
+}
+
+extension AnnotatedPDFComposerTests {
+    static func baseDocumentForGuardTest() throws -> Data {
+        try baseDocument(pages: 1)
+    }
+
+    static func drawingForGuardTest() -> DrawingAnchor {
+        drawing(kind: .musical(MusicalAnchor(
+            measureIndex: 0, tickInMeasure: 0, partIndex: 0, staffIndexInPart: 0,
+            dxSp: 0, verticalOffsetSp: 0,
+        )))
+    }
+}
+
+/// The real CoreGraphics engraving path, wrapped so the Reader test target does not need to import Infrastructure.
+struct CoreGraphicsPDFRendererStub: Domain.ScorePDFRenderer {
+    func renderPDF(score: Score, title: String) async throws -> Data {
+        try await MainActor.run {
+            try PDFExporter.export(score: score, options: PDFExporter.Options(title: title))
+        }
+    }
+}
+
+@Suite("ReaderAnnotatedPDFRenderer")
+struct ReaderAnnotatedPDFRendererTests {
+    private let _install: Void = LayoutTestSupport.installed
+
+    /// `ScorePDFRenderer` that returns a fixed document, so the renderer's mismatch guard can be exercised without
+    /// engraving anything.
+    private struct StubPDFRenderer: Domain.ScorePDFRenderer {
+        let data: Data
+        func renderPDF(score: Score, title: String) throws -> Data {
+            data
+        }
+    }
+
+    private static func score(measures: Int) -> Score {
+        let note = Note(pitch: 60, tpc: 14)
+        let chord = Chord(duration: .whole, notes: [note])
+        let bars = (0 ..< measures).map { _ in Measure(voices: [Voice(elements: [.chord(chord)])]) }
+        return Score(
+            division: 480,
+            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: bars)])],
+        )
+    }
+
+    @Test
+    func `the engraved export is a readable PDF even with no ink`() async throws {
+        let renderer = ReaderAnnotatedPDFRenderer(pdfRenderer: CoreGraphicsPDFRendererStub())
+        let data = try await renderer.renderAnnotatedEngravedPDF(
+            score: Self.score(measures: 8), title: "T", drawings: [],
+        )
+        let provider = try #require(CGDataProvider(data: data as CFData))
+        #expect(try #require(CGPDFDocument(provider)).numberOfPages >= 1)
+    }
+
+    @Test
+    func `a base PDF that disagrees with the plan comes back unstamped rather than mis-stamped`() async throws {
+        // A one-page stub for a score that paginates to several: the guard must notice and skip the ink.
+        let stub = try AnnotatedPDFComposerTests.baseDocumentForGuardTest()
+        let renderer = ReaderAnnotatedPDFRenderer(pdfRenderer: StubPDFRenderer(data: stub))
+        let drawings = [AnnotatedPDFComposerTests.drawingForGuardTest()]
+        let data = try await renderer.renderAnnotatedEngravedPDF(
+            score: Self.score(measures: 240), title: "T", drawings: drawings,
+        )
+        #expect(data == stub)
+    }
+
+    @Test
+    func `the original-PDF export preserves the base document's pages`() async throws {
+        let base = try AnnotatedPDFComposerTests.baseDocumentForGuardTest()
+        let renderer = ReaderAnnotatedPDFRenderer(pdfRenderer: StubPDFRenderer(data: base))
+        let data = try await renderer.renderAnnotatedOriginalPDF(basePDF: base, drawings: [])
+        let provider = try #require(CGDataProvider(data: data as CFData))
+        #expect(try #require(CGPDFDocument(provider)).numberOfPages == 1)
     }
 }
