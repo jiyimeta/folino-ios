@@ -58,7 +58,7 @@ struct EngravedExportLayoutTests {
 
     @Test
     @MainActor
-    func `page bands are contiguous, ascending and non-empty`() {
+    func `page bands are ascending, non-empty and non-overlapping`() {
         let resolved = EngravedExportLayout.resolve(
             score: Self.score(measures: 240), options: EngravedExportLayout.exportOptions(title: "T"),
         )

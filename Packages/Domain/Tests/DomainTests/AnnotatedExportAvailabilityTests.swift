@@ -71,6 +71,16 @@ struct AnnotatedExportAvailabilityTests {
     }
 
     @Test
+    func `a title over the 100-character cap is truncated before the annotated suffix is appended`() {
+        let title = String(repeating: "a", count: 150)
+        let truncatedStem = String(repeating: "a", count: 100)
+        #expect(ScoreExportNaming.fileName(title: title, format: .annotatedPDF)
+            == "\(truncatedStem) (annotated).pdf")
+        #expect(ScoreExportNaming.fileName(title: title, format: .annotatedOriginalPDF)
+            == "\(truncatedStem) (original annotated).pdf")
+    }
+
+    @Test
     func `only the annotated formats report isAnnotated`() {
         #expect(ScoreShareFormat.annotatedPDF.isAnnotated)
         #expect(ScoreShareFormat.annotatedOriginalPDF.isAnnotated)

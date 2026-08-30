@@ -95,7 +95,7 @@ private func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
     case .annotatedPDF, .annotatedOriginalPDF:
         // Unreachable: `bulkAvailableShareFormats` is a fixed list that never includes an annotated format, because
         // a multi-item selection does not agree about what ink its items carry.
-        Label { Text("PDF") } icon: { Image(systemName: "square.and.pencil") }
+        Label { Text("library.format.pdf", bundle: .module) } icon: { Image(systemName: "square.and.pencil") }
     }
 }
 
