@@ -1,9 +1,9 @@
+// PARITY(macos): system share sheet — macOS needs an NSSharingServicePicker equivalent, wired into
+//   ScoreShareTarget's call sites.
+
 #if os(iOS)
 import SwiftUI
 import UIKit
-
-// PARITY(macos): system share sheet — macOS needs an NSSharingServicePicker equivalent, wired into
-// ScoreShareTarget's call sites.
 
 /// Bridges `UIActivityViewController` (the system share sheet) into SwiftUI. Use via `.sheet {
 /// ActivityViewControllerRepresentable(items: [...]) }`.

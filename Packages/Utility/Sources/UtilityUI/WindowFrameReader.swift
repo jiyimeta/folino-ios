@@ -33,7 +33,7 @@ extension View {
 }
 
 // PARITY(macos): window-coordinate frame probe — macOS needs the NSView equivalent before any Mac code can measure
-// across view trees.
+//   across view trees.
 
 #if os(iOS)
 private struct WindowFrameChangeModifier: ViewModifier {

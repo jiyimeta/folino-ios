@@ -51,7 +51,7 @@ extension View {
 }
 
 // PARITY(macos): per-screen light/dark scoping — macOS would set NSAppearance on the hosting view instead of
-// UITraitOverrides.
+//   UITraitOverrides.
 
 #if os(iOS)
 private struct HostingAppearanceApplier: UIViewRepresentable {

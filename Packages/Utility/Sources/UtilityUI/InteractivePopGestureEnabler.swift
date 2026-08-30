@@ -1,10 +1,10 @@
 import SwiftUI
 
+// PARITY(macos): interactive pop gesture — no macOS analogue; the modifier is a no-op there. Revisit only if the
+//   Mac shell ever adopts a navigation stack with a swipe-back affordance.
+
 #if os(iOS)
 import UIKit
-
-// PARITY(macos): interactive pop gesture — no macOS analogue; the modifier is a no-op there. Revisit only if the
-// Mac shell ever adopts a navigation stack with a swipe-back affordance.
 
 /// Restores the edge-swipe-back gesture on a screen that hides the navigation bar.
 ///

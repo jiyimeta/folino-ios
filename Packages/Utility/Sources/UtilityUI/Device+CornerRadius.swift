@@ -19,8 +19,8 @@ public enum DeviceMetrics {
 }
 
 // PARITY(macos): screen corner radius — DeviceKit has no macOS device geometry to read, so
-// `screenCornerRadius` returns 0 there. Revisit only if a Mac window ever needs concentric corner
-// nesting against real display bezel geometry.
+//   `screenCornerRadius` returns 0 there. Revisit only if a Mac window ever needs concentric corner
+//   nesting against real display bezel geometry.
 
 #if os(iOS)
 extension Device {
