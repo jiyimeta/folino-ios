@@ -234,13 +234,27 @@ silently."
 
 ---
 
-## Task 2: Domain — the two formats, the availability rule, the filenames
+## Task 2: Domain — the two formats, the availability rule, the filenames, and every switch they force
+
+Adding a case to `ScoreShareFormat` breaks four exhaustive switches outside
+Domain, and one of them is in `ScoreUI`, which the `Reader` package depends on.
+Splitting the enum change from those switch completions would leave the tree
+uncompilable for Tasks 3-6, so they land here, in one atomic change. The share
+service's own switch gets a throwing placeholder that Task 7 replaces with the
+real routing.
 
 **Files:**
 - Modify: `Packages/Domain/Sources/Domain/Protocols/ScoreShareService.swift`
 - Modify: `Packages/Domain/Sources/Domain/Analytics/DomainEnums+Analytics.swift`
 - Create: `Packages/Domain/Sources/Domain/Logic/AnnotatedExportAvailability.swift`
 - Create: `Packages/Domain/Tests/DomainTests/AnnotatedExportAvailabilityTests.swift`
+- Modify: `Packages/ScoreUI/Sources/ScoreUI/ShareSubmenu.swift`
+- Modify: `Packages/ScoreUI/Sources/ScoreUI/Resources/Localizable.xcstrings`
+- Modify: `Packages/Features/Library/Sources/Library/Views/BulkActionBar.swift`
+- Modify: `Packages/Features/Library/Sources/FolinoLibraryJNI/LibraryAndroidStore.swift`
+- Modify: `Packages/Features/Library/Sources/FolinoLibraryJNI/AnalyticsBridge+TokenMappers.swift`
+- Modify: `Packages/Infrastructure/Sources/ScoreFiles/LiveScoreShareService.swift` (placeholder branch only)
+- Modify: `docs/engineering/ios-android-parity.md` (regenerated)
 
 **Interfaces:**
 - Consumes: `ScoreShareFormat`, `ScoreExportNaming.sanitize(title:)`.
@@ -466,7 +480,7 @@ In `Packages/Domain/Sources/Domain/Analytics/DomainEnums+Analytics.swift`, the
 
 Leave the `ScoreFormat` extension near line 10 alone — it is a different enum.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [ ] **Step 5: Run the Domain tests**
 
 ```bash
 cd Packages/Domain
@@ -476,8 +490,7 @@ xcodebuild test -scheme Domain \
   -only-testing:DomainTests/AnnotatedExportAvailabilityTests
 ```
 
-Expected: PASS. Then run the whole Domain suite to catch any other exhaustive
-switch in Domain that the new cases broke:
+Expected: PASS. Then the whole Domain suite:
 
 ```bash
 xcodebuild test -scheme Domain \
@@ -487,10 +500,146 @@ xcodebuild test -scheme Domain \
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Add the localized menu strings**
+
+Add two keys to `Packages/ScoreUI/Sources/ScoreUI/Resources/Localizable.xcstrings`,
+matching the shape of the existing `scoreUI.format.pdf` entry (a `"state":
+"translated"` string unit under each locale):
+
+| Key | en | ja | ko | zh-Hans | zh-Hant |
+| --- | --- | --- | --- | --- | --- |
+| `scoreUI.format.pdf.annotated` | `PDF (annotated)` | `PDF（書き込みあり）` | `PDF (주석 포함)` | `PDF（含标注）` | `PDF（含標注）` |
+| `scoreUI.format.originalPDF.annotated` | `Original PDF (annotated)` | `元のPDF（書き込みあり）` | `원본 PDF (주석 포함)` | `原始 PDF（含标注）` | `原始 PDF（含標注）` |
+
+The Japanese wording is 「書き込み」, matching `reader.toolbar.annotate.start`
+(「書き込みを開始」), and 「元のPDF」, matching
+`reader.displaySource.showOriginal`. Never write an internal feature name
+(`Reader`, `Library`, …) into user copy, and the brand is lowercase `folino`.
+
+- [ ] **Step 7: Complete the menu switches**
+
+In `Packages/ScoreUI/Sources/ScoreUI/ShareSubmenu.swift`:
+
+```swift
+private func shareMenuFormatText(for format: ScoreShareFormat) -> Text {
+    switch format {
+    // …existing cases…
+    case .annotatedPDF:
+        Text("scoreUI.format.pdf.annotated", bundle: .module)
+    case .annotatedOriginalPDF:
+        Text("scoreUI.format.originalPDF.annotated", bundle: .module)
+    }
+}
+
+private func shareMenuIconName(for format: ScoreShareFormat) -> String {
+    switch format {
+    // …existing cases…
+    case .annotatedPDF, .annotatedOriginalPDF:
+        "square.and.pencil"
+    }
+}
+```
+
+`ShareFormatMenuItems.placeholderFormats` stays the five plain formats: it is
+what the menu shows before `loadFormats` answers, and an annotated row that
+vanished on load would be worse than one that appeared.
+
+- [ ] **Step 8: Complete the Library switch**
+
+In `Packages/Features/Library/Sources/Library/Views/BulkActionBar.swift`, add to
+`bulkShareFormatLabel` — match the surrounding `Label` construction rather than
+copying this literally if it differs:
+
+```swift
+    case .annotatedPDF, .annotatedOriginalPDF:
+        // Unreachable: `bulkAvailableShareFormats` is a fixed list that never includes an annotated format, because
+        // a multi-item selection does not agree about what ink its items carry.
+        Label("PDF", systemImage: "square.and.pencil")
+```
+
+- [ ] **Step 9: Complete the Android JNI switches and leave the parity marker**
+
+These files compile only under `FOLINO_ANDROID=1`, but an exhaustive switch left
+alone there breaks the Android build.
+
+In `Packages/Features/Library/Sources/FolinoLibraryJNI/LibraryAndroidStore.swift`:
+
+- `token(for:)` (~line 504) and the extension at ~line 966: add
+  `case .annotatedPDF: "pdf_annotated"` and
+  `case .annotatedOriginalPDF: "pdf_original_annotated"` — the same tokens
+  Step 4 used for analytics.
+- `parseFormat(_:)` (~line 492): add the two matching string cases.
+- The export switch (~line 555): add
+
+```swift
+        // PARITY(android): Annotated PDF export — Android needs an androidx.ink renderer and a PdfDocument writer to
+        //   fill these in. The placement logic is already shared (`AnnotatedExportPlanner` in ReaderAnnotationCore),
+        //   as is the availability rule (`AnnotatedExportAvailability`) and the filename
+        //   (`ScoreExportNaming.fileName`), so what is missing is the drawing half only.
+        case .annotatedPDF, .annotatedOriginalPDF: return ""
+```
+
+- `exportFormats` (~line 525) maps `ScoreShareFormat.allOrdered`, which does not
+  contain the annotated cases, so the Android sheet keeps its five rows with no
+  further change.
+
+In `Packages/Features/Library/Sources/FolinoLibraryJNI/AnalyticsBridge+TokenMappers.swift`,
+add the two tokens to both `switch`es (~lines 36 and 50) so a token round-trips.
+
+- [ ] **Step 10: Add the placeholder branch in the share service**
+
+`LiveScoreShareService.prepareShare` switches exhaustively over
+`ScoreShareFormat`. Task 7 gives these cases real routing; for now the tree just
+has to compile:
+
+```swift
+        case .annotatedPDF, .annotatedOriginalPDF:
+            // Task 7 replaces this with the real routing; the rows are not offered yet, so this is unreachable.
+            throw DomainError.scoreWriteFailed(reason: "annotated export is not wired up yet")
+```
+
+- [ ] **Step 11: Regenerate the parity ledger**
 
 ```bash
-git -C /Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/.claude/worktrees/annotated-pdf-export add Packages/Domain
+python3 Scripts/parity-report.py
+```
+
+The `parity-ledger` pre-commit hook fails when
+`docs/engineering/ios-android-parity.md` is stale, so run this before
+committing.
+
+- [ ] **Step 12: Build the packages the new cases touch**
+
+From the worktree root:
+
+```bash
+cd Packages/ScoreUI
+xcodebuild build -scheme ScoreUI \
+  -destination 'platform=iOS Simulator,id=513F3B9E-891E-44CB-9DD3-BFCF5EEE3394' \
+  -skipPackagePluginValidation
+```
+
+```bash
+cd Packages/Features/Reader
+xcodebuild build -scheme Reader \
+  -destination 'platform=iOS Simulator,id=513F3B9E-891E-44CB-9DD3-BFCF5EEE3394' \
+  -skipPackagePluginValidation
+```
+
+```bash
+cd Packages/Infrastructure
+xcodebuild build -scheme Infrastructure-Package \
+  -destination 'platform=iOS Simulator,id=513F3B9E-891E-44CB-9DD3-BFCF5EEE3394' \
+  -skipPackagePluginValidation
+```
+
+Expected: BUILD SUCCEEDED for all three. `Reader` is the one that matters most —
+it depends on `ScoreUI`, and Tasks 3-6 build it.
+
+- [ ] **Step 13: Commit**
+
+```bash
+git -C /Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/.claude/worktrees/annotated-pdf-export add Packages/Domain Packages/ScoreUI Packages/Features/Library Packages/Infrastructure/Sources/ScoreFiles/LiveScoreShareService.swift docs/engineering/ios-android-parity.md
 git -C /Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/.claude/worktrees/annotated-pdf-export commit -m "feat(domain): annotated PDF share formats and their availability rule
 
 An item can be annotated on two documents — the engraved notation and, for a
@@ -498,7 +647,12 @@ PDF-origin item, the original pages — so one row is offered per base that
 actually carries ink rather than picking a base and dropping the other ink.
 The rule is pure so Android's export sheet reads the same answer, and the
 filenames carry an English suffix so the annotated export cannot overwrite
-the plain PDF in the shared temp directory."
+the plain PDF in the shared temp directory.
+
+The switches the two new cases force land in the same commit: ScoreUI sits
+under Reader, so splitting them would leave the tree uncompilable for the
+tasks that follow. Bulk share and the Android sheet both read allOrdered,
+which is unchanged, so neither gains a row it cannot fulfil."
 ```
 
 ---
@@ -1924,119 +2078,20 @@ PDF in the shared temp directory."
 
 ---
 
-## Task 8: The menu rows, the remaining switches, and the App wiring
+## Task 8: Wire the App composition root and build the whole app
+
+Everything user-facing landed in Task 2; what is left is handing the renderer to
+the share service and proving the assembled app builds and passes.
 
 **Files:**
-- Modify: `Packages/ScoreUI/Sources/ScoreUI/ShareSubmenu.swift`
-- Modify: `Packages/ScoreUI/Sources/ScoreUI/Resources/Localizable.xcstrings`
-- Modify: `Packages/Features/Library/Sources/Library/Views/BulkActionBar.swift`
-- Modify: `Packages/Features/Library/Sources/FolinoLibraryJNI/LibraryAndroidStore.swift`
-- Modify: `Packages/Features/Library/Sources/FolinoLibraryJNI/AnalyticsBridge+TokenMappers.swift`
 - Modify: `App/AppBootstrap.swift`
-- Modify: `docs/engineering/ios-android-parity.md` (regenerated)
 
 **Interfaces:**
-- Consumes: everything from Tasks 2 and 6.
+- Consumes: `Reader.ReaderAnnotatedPDFRenderer(pdfRenderer:)` (Task 6),
+  `LiveScoreShareService.init(…annotatedPDFRenderer:annotationStore:)` (Task 7).
 - Produces: nothing new.
 
-- [ ] **Step 1: Add the localized strings**
-
-Add two keys to `Packages/ScoreUI/Sources/ScoreUI/Resources/Localizable.xcstrings`,
-matching the shape of the existing `scoreUI.format.pdf` entry (`"state":
-"translated"` string units under each locale):
-
-| Key | en | ja | ko | zh-Hans | zh-Hant |
-| --- | --- | --- | --- | --- | --- |
-| `scoreUI.format.pdf.annotated` | `PDF (annotated)` | `PDF（書き込みあり）` | `PDF (주석 포함)` | `PDF（含标注）` | `PDF（含標注）` |
-| `scoreUI.format.originalPDF.annotated` | `Original PDF (annotated)` | `元のPDF（書き込みあり）` | `원본 PDF (주석 포함)` | `原始 PDF（含标注）` | `原始 PDF（含標注）` |
-
-The Japanese wording is 「書き込み」, matching `reader.toolbar.annotate.start`
-(「書き込みを開始」), and 「元のPDF」 matching
-`reader.displaySource.showOriginal`. Do not write 「Reader」 or any other
-internal feature name into user copy.
-
-- [ ] **Step 2: Complete the menu switches**
-
-In `Packages/ScoreUI/Sources/ScoreUI/ShareSubmenu.swift`:
-
-```swift
-private func shareMenuFormatText(for format: ScoreShareFormat) -> Text {
-    switch format {
-    // …existing cases…
-    case .annotatedPDF:
-        Text("scoreUI.format.pdf.annotated", bundle: .module)
-    case .annotatedOriginalPDF:
-        Text("scoreUI.format.originalPDF.annotated", bundle: .module)
-    }
-}
-
-private func shareMenuIconName(for format: ScoreShareFormat) -> String {
-    switch format {
-    // …existing cases…
-    case .annotatedPDF, .annotatedOriginalPDF:
-        "square.and.pencil"
-    }
-}
-```
-
-`ShareFormatMenuItems.placeholderFormats` stays the five plain formats: it is
-what the menu shows before `loadFormats` answers, and an annotated row that
-disappears on load would be worse than one that appears.
-
-- [ ] **Step 3: Complete the Library switches**
-
-In `Packages/Features/Library/Sources/Library/Views/BulkActionBar.swift`, add to
-`bulkShareFormatLabel`:
-
-```swift
-    case .annotatedPDF, .annotatedOriginalPDF:
-        // Unreachable: `bulkAvailableShareFormats` is a fixed list that never includes an annotated format, because
-        // a multi-item selection does not agree about what ink its items carry.
-        Label("PDF", systemImage: "square.and.pencil")
-```
-
-Match the surrounding `Label` construction in that function rather than copying
-this literally if it differs.
-
-- [ ] **Step 4: Complete the Android JNI switches and leave the parity marker**
-
-These files only compile under `FOLINO_ANDROID=1`, but an exhaustive switch
-there will break the Android build if left alone.
-
-In `Packages/Features/Library/Sources/FolinoLibraryJNI/LibraryAndroidStore.swift`:
-
-- `token(for:)` (~line 504) and the extension at ~line 966: add
-  `case .annotatedPDF: "pdf_annotated"` and
-  `case .annotatedOriginalPDF: "pdf_original_annotated"`.
-- `parseFormat(_:)` (~line 492): add the two matching string cases.
-- The export switch (~line 555): add
-
-```swift
-        // PARITY(android): Annotated PDF export — Android needs an androidx.ink renderer and a PdfDocument writer to
-        //   fill these in. The placement logic is already shared (`AnnotatedExportPlanner` in ReaderAnnotationCore),
-        //   as is the availability rule (`AnnotatedExportAvailability`) and the filename
-        //   (`ScoreExportNaming.fileName`), so what is missing is the drawing half only.
-        case .annotatedPDF, .annotatedOriginalPDF: return ""
-```
-
-- `exportFormats` (~line 525) already maps `ScoreShareFormat.allOrdered`, which
-  does not contain the annotated cases, so the Android sheet keeps showing five
-  rows with no further change.
-
-In `Packages/Features/Library/Sources/FolinoLibraryJNI/AnalyticsBridge+TokenMappers.swift`,
-add the two tokens to both `switch`es (~lines 36 and 50) so an analytics token
-round-trips.
-
-- [ ] **Step 5: Regenerate the parity ledger**
-
-```bash
-python3 Scripts/parity-report.py
-```
-
-The `parity-ledger` pre-commit hook fails if `docs/engineering/ios-android-parity.md`
-is stale, so run this before committing.
-
-- [ ] **Step 6: Wire the App composition root**
+- [ ] **Step 1: Wire the App composition root**
 
 In `App/AppBootstrap.swift`, at the `LiveScoreShareService` construction (~line
 205), pass the two new dependencies. The `annotationStore` local already exists
@@ -2058,7 +2113,7 @@ and if it is not, thread the local through rather than reordering the bootstrap.
 
 Add `import Reader` if the file does not already have it.
 
-- [ ] **Step 7: Build the app and run the full test suite**
+- [ ] **Step 2: Build the app and run the full test suite**
 
 ```bash
 xcodegen generate
@@ -2087,17 +2142,15 @@ rm -f Packages/Features/Editor/Package.resolved
 rm -f Packages/Features/Library/Package.resolved
 ```
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git -C /Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/.claude/worktrees/annotated-pdf-export add Packages/ScoreUI Packages/Features/Library App/AppBootstrap.swift docs/engineering/ios-android-parity.md
-git -C /Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/.claude/worktrees/annotated-pdf-export commit -m "feat(share): show the annotated PDF rows and wire the renderer in
+git -C /Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/.claude/worktrees/annotated-pdf-export add App/AppBootstrap.swift
+git -C /Users/kiichi/Developer/Personal/ios-apps/Folino-iOS/.claude/worktrees/annotated-pdf-export commit -m "feat(app): hand the annotated PDF renderer to the share service
 
-The rows are appended after the five plain formats, so the clean engraving
-stays one tap away for a user who has annotated. Bulk share is untouched: a
-multi-item selection does not agree about what ink its items carry, so its
-fixed format list never gains these. Android's sheet keeps its five rows and
-carries a PARITY marker for the drawing half it still needs."
+The last wire: the composition root is the only place that may see both a
+Feature and an Infrastructure adapter, so it is where the Reader's renderer
+meets the share service that asks for it."
 ```
 
 ---
@@ -2147,12 +2200,12 @@ passes, add nothing — a completed, verified feature is git history, not memory
 
 ## Self-review notes
 
-- **Spec coverage.** Availability rule → Task 2. Filenames → Task 2. Planner →
-  Task 3. Page bands + drift guard (test half) → Task 4. Ink rasterization and
-  composition → Task 5. Drift guard (runtime half) and the two entry points →
-  Task 6. Share-service rows and routing → Task 7. Menu copy, exhaustive
-  switches, parity marker, App wiring → Task 8. Vector premise → Task 1.
-  Manual QA → Task 9.
+- **Spec coverage.** Vector premise → Task 1. Availability rule, filenames, menu
+  copy, every exhaustive switch the new cases force, and the parity marker →
+  Task 2. Planner → Task 3. Page bands and the drift guard's test half → Task 4.
+  Ink rasterization and composition → Task 5. The drift guard's runtime half and
+  the two entry points → Task 6. Share-service rows and routing → Task 7. App
+  wiring and the whole-app build → Task 8. Manual QA → Task 9.
 - **Out-of-scope items stay out.** No text-box handling, no Android renderer, no
   print path, no Pro gating.
 - **The one thing to watch while executing:** Task 7's `Rig` and
