@@ -68,7 +68,6 @@ fun LoopAllScene(layout: ScreenshotLayout, tag: String) {
             Column(Modifier.fillMaxSize()) {
                 // Real Reader top app bar; static screenshot, callbacks are no-ops.
                 ReaderTopBar(
-                    title = READER_SCENE_TITLE,
                     onBack = {},
                     onShare = {},
                     onEditInfo = {},

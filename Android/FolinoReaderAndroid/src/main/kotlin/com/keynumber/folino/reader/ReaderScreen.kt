@@ -214,7 +214,6 @@ fun ReaderScreen(
      * layer rather than looked up here — the Reader module has no dependency on the Library module.
      * A blank value (or a name whose file is missing) fails cleanly via [ReaderViewModel.load]. */
     localFileName: String,
-    title: String,
     layoutMode: ReaderLayoutMode = ReaderLayoutMode.VERTICAL,
     displayOptions: LayoutOptions = LayoutOptions.DEFAULT,
     onDisplayOptionsChange: (LayoutOptions) -> Unit = {},
@@ -343,8 +342,11 @@ fun ReaderScreen(
     /** The global sticky continuation mode (re-read each end-of-score so a Settings change is picked up). */
     continuationModeProvider: suspend () -> PlaylistContinuationMode = { PlaylistContinuationMode.PLAY_THROUGH },
     /** Asks the host to retarget the Reader to another entry in place (host swaps its currentScoreId /
-     * currentLocalFileName / title). Every displayed field of the outgoing score has to move together:
-     * an auto-advance that carried only the id left the app bar naming the score that just finished. */
+     * currentLocalFileName). Every per-score field of the outgoing score has to move together: an auto-advance
+     * that carried only the id left the app bar naming the score that just finished — which is why
+     * [PlaylistEntry] is a named record rather than a pair, so a forgotten field is a compile error. (The title
+     * is no longer among the fields the Reader DISPLAYS; the record still carries it, and that is the point of
+     * the shape.) */
     onRetargetScore: (PlaylistEntry) -> Unit = {},
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
@@ -1041,7 +1043,6 @@ fun ReaderScreen(
         snackbarHost = { SnackbarHost(editSaveNoticeHost) },
         topBar = {
             ReaderTopBar(
-                title = title,
                 onBack = onBack,
                 onShare = onShare,
                 onEditInfo = onEditInfo,
@@ -1416,11 +1417,12 @@ private fun KeepScreenOn(enabled: Boolean) {
 }
 
 /**
- * The Reader's top app bar (back arrow + title + the share / edit-info / playback / display action
- * icons). Extracted from [ReaderScreen]'s Scaffold so the screenshot harness can render the REAL bar
- * over its score scenes (mirroring the [DisplayInspectorContent] / [PlaybackInspectorContent] seams).
- * Production behavior is unchanged: [ReaderScreen] delegates its `topBar` here, passing the same
- * callbacks it used inline.
+ * The Reader's top app bar (back arrow + the share / edit-info / playback / display action icons).
+ * Extracted from [ReaderScreen]'s Scaffold so the screenshot harness can render the REAL bar over its score
+ * scenes (mirroring the [DisplayInspectorContent] / [PlaybackInspectorContent] seams). Production behavior is
+ * unchanged: [ReaderScreen] delegates its `topBar` here, passing the same callbacks it used inline.
+ *
+ * **It carries no score title** — see the `title` slot below for why, and why iOS's own strip never had one.
  *
  * PiP is not exposed here — on Android it auto-enters when the user leaves the app during playback;
  * an explicit toolbar button is an iOS idiom we don't mirror.
@@ -1428,7 +1430,6 @@ private fun KeepScreenOn(enabled: Boolean) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderTopBar(
-    title: String,
     onBack: () -> Unit,
     onShare: () -> Unit,
     onEditInfo: () -> Unit,
@@ -1483,29 +1484,22 @@ fun ReaderTopBar(
     TopAppBar(
         modifier = modifier,
         windowInsets = windowInsets,
-        // Single-line title that ellipsizes when it doesn't fit, so a long score name never wraps the
-        // bar to two rows. A PDF adds the brand label after the title, mirroring iOS's PDF badge: it is
-        // what keeps the playback caveat reachable once "Don't show again" has silenced the automatic
-        // presentation. Placed here rather than in `actions` so it reads as a property of THIS document
-        // rather than as another command, and so it never competes with the action icons for width.
+        // **The Reader shows no score title at all**, reading or editing.
+        //
+        // It used to, and it never had the room: this bar carries five actions while reading and six while
+        // editing, so on a 360 dp phone the title ellipsized to two or three characters — a fragment that names
+        // nothing while still taking the width it took. And it was answering a question nobody had: you opened
+        // this score, and the score's own engraved title is right there on the first page.
+        //
+        // iOS reaches the same place and has for longer — `ReaderRootScreen` hides the navigation bar outright and
+        // draws its own strip, which has never carried a title.
+        //
+        // The PDF label stays. It is not decoration: it is what keeps the playback caveat reachable once "Don't
+        // show again" has silenced the automatic presentation, and iOS keeps its `PDFBadge` for the same reason.
+        // With the title gone it simply has the slot to itself.
         title = {
-            // No title while editing. The bar is a contextual one then — six controls on a 360 dp phone — and a
-            // document title is the first thing a contextual bar gives up (Material replaces it with the mode;
-            // iOS's `EditorTopBarView` drops it outright). You already know which score you are editing: you
-            // opened it. Without this the title ellipsizes to two or three characters and earns none of the width.
-            if (!editing.isEditing) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        title.ifEmpty { "folino" },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (isPdf) {
-                        Spacer(Modifier.width(8.dp))
-                        ReaderPdfLabel(onClick = onShowPdfNotice)
-                    }
-                }
+            if (isPdf && !editing.isEditing) {
+                ReaderPdfLabel(onClick = onShowPdfNotice)
             }
         },
         navigationIcon = {

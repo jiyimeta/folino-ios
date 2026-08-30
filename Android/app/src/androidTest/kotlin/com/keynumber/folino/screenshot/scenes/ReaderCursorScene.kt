@@ -48,7 +48,6 @@ fun ReaderCursorScene(layout: ScreenshotLayout, tag: String) {
                 // Real Reader top app bar (back + title + PiP/edit/playback/display actions). Static
                 // screenshot: every callback is a no-op.
                 ReaderTopBar(
-                    title = READER_SCENE_TITLE,
                     onBack = {},
                     onShare = {},
                     onEditInfo = {},

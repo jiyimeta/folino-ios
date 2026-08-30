@@ -573,7 +573,10 @@ private fun LibraryNavGraph(
                 ),
             ) { entry ->
                 val navId = entry.arguments?.getString("id") ?: ""
-                val navTitle = URLDecoder.decode(entry.arguments?.getString("title") ?: "", "UTF-8")
+                // The route still carries `{title}` — the Library tap, the playlist tap and the share-import
+                // flow all build it, and it is part of the URL those three agree on — but nothing on the Reader
+                // reads it any more, since the bar shows no score title. Decoding it here would be work whose
+                // only result is an unused string.
                 val navLocalFileName =
                     URLDecoder.decode(entry.arguments?.getString("localFileName").orEmpty(), "UTF-8")
                 val playlistId = entry.arguments?.getString("playlistId")
@@ -584,10 +587,11 @@ private fun LibraryNavGraph(
                 // which file to open. Seeded from the nav arg; the auto-advance path below re-seeds it
                 // from a Room lookup rather than a Reader-side one (see onRetargetScore).
                 var currentLocalFileName by rememberSaveable(navId) { mutableStateOf(navLocalFileName) }
-                // Also part of the same retarget event. The nav arg only ever describes the score the
-                // Reader was ENTERED on, so reading it directly left the app bar naming the previous
-                // score for the whole of every auto-advanced one.
-                var currentTitle by rememberSaveable(navId) { mutableStateOf(navTitle) }
+                // The Reader displays no score title any more — the bar carries five actions and had room for
+                // two or three characters of it — so the retarget event no longer has one to carry. The route
+                // argument and `PlaylistEntry.title` stay: they are what the Library and the share-import flow
+                // already write, and `PlaylistEntry`'s named shape is what makes a forgotten per-score field a
+                // compile error rather than a stale app bar.
                 // Reader display mode comes from the Settings → Layout pref (DataStore). Default
                 // "page" matches SettingsPrefs; until the page/horizontal surfaces land, those
                 // modes fall back to vertical scroll inside ReaderScreen.
@@ -775,7 +779,6 @@ private fun LibraryNavGraph(
                     audioVm = audioVm,
                     scoreId = currentScoreId,
                     localFileName = currentLocalFileName,
-                    title = currentTitle,
                     onEditInfo = {
                         AndroidAnalytics.log(AndroidAnalytics.bridge.scoreInfoOpened("readerOverlay"))
                         nav.navigate("editInfo/$currentScoreId")
@@ -973,7 +976,6 @@ private fun LibraryNavGraph(
                     onRetargetScore = { next ->
                         currentScoreId = next.id
                         currentLocalFileName = next.localFileName
-                        currentTitle = next.title
                     },
                     continuationModeWire = continuationModeWire,
                     onContinuationModeChange = { v -> scope.launch { prefs.setPlaylistContinuationMode(v) } },
