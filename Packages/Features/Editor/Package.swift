@@ -24,9 +24,10 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", exact: "0.63.2"),
     .package(path: "../../Domain"),
     .package(path: "../../Utility"),
+    .package(path: "../../ScoreUI"),
     .package(
         url: "https://github.com/jiyimeta/swift-sheet-music.git",
-        exact: "2.1.0",
+        exact: "2.2.0",
     ),
 ]
 
@@ -113,6 +114,7 @@ if isAndroid {
             dependencies: [
                 "Domain",
                 "EditorCore",
+                "ScoreUI",
                 .product(name: "UtilityCore", package: "Utility"),
                 .product(name: "UtilityUI", package: "Utility"),
                 .product(name: "SheetMusicUI", package: "swift-sheet-music"),

@@ -32,7 +32,7 @@ if isAndroid {
         .package(url: "https://github.com/jiyimeta/swift-wirelet.git", exact: "0.5.0"),
         .package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
-            exact: "2.1.0",
+            exact: "2.2.0",
         ),
         .package(path: "../../Domain"),
         .package(path: "../../Utility"),
@@ -89,7 +89,9 @@ if isAndroid {
             resources: [.process("Resources")],
             plugins: swiftLintPlugins,
         ),
-        .testTarget(name: "LibraryTests", dependencies: ["Library"]),
+        // ScoreUI is explicit, not merely transitive through Library: the tests import it directly to resolve
+        // catalog display names (`localizedInstrumentName`) rather than hard-coding English.
+        .testTarget(name: "LibraryTests", dependencies: ["Library", "ScoreUI"]),
     ]
 }
 
