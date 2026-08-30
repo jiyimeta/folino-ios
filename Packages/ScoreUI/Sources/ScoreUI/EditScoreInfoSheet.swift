@@ -44,6 +44,8 @@ public struct EditScoreInfoSheet: View {
                 }
             }
             .navigationTitle(Text("scoreUI.editInfo.title", bundle: .module))
+            // PARITY(macos): edit-info sheet title display mode — no macOS analogue; navigationTitle alone sets the
+            //   sheet title there. Revisit only if a Mac port wants inline-vs-large-title parity with the iOS sheet.
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif

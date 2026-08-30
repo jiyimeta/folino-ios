@@ -74,6 +74,7 @@ Nothing is currently owed to iOS.
 
 | Item | Where it diverges | What macOS still needs |
 | --- | --- | --- |
+| edit-info sheet title display mode | `Packages/ScoreUI/Sources/ScoreUI/EditScoreInfoSheet.swift:47` | no macOS analogue; navigationTitle alone sets the sheet title there. Revisit only if a Mac port wants inline-vs-large-title parity with the iOS sheet. |
 | system share sheet | `Packages/Utility/Sources/UtilityUI/ActivityViewControllerRepresentable.swift:1` | macOS needs an NSSharingServicePicker equivalent, wired into ScoreShareTarget's call sites. |
 | screen corner radius | `Packages/Utility/Sources/UtilityUI/Device+CornerRadius.swift:21` | DeviceKit has no macOS device geometry to read, so `screenCornerRadius` returns 0 there. Revisit only if a Mac window ever needs concentric corner nesting against real display bezel geometry. |
 | per-screen light/dark scoping | `Packages/Utility/Sources/UtilityUI/HostingAppearance.swift:53` | macOS would set NSAppearance on the hosting view instead of UITraitOverrides. |
