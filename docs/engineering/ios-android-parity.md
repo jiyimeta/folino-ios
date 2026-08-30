@@ -79,6 +79,7 @@ Nothing is currently owed to iOS.
 | screen corner radius | `Packages/Utility/Sources/UtilityUI/Device+CornerRadius.swift:21` | DeviceKit has no macOS device geometry to read, so `screenCornerRadius` returns 0 there. Revisit only if a Mac window ever needs concentric corner nesting against real display bezel geometry. |
 | per-screen light/dark scoping | `Packages/Utility/Sources/UtilityUI/HostingAppearance.swift:53` | macOS would set NSAppearance on the hosting view instead of UITraitOverrides. |
 | interactive pop gesture | `Packages/Utility/Sources/UtilityUI/InteractivePopGestureEnabler.swift:3` | no macOS analogue; the modifier is a no-op there. Revisit only if the Mac shell ever adopts a navigation stack with a swipe-back affordance. |
+| toolbar placement and title display mode | `Packages/Utility/Sources/UtilityUI/PlatformToolbarCompat.swift:3` | these substitute neutral macOS behavior so shared screens compile. Ⅲb migrates each call site to a semantic placement (.cancellationAction / .confirmationAction), which is what actually earns Esc / Return key equivalents on a Mac sheet. |
 | window-coordinate frame probe | `Packages/Utility/Sources/UtilityUI/WindowFrameReader.swift:35` | macOS needs the NSView equivalent before any Mac code can measure across view trees. |
 | window top safe-area probe | `Packages/Utility/Sources/UtilityUI/WindowSafeAreaReader.swift:47` | macOS needs an NSView/NSWindow-backed equivalent that reads `NSWindow.contentView?.safeAreaInsets.top` before any Mac screen can report it. |
 
