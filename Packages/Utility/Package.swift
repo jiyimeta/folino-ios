@@ -20,7 +20,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", exact: "0.63.2"),
-        .package(url: "https://github.com/devicekit/devicekit", from: "5.8.0"),
+        .package(url: "https://github.com/devicekit/devicekit", exact: "5.8.0"),
     ],
     targets: [
         .target(name: "UtilityCore", dependencies: [], plugins: swiftLintPlugins),

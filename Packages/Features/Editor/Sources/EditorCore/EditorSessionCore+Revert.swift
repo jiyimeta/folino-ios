@@ -18,7 +18,9 @@ extension EditorSessionCore {
     /// and its inverse). Either one being "moved" counts as edited.
     public var sessionHasEdits: Bool {
         guard isSessionActive else { return false }
-        if sessionEditDepth != 0 { return true }
+        if sessionEditDepth != 0 {
+            return true
+        }
         return !isAtSessionOpenScore
     }
 
@@ -30,8 +32,12 @@ extension EditorSessionCore {
 
     /// What leaving the session should offer to do — the three-way answer a host's end-of-session buttons render.
     public var sessionEndMode: EditorSessionEndMode {
-        if sessionHasEdits { return .commitEdited }
-        if hasCapturedOriginal { return .revert }
+        if sessionHasEdits {
+            return .commitEdited
+        }
+        if hasCapturedOriginal {
+            return .revert
+        }
         return .commitUnchanged
     }
 
@@ -43,16 +49,72 @@ extension EditorSessionCore {
     /// The rebuild is not belt-and-braces: an adopted session's stack reaches back past this session's start, so
     /// undoing `sessionEditDepth` steps is only correct while every one of them belongs to this session. If the
     /// count and the score disagree afterwards, the score is what the user means by "as I found it".
-    public func unwindSessionEdits() {
-        guard let session else { return }
-        while sessionEditDepth > 0, session.undo() { sessionEditDepth -= 1 }
-        while sessionEditDepth < 0, session.redo() { sessionEditDepth += 1 }
+    ///
+    /// Returns the part-index mapping the host still owes its part-indexed state, or `nil` when nothing moved. The
+    /// rebuild throws this session away and its part-id baseline with it, and a mapping still standing at that moment
+    /// is the row's ONLY route back: the score jumps to the session-open parts while the row sits in whatever
+    /// numbering the last consume left it in, and the replacement session baselines on the post-jump parts — so it
+    /// would read identity forever and nothing would ever reconcile them. Reachable whenever a part edit was saved
+    /// and then discarded.
+    ///
+    /// The destination is the SNAPSHOT's parts, not the session's current ones. The session's own map ends wherever
+    /// this session happens to have left the score, and the gear only runs when that is NOT the snapshot — so
+    /// migrating with it alone would land the row in an intermediate numbering that no file ever has. Composing it
+    /// with "where the current parts sit in the snapshot" puts the row into the numbering the restored score has. A
+    /// part this session removed and the snapshot still carries is dropped rather than restored: its id is gone from
+    /// the current score, so nothing here can name it.
+    ///
+    /// Performing the migration is the host's — it reads and rewrites stores this core cannot see.
+    @discardableResult
+    public func unwindSessionEdits() -> [Int: Int?]? {
+        guard let session else { return nil }
+        while sessionEditDepth > 0, session.undo() {
+            sessionEditDepth -= 1
+        }
+        while sessionEditDepth < 0, session.redo() {
+            sessionEditDepth += 1
+        }
+        var owedMapping: [Int: Int?]?
         if let sessionOpenScore, sessionEditDepth != 0 || session.score != sessionOpenScore {
+            let restore = Self.partIndexMapping(from: session.score, to: sessionOpenScore)
+            let mapping = Self.composing(session.partIndexMapping, restore)
+            owedMapping = mapping.allSatisfy { $0.value == $0.key } ? nil : mapping
             self.session = ScoreEditSession(score: sessionOpenScore)
             sessionEditDepth = 0
         }
         revision += 1
         rederiveSelection()
+        return owedMapping
+    }
+
+    /// Where each of `from`'s parts sits in `to`, by `Part.id`; `nil` = `to` does not have it. The same shape
+    /// `ScoreEditSession.partIndexMapping` produces, computed between two scores the caller holds rather than
+    /// against the session's own baseline.
+    ///
+    /// Duplicate ids on either side yield the identity map, for the reason `ScoreEditSession` documents: a
+    /// `firstIndex(of:)` answer over duplicates is a plausible-looking lie, and moving one part's preferences onto
+    /// another is worse than not migrating.
+    public static func partIndexMapping(from: Score, to: Score) -> [Int: Int?] {
+        let source = from.parts.map(\.id)
+        let destination = to.parts.map(\.id)
+        guard Set(source).count == source.count, Set(destination).count == destination.count else {
+            return Dictionary(uniqueKeysWithValues: source.indices.map { ($0, Optional($0)) })
+        }
+        return Dictionary(
+            uniqueKeysWithValues: source.enumerated().map { ($0.offset, destination.firstIndex(of: $0.element)) },
+        )
+    }
+
+    /// `first` followed by `second`, as one map. A key `first` sends to `nil` stays `nil`; so does one whose
+    /// destination `second` does not know about.
+    public static func composing(_ first: [Int: Int?], _ second: [Int: Int?]) -> [Int: Int?] {
+        first.mapValues { intermediate -> Int? in
+            // Two unwraps, two different questions: did `first` keep this part, and does `second` know where the
+            // index it landed on goes. Written as one `guard` because a `?? nil` reads as redundant and SwiftLint
+            // strips it.
+            guard let intermediate, let destination = second[intermediate] else { return nil }
+            return destination
+        }
     }
 
     /// Marks the session discarded, so `sessionToRetain` stops offering it: a retained stack that reaches back

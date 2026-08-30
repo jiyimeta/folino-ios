@@ -121,6 +121,10 @@ struct LibraryScene: View {
             gateway: FixtureGateway(),
             shareService: FixtureShareService(),
             metadataReader: FixtureMetadataReader(),
+            creator: FixtureCreator(),
+            // Same throwaway location the detail Reader above uses. No screenshot scene drives creation or the
+            // wizard's clone step, so nothing ever resolves a file under it.
+            scoresDirectory: URL(filePath: NSTemporaryDirectory()),
         )
     }
 }

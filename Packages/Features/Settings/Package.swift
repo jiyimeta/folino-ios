@@ -44,8 +44,8 @@ var targets: [Target] = [
 ]
 
 var packageDependencies: [Package.Dependency] = [
-    .package(url: "https://github.com/devicekit/devicekit", from: "5.8.0"),
-    .package(url: "https://github.com/jpsim/Yams", from: "5.3.0"),
+    .package(url: "https://github.com/devicekit/devicekit", exact: "5.8.0"),
+    .package(url: "https://github.com/jpsim/Yams", exact: "5.4.0"),
     .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", exact: "0.63.2"),
     // The same wirelet every other JNI `.so` in this app links. This package sat on v0.2.2 by revision
     // while Reader, Library, Editor and Infrastructure moved to 0.5.0, so one process carried two builds

@@ -13,11 +13,16 @@ public final class LibraryViewModel {
     let gateway: any ScoreFileGateway
     let shareService: any ScoreShareService
     let metadataReader: any ScoreMetadataReading
+    let creator: any ScoreFileCreator
+    /// Where `ScoreItem.localFileName` resolves against. Needed by the creation wizard's "same instrumentation as
+    /// an existing score" step, which is the only Library flow that parses a score file itself — every other one
+    /// hands the `ScoreItem` to an adapter (`shareService`, `metadataReader`) that owns the resolution.
+    let scoresDirectory: URL
     let vocalTunerHandoff: any VocalTunerHandoff
     /// Analytics sink. Read by the Screens that mutate the repository directly (playlist/tag rename, reorder, single
     /// add/remove) so those view-layer bypass paths log against the same instance as the VM-owned actions.
     let analytics: any Analytics
-    private let crashReporter: any CrashReporter
+    let crashReporter: any CrashReporter
 
     /// Logical origin label for every import that flows through the Library's in-app file picker.
     private static let importSource = "file_picker"
@@ -32,9 +37,12 @@ public final class LibraryViewModel {
 
     var currentError: Error?
 
-    /// Set when an import succeeds; the App composition root watches this and pushes the Reader. Cleared by the watcher
-    /// after handling.
+    /// Set when an import succeeds; the App watches this and pushes the Reader. Cleared by the watcher after handling.
     public var pendingScoreToOpen: ScoreItem?
+
+    var isNewScoreSheetPresented = false
+    /// Read together with `pendingScoreToOpen`: when true, the App opens the pushed Reader in an edit session.
+    public private(set) var pendingOpenInEditSession = false
 
     /// Drives the `.fileImporter` sheet.
     var isFileImporterPresented = false
@@ -64,6 +72,8 @@ public final class LibraryViewModel {
         gateway: any ScoreFileGateway,
         shareService: any ScoreShareService,
         metadataReader: any ScoreMetadataReading,
+        creator: any ScoreFileCreator,
+        scoresDirectory: URL,
         vocalTunerHandoff: any VocalTunerHandoff = NoopVocalTunerHandoff(),
         analytics: any Analytics = NoopAnalytics(),
         crashReporter: any CrashReporter = NoopCrashReporter(),
@@ -74,6 +84,8 @@ public final class LibraryViewModel {
         self.gateway = gateway
         self.shareService = shareService
         self.metadataReader = metadataReader
+        self.creator = creator
+        self.scoresDirectory = scoresDirectory
         self.vocalTunerHandoff = vocalTunerHandoff
         self.analytics = analytics
         self.crashReporter = crashReporter
@@ -311,7 +323,9 @@ public final class LibraryViewModel {
         defer { isImporting = false }
         let scoped = sourceURL.startAccessingSecurityScopedResource()
         defer {
-            if scoped { sourceURL.stopAccessingSecurityScopedResource() }
+            if scoped {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
         }
         let plan: ImportPlan
         do {
@@ -347,24 +361,32 @@ public final class LibraryViewModel {
         }
     }
 
-    /// Record an import failure as both an analytics event and a Crashlytics non-fatal. The `reason` is bucketed to a
-    /// stable low-cardinality label so analytics never carries a raw error string.
-    private func logImportFailed(format: String, error: Error) {
-        crashReporter.record(error: error)
-        analytics.log(.scoreImportFailed(format: format, reason: Self.importFailureReason(error)))
+    /// Builds a blank score from `form`'s template and hands it to `creator`, queuing it on `pendingScoreToOpen`
+    /// (the same App watcher `startImport` uses) with `pendingOpenInEditSession` armed. An untitled form — or one
+    /// whose instrumentation the user emptied — no-ops.
+    ///
+    /// Lives here rather than in `LibraryViewModel+NewScore.swift` because `pendingOpenInEditSession` is
+    /// `private(set)`: only this file can arm it.
+    func createScore(from form: NewScoreForm) async {
+        guard let template = form.template() else { return }
+        do {
+            let item = try await creator.createScore(Score.blank(template))
+            analytics.log(.scoreCreated(
+                template: form.instrumentationSource, partCount: form.instrumentation.count,
+            ))
+            pendingOpenInEditSession = true
+            pendingScoreToOpen = item
+            isNewScoreSheetPresented = false
+        } catch {
+            crashReporter.record(error: error)
+            currentError = ScoreCreationFailed()
+        }
     }
 
-    private static func importFailureReason(_ error: Error) -> String {
-        guard let domain = error as? DomainError else { return "other" }
-        switch domain {
-        case .scoreFileNotFound: return "file_not_found"
-        case .unsupportedFormat: return "unsupported_format"
-        case .scoreParseFailed: return "parse_failed"
-        case .scoreWriteFailed: return "write_failed"
-        case .persistenceFailed: return "persistence_failed"
-        case .syncFailed: return "sync_failed"
-        case .audioEngineFailed: return "audio_engine_failed"
-        }
+    /// The App calls this when it consumes `pendingScoreToOpen`, so a later import doesn't inherit a stale arm.
+    public func consumePendingOpenInEditSession() -> Bool {
+        defer { pendingOpenInEditSession = false }
+        return pendingOpenInEditSession
     }
 }
 

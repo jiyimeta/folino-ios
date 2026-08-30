@@ -27,6 +27,20 @@ extension AnalyticsEvent {
         )
     }
 
+    /// Logged when the scratch-creation form successfully builds and saves a new blank score.
+    ///
+    /// `template` says where the instrumentation came from: a ready-made ensemble's id (`"solo-piano"`,
+    /// `"string-quartet"`, …), `"cloned"` when it was copied wholesale from an existing score, or `"custom"` once the
+    /// user has hand-edited the list — a hand-edit is what makes the ensemble no longer that template's. `nil` (logged
+    /// as `"unknown"`, matching `scoreImported`'s missing version) is for a caller with no wizard context.
+    ///
+    /// `partCount` is logged raw — events-first: bucket at analysis time, not at collection.
+    public static func scoreCreated(template: String?, partCount: Int) -> AnalyticsEvent {
+        AnalyticsEvent(name: "score_created", parameters: [
+            "template": .string(template ?? "unknown"), "part_count": .int(partCount),
+        ])
+    }
+
     public static func scoreOpened(from: AnalyticsSource) -> AnalyticsEvent {
         AnalyticsEvent(
             name: "select_content",
@@ -55,6 +69,35 @@ extension AnalyticsEvent {
 
     public static func search() -> AnalyticsEvent {
         AnalyticsEvent(name: "search")
+    }
+
+    // MARK: Editing
+
+    /// A part added, removed or reordered from the instruments sheet — `action` is `"add"`, `"remove"` or `"reorder"`.
+    /// Which instrument was involved is deliberately not carried (M2 spec §8): the question this answers is whether
+    /// people edit an ensemble after creating it, not what they fill it with.
+    public static func scorePartsEdited(action: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "score_parts_edited", parameters: ["action": .string(action)])
+    }
+
+    /// A key or time signature written or dropped from one of the signature sheets — `kind` is `"key"` or `"time"`,
+    /// `action` is `"set"` or `"remove"`. Which key, or which meter, is deliberately not carried, for the reason
+    /// `scorePartsEdited` gives: the question is whether people change signatures after creating a score, not what
+    /// they change them to.
+    public static func scoreSignatureChanged(kind: String, action: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "score_signature_changed", parameters: [
+            "kind": .string(kind), "action": .string(action),
+        ])
+    }
+
+    /// A rehearsal mark written, renamed or removed in the editor. `action` is `"set"` (the bar carried no mark),
+    /// `"rename"` (it did) or `"remove"`. The score sees one write either way, but naming a bar for the first time
+    /// and renaming one that was already named are different user acts, and collected data cannot be split apart
+    /// afterwards — so the two are separated at the source.
+    public static func scoreRehearsalMarkEdited(action: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "score_rehearsal_mark_edited", parameters: [
+            "action": .string(action),
+        ])
     }
 
     // MARK: Playlists & tags
@@ -277,16 +320,32 @@ extension AnalyticsEvent {
     /// by `settings_snapshot` / `repeat_mode_changed`, and neither has a per-score user-intent question to answer.
     public static func scorePrefs(_ prefs: ReaderPreferences, screenWidthPt: Double) -> AnalyticsEvent? {
         var params: [String: AnalyticsValue] = [:]
-        if let staffSize = prefs.staffSize { params["staff_size"] = .int(Int(staffSize.rounded())) }
-        if let honorBreaks = prefs.honorLayoutBreaks { params["honor_layout_breaks"] = .bool(honorBreaks) }
-        if let volume = prefs.masterVolume { params["master_volume_pct"] = .int(percentBucket(volume)) }
-        if let transpose = prefs.transposeSemitones { params["transpose_semitones"] = .int(transpose) }
-        if let tempo = prefs.tempoMultiplier { params["tempo_multiplier_pct"] = .int(percentBucket(tempo)) }
-        if let a4 = prefs.a4ReferenceHz { params["a4_reference_hz"] = .int(Int(a4.rounded())) }
+        if let staffSize = prefs.staffSize {
+            params["staff_size"] = .int(Int(staffSize.rounded()))
+        }
+        if let honorBreaks = prefs.honorLayoutBreaks {
+            params["honor_layout_breaks"] = .bool(honorBreaks)
+        }
+        if let volume = prefs.masterVolume {
+            params["master_volume_pct"] = .int(percentBucket(volume))
+        }
+        if let transpose = prefs.transposeSemitones {
+            params["transpose_semitones"] = .int(transpose)
+        }
+        if let tempo = prefs.tempoMultiplier {
+            params["tempo_multiplier_pct"] = .int(percentBucket(tempo))
+        }
+        if let a4 = prefs.a4ReferenceHz {
+            params["a4_reference_hz"] = .int(Int(a4.rounded()))
+        }
         let userHidden = prefs.hiddenStaves.subtracting(prefs.authoredHiddenStaves)
-        if !userHidden.isEmpty { params["hidden_staff_count"] = .int(userHidden.count) }
+        if !userHidden.isEmpty {
+            params["hidden_staff_count"] = .int(userHidden.count)
+        }
         let userRevealed = prefs.authoredHiddenStaves.subtracting(prefs.hiddenStaves)
-        if !userRevealed.isEmpty { params["revealed_staff_count"] = .int(userRevealed.count) }
+        if !userRevealed.isEmpty {
+            params["revealed_staff_count"] = .int(userRevealed.count)
+        }
         if !prefs.stripProgramOverrides.isEmpty {
             params["program_override_count"] = .int(prefs.stripProgramOverrides.count)
         }

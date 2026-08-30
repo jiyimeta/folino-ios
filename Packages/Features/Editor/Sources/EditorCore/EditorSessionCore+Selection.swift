@@ -75,13 +75,78 @@ extension EditorSessionCore {
         place(selection: item, caret: item)
     }
 
-    /// Sets selection and caret independently. The only caller that passes different values is note input, which
-    /// leaves the selection on the note it just wrote and moves the caret to the next slot.
-    func place(selection item: SheetMusicCore.ScoreItemID?, caret: SheetMusicCore.ScoreItemID?) {
+    /// Sets selection and caret independently. Note input passes different values — it leaves the selection on the
+    /// note it just wrote and moves the caret to the next slot — and so does an append that must NOT move either:
+    /// `appendMeasure` restores both to what they named before the insert, since a bar added at the end shifts no
+    /// existing slot and re-deriving would jump both markers onto the new last bar.
+    public func place(selection item: SheetMusicCore.ScoreItemID?, caret: SheetMusicCore.ScoreItemID?) {
         selectedItem = item
         caretItem = caret
+        // Every ordinary placement names a slot, and a slot begins at a column — so the two stay in step here, and
+        // only the column stepper (which can land BETWEEN onsets) writes `caretColumn` on its own.
+        caretColumn = Self.slot(of: caret).flatMap { slot in
+            score.flatMap { ColumnNavigation.column(of: slot, in: $0) }
+        }
         armFromSelectionIfNeeded()
         selectionRevision += 1
+    }
+
+    /// Places the two markers at `column`, drawing the caret on whatever slot covers it.
+    ///
+    /// Used by ← / →, which may land between onsets — an empty bar stepped through by the armed duration — where
+    /// the covering slot's own start is NOT the column. Everything else goes through `place(selection:caret:)`,
+    /// whose column follows its slot.
+    func place(column: ScoreColumn, preferring voiceIndex: Int) {
+        guard let score, let covering = coveringSlot(at: column, preferring: voiceIndex, in: score) else { return }
+        let item = SelectionRederivation.item(at: covering, in: score, preferringNoteIndex: nil)
+        selectedItem = item
+        caretItem = item
+        caretColumn = column
+        armFromSelectionIfNeeded()
+        selectionRevision += 1
+    }
+
+    /// The slot to draw the caret on at `column`.
+    ///
+    /// A voice that STARTS something at the column wins — its own if it does, otherwise the lowest-numbered voice
+    /// that does. A slot the column merely runs THROUGH is the last resort, and only because a column between every
+    /// voice's onsets has to be drawn somewhere (→ stepping the armed duration across an empty bar is the case that
+    /// puts it there).
+    ///
+    /// The order matters, and getting it wrong is visible rather than subtle: with a quarter in the feet voice under
+    /// two eighths in the hands, stepping to the second eighth would draw the caret on the quarter it is halfway
+    /// through — the marker would appear not to move at all, and the next → would look like it had skipped a beat.
+    ///
+    /// On a single-voice staff — most scores — there is only one voice to ask, which is why none of this changes
+    /// anything for them.
+    func coveringSlot(at column: ScoreColumn, preferring voiceIndex: Int, in score: Score) -> VoiceElementID? {
+        guard score.parts.indices.contains(column.staff.partIndex),
+              score.parts[column.staff.partIndex].staves.indices.contains(column.staff.staffIndexInPart)
+        else { return nil }
+        let measures = score.parts[column.staff.partIndex].staves[column.staff.staffIndexInPart].measures
+        guard measures.indices.contains(column.measureIndex) else { return nil }
+        let voices = measures[column.measureIndex].voices.indices
+
+        let preferred = ColumnNavigation.slot(inVoice: voiceIndex, at: column, in: score)
+        if let preferred, preferred.tickWithinSlot == 0 {
+            return preferred.slot
+        }
+        for candidate in voices where candidate != voiceIndex {
+            if let resolved = ColumnNavigation.slot(inVoice: candidate, at: column, in: score),
+               resolved.tickWithinSlot == 0
+            {
+                return resolved.slot
+            }
+        }
+        if let preferred {
+            return preferred.slot
+        }
+        for candidate in voices {
+            if let resolved = ColumnNavigation.slot(inVoice: candidate, at: column, in: score) {
+                return resolved.slot
+            }
+        }
+        return nil
     }
 
     /// Arms the length keys from whatever was just picked, but ONLY while nothing is armed yet — which in practice

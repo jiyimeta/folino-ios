@@ -137,13 +137,14 @@ App ──▶ Features ──┬─▶ Domain ◀── swift-sheet-music
 - **`Packages/Features/<Name>/`** — one package per feature (Library, Reader, Editor, ImportExport, Settings). Depends on Domain and the shared `ScoreUI` layer only.
 - **`App/`** — composition root. The only place that wires Infrastructure adapters into Feature view models.
 
-`swift-sheet-music` is consumed by Domain (model re-export) and Infrastructure (adapters). Features never import it directly.
+`swift-sheet-music` is consumed by Domain (model re-export) and Infrastructure (adapters).
+
+**Features may import `swift-sheet-music`'s MODEL modules directly** (`SheetMusicCore`, `SheetMusicUI`, …) — Reader and Editor render and edit the score itself, so its types are their subject matter, and Domain re-exports the same types anyway, which made the old prohibition a rule about how an import is spelled rather than about what a Feature depends on. What a Feature must NOT reach for is an **adapter**: audio engines, file gateways, persistence, network. Those stay behind a Domain protocol.
 
 **Forbidden** (will be flagged in review):
 
 - Feature → Feature (lift shared code into Domain, the shared `ScoreUI` layer, or compose at App).
 - Feature → Infrastructure (always go through a Domain protocol).
-- Feature → `swift-sheet-music` directly.
 - Domain → Infrastructure / Features / App.
 - ScoreUI → Feature / Infrastructure / App (ScoreUI sits below Features; Domain + Utility only).
 - Utility → anything else in this repo.

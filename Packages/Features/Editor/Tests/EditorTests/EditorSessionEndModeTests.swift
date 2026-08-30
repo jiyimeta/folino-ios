@@ -58,11 +58,11 @@ struct EditorSessionEndModeTests {
     }
 
     @Test
-    func `undoing back to nothing hands the revert offer back`() {
+    func `undoing back to nothing hands the revert offer back`() async {
         let viewModel = makeViewModel(item: itemWithOriginal())
         viewModel.beginSession(score: EditorFixtures.fourQuarterRests())
         viewModel.previewSeedSessionEdit()
-        viewModel.unwindSessionEdits()
+        await viewModel.unwindSessionEdits()
         #expect(viewModel.sessionHasEdits == false)
         #expect(viewModel.sessionEndMode == .revert)
     }

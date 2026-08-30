@@ -48,7 +48,9 @@ final class ReaderPiPSession {
     }
 
     var coordinator: ScorePiPCoordinator {
-        if let c = coordinatorBacking { return c }
+        if let c = coordinatorBacking {
+            return c
+        }
         let c = ScorePiPCoordinator()
         c.onPiPStarted = { [weak self] in self?.isActive = true }
         c.onPiPStopped = { [weak self] in self?.isActive = false }
@@ -122,7 +124,9 @@ final class ReaderPiPSession {
     /// Owner calls this after `playbackSession.isPlaying` flips.
     func onPlayingChanged(to playing: Bool) {
         applyAutoStart()
-        if playing { flushDirtyIfNeeded() }
+        if playing {
+            flushDirtyIfNeeded()
+        }
     }
 
     /// Coalesced rearm trigger. The heavy layout step inside `coordinator.arm` runs off the main
@@ -156,16 +160,24 @@ final class ReaderPiPSession {
         scheduleArm()
     }
 
+    /// The score a PiP frame engraves: the same display chain the on-screen reader runs, against the snapshot taken
+    /// at arm time. Separated from `performArm` so it can be exercised without a coordinator.
+    static func armScore(_ score: Score, snapshot: PiPLayoutSnapshot) -> Score {
+        ReaderDisplayTransforms.display(
+            score,
+            clefOverrides: snapshot.clefOverrides,
+            transposeSemitones: snapshot.transposeSemitones,
+            hiddenStaves: snapshot.hiddenStaves,
+        )
+    }
+
     private func performArm() async {
         guard !Task.isCancelled,
               isEnabled,
               let score = scoreProvider(),
               let snapshot = layoutSnapshotProvider()
         else { return }
-        let visible = score
-            .applying(clefOverrides: snapshot.clefOverrides)
-            .transposed(bySemitones: snapshot.transposeSemitones)
-            .filtered(hidingStaves: snapshot.hiddenStaves)
+        let visible = Self.armScore(score, snapshot: snapshot)
         do {
             try await coordinator.arm(
                 score: visible,

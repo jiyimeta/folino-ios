@@ -1,4 +1,5 @@
 import Domain
+import EditorCore
 import Foundation
 import Observation
 import SwiftUI
@@ -84,10 +85,16 @@ public struct EditorPadView: View {
             tripletKey(isFlexible: false)
             dotKey(isFlexible: false)
             Divider().frame(height: Self.dividerHeight)
-            pitchKeys(isFlexible: false)
-            Divider().frame(height: Self.dividerHeight)
-            EditorContextOps.buttons(viewModel: viewModel)
-            deleteKey(isFlexible: false)
+            if viewModel.isDrumStaffActive {
+                // One row means one row: the kit's keys run inline where the letters would, and `ViewThatFits`
+                // decides whether fifteen of them plus the durations actually fit before showing it.
+                drumRows(isFlexible: false)
+            } else {
+                pitchKeys(isFlexible: false)
+                Divider().frame(height: Self.dividerHeight)
+                EditorContextOps.buttons(viewModel: viewModel)
+                deleteKey(isFlexible: false)
+            }
         }
     }
 
@@ -104,11 +111,30 @@ public struct EditorPadView: View {
                 EditorContextOps.buttons(viewModel: viewModel, isFlexible: true)
                 dotKey(isFlexible: true)
             }
-            HStack(spacing: 4) {
-                pitchKeys(isFlexible: true)
-                deleteKey(isFlexible: true)
+            if viewModel.isDrumStaffActive {
+                drumRows(isFlexible: true)
+            } else {
+                HStack(spacing: 4) {
+                    pitchKeys(isFlexible: true)
+                    deleteKey(isFlexible: true)
+                }
             }
         }
+    }
+
+    /// The kit in place of the letters. Row 1 above is untouched — a drum staff arms lengths, tuplets, ties and dots
+    /// exactly as a pitched one does — and the rest key keeps its pitched meaning at the end of the last row.
+    ///
+    /// There is no manual drum-mode switch: the score already says which kind of staff the caret is on, and a toggle
+    /// would be a second source of truth the user has to keep in sync.
+    private func drumRows(isFlexible: Bool) -> some View {
+        EditorDrumPadRows(
+            layout: viewModel.drumPadLayout,
+            litPitches: viewModel.litDrumPitches,
+            isFlexible: isFlexible,
+            press: { viewModel.pressDrumKey($0) },
+            restKey: AnyView(deleteKey(isFlexible: isFlexible)),
+        )
     }
 
     // MARK: Key groups

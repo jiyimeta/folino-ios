@@ -124,6 +124,15 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     private var addMenu: some View {
         Menu {
             Button {
+                viewModel.isNewScoreSheetPresented = true
+            } label: {
+                Label {
+                    Text("library.newScore.title", bundle: .module)
+                } icon: {
+                    Image(systemName: "music.note")
+                }
+            }
+            Button {
                 viewModel.isFileImporterPresented = true
             } label: {
                 Label {

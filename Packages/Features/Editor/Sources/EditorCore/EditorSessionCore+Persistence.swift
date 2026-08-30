@@ -12,8 +12,16 @@ extension EditorSessionCore {
     /// `isolation:` makes this run wherever its caller runs rather than hopping to the generic executor. That is what
     /// lets a non-`Sendable` core be driven from the main actor on iOS and from a JNI thread on Android without
     /// either one sending it across a boundary.
-    public func performSave(isolation: isolated (any Actor)? = #isolation) async {
-        guard let score, isDirty, !isReverting else { return }
+    ///
+    /// Returns whether the file and the row were actually written. A host with state of its own keyed to the score's
+    /// shape — iOS's part-indexed preferences and ink — migrates it on the strength of that answer, and only that
+    /// answer: a save that bailed at the entry guard or failed left the file in the numbering it had.
+    @discardableResult
+    public func performSave(isolation: isolated (any Actor)? = #isolation) async -> Bool {
+        guard let score, isDirty, !isReverting else { return false }
+        // The score can move under the awaits below, and `markSaved()` must not declare such an edit written — the
+        // bytes about to go out are the ones pinned right here.
+        let ticketAtEntry = mutationTicket
         let destination = Self.saveDestination(for: scoreItem, scoresDirectory: scoresDirectory)
         // BEFORE the write, and only here: this is the last moment the file still holds the bytes the score was
         // imported with. Editing metadata does not touch the file, so nothing earlier can have moved them. A capture
@@ -23,7 +31,7 @@ extension EditorSessionCore {
         // a revert that started while this call was suspended there is invisible to the guard above. Re-check here,
         // before the write that would race the store's own file swap: if the revert won that race, we must not now
         // overwrite the original it just restored.
-        guard !isReverting else { return }
+        guard !isReverting else { return false }
         do {
             try await writer.write(score, to: destination.url, format: destination.format)
             let facts = try fileFacts.hashAndSize(of: destination.url)
@@ -70,9 +78,18 @@ extension EditorSessionCore {
             if destination.isSiblingCopy {
                 didSaveAsSiblingMSCZ = true
             }
-            markSaved()
+            // Only when nothing landed while this call was suspended. An edit that arrived in one of the awaits
+            // above is not in the bytes just written, and every trigger site schedules its own save — so leaving
+            // `isDirty` standing is what lets that already-scheduled save actually run instead of finding a clean
+            // core and doing nothing. Clearing it unconditionally silently dropped such an edit, and for a part
+            // edit it dropped the FILE half while the row half had already been migrated.
+            if mutationTicket == ticketAtEntry {
+                markSaved()
+            }
+            return true
         } catch {
             // Keep isDirty true so the next debounce tick or flush retries the write.
+            return false
         }
     }
 

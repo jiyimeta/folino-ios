@@ -41,6 +41,40 @@ final class FakeScoreFileGateway: ScoreFileGateway, @unchecked Sendable {
     }
 }
 
+/// Payload-level annotation store, mirroring `LiveAnnotationStore`'s `AnnotationBlobStore` face: raw bytes keyed by
+/// score, no assembly and no policy. `saveError` covers `delete` too — both are writes, and the migration's rollback
+/// has to hold for either.
+final class FakeAnnotationBlobStore: AnnotationBlobStore, @unchecked Sendable {
+    var payloads: [ScoreItemID: Data] = [:]
+    private(set) var deleted: [ScoreItemID] = []
+    private(set) var saveCount = 0
+    var loadError: Error?
+    var saveError: Error?
+
+    func load(scoreID: ScoreItemID) throws -> Data? {
+        if let loadError {
+            throw loadError
+        }
+        return payloads[scoreID]
+    }
+
+    func save(scoreID: ScoreItemID, updatedAt: Date, payload: Data) throws {
+        if let saveError {
+            throw saveError
+        }
+        saveCount += 1
+        payloads[scoreID] = payload
+    }
+
+    func delete(scoreID: ScoreItemID) throws {
+        if let saveError {
+            throw saveError
+        }
+        deleted.append(scoreID)
+        payloads[scoreID] = nil
+    }
+}
+
 @MainActor
 @Observable
 final class FakeScoreLibraryRepository: ScoreLibraryRepository {
@@ -80,16 +114,27 @@ final class FakeScoreLibraryRepository: ScoreLibraryRepository {
         []
     }
 
+    /// Per-score preference rows, keyed the way the live store keys them. Seeded directly by a test that needs a row
+    /// to exist; otherwise empty, which is the "score never opened in the Reader" case.
+    var readerPreferences: [ScoreItemID: ReaderPreferences] = [:]
+    var savedReaderPreferences: [ReaderPreferences] = []
+    /// When set, `saveReaderPreferences` throws this — exercises the migration's retry-next-save path.
+    var readerPreferencesSaveError: Error?
+
     func loadReaderPreferences(for scoreItemID: ScoreItemID) throws -> ReaderPreferences? {
-        nil
+        readerPreferences[scoreItemID]
     }
 
-    func saveReaderPreferences(_ preferences: ReaderPreferences) throws {}
+    func saveReaderPreferences(_ preferences: ReaderPreferences) throws {
+        if let readerPreferencesSaveError {
+            throw readerPreferencesSaveError
+        }
+        savedReaderPreferences.append(preferences)
+        readerPreferences[preferences.scoreItemID] = preferences
+    }
 
-    /// This fake never stores preferences (`loadReaderPreferences` is a `nil` stub), so an empty snapshot is the
-    /// honest answer rather than a placeholder.
     func allReaderPreferences() throws -> [ReaderPreferences] {
-        []
+        Array(readerPreferences.values)
     }
 }
 

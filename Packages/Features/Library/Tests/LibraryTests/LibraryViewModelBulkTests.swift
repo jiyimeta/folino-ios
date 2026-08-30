@@ -31,6 +31,8 @@ struct LibraryViewModelBulkTests {
             gateway: FakeScoreFileGateway(),
             shareService: FakeScoreShareService(),
             metadataReader: FakeScoreMetadataReading(),
+            creator: FakeScoreFileCreator(),
+            scoresDirectory: URL(filePath: "/tmp/folino-tests"),
         )
         return VMFixture(vm: vm, repo: repo)
     }

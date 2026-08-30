@@ -167,11 +167,50 @@ extension EditorViewModel {
         syncFromCore()
     }
 
+    // MARK: - Drum note entry
+
+    /// Whether the caret's staff is a percussion kit — what the pad swaps its lower rows on.
+    public var isDrumStaffActive: Bool {
+        _ = generation
+        return core.isDrumStaffActive
+    }
+
+    /// The pad's keys with each one's engraving taken from the open score's own kit.
+    public var drumPadLayout: DrumPadLayout {
+        _ = generation
+        return core.resolvedDrumPadLayout
+    }
+
+    /// The drum pitches sounding in the caret's column — the keys the pad lights, and so the ones a press takes
+    /// away rather than adds.
+    public var litDrumPitches: Set<Int> {
+        _ = generation
+        return core.litDrumPitches
+    }
+
+    /// Seeds the layout the pad draws. The host owns persistence: the layout is global, not per-score.
+    public func setDrumPadLayout(_ layout: DrumPadLayout) {
+        core.drumPadLayout = layout
+        syncFromCore()
+    }
+
+    public func pressDrumKey(_ key: DrumPadKey) {
+        core.pressDrumKey(key)
+        syncFromCore()
+    }
+
     // MARK: - Selection, driven from the hit test and the host
 
     /// Internal, for `EditorViewModel+HitTest.swift`.
     func select(_ item: SheetMusicCore.ScoreItemID?) {
         core.select(item)
+        syncFromCore()
+    }
+
+    /// Internal, for `EditorViewModel+Measures.swift`'s append, which restores the two markers to what they named
+    /// before the insert rather than letting the re-derivation move them onto the new last bar.
+    func place(selection item: SheetMusicCore.ScoreItemID?, caret: SheetMusicCore.ScoreItemID?) {
+        core.place(selection: item, caret: caret)
         syncFromCore()
     }
 
