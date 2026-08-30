@@ -54,6 +54,9 @@ public struct LiveScoreShareService: ScoreShareService {
             return try writeMIDI(score: score, sanitizedTitle: title)
         case .audioM4A:
             return try await writeM4A(score: score, sanitizedTitle: title)
+        case .annotatedPDF, .annotatedOriginalPDF:
+            // Task 7 replaces this with the real routing; the rows are not offered yet, so this is unreachable.
+            throw DomainError.scoreWriteFailed(reason: "annotated export is not wired up yet")
         }
     }
 

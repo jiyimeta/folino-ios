@@ -134,6 +134,10 @@ private func shareMenuFormatText(for format: ScoreShareFormat) -> Text {
         Text("scoreUI.format.midi", bundle: .module)
     case .audioM4A:
         Text("scoreUI.format.m4a", bundle: .module)
+    case .annotatedPDF:
+        Text("scoreUI.format.pdf.annotated", bundle: .module)
+    case .annotatedOriginalPDF:
+        Text("scoreUI.format.originalPDF.annotated", bundle: .module)
     }
 }
 
@@ -147,5 +151,7 @@ private func shareMenuIconName(for format: ScoreShareFormat) -> String {
         "pianokeys"
     case .audioM4A:
         "waveform"
+    case .annotatedPDF, .annotatedOriginalPDF:
+        "square.and.pencil"
     }
 }

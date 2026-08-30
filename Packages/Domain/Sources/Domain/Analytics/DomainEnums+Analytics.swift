@@ -64,6 +64,8 @@ extension ScoreShareFormat {
         case .pdf: "pdf"
         case .midi: "midi"
         case .audioM4A: "m4a"
+        case .annotatedPDF: "pdf_annotated"
+        case .annotatedOriginalPDF: "pdf_original_annotated"
         }
     }
 }

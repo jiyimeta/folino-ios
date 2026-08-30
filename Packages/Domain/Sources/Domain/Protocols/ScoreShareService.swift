@@ -12,6 +12,10 @@ public enum ScoreShareFormat: Hashable, Sendable {
     case pdf
     case midi
     case audioM4A
+    /// The engraved notation with the item's musical-anchored ink baked in.
+    case annotatedPDF
+    /// A PDF-origin item's original pages with its page-anchored ink baked in.
+    case annotatedOriginalPDF
 }
 
 /// One row in the share menu — a `format` plus whether it matches the item's source representation. `isOriginal ==
@@ -53,13 +57,16 @@ extension ScoreShareFormat {
     public var canonicalExtension: String {
         switch self {
         case .museScoreV4, .museScoreV3: "mscz"
-        case .pdf: "pdf"
+        case .pdf, .annotatedPDF, .annotatedOriginalPDF: "pdf"
         case .midi: "mid"
         case .audioM4A: "m4a"
         }
     }
 
-    /// The formats in display order — the single source for both the iOS menu and the Android sheet.
+    /// The formats in display order — the single source for both the iOS menu and the Android sheet. The annotated
+    /// formats are deliberately absent: whether they appear depends on the item's ink, so they come from
+    /// `AnnotatedExportAvailability.formats(…)` and are appended after these. Bulk share offers only this list,
+    /// because a selection's items do not agree about what ink they carry.
     public static let allOrdered: [ScoreShareFormat] = [.museScoreV4, .museScoreV3, .pdf, .midi, .audioM4A]
 
     /// The share format that re-emits `source` byte-for-byte, or `nil` for sources we don't expose as a format
@@ -74,6 +81,17 @@ extension ScoreShareFormat {
     }
 }
 
+extension ScoreShareFormat {
+    /// Whether this format bakes the item's handwriting into the output. Annotated formats never carry the
+    /// `isOriginal` flag and never appear in a bulk selection's menu.
+    public var isAnnotated: Bool {
+        switch self {
+        case .annotatedPDF, .annotatedOriginalPDF: true
+        case .museScoreV4, .museScoreV3, .pdf, .midi, .audioM4A: false
+        }
+    }
+}
+
 /// Pure filename derivation for exported scores, shared by iOS and Android so both produce identical filenames.
 public enum ScoreExportNaming {
     /// Replace filesystem-hostile characters with `_`, trim leading/trailing `_`/space, fall back to `"score"` when
@@ -84,5 +102,19 @@ public enum ScoreExportNaming {
         let stripped = cleaned.trimmingCharacters(in: CharacterSet(charactersIn: "_ "))
         let candidate = stripped.isEmpty ? "score" : stripped
         return String(candidate.prefix(100))
+    }
+
+    /// Full exported filename for `title` in `format`: the sanitized title, an annotated-export suffix when the
+    /// format has one, then the format's canonical extension. The suffix exists because every share lands in one
+    /// temp directory — without it an annotated PDF would overwrite the plain PDF of the same item, and vice versa.
+    /// Suffixes stay English (they are filenames, not UI copy) so iOS and Android produce identical names.
+    public static func fileName(title: String, format: ScoreShareFormat) -> String {
+        let stem = sanitize(title: title)
+        let suffix = switch format {
+        case .annotatedPDF: " (annotated)"
+        case .annotatedOriginalPDF: " (original annotated)"
+        case .museScoreV4, .museScoreV3, .pdf, .midi, .audioM4A: ""
+        }
+        return "\(stem)\(suffix).\(format.canonicalExtension)"
     }
 }
