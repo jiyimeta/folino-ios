@@ -84,10 +84,12 @@ struct EditorAddMeasuresSheet: View {
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button { dismiss() } label: { L10n.Common.cancel }
+            Button { dismiss() } label: {
+                SheetActionLabel(.close, title: L10n.Common.cancel)
+            }
         }
         ToolbarItem(placement: .confirmationAction) {
-            EditorConfirmButton(label: Text("editor.measure.addMany.apply", bundle: .module), action: add)
+            SheetConfirmButton(title: Text("editor.measure.addMany.apply", bundle: .module), action: add)
         }
         // A number pad has no return key; without this there is no way to put it away on a phone.
         ToolbarItemGroup(placement: .keyboard) {

@@ -38,6 +38,37 @@ public struct SheetActionLabel: View {
     }
 }
 
+/// The confirming control on a sheet's navigation bar: a round, prominently tinted button holding a checkmark.
+///
+/// The tint is the BUTTON's, through the prominent style — not a filled circle drawn inside a plain one. Painting an
+/// accent disc behind the glyph leaves the toolbar's own glass capsule around it, so the colour reads as a badge
+/// sitting in a button rather than as the button itself.
+///
+/// A button rather than a bare label because the styling is the shared part: every sheet that commits a draft should
+/// look identical doing it, and a caller that only borrowed the glyph would have to remember the style too. The
+/// closing ✕ has no such styling — iOS 26 draws it plain — so it stays a `SheetActionLabel` inside an ordinary
+/// `Button`.
+public struct SheetConfirmButton: View {
+    private let title: Text
+    private let action: () -> Void
+
+    public init(title: Text, action: @escaping () -> Void) {
+        self.title = title
+        self.action = action
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            SheetActionLabel(.confirm, title: title)
+                .font(.system(size: 15, weight: .semibold))
+        }
+        // `.glassProminent` on iOS 26, `.borderedProminent` at the iOS 18 floor — the style tints the whole control,
+        // and `.circle` is what makes that whole control a disc.
+        .glassProminentButtonStyleCompat()
+        .buttonBorderShape(.circle)
+    }
+}
+
 #if DEBUG
 #Preview("sheet actions") {
     NavigationStack {
@@ -48,8 +79,7 @@ public struct SheetActionLabel: View {
                     Button {} label: { SheetActionLabel(.close, title: Text(verbatim: "Cancel")) }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button {} label: { SheetActionLabel(.confirm, title: Text(verbatim: "Save")) }
-                        .buttonStyle(.borderedProminent)
+                    SheetConfirmButton(title: Text(verbatim: "Save")) {}
                 }
             }
     }

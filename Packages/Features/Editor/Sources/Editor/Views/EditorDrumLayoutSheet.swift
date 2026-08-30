@@ -159,13 +159,10 @@ struct EditorDrumLayoutSheet: View {
             }
         }
         ToolbarItem(placement: .confirmationAction) {
-            Button {
+            SheetConfirmButton(title: Text("editor.drum.layout.done", bundle: .module)) {
                 apply(layout)
                 dismiss()
-            } label: {
-                SheetActionLabel(.confirm, title: Text("editor.drum.layout.done", bundle: .module))
             }
-            .buttonStyle(.borderedProminent)
         }
     }
 
