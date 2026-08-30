@@ -20,6 +20,7 @@
 - **No iOS regression.** Every task verifies that the iOS build still passes before committing.
 - **Access control:** new symbols get no access modifier; promote to `public` only when something outside the module references it.
 - **Comment style:** reflow `//` / `///` paragraphs at 120 columns.
+- **`PARITY(macos):` markers have a grammar.** `Scripts/parity-report.py:50` requires a continuation line to be indented **two or more** spaces past the comment token (`//   like this`); a single space silently ends the entry and the ledger row is truncated mid-sentence with no diagnostic. Write continuations as `//   text`. Place the marker **outside** any `#if os(iOS)` guard — a note about what macOS needs, buried in a block macOS never compiles, is in the one place its reader will not look.
 - **Do not use partial staging** (`git add -p`). Stage whole files.
 - **`public` is a decision:** the macOS no-op branches keep exactly the access level their iOS counterparts have — no wider.
 
@@ -180,7 +181,7 @@ In `ActivityViewControllerRepresentable.swift`, wrap the whole file body:
     import UIKit
 
     // PARITY(macos): system share sheet — macOS needs an NSSharingServicePicker equivalent, wired into
-    // ScoreShareTarget's call sites.
+    //   ScoreShareTarget's call sites.
 
     /// Bridges `UIActivityViewController` (the system share sheet) into SwiftUI. Use via `.sheet {
     /// ActivityViewControllerRepresentable(items: [...]) }`.
@@ -194,7 +195,7 @@ Do the same for `InteractivePopGestureEnabler`'s `public struct InteractivePopGe
 
 ```swift
 // PARITY(macos): interactive pop gesture — no macOS analogue; the modifier is a no-op there. Revisit only if the
-// Mac shell ever adopts a navigation stack with a swipe-back affordance.
+//   Mac shell ever adopts a navigation stack with a swipe-back affordance.
 ```
 
 - [ ] **Step 3: Give the three modifiers a macOS no-op that keeps the signature**
@@ -224,7 +225,7 @@ extension View {
 }
 
 // PARITY(macos): per-screen light/dark scoping — macOS would set NSAppearance on the hosting view instead of
-// UITraitOverrides.
+//   UITraitOverrides.
 
 #if os(iOS)
     // ... the existing private modifier and hosting-controller machinery, indented one level ...
@@ -270,7 +271,7 @@ extension View {
 }
 
 // PARITY(macos): window-coordinate frame probe — macOS needs the NSView equivalent before any Mac code can measure
-// across view trees.
+//   across view trees.
 ```
 
 `InteractivePopGestureEnabler.swift`, the modifier at line 142:
@@ -295,7 +296,7 @@ Read the existing body of `restoresInteractivePopGesture()` before editing and p
 
 - [ ] **Step 4: Check the `@ViewBuilder` fallout**
 
-Each modifier gains `@ViewBuilder` because its two branches return different types. If a call site breaks because it relied on the concrete return type, fix the call site to use `some View`; do not remove `@ViewBuilder`.
+Each modifier gains `@ViewBuilder`. **The reason is not that two branches return different types** — `#if os(iOS)` is resolved by the parser, so only one branch exists in any given compile and `some View` would infer fine without a builder. It is kept because it is harmless (`buildBlock` over a single expression is the identity) and it survives someone later converting the `#if` into a runtime condition, which is exactly the shape `GlassEffectCompat` already has. If a call site breaks because it relied on the concrete return type, fix the call site to use `some View`; do not remove `@ViewBuilder`.
 
 Run: `grep -rn "hostingAppearance\|onWindowTopSafeAreaChange\|onWindowFrameChange\|restoresInteractivePopGesture" Packages App --include='*.swift'`
 Expected: every hit is a modifier application in a `View` body — none stores the result in a typed property or passes it to a generic constrained to a concrete view type.
@@ -390,7 +391,7 @@ Read the surrounding presentation closure first, then wrap only the presented co
                     ActivityViewControllerRepresentable(items: target.urls)
                 #else
                     // PARITY(macos): library share sheet — presents nothing until the Mac shell has an
-                    // NSSharingServicePicker path.
+                    //   NSSharingServicePicker path.
                     EmptyView()
                 #endif
 ```
@@ -446,7 +447,7 @@ Wrap each file's entire contents in `#if os(iOS) … #endif`, indenting the body
 
 ```swift
 // PARITY(macos): live playback controller — macOS needs the AVAudioSession-free equivalent (no session category,
-// NSImage-backed now-playing artwork, and CoreAudio default-device observation in place of route notifications).
+//   NSImage-backed now-playing artwork, and CoreAudio default-device observation in place of route notifications).
 #if os(iOS)
     // ... existing file contents, indented one level ...
 #endif
@@ -504,7 +505,7 @@ If the UIKit use is confined to presenting the share sheet, gate the whole file 
 
 ```swift
 // PARITY(macos): share session — the Mac path needs NSSharingServicePicker; the session's URL preparation is
-// portable and should be lifted out of this file when that lands.
+//   portable and should be lifted out of this file when that lands.
 ```
 
 If the file also contains **portable** logic (temporary-file staging, filename construction), **split it**: move the portable half to a new `ShareSessionFiles.swift` with no guard, and gate only the presentation half. That logic is shared with Android per the parity rule and must not sit behind an iOS guard.
@@ -571,7 +572,7 @@ Delete `extension UIImage { func resized(to:) }` and the `import UIKit` once not
 
 ```swift
 // PARITY(macos): A–B repeat row glyph — iOS rasterizes because a Menu row will not draw a custom View; the Mac
-// menu has no such restriction, so the two branches are expected to stay different.
+//   menu has no such restriction, so the two branches are expected to stay different.
 ```
 
 - [ ] **Step 3: Run the build to verify it passes**
@@ -628,8 +629,8 @@ import SwiftUI
 #endif
 
 // PARITY(macos): dotted-duration menu glyph — iOS rasterizes because a UIKit `Menu` row will not draw a custom
-// View or apply a custom font. AppKit menus have no such restriction, so the Mac pad should draw the glyph as a
-// View rather than port the rasterizer.
+//   View or apply a custom font. AppKit menus have no such restriction, so the Mac pad should draw the glyph as a
+//   View rather than port the rasterizer.
 ```
 
 Wrap the two members and their call sites in `#if os(iOS)`. Where a `View` body branches on them, use the `@ViewBuilder` + `#if` pattern from Task 2 Step 3 so the macOS branch renders the glyph as text with `PadDurationGlyph.swiftUIFont(size:)`.
