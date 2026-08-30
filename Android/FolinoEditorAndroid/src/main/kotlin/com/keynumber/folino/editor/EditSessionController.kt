@@ -132,6 +132,10 @@ data class EditUiState(
             activeVoice == other.activeVoice &&
             sessionHasEdits == other.sessionHasEdits &&
             canRevertToOriginal == other.canRevertToOriginal &&
+            // Omitting this one silently cost the notice it exists for: a debounced save flips ONLY this flag, so
+            // the folded state compared equal, `MutableStateFlow` conflated it, and the "saved as .mscz" Snackbar
+            // never fired. A hand-written `equals` has to list every field or it is a filter, not an equality.
+            didSaveAsSiblingMSCZ == other.didSaveAsSiblingMSCZ &&
             sessionEndMode == other.sessionEndMode &&
             selectedItem.contentEquals(other.selectedItem) &&
             caretItem.contentEquals(other.caretItem)
@@ -159,6 +163,7 @@ data class EditUiState(
         result = 31 * result + activeVoice.hashCode()
         result = 31 * result + sessionHasEdits.hashCode()
         result = 31 * result + canRevertToOriginal.hashCode()
+        result = 31 * result + didSaveAsSiblingMSCZ.hashCode()
         result = 31 * result + sessionEndMode.hashCode()
         result = 31 * result + selectedItem.contentHashCode()
         result = 31 * result + caretItem.contentHashCode()
@@ -280,7 +285,11 @@ class EditSessionController(
         val selectionAndCommands = combine(
             projection.canUndo,
             projection.canRedo,
-            projection.hasEditTarget,
+            // The relay's, NOT `projection.hasEditTarget` — same value from the same core, delivered by a channel
+            // that cannot lose the false → true. See `EditorBridge.hasEditTargetNow` for the one that can, and why
+            // this property in particular never recovers when it does: a pad that will not light produces no next
+            // op to correct it with.
+            relay.hasEditTarget,
             projection.isNoteSelected,
         ) { canUndo, canRedo, hasEditTarget, isNoteSelected ->
             SelectionAndCommands(canUndo, canRedo, hasEditTarget, isNoteSelected)

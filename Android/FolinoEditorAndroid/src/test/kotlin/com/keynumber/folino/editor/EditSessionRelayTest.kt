@@ -62,6 +62,10 @@ private class FakeBridge : EditBridging {
     override fun revision() = revision
     override fun appliedIntentCount() = appliedIntentCount
 
+    /** What the authoritative core would answer. A test sets it to stand in for "an op left something selected". */
+    var editTarget = false
+    override fun hasEditTargetNow() = editTarget
+
     override fun undo() {
         if (refuseUndo) return
         if (strandFrameOnUndo) willApply(1) else revision += 1
@@ -654,6 +658,43 @@ class EditSessionRelayTest {
         // The funnel is the choke point — iOS's op funnel arms unconditionally too, and for the same reason its own
         // doc gives: the timer must not be skippable for one op and not another.
         assertEquals(3, f.autosave.arms)
+    }
+
+    // MARK: - The pad's gate
+    //
+    // Read from the core after every op rather than observed off the projection — see
+    // `EditorBridge.hasEditTargetNow` for the update the observable channel can drop, and why this is the one
+    // property that never recovers from it (a dead pad emits no next op to correct itself with).
+
+    @Test fun openingPublishesTheGateTheCarriedSelectionLeft() {
+        val f = Fixture(bridge = FakeBridge().apply { editTarget = true })
+
+        f.open(byteArrayOf(1, 2))
+
+        assertTrue(f.relay.hasEditTarget.value)
+    }
+
+    @Test fun everyOpRefreshesTheGate() {
+        val f = Fixture()
+        f.open()
+        assertFalse(f.relay.hasEditTarget.value)
+
+        // The op is what changed the core's answer; the relay must go and ask rather than wait to be told.
+        f.bridge.editTarget = true
+        f.relay.selectItem(byteArrayOf(3))
+
+        assertTrue(f.relay.hasEditTarget.value)
+    }
+
+    @Test fun closingClearsTheGate() {
+        val f = Fixture(bridge = FakeBridge().apply { editTarget = true })
+        f.open()
+        assertTrue(f.relay.hasEditTarget.value)
+
+        // The bridge would still answer true — a torn-down session has no target regardless of what it says.
+        f.relay.close()
+
+        assertFalse(f.relay.hasEditTarget.value)
     }
 
     /** Opening a session is not an edit, and carrying the reader's last tap into it is part of opening. iOS says

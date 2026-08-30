@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
@@ -50,6 +51,9 @@ private class FakeRelay(private val openResult: OpenResult = OpenResult.OPENED) 
 
     var flushCalls = 0
     override fun flushPendingSave() { flushCalls += 1 }
+
+    val editTarget = MutableStateFlow(false)
+    override val hasEditTarget: StateFlow<Boolean> = editTarget
 
     override fun selectItem(bytes: ByteArray) { calls += "selectItem" }
     override fun inputPitch(letter: String) { calls += "inputPitch($letter)" }

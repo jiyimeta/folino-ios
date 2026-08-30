@@ -76,6 +76,25 @@ public enum EditorPadTuckGeometry {
         return projectedTranslationX > 0 ? .trailing : .leading
     }
 
+    /// The pad's resting y-center at `placement` — the reference a dock decision measures a landing against, so
+    /// that "where did it end up" means the same thing on both platforms rather than each side inventing an
+    /// origin. Pair it with `EditorPadPlacement.nearest(toCenterY:in:)`:
+    ///
+    /// ```
+    /// let landed = parkedCenterY(...) + predictedTranslationY
+    /// let dock = EditorPadPlacement.nearest(toCenterY: landed, in: viewportHeight)
+    /// ```
+    ///
+    /// Deliberately measured against the raw viewport, ignoring whatever band the pad actually parks clear of
+    /// (a transport, a FAB cluster): the decision is only ever "which half of the screen did this land in", and
+    /// folding a platform's own chrome height into the reference would make the same gesture answer differently
+    /// on each.
+    public static func parkedCenterY(
+        placement: EditorPadPlacement, viewportHeight: Double, padHeight: Double,
+    ) -> Double {
+        placement == .bottom ? viewportHeight - padHeight / 2 : padHeight / 2
+    }
+
     /// How far into the screen a tucked pad has been pulled, measured from its offscreen rest. Positive is inward;
     /// an outward push reads negative.
     public static func inwardTravel(side: EditorPadTuckSide, translationX: Double) -> Double {

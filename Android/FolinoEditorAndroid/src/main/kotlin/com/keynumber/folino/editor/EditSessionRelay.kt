@@ -5,6 +5,9 @@ import com.keynumber.folino.editor.generated.EditorBridgeViewModel
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.serialization.NoteIDCodec
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * The ssm entry points the relay uses, behind an interface so the JVM tests can drive the policy without a device.
@@ -58,6 +61,11 @@ interface EditBridging {
     fun takePendingAudition(): ByteArray
     fun revision(): Int
     fun appliedIntentCount(): Int
+
+    /** The pad's gate, read synchronously rather than off the observable projection — see
+     * `EditorBridge.hasEditTargetNow` for the update this channel can otherwise lose, and why this is the one
+     * property that never recovers from losing it. */
+    fun hasEditTargetNow(): Boolean
 
     fun selectItem(bytes: ByteArray)
 
@@ -132,6 +140,7 @@ class GeneratedEditBridging(private val vm: EditorBridgeViewModel) : EditBridgin
     override fun takePendingAudition(): ByteArray = vm.takePendingAudition().bytes
     override fun revision() = vm.revisionNow()
     override fun appliedIntentCount() = vm.appliedIntentCountNow()
+    override fun hasEditTargetNow() = vm.hasEditTargetNow()
 
     override fun selectItem(bytes: ByteArray) = vm.selectItem(EditBytesWire(bytes))
     override fun selectCarriedItem(bytes: ByteArray) = vm.selectCarriedItem(EditBytesWire(bytes))
@@ -249,6 +258,11 @@ interface EditSessionOps {
     /** Writes any pending edit now, without ending the session. Driven from the Reader's `onPause`. */
     fun flushPendingSave()
 
+    /** Whether the pad has anything to act on — refreshed from the core after every op rather than observed, for
+     * the reason `EditorBridge.hasEditTargetNow` gives. The controller folds THIS into its state instead of the
+     * projection's own `hasEditTarget`; the value is identical, the delivery is not. */
+    val hasEditTarget: StateFlow<Boolean>
+
     fun selectItem(bytes: ByteArray)
     fun inputPitch(letter: String)
     fun deleteSelection()
@@ -327,6 +341,23 @@ class EditSessionRelay(
     private var appliedSinceCheck = 0
     private var isOpen = false
 
+    private val _hasEditTarget = MutableStateFlow(false)
+
+    /**
+     * Whether the pad has anything to act on, refreshed from the authoritative core after every op and at open —
+     * the SAME answer `EditProjection.hasEditTarget` carries, taken through a channel that cannot silently drop
+     * an update. See `EditorBridge.hasEditTargetNow` for the one it can.
+     *
+     * The value is still the core's; nothing here decides it. What changes is only when Kotlin learns it, and
+     * "right after the op that could have changed it" is a strictly better moment than "whenever an observation
+     * notification happens to land".
+     */
+    override val hasEditTarget: StateFlow<Boolean> = _hasEditTarget.asStateFlow()
+
+    private fun refreshEditTarget() {
+        _hasEditTarget.value = if (isOpen) bridge.hasEditTargetNow() else false
+    }
+
     // MARK: - Lifecycle
 
     /**
@@ -389,6 +420,9 @@ class EditSessionRelay(
         // Nothing the funnel does is owed here anyway — placing a selection emits no intent and queues no
         // audition, which is exactly what makes carrying one different from a tap.
         if (isOpen) bridge.selectCarriedItem(carriedItem)
+        // A carried selection arms the pad before the reader has touched anything, so the gate has to be right
+        // from the first frame of the session rather than from the first op.
+        refreshEditTarget()
         return if (isOpen) OpenResult.OPENED else OpenResult.RESYNC_FAILED
     }
 
@@ -401,6 +435,7 @@ class EditSessionRelay(
         natives.endEditSession(host.scoreHandle())
         bridge.endSession()
         isOpen = false
+        refreshEditTarget()
     }
 
     /**
@@ -506,6 +541,10 @@ class EditSessionRelay(
         val auditionFrame = bridge.takePendingAudition()
         carryToMirror()
         sound(auditionFrame)
+        // Last, and from the one place no op can skip: whatever the op did to the caret or the selection, the pad's
+        // gate is now whatever the core says it is. See `hasEditTarget` above for why this cannot ride the
+        // projection like the rest.
+        refreshEditTarget()
     }
 
     /** Relays whatever the op applied. Split out of [relay] only so its early returns stay early returns. */

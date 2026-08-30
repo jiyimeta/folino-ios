@@ -83,6 +83,7 @@
     <string name="reader_editing_discard_action">Discard Changes</string>
     <string name="reader_editing_pad_hide">Hide note keyboard</string>
     <string name="reader_editing_pad_show">Show note keyboard</string>
+    <string name="reader_editing_pad_move">Move the editing controls</string>
     <string name="reader_editing_voice">Voice %1$d</string>
     <string name="reader_editing_unavailable_version">Editing is unavailable: this score is being rendered by a different engine build.</string>
     <string name="reader_editing_unavailable_diverged">Editing is unavailable for this score right now.</string>

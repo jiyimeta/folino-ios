@@ -14,6 +14,19 @@ enum class PadTuckSide(val rawIndex: Int) {
     }
 }
 
+/** Which edge the note pad is DOCKED to — orthogonal to [PadTuckSide], which is where a dismissed pad parks.
+ * Mirrors Swift's `EditorPadPlacement`; top and bottom only, because a full-width row of keys on a side edge
+ * would be either unusably narrow or covering half the score. */
+enum class PadPlacement(val rawIndex: Int) {
+    TOP(0),
+    BOTTOM(1),
+    ;
+
+    companion object {
+        fun fromRawIndex(rawIndex: Int): PadPlacement = if (rawIndex == 0) TOP else BOTTOM
+    }
+}
+
 /**
  * The thresholds and release decisions behind the note pad's PiP-style side tuck.
  *
@@ -61,6 +74,21 @@ interface PadTuckGeometry {
 
     /** Whether releasing a tucked pad's drag brings it back out. */
     fun restoresFromTuck(side: PadTuckSide, projectedTranslationXPx: Float, thresholdPx: Float): Boolean
+
+    /**
+     * Which dock a release lands the pad on. Asked as one question rather than as "where does it rest" plus
+     * "which half is that in", because the two only mean anything together — see the Swift side's own note.
+     *
+     * The vertical dock re-derives on EVERY release, tucked or not: a tucked sliver slid along its edge still
+     * changes which end of the score it is parked at, so pulling it back out has to land it where the reader
+     * last left it.
+     */
+    fun dock(
+        placement: PadPlacement,
+        viewportHeightPx: Float,
+        padHeightPx: Float,
+        projectedTranslationYPx: Float,
+    ): PadPlacement
 }
 
 /** [PadTuckGeometry] answered by the shared Swift implementation over JNI. */
@@ -103,4 +131,18 @@ class SwiftPadTuckGeometry(private val bridge: EditorPadTuckBridgeViewModel) : P
 
     override fun restoresFromTuck(side: PadTuckSide, projectedTranslationXPx: Float, thresholdPx: Float): Boolean =
         bridge.restoresFromTuck(side.rawIndex, projectedTranslationXPx.toDouble(), thresholdPx.toDouble())
+
+    override fun dock(
+        placement: PadPlacement,
+        viewportHeightPx: Float,
+        padHeightPx: Float,
+        projectedTranslationYPx: Float,
+    ): PadPlacement = PadPlacement.fromRawIndex(
+        bridge.dockRawIndex(
+            placement.rawIndex,
+            viewportHeightPx.toDouble(),
+            padHeightPx.toDouble(),
+            projectedTranslationYPx.toDouble(),
+        ),
+    )
 }

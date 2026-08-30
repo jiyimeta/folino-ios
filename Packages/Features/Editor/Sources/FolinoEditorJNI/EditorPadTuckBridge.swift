@@ -72,4 +72,25 @@ public final class EditorPadTuckBridge {
             threshold: threshold,
         )
     }
+
+    /// Which dock a release lands the pad on, as `EditorPadPlacement.rawIndex`.
+    ///
+    /// One call rather than two (a park reference, then a nearest-edge test) because the two only mean anything
+    /// together: the decision is "where did the pad's own center end up", and splitting it would let a caller
+    /// measure the landing from an origin the rule was not written against — which is exactly the drift this
+    /// bridge exists to prevent.
+    @WireletExpose
+    public func dockRawIndex(
+        placementRawIndex: Int32,
+        viewportHeight: Double,
+        padHeight: Double,
+        projectedTranslationY: Double,
+    ) -> Int32 {
+        let landed = EditorPadTuckGeometry.parkedCenterY(
+            placement: EditorPadPlacement(rawIndex: placementRawIndex),
+            viewportHeight: viewportHeight,
+            padHeight: padHeight,
+        ) + projectedTranslationY
+        return EditorPadPlacement.nearest(toCenterY: landed, in: viewportHeight).rawIndex
+    }
 }

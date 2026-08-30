@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.keynumber.folino.editor.PadPlacement
 import com.keynumber.folino.editor.PadTuckSide
 import com.keynumber.folino.reader.ink.AnnotationTool
 import com.keynumber.folino.reader.ink.AnnotationToolState
@@ -65,6 +66,10 @@ object SettingsKeys {
      */
     val editorPadExpanded = booleanPreferencesKey("editorPadVisible")
     val editorPadTuckSide = stringPreferencesKey("editorPadTuckSide")
+
+    /** Which end of the score the pad is docked to (`top` / `bottom`, `PadPlacement`'s own lower-cased names) —
+     * the other half of the same drag, and iOS's `editorPadPlacement` under the same key. */
+    val editorPadPlacement = stringPreferencesKey("editorPadPlacement")
 
     /**
      * Set once the user chose "Don't show again" on the Reader's PDF-playback caveat; suppresses its automatic
@@ -157,6 +162,9 @@ class SettingsPrefs(private val context: Context) {
         // preference that cannot be parsed is a preference, not a crash.
         if (prefs[SettingsKeys.editorPadTuckSide] == "leading") PadTuckSide.LEADING else PadTuckSide.TRAILING
     }
+    val editorPadPlacement: Flow<PadPlacement> = context.dataStore.data.map { prefs ->
+        if (prefs[SettingsKeys.editorPadPlacement] == "top") PadPlacement.TOP else PadPlacement.BOTTOM
+    }
     val pdfPlaybackNoticeDismissed: Flow<Boolean> =
         context.dataStore.data.map { it[SettingsKeys.pdfPlaybackNoticeDismissed] ?: false }
     val showSeekBar: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.showSeekBar] ?: true }
@@ -210,6 +218,10 @@ class SettingsPrefs(private val context: Context) {
     /** Brings the pad back out. The side is deliberately left as it was, so the next tuck parks it where the
      * reader last put it — iOS keeps `editorPadTuckSide` across a restore for the same reason. */
     suspend fun setEditorPadExpanded() = context.dataStore.edit { it[SettingsKeys.editorPadExpanded] = true }
+
+    suspend fun setEditorPadPlacement(placement: PadPlacement) = context.dataStore.edit {
+        it[SettingsKeys.editorPadPlacement] = placement.name.lowercase()
+    }
     suspend fun setPdfPlaybackNoticeDismissed() =
         context.dataStore.edit { it[SettingsKeys.pdfPlaybackNoticeDismissed] = true }
     suspend fun setShowSeekBar(v: Boolean) = context.dataStore.edit { it[SettingsKeys.showSeekBar] = v }

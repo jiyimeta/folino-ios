@@ -151,4 +151,45 @@ struct EditorPadTuckGeometryTests {
             #expect(EditorPadTuckSide(rawIndex: side.rawIndex) == side)
         }
     }
+
+    @Test func `placement survives the JNI discriminator round trip`() {
+        for placement in EditorPadPlacement.allCases {
+            #expect(EditorPadPlacement(rawIndex: placement.rawIndex) == placement)
+        }
+    }
+
+    // MARK: - The vertical dock
+
+    @Test func `the parked center sits half a pad in from the docked edge`() {
+        let padHeight: Double = 120
+        #expect(EditorPadTuckGeometry.parkedCenterY(
+            placement: .bottom, viewportHeight: viewportHeight, padHeight: padHeight,
+        ) == viewportHeight - padHeight / 2)
+        #expect(EditorPadTuckGeometry.parkedCenterY(
+            placement: .top, viewportHeight: viewportHeight, padHeight: padHeight,
+        ) == padHeight / 2)
+    }
+
+    /// A short flick must not fly the pad across the screen: the decision is where the pad's own center LANDED,
+    /// not how far the finger travelled.
+    @Test func `a small nudge leaves the dock where it was`() {
+        let padHeight: Double = 120
+        let parked = EditorPadTuckGeometry.parkedCenterY(
+            placement: .bottom, viewportHeight: viewportHeight, padHeight: padHeight,
+        )
+        #expect(EditorPadPlacement.nearest(toCenterY: parked - 40, in: viewportHeight) == .bottom)
+        // Past the midpoint it re-docks, and the midpoint itself belongs to the bottom (`<` is strict).
+        #expect(EditorPadPlacement.nearest(toCenterY: viewportHeight / 2, in: viewportHeight) == .bottom)
+        #expect(EditorPadPlacement.nearest(toCenterY: viewportHeight / 2 - 1, in: viewportHeight) == .top)
+    }
+
+    @Test func `a throw from the bottom to the top re-docks`() {
+        let padHeight: Double = 120
+        let parked = EditorPadTuckGeometry.parkedCenterY(
+            placement: .bottom, viewportHeight: viewportHeight, padHeight: padHeight,
+        )
+        // Projected travel far enough up to carry the pad's center into the upper half.
+        let landed = parked - viewportHeight * 0.6
+        #expect(EditorPadPlacement.nearest(toCenterY: landed, in: viewportHeight) == .top)
+    }
 }

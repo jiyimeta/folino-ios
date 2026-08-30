@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.IconButton
@@ -72,6 +73,8 @@ fun EditingTopBarActions(
     canUndo: Boolean,
     canRedo: Boolean,
     activeVoice: Int,
+    /** Whether this session has moved the score. Only changes how `Done` is DRAWN — see its call site. */
+    sessionHasEdits: Boolean,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     onSetVoice: (Int) -> Unit,
@@ -100,8 +103,22 @@ fun EditingTopBarActions(
         if (canRevertToOriginal) {
             EditingOverflowMenu(onRevertToOriginal = onRevertToOriginal)
         }
-        TextButton(onClick = onEndEditing) {
-            Text(stringResource(R.string.reader_editing_done), fontWeight = FontWeight.SemiBold)
+        // Done fills in once this session has actually changed something.
+        //
+        // The pair it belongs to is ✕ / Done — throw this session's work away, or keep it — and while nothing has
+        // been written the two do the same thing, which is exactly when a flat text button beside a flat ✕ reads
+        // as one control duplicated. The moment there IS something to keep, saying so is what tells them apart.
+        // iOS makes the same state visible in its own vocabulary: its trailing checkmark goes yellow on
+        // `commitEdited` because "the colour says the score is not what it was when you opened it". Material's
+        // way of saying a control now commits something real is emphasis, so the button fills.
+        if (sessionHasEdits) {
+            FilledTonalButton(onClick = onEndEditing) {
+                Text(stringResource(R.string.reader_editing_done), fontWeight = FontWeight.SemiBold)
+            }
+        } else {
+            TextButton(onClick = onEndEditing) {
+                Text(stringResource(R.string.reader_editing_done), fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 }
@@ -294,6 +311,7 @@ private fun EditingTopBarActionsPreview() {
         canUndo = true,
         canRedo = false,
         activeVoice = 0,
+        sessionHasEdits = false,
         onUndo = {},
         onRedo = {},
         onSetVoice = {},
@@ -303,13 +321,15 @@ private fun EditingTopBarActionsPreview() {
     )
 }
 
-@Preview(name = "Editing top-bar actions — voice 3, nothing to revert", showBackground = true)
+/** The state the ✕ / Done pair has to read as two different things in: there is now something to throw away. */
+@Preview(name = "Editing top-bar actions — this session has edits", showBackground = true)
 @Composable
-private fun EditingTopBarActionsVoiceThreePreview() {
+private fun EditingTopBarActionsEditedPreview() {
     EditingTopBarActions(
         canUndo = true,
         canRedo = true,
         activeVoice = 2,
+        sessionHasEdits = true,
         onUndo = {},
         onRedo = {},
         onSetVoice = {},

@@ -95,6 +95,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.keynumber.folino.editor.EditAvailability
 import com.keynumber.folino.editor.EditUiState
+import com.keynumber.folino.editor.PadPlacement
 import com.keynumber.folino.editor.PadTuckGeometry
 import com.keynumber.folino.editor.PadTuckSide
 import com.keynumber.folino.editor.caretRectMm
@@ -406,10 +407,14 @@ fun ReaderScreen(
      */
     isPadExpanded: Boolean = true,
     padTuckSide: PadTuckSide = PadTuckSide.TRAILING,
-    /** Tucks the note pad past a side edge, or brings it back — the drag's two outcomes, persisted by the caller
-     * so the pad stays where a reader put it. See [com.keynumber.folino.reader.editing.EditingPadTuck]. */
+    /** Which end of the score the pad is docked to — the other axis of the same drag, and the same kind of
+     * preference. Bottom by default: that is where a reader's hands already are. */
+    padPlacement: PadPlacement = PadPlacement.BOTTOM,
+    /** The drag's three outcomes, persisted by the caller so the pad stays where a reader put it. See
+     * [com.keynumber.folino.reader.editing.EditingPadTuck]. */
     onTuckPad: (PadTuckSide) -> Unit = {},
     onRestorePad: () -> Unit = {},
+    onDockPad: (PadPlacement) -> Unit = {},
     /** The thresholds and release decisions behind that drag, answered by the shared Swift geometry. Required
      * rather than defaulted: a stand-in would be a second implementation of the very rules this seam exists to
      * keep single (see [PadTuckGeometry]). */
@@ -978,12 +983,17 @@ fun ReaderScreen(
     val showsSeekBarNow = showSeekBar && !editing.isEditing
 
     // The score-content Box's own size and the pad's measured height — the two numbers the floating editing chrome
-    // needs and nothing else does. The pad reserves scroll room at the end of the score only while it is OUT; a
-    // tucked pad gives that room back, the same line iOS's `EditorChromeView.publishInsets` draws.
+    // needs and nothing else does.
+    //
+    // The pad reserves scroll room at the end of the score only while it is OUT **and docked at the bottom**. A
+    // tucked pad gives that room back, and a TOP-docked one reserves nothing at all — iOS draws both lines in
+    // `EditorChromeView.publishInsets`, the second because a top inset shoved the whole score down the moment the
+    // pad arrived there, which read as a layout glitch rather than as reserved room.
     var editingViewportPx by remember { mutableStateOf(IntSize.Zero) }
     var editingPadHeight by remember { mutableStateOf(0.dp) }
+    val padReservesRoom = editing.isEditing && isPadExpanded && padPlacement == PadPlacement.BOTTOM
     val editingBottomContentPad = (if (!showsSeekBarNow) fabClusterReservedHeight else 0.dp) +
-        (if (editing.isEditing && isPadExpanded) editingPadHeight else 0.dp)
+        (if (padReservesRoom) editingPadHeight else 0.dp)
 
     // The selection tint (Task 5's `ReaderViewModel.setEditSelection`). `EditUiState.selectedItem` is the raw
     // `ScoreItemID` wire the shared core published; decode it with ssm's own generated codec — a Kotlin second
@@ -1255,18 +1265,20 @@ fun ReaderScreen(
                 EditingPadTuck(
                     isExpanded = isPadExpanded,
                     tuckSide = padTuckSide,
+                    placement = padPlacement,
                     geometry = padTuckGeometry,
                     viewportWidthPx = editingViewportPx.width.toFloat(),
                     viewportHeightPx = editingViewportPx.height.toFloat(),
+                    // Clear of the compact transport, which an edit session always gets (see `showsSeekBarNow`):
+                    // the FAB cluster sits in that band at the bottom-end, and a bottom-docked pad parks above it
+                    // exactly as iOS's pad parks above its own collapsed transport. At the top there is nothing to
+                    // clear — this Box already starts below the app bar — so the inset is only breathing room.
+                    bottomInset = fabClusterReservedHeight,
+                    topInset = 4.dp,
                     onTuck = onTuckPad,
                     onRestore = onRestorePad,
+                    onDock = onDockPad,
                     onCardHeightChange = { editingPadHeight = it },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        // Clear of the compact transport, which an edit session always gets (see
-                        // `showsSeekBarNow`): the FAB cluster sits in that band at the bottom-end, and the pad
-                        // parks above it exactly as iOS's pad parks above its own collapsed transport.
-                        .padding(bottom = fabClusterReservedHeight),
                 ) {
                     EditingPad(
                         armedDurationKind = editing.armedDurationKind,
@@ -1529,6 +1541,7 @@ fun ReaderTopBar(
                     canUndo = editing.canUndo,
                     canRedo = editing.canRedo,
                     activeVoice = editing.activeVoice,
+                    sessionHasEdits = editing.sessionHasEdits,
                     onUndo = onUndo,
                     onRedo = onRedo,
                     onSetVoice = onSetVoice,

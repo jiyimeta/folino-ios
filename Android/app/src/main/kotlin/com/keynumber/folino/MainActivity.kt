@@ -58,6 +58,7 @@ import com.keynumber.folino.editor.EditSessionRelay
 import com.keynumber.folino.editor.EditorRoomFiles
 import com.keynumber.folino.editor.GeneratedEditBridging
 import com.keynumber.folino.editor.NoteAuditioning
+import com.keynumber.folino.editor.PadPlacement
 import com.keynumber.folino.editor.PadTuckSide
 import com.keynumber.folino.editor.SwiftPadTuckGeometry
 import com.keynumber.folino.editor.generated.EditorBridgeViewModel
@@ -705,6 +706,7 @@ private fun LibraryNavGraph(
                 val padTuckGeometry = remember(padTuckBridgeVm) { SwiftPadTuckGeometry(padTuckBridgeVm) }
                 val padExpanded by prefs.editorPadExpanded.collectAsState(initial = true)
                 val padTuckSide by prefs.editorPadTuckSide.collectAsState(initial = PadTuckSide.TRAILING)
+                val padPlacement by prefs.editorPadPlacement.collectAsState(initial = PadPlacement.BOTTOM)
                 val editScope = rememberCoroutineScope()
                 // The editing session's own thread. NOT the main thread: a save encodes the whole score, which
                 // measured 160-230 ms on a Pixel 8a, and every op reaching `EditorBridge` runs synchronously. See
@@ -1029,8 +1031,10 @@ private fun LibraryNavGraph(
                     // nothing at all rather than as a lag in the gesture.
                     isPadExpanded = padExpanded,
                     padTuckSide = padTuckSide,
+                    padPlacement = padPlacement,
                     onTuckPad = { side -> scope.launch { prefs.setEditorPadTucked(side) } },
                     onRestorePad = { scope.launch { prefs.setEditorPadExpanded() } },
+                    onDockPad = { dock -> scope.launch { prefs.setEditorPadPlacement(dock) } },
                     padTuckGeometry = padTuckGeometry,
                     onSelectPreviousElement = { editController.selectPreviousElement() },
                     onSelectNextElement = { editController.selectNextElement() },

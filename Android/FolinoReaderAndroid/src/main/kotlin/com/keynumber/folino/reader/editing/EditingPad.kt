@@ -136,6 +136,12 @@ fun EditingPad(
 
     Surface(
         tonalElevation = 3.dp,
+        // The pad floats over the score now, so it needs the same lift [EditingStepperPill] has: a light card on
+        // white paper otherwise has no edge at all and reads as part of the page. This is where the two platforms
+        // do the same thing by different means — iOS's card is a glass material (`regularGlassCompat`), which
+        // carries its own separation and needs no drop shadow; Material's answer to "this surface floats" is
+        // elevation.
+        shadowElevation = 3.dp,
         shape = RoundedCornerShape(20.dp),
         modifier = modifier.fillMaxWidth(),
     ) {
