@@ -1,0 +1,80 @@
+{
+  "_comment": [
+    "The drum pad's instrument pictograms, authored visually in pen.dev and copied here as plain text.",
+    "One entry per drawing, in the order the Swift enum declares them.",
+    "  viewBox     the design-space rectangle the paths are drawn in, chosen so each instrument fills its key by",
+    "              the amount its real size deserves — ride 96% of the frame, a crash 82% of that, a rack tom 71%.",
+    "  stroke      the outline: the instrument itself. Drawn with a round cap and join.",
+    "  fill        solid hardware under the outline — lugs, the kick's beater, the hi-hat's footboard. Optional.",
+    "  pitches     the GM drum pitches this drawing stands for.",
+    "  labelAnchor where a shell letter is centred, for the drums that can carry one. Optional.",
+    "Run Scripts/generate-drum-icons.py after editing to regenerate DrumInstrumentIcon.swift."
+  ],
+
+  "hiHatClosed": {
+    "viewBox": [10.5, 12, 79, 79],
+    "stroke": "M16 60l26-8c2-6 14-6 16 0l26 8m-68 0l22 7c8 2.545 16 2.545 24 0l22-7m0 0c-22 4.196-46 4.196-68 0m34-14v-10m0 32.9v10.1",
+    "pitches": [42]
+  },
+  "hiHatOpen": {
+    "viewBox": [10.5, 12, 79, 79],
+    "stroke": "M16 48l26-8c2-6 14-6 16 0l26 8m0 0c-22 4.196-46 4.196-68 0m0 12l22 7c8 2.545 16 2.545 24 0l22-7m0 0c-22-4.973-46-4.973-68 0m34-26l0-10m0 27.147l0 8.853m0 8.9l0 10.1",
+    "pitches": [46]
+  },
+  "hiHatPedal": {
+    "viewBox": [10.5, 28, 79, 79],
+    "stroke": "M16 60l26-8c2-6 14-6 16 0l26 8m-68 0l22 7c8 2.545 16 2.545 24 0l22-7m0 0c-22 4.196-46 4.196-68 0m34-14v-10m0 32.9v21.1",
+    "fill": "M28 96l44-11 2 7-44 7z",
+    "pitches": [44]
+  },
+  "crashLeft": {
+    "viewBox": [-7.15, -5.15, 114.3, 114.3],
+    "stroke": "M95 61.6a46 11 12 1 1-90-19.2 46 11 12 1 1 90 19.2m-41.9-13.3l-4.4-0.9m17.4 13.3c-10-0.7-25.3-4-34.4-7.3",
+    "pitches": [49]
+  },
+  "crashRight": {
+    "viewBox": [-7.15, -5.15, 114.3, 114.3],
+    "stroke": "M5 61.6a46 11-12 1 0 90-19.2 46 11-12 1 0-90 19.2m41.9-13.3l4.4-0.9m-17.4 13.3c10-0.7 25.3-4 34.4-7.3",
+    "pitches": [57]
+  },
+  "ride": {
+    "viewBox": [2.1, 4.1, 95.8, 95.8],
+    "stroke": "M4 52a46 11 0 1 0 92 0 46 11 0 1 0-92 0m43.768-4.21l2.232 0 2.232 0m-19.835 9.353c10.014 1.379 25.639 1.379 35.206 0",
+    "pitches": [51]
+  },
+  "cowbell": {
+    "viewBox": [-2.15, -4.65, 104.3, 104.3],
+    "stroke": "M38 16h24l14 58h-52z m-14 58l4 10h44l4-10m-30-58v-5h8v5",
+    "pitches": [56]
+  },
+  "snare": {
+    "viewBox": [3.35, -3.65, 93.3, 93.3],
+    "stroke": "M10 28a40 12 0 1 0 80 0 40 12 0 1 0-80 0m5 0a35 9.5 0 1 0 70 0 35 9.5 0 1 0-70 0m-5 0v30a40 12 0 0 0 80 0v-30m-80 26a40 12 0 0 0 80 0",
+    "fill": "M19 38.2l6 0-0.9 22.8-4.2 0-0.9-22.8z m28 3.4l6 0-0.9 22.8-4.2 0-0.9-22.8z m28-3.4l6 0-0.9 22.8-4.2 0-0.9-22.8z",
+    "pitches": [38, 40]
+  },
+  "sideStick": {
+    "viewBox": [3.35, -4.34, 93.3, 93.3],
+    "stroke": "M10 28a40 12 0 1 0 80 0 40 12 0 1 0-80 0m5 0a35 9.5 0 1 0 70 0 35 9.5 0 1 0-70 0m-5 0v30a40 12 0 0 0 80 0v-30m-80 26a40 12 0 0 0 80 0m-57.526-22.365l57.526-17.008",
+    "fill": "M19 38.2l6 0-0.9 22.8-4.2 0-0.9-22.8z m28 3.4l6 0-0.9 22.8-4.2 0-0.9-22.8z m28-3.4l6 0-0.9 22.8-4.2 0-0.9-22.8z",
+    "pitches": [37]
+  },
+  "tom": {
+    "viewBox": [3.7, 0.4, 92.6, 92.6],
+    "stroke": "M18 32a32 11 0 1 0 64 0 32 11 0 1 0-64 0m5 0a27 8.5 0 1 0 54 0 27 8.5 0 1 0-54 0m-5 0v36.304a32 11 0 0 0 64 0v-36.304m-64 32.304a32 11 0 0 0 64 0m-32-42.304v-8m-7 0h14",
+    "pitches": [45, 47, 48, 50],
+    "labelAnchor": [50, 58]
+  },
+  "floorTom": {
+    "viewBox": [3.7, 4.2, 92.6, 92.6],
+    "stroke": "M14 19a36 12 0 1 0 72 0 36 12 0 1 0-72 0m5 0a31 9.5 0 1 0 62 0 31 9.5 0 1 0-62 0m-5 0v45a36 12 0 0 0 72 0v-45m-72 41a36 12 0 0 0 72 0m-61.456 12.485l-1.865 21.515m52.777-21.515l1.865 21.515m-27.321-18l0 13",
+    "pitches": [41, 43],
+    "labelAnchor": [50, 51.5]
+  },
+  "kick": {
+    "viewBox": [10.4, 4.4, 79.2, 79.2],
+    "stroke": "M50 6a38 38 0 1 0 0 76 38 38 0 1 0 0-76m0 6a32 32 0 1 0 0 64 32 32 0 1 0 0-64m-35.107 46.542l-2.893 23.458m73.107-23.458l2.893 23.458",
+    "fill": "M52 57a9 9 0 1 0 18 0 9 9 0 1 0-18 0z",
+    "pitches": [35, 36]
+  }
+}
