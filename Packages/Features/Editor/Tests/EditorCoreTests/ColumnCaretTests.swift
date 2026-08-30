@@ -71,8 +71,10 @@ struct ColumnCaretTests {
         core.selectNextElement()
 
         #expect(core.caretColumn == ScoreColumn(staff: Self.staff, measureIndex: 0, tick: 480))
-        // Drawn at the write destination, which in voice 1 is still the half rest it is halfway through.
-        #expect(core.caretItem == Self.rest(voice: 1, element: 0))
+        // Drawn on the voice that actually STARTS something there — voice 0's second quarter — not on the half
+        // rest voice 1 is halfway through. Drawing it on the slot the column runs through leaves the marker
+        // looking as though it never moved, and makes the next → read as a skipped beat (QA, 2026-08-30).
+        #expect(core.caretItem == Self.rest(voice: 0, element: 2))
     }
 
     @Test

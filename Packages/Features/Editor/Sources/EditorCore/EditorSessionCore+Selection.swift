@@ -106,19 +106,42 @@ extension EditorSessionCore {
         selectionRevision += 1
     }
 
-    /// The slot to draw the caret on at `column`: the voice it came from when that voice has one there, and
-    /// otherwise the lowest-numbered voice that does. On a single-voice staff — most scores — that is the only
-    /// voice there is, which is why this changes nothing for them.
+    /// The slot to draw the caret on at `column`.
+    ///
+    /// A voice that STARTS something at the column wins — its own if it does, otherwise the lowest-numbered voice
+    /// that does. A slot the column merely runs THROUGH is the last resort, and only because a column between every
+    /// voice's onsets has to be drawn somewhere (→ stepping the armed duration across an empty bar is the case that
+    /// puts it there).
+    ///
+    /// The order matters, and getting it wrong is visible rather than subtle: with a quarter in the feet voice under
+    /// two eighths in the hands, stepping to the second eighth would draw the caret on the quarter it is halfway
+    /// through — the marker would appear not to move at all, and the next → would look like it had skipped a beat.
+    ///
+    /// On a single-voice staff — most scores — there is only one voice to ask, which is why none of this changes
+    /// anything for them.
     func coveringSlot(at column: ScoreColumn, preferring voiceIndex: Int, in score: Score) -> VoiceElementID? {
-        if let preferred = ColumnNavigation.slot(inVoice: voiceIndex, at: column, in: score) {
-            return preferred.slot
-        }
         guard score.parts.indices.contains(column.staff.partIndex),
               score.parts[column.staff.partIndex].staves.indices.contains(column.staff.staffIndexInPart)
         else { return nil }
         let measures = score.parts[column.staff.partIndex].staves[column.staff.staffIndexInPart].measures
         guard measures.indices.contains(column.measureIndex) else { return nil }
-        for candidate in measures[column.measureIndex].voices.indices {
+        let voices = measures[column.measureIndex].voices.indices
+
+        let preferred = ColumnNavigation.slot(inVoice: voiceIndex, at: column, in: score)
+        if let preferred, preferred.tickWithinSlot == 0 {
+            return preferred.slot
+        }
+        for candidate in voices where candidate != voiceIndex {
+            if let resolved = ColumnNavigation.slot(inVoice: candidate, at: column, in: score),
+               resolved.tickWithinSlot == 0
+            {
+                return resolved.slot
+            }
+        }
+        if let preferred {
+            return preferred.slot
+        }
+        for candidate in voices {
             if let resolved = ColumnNavigation.slot(inVoice: candidate, at: column, in: score) {
                 return resolved.slot
             }

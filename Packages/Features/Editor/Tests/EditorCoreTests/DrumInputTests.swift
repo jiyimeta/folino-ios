@@ -251,4 +251,38 @@ struct DrumInputTests {
 
         #expect(core.score == before)
     }
+
+    /// QA (2026-08-30): hi-hats on b1 and b1.5, a quarter bass drum written into the feet voice at b1, then →.
+    /// It landed on b2, skipping b1.5 — every beat that has a note or a rest is supposed to be a stop.
+    @Test
+    func `stepping stops at an onset the caret's own voice runs straight through`() {
+        let hiHat = Chord(duration: .eighth, notes: [Note(pitch: 42, tpc: 14, headType: "cross")])
+        let voice0 = Voice(elements: [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(hiHat), .chord(hiHat),
+            .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
+        ])
+        let staffValue = Staff(
+            staffType: GMPercussion.staffTypeName,
+            group: GMPercussion.staffGroup,
+            measures: [Measure(voices: [voice0])],
+        )
+        let part = Part(
+            id: "1",
+            instrument: Instrument(id: "drumset", useDrumset: true, drumLineMap: GMPercussion.drumLineMap),
+            staves: [staffValue],
+        )
+        let core = EditorCoreFixtures.makeCore()
+        core.beginSession(score: Score(division: 480, parts: [part]))
+        core.select(Self.rest(voice: 0, element: 1))
+        core.setDuration(.quarter)
+
+        core.pressDrumKey(Self.key(36, voice: 1))
+        core.selectNextElement()
+
+        // b1.5 — where the second hi-hat is — not b2.
+        #expect(core.caretColumn?.tick == 240)
+        // And the caret is DRAWN on something that actually starts there, not on the bass drum it is inside.
+        #expect(EditorSessionCore.slot(of: core.caretItem) == Self.slot(voice: 0, element: 2))
+    }
 }
