@@ -36,7 +36,6 @@ import com.keynumber.folino.reader.ReaderTopBar
 import com.keynumber.folino.reader.fixedPxPerMm
 import com.keynumber.folino.reader.layoutWidthMm
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
-import com.keynumber.folino.screenshot.fixtures.READER_SCENE_TITLE
 import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
 import com.keynumber.folino.screenshot.fixtures.SceneReady
 import com.keynumber.folino.screenshot.fixtures.rememberPreparedAudioVm

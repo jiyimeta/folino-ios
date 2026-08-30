@@ -703,7 +703,10 @@ class EditSessionRelay(
          * `stableFingerprint` walks the whole value tree, so it is the one thing here whose cost grows with the
          * score. Task 9's device test (`EditSessionParityTest.fingerprintWalkIsCheapEnoughToSample`) measured one
          * walk on `parity.mscz` — a real 127-measure, 6-part arrangement — on a physical Pixel 8a at **~1.9ms**
-         * (1908us and 1911us across two runs), under the ~2ms line this comment used to guess at. At
+         * (1908us and 1911us across two runs), under the ~2ms line this comment used to guess at. The same
+         * device, engine and score read **2044us and 2023us** on 2026-08-30 — the walk did not change, the
+         * machine's mood did, which is why the test's bound is the ~4ms design limit below and not the
+         * measurement. At
          * `FINGERPRINT_SAMPLE_EVERY = 8` that amortizes to ~239us per applied intent, comfortably under the
          * half-millisecond budget, so eight stays unchanged. Raise it (recomputing the amortized cost against a
          * fresh measurement) only if a future score/device combination pushes the walk itself past ~4ms. Session
