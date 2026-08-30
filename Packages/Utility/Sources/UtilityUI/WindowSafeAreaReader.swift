@@ -1,6 +1,17 @@
 import SwiftUI
 import UIKit
 
+extension EnvironmentValues {
+    /// Pins what `onWindowTopSafeAreaChange` reports, instead of reading the window's own inset. `nil` — the default,
+    /// and the only value a running app ever wants — reads the window.
+    ///
+    /// Set by the **screenshot harness**, which lays a screen out inside a mock device frame that is not the window.
+    /// Reading the window there is a category error: the frame draws no status-bar band, so a screen that positions
+    /// something inside the top safe area (the Reader's cutout tier) puts it on top of its own control strip instead
+    /// of above it. Pinned to 0, the screen sees the truth about the surface it is actually drawn on.
+    @Entry public var windowTopSafeAreaInsetOverride: CGFloat?
+}
+
 extension View {
     /// Reports the **window's** top safe-area inset — the band the system reserves for the status bar and the display
     /// cutout — and keeps reporting it as it changes (rotation, a Dynamic Island activity growing, a resize).
@@ -14,17 +25,36 @@ extension View {
     ///
     /// The window's insets have no such loop: they are the device's, they belong to a layer above anything a screen
     /// can add, and a screen embedded in a smaller container still reads the truth rather than its container's
-    /// leftovers.
+    /// leftovers. The one case where that is the wrong answer — a container standing in for a whole device — pins the
+    /// value with `\.windowTopSafeAreaInsetOverride` instead.
     public func onWindowTopSafeAreaChange(_ action: @escaping (CGFloat) -> Void) -> some View {
-        // Deliberately NOT sized to zero. The probe reports the *window's* insets, so its own geometry is irrelevant
-        // to the value — but its geometry is what schedules the re-read: a 0x0 view gets no `layoutSubviews` when the
-        // device rotates, so the last portrait value survived into landscape and drew a cutout tier on a screen with
-        // no cutout. A full-size background lays out again on every bounds change, which is exactly the cue needed.
-        background(
-            WindowSafeAreaProbe(onChange: action)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true),
-        )
+        modifier(WindowTopSafeAreaChange(action: action))
+    }
+}
+
+/// Reports the window's top inset, unless `\.windowTopSafeAreaInsetOverride` pins one. A modifier rather than a bare
+/// `background` so the override can be read from the environment at all.
+private struct WindowTopSafeAreaChange: ViewModifier {
+    @Environment(\.windowTopSafeAreaInsetOverride) private var override
+    let action: (CGFloat) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                // Deliberately NOT sized to zero. The probe reports the *window's* insets, so its own geometry is
+                // irrelevant to the value — but its geometry is what schedules the re-read: a 0x0 view gets no
+                // `layoutSubviews` when the device rotates, so the last portrait value survived into landscape and
+                // drew a cutout tier on a screen with no cutout. A full-size background lays out again on every
+                // bounds change, which is exactly the cue needed.
+                if override == nil {
+                    WindowSafeAreaProbe(onChange: action)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+            // A pinned value has no probe to announce it, so it is delivered on appear and whenever it moves.
+            .onAppear { override.map(action) }
+            .onChange(of: override) { _, new in new.map(action) }
     }
 }
 
