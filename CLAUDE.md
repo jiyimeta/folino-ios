@@ -176,7 +176,8 @@ Folino is becoming cross-platform (iOS/iPadOS native; Android via `swift-wirelet
 ### Recording a deliberate one-platform-first gap
 
 When a feature lands on one platform and the other half is deliberately deferred, leave a marker at the point of
-divergence — `// PARITY(android): <title> — <what Android still needs>` (or `PARITY(ios)`). `Scripts/parity-report.py`
+divergence — `// PARITY(android): <title> — <what Android still needs>` (or `PARITY(ios)`, or `PARITY(macos)`).
+`Scripts/parity-report.py`
 collects them into `docs/engineering/ios-android-parity.md`, and the `parity-ledger` pre-commit hook fails if that file
 drifted, so the ledger cannot rot. Implementing the other half deletes the marker, which deletes the row. Details and
 the format are in the ledger itself. Reserve it for real, intended gaps — it is not a TODO list.
