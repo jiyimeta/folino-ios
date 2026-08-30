@@ -18,7 +18,13 @@ enum ReaderFeatureHint: String, CaseIterable {
     /// user has just shrunk it — which is exactly when a once-per-launch budget would already be spent.
     case transportExpand
     /// The note-editing entry point (`music.quarternote.3`).
-    case noteEditing
+    ///
+    /// The raw value is deliberately not `noteEditing`: it is the persistence key
+    /// (`readerHint.used.<rawValue>`), so changing it retires the OLD record and offers this hint again to everyone
+    /// who had already dismissed it. The glyph moved from `square.and.pencil` — the compose icon iOS uses for a new
+    /// document — to the notes this button actually writes, and someone who learned the old one deserves to be
+    /// introduced to the new one rather than to find their button replaced.
+    case noteEditing = "noteEditing.quarternote"
     /// The ink-annotation toggle (`pencil.tip.crop.circle`).
     case annotation
     /// Per-part show/hide — lives in the display inspector.
