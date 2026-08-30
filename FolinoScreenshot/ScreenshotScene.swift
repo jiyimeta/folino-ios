@@ -44,6 +44,14 @@ enum ScreenshotScene: CaseIterable {
         sceneBody
             .environment(\.screenshotIdiom, ScreenshotEnvironment.idiom)
             .environment(\.windowTopSafeAreaInsetOverride, 0)
+            // The delivered pixels come from `simctl io screenshot`, which grabs the whole device screen — so the
+            // simulator draws its Dynamic Island as a black pill over whatever the scene put up there, and
+            // `ABRepeatScene`'s title (two subtitle lines, no bullets, so it sits highest) ran straight into it.
+            //
+            // Stated here rather than left to a scene: it used to be an accident. Scenes share one process, and the
+            // editing scene hid the status bar as a side effect of its cutout tier — which happened to hold for
+            // every scene captured after it, and for none captured before.
+            .statusBarHidden(true)
     }
 
     @MainActor @ViewBuilder
