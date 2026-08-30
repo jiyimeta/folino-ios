@@ -17,8 +17,8 @@ import org.junit.Test
  * VERTICAL surface's program while the hit test answered with a `ScoreItemID` naming a DIFFERENT element — which then
  * became the target of the next pad key.
  *
- * All three readers now go through `ReaderViewModel.withVerticalLayout` (and its non-suspending fast path
- * `tryWithVerticalLayout`), which asks exactly this question with the lock held. `ReaderViewModel(app)` cannot be
+ * All three readers now go through `ReaderViewModel.withReaderLayout` (and its non-suspending fast path
+ * `tryWithReaderLayout`), which asks exactly this question with the lock held. `ReaderViewModel(app)` cannot be
  * constructed in this module's JVM test source set — no Robolectric, no Android `Application` (see `RecomputeSkipTest`
  * and `ReaderEditHostTest` for the same constraint), and the native calls have no JNI library to reach. The
  * comparison IS the fix, though, so it is extracted and pinned here; that it runs inside the same `layoutMutex`

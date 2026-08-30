@@ -1,4 +1,5 @@
 import Domain
+import ReaderInteractionCore
 import SheetMusicCore
 import SwiftUI
 import UtilityUI

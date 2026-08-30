@@ -21,7 +21,6 @@ import com.keynumber.folino.reader.ReaderLayoutMode
 import com.keynumber.folino.reader.ReaderTopBar
 import com.keynumber.folino.reader.RepeatMode
 import com.keynumber.folino.screenshot.fixtures.MarketingStrings
-import com.keynumber.folino.screenshot.fixtures.READER_SCENE_TITLE
 import com.keynumber.folino.screenshot.fixtures.ReaderSceneContent
 import com.keynumber.folino.screenshot.fixtures.SCREENSHOT_STAFF_SIZE
 import com.keynumber.folino.screenshot.fixtures.SceneReady
@@ -68,7 +67,6 @@ fun LoopAllScene(layout: ScreenshotLayout, tag: String) {
             Column(Modifier.fillMaxSize()) {
                 // Real Reader top app bar; static screenshot, callbacks are no-ops.
                 ReaderTopBar(
-                    title = READER_SCENE_TITLE,
                     onBack = {},
                     onShare = {},
                     onEditInfo = {},

@@ -48,11 +48,12 @@ class PadSingleRowWidthTest {
 
     @Test
     fun `SINGLE_ROW_KEY_COUNT matches what the row's own key groups emit`() {
-        // Duration keys (PadDuration.ordered) + the tuplet, tie, dot and add-to-chord keys + the two steppers +
-        // pitch keys (PITCH_LETTERS) + 1 rest key, read from the SAME lists SingleRow's own key groups iterate —
-        // not a copy of "5" and "7". If a key group's count changes without SINGLE_ROW_KEY_COUNT changing too,
-        // this is the test that catches it.
-        assertEquals(PadDuration.ordered.size + 4 + 2 + PITCH_LETTERS.size + 1, SINGLE_ROW_KEY_COUNT)
+        // Duration keys (PadDuration.ordered) + the tuplet, tie, dot and add-to-chord keys + pitch keys
+        // (PITCH_LETTERS) + 1 rest key, read from the SAME lists SingleRow's own key groups iterate — not a copy
+        // of "5" and "7". If a key group's count changes without SINGLE_ROW_KEY_COUNT changing too, this is the
+        // test that catches it. (The two ← / → steppers used to be counted here; they are their own pill now —
+        // see `EditingStepperPill`.)
+        assertEquals(PadDuration.ordered.size + 4 + PITCH_LETTERS.size + 1, SINGLE_ROW_KEY_COUNT)
     }
 
     @Test

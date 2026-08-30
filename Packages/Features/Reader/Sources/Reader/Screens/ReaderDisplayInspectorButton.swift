@@ -1,3 +1,4 @@
+import ReaderInteractionCore
 import SwiftUI
 
 /// The display-settings (visual inspector) button, extracted from `ReaderTopBarControls` so the editing strip can

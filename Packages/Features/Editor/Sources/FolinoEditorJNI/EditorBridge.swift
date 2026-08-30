@@ -176,6 +176,30 @@ public final class EditorBridge {
         Int32(core?.appliedIntentCount ?? 0)
     }
 
+    /// The core's `hasEditTarget`, read synchronously — the SAME answer `hasEditTarget` publishes, reached by a
+    /// channel that cannot drop it.
+    ///
+    /// The projection reaches Kotlin through `withObservationTracking`, whose `onChange` fires at **willSet — before
+    /// the new value is stored**. The generated handler answers that by posting a re-read to the main thread, so a
+    /// re-read that overtakes the still-in-flight store reads the OLD value and re-arms on it; the store then
+    /// completes without firing the registration it already consumed. Any projected property can lose an update
+    /// that way, and it stays lost until the next assignment to that property.
+    ///
+    /// For most of them the next op fixes it. Not this one: `hasEditTarget` is what makes the whole pad live
+    /// (`EditingPad`'s `enabled`), so losing its false → true leaves a pad that cannot be pressed — and a pad that
+    /// cannot be pressed produces no next op. The score still shows the selection tint and the callout, because
+    /// their own properties happened to win the race, which is exactly how it reads to a user: "a note is selected
+    /// but the keys are dead."
+    ///
+    /// So Android reads this one through the relay's funnel instead, the same way it already reads `revisionNow()`
+    /// and `appliedIntentCountNow()` — the repo's standing answer to this channel being stale right after an op.
+    /// **The root fix is swift-wirelet's**: the notification has to be delivered after the store, not before it.
+    /// Until that lands, this is the one property whose staleness is not self-healing.
+    @WireletExpose
+    public func hasEditTargetNow() -> Bool {
+        core?.hasEditTarget ?? false
+    }
+
     // MARK: - Lifecycle
 
     /// Opens a session over the score at `scorePath`, parsed in THIS image.
@@ -439,6 +463,25 @@ public final class EditorBridge {
         }
         guard let item = try? ScoreItemIDCodec.decode(frame.bytes) else { return }
         core?.selectFromTap(item)
+        sync()
+    }
+
+    /// The selection the reader was already on, carried into the session that just opened — Android's half of what
+    /// `EditableReaderScreen` does with `ReaderEditingHost.pendingSelection`. Empty bytes mean nothing was
+    /// remembered, and the session opens blank with an inert pad, exactly as iOS does.
+    ///
+    /// `selectCarriedItem`, not `selectItem`: the rules that separate the two — drop an ID this score no longer
+    /// contains, and sound nothing — are the core's, so both platforms get one answer. See
+    /// `EditorSessionCore.selectCarriedItem`.
+    @WireletExpose
+    public func selectCarriedItem(frame: EditBytesWire) {
+        guard !frame.bytes.isEmpty else {
+            core?.selectCarriedItem(nil)
+            sync()
+            return
+        }
+        guard let item = try? ScoreItemIDCodec.decode(frame.bytes) else { return }
+        core?.selectCarriedItem(item)
         sync()
     }
 

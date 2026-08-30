@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.keynumber.folino.editor.PadPlacement
+import com.keynumber.folino.editor.PadTuckSide
 import com.keynumber.folino.reader.ink.AnnotationTool
 import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.ink.AnnotationWidths
@@ -52,6 +54,22 @@ object SettingsKeys {
     val clefOverrides = stringSetPreferencesKey("reader.clefOverrides")
     /** Set once the user has interacted with the page-mode tap-zone overlay; suppresses the onboarding hint. */
     val pageTapHintDismissed = booleanPreferencesKey("reader.pageTapHintDismissed")
+
+    /**
+     * Whether the note-input pad is out on the score or tucked past a side edge, and which edge it is tucked past
+     * (`leading` / `trailing`, `PadTuckSide`'s own lower-cased names).
+     *
+     * Reader preferences rather than session state, and defaulted to OUT: someone who pushes the keyboard aside
+     * means it for the next score too, and someone who writes with it out wants it out next time. Same key STRINGS
+     * as iOS's `editorPadVisible` / `editorPadTuckSide` `@AppStorage`, so the two platforms name one setting
+     * identically — hence the camelCase, unlike this file's dotted `reader.*` keys.
+     */
+    val editorPadExpanded = booleanPreferencesKey("editorPadVisible")
+    val editorPadTuckSide = stringPreferencesKey("editorPadTuckSide")
+
+    /** Which end of the score the pad is docked to (`top` / `bottom`, `PadPlacement`'s own lower-cased names) —
+     * the other half of the same drag, and iOS's `editorPadPlacement` under the same key. */
+    val editorPadPlacement = stringPreferencesKey("editorPadPlacement")
 
     /**
      * Set once the user chose "Don't show again" on the Reader's PDF-playback caveat; suppresses its automatic
@@ -138,6 +156,15 @@ class SettingsPrefs(private val context: Context) {
     val hiddenStaves: Flow<Set<String>> = context.dataStore.data.map { it[SettingsKeys.hiddenStaves] ?: emptySet() }
     val clefOverrides: Flow<Set<String>> = context.dataStore.data.map { it[SettingsKeys.clefOverrides] ?: emptySet() }
     val pageTapHintDismissed: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.pageTapHintDismissed] ?: false }
+    val editorPadExpanded: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.editorPadExpanded] ?: true }
+    val editorPadTuckSide: Flow<PadTuckSide> = context.dataStore.data.map { prefs ->
+        // Unknown text reads as the default side rather than throwing: this value comes back from disk, and a
+        // preference that cannot be parsed is a preference, not a crash.
+        if (prefs[SettingsKeys.editorPadTuckSide] == "leading") PadTuckSide.LEADING else PadTuckSide.TRAILING
+    }
+    val editorPadPlacement: Flow<PadPlacement> = context.dataStore.data.map { prefs ->
+        if (prefs[SettingsKeys.editorPadPlacement] == "top") PadPlacement.TOP else PadPlacement.BOTTOM
+    }
     val pdfPlaybackNoticeDismissed: Flow<Boolean> =
         context.dataStore.data.map { it[SettingsKeys.pdfPlaybackNoticeDismissed] ?: false }
     val showSeekBar: Flow<Boolean> = context.dataStore.data.map { it[SettingsKeys.showSeekBar] ?: true }
@@ -180,6 +207,21 @@ class SettingsPrefs(private val context: Context) {
     suspend fun setHiddenStaves(v: Set<String>) = context.dataStore.edit { it[SettingsKeys.hiddenStaves] = v }
     suspend fun setClefOverrides(v: Set<String>) = context.dataStore.edit { it[SettingsKeys.clefOverrides] = v }
     suspend fun setPageTapHintDismissed() = context.dataStore.edit { it[SettingsKeys.pageTapHintDismissed] = true }
+
+    /** Tucking records both halves at once: the side is only meaningful alongside "and it is tucked", and writing
+     * them separately would leave a frame in which the pad is parked past an edge it has not been told about. */
+    suspend fun setEditorPadTucked(side: PadTuckSide) = context.dataStore.edit {
+        it[SettingsKeys.editorPadExpanded] = false
+        it[SettingsKeys.editorPadTuckSide] = side.name.lowercase()
+    }
+
+    /** Brings the pad back out. The side is deliberately left as it was, so the next tuck parks it where the
+     * reader last put it — iOS keeps `editorPadTuckSide` across a restore for the same reason. */
+    suspend fun setEditorPadExpanded() = context.dataStore.edit { it[SettingsKeys.editorPadExpanded] = true }
+
+    suspend fun setEditorPadPlacement(placement: PadPlacement) = context.dataStore.edit {
+        it[SettingsKeys.editorPadPlacement] = placement.name.lowercase()
+    }
     suspend fun setPdfPlaybackNoticeDismissed() =
         context.dataStore.edit { it[SettingsKeys.pdfPlaybackNoticeDismissed] = true }
     suspend fun setShowSeekBar(v: Boolean) = context.dataStore.edit { it[SettingsKeys.showSeekBar] = v }

@@ -3,7 +3,12 @@ package com.keynumber.folino.reader
 import android.util.Log
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,17 +32,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.Draw
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.FabPosition
-import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.ModalBottomSheet
@@ -46,6 +52,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.MaterialTheme
@@ -72,6 +80,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -94,18 +103,30 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.keynumber.folino.editor.EditAvailability
 import com.keynumber.folino.editor.EditUiState
+import com.keynumber.folino.editor.PadPlacement
+import com.keynumber.folino.editor.PadTuckGeometry
+import com.keynumber.folino.editor.PadTuckSide
 import com.keynumber.folino.editor.caretRectMm
 import com.keynumber.folino.editor.editingHitTestForTap
 import com.keynumber.folino.reader.editing.EDIT_CALLOUT_MINIMUM_WIDTH_MM
 import com.keynumber.folino.reader.editing.EDIT_CARET_MINIMUM_WIDTH_MM
 import com.keynumber.folino.reader.editing.EditingCallout
 import com.keynumber.folino.reader.editing.EditingCaretOverlay
-import com.keynumber.folino.reader.editing.EditingLayoutModeDialog
 import com.keynumber.folino.reader.editing.EditingPad
+import com.keynumber.folino.reader.editing.EditingPadTuck
+import com.keynumber.folino.reader.editing.EditingStepperPill
+import com.keynumber.folino.reader.editing.PAD_TUCK_HORIZONTAL_MARGIN
 import com.keynumber.folino.reader.editing.DiscardEditsDialog
 import com.keynumber.folino.reader.editing.EditingTopBarActions
 import com.keynumber.folino.reader.editing.EditingUnavailableDialog
 import com.keynumber.folino.reader.editing.editingUnavailableReasonFor
+import com.keynumber.folino.reader.hints.ReaderFeatureHint
+import com.keynumber.folino.reader.hints.ReaderHintController
+import com.keynumber.folino.reader.hints.ReaderHintDeferredOffers
+import com.keynumber.folino.reader.hints.ReaderHintOverlay
+import com.keynumber.folino.reader.hints.ReaderHintTarget
+import com.keynumber.folino.reader.hints.readerHintAnchor
+import com.keynumber.folino.reader.hints.readerHintDismissOnTap
 import com.keynumber.folino.reader.ink.AnnotationCaptureController
 import com.keynumber.folino.reader.ink.AnnotationHandoffQueue
 import com.keynumber.folino.reader.ink.AnnotationLayers
@@ -127,12 +148,14 @@ import io.github.jiyimeta.sheetmusic.audio.model.EditCaretFrame
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import io.github.jiyimeta.sheetmusic.audio.serialization.DecodedFrameCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
+import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreItemIDCodec
 import io.github.jiyimeta.sheetmusic.compose.cursor.LoopHighlightOverlay
 import io.github.jiyimeta.sheetmusic.compose.cursor.PlaybackCursorOverlay
 import io.github.jiyimeta.sheetmusic.compose.render.BandedScorePage
 import io.github.jiyimeta.sheetmusic.compose.render.ScorePage
 import io.github.jiyimeta.sheetmusic.compose.render.bundledFontProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -198,6 +221,13 @@ internal const val ON_SCREEN_CURSOR_ALPHA = 0.6f
 /** logcat tag for this screen. `ReaderViewModel` owns "ReaderViewModel"; this one is the Compose side. */
 private const val READER_TAG = "ReaderScreen"
 
+/**
+ * How long the Reader waits before offering this launch's coach mark: long enough for the chrome to lay out and
+ * report its anchors (selection is driven entirely by which controls have reported one), and long enough after a
+ * sheet closes that the tap which closed it does not also dismiss the bubble it just made room for.
+ */
+private const val HINT_OFFER_SETTLE_MILLIS = 1000L
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(
@@ -206,7 +236,6 @@ fun ReaderScreen(
      * layer rather than looked up here — the Reader module has no dependency on the Library module.
      * A blank value (or a name whose file is missing) fails cleanly via [ReaderViewModel.load]. */
     localFileName: String,
-    title: String,
     layoutMode: ReaderLayoutMode = ReaderLayoutMode.VERTICAL,
     displayOptions: LayoutOptions = LayoutOptions.DEFAULT,
     onDisplayOptionsChange: (LayoutOptions) -> Unit = {},
@@ -335,8 +364,11 @@ fun ReaderScreen(
     /** The global sticky continuation mode (re-read each end-of-score so a Settings change is picked up). */
     continuationModeProvider: suspend () -> PlaylistContinuationMode = { PlaylistContinuationMode.PLAY_THROUGH },
     /** Asks the host to retarget the Reader to another entry in place (host swaps its currentScoreId /
-     * currentLocalFileName / title). Every displayed field of the outgoing score has to move together:
-     * an auto-advance that carried only the id left the app bar naming the score that just finished. */
+     * currentLocalFileName). Every per-score field of the outgoing score has to move together: an auto-advance
+     * that carried only the id left the app bar naming the score that just finished — which is why
+     * [PlaylistEntry] is a named record rather than a pair, so a forgotten field is a compile error. (The title
+     * is no longer among the fields the Reader DISPLAYS; the record still carries it, and that is the point of
+     * the shape.) */
     onRetargetScore: (PlaylistEntry) -> Unit = {},
     readerVm: ReaderViewModel = viewModel(),
     audioVm: ReaderAudioViewModel = viewModel(),
@@ -354,10 +386,18 @@ fun ReaderScreen(
      * until a caller wires the real controller through — see [ReadyScore]'s matching parameter, which this
      * same value must also reach once that wiring lands (a later task's job; see that parameter's doc). */
     editing: EditUiState = EditUiState(),
-    /** Opens an edit session for this score. No-op by default; the composition root wires this to
-     * `EditSessionController.begin` and is the layer that refuses it for a PDF (spec §7, §8.1). */
-    onStartEditing: () -> Unit = {},
-    /** Ends the edit session — the app-bar ✓, the back arrow while editing, and the system back gesture
+    /**
+     * Opens an edit session for this score. No-op by default; the composition root wires this to
+     * `EditSessionController.begin` and is the layer that refuses it for a PDF (spec §7, §8.1).
+     *
+     * The argument is the element the reader's last tap-to-seek landed on, or null when there was none — the
+     * session opens on it, so edit mode starts where the finger left off. iOS carries the same value across the
+     * same seam (`ReaderEditingHost.pendingSelection` → `EditorViewModel.selectItem`), and what makes it safe to
+     * hand over unchecked is that both platforms drop a stale ID in one shared place
+     * (`EditorSessionCore.selectCarriedItem`).
+     */
+    onStartEditing: (ByteArray?) -> Unit = {},
+    /** Ends the edit session — the app-bar ✓, the bar's leading ✕ while editing, and the system back gesture
      * (via `BackHandler` below) all funnel through this one callback. Flushes nothing on its own; a pending
      * save is a later task's concern (spec §8.4). */
     onEndEditing: () -> Unit = {},
@@ -381,11 +421,30 @@ fun ReaderScreen(
     /** Sets the voice (zero-indexed, 0..3) that new input writes into. Reached from the app bar's voice picker
      * ([com.keynumber.folino.reader.editing.EditingTopBarActions]). */
     onSetVoice: (Int) -> Unit = {},
-    /** Shows or hides the note pad; the controller owns whether it's currently visible
-     * ([EditUiState.isPadVisible]), this callback only toggles it. Also an app-bar action. */
-    onTogglePad: () -> Unit = {},
-    /** Steps the selection to the previous / next element. On the PAD, not in a bar of its own — see
-     * [com.keynumber.folino.reader.editing.EditingPad]'s class doc. */
+    /**
+     * Whether the note pad is out on the score or tucked past a side edge, and which edge.
+     *
+     * Reader PREFERENCES, not session state: someone who pushes the keyboard aside means it for the next score
+     * too, so the composition root reads and writes them through `SettingsPrefs`. iOS keeps the same two in
+     * `@AppStorage` for the same reason, and out-by-default for the same one — the sliver left showing is a
+     * self-explaining way back, where a pad hidden behind a toolbar button made edit mode look inert.
+     */
+    isPadExpanded: Boolean = true,
+    padTuckSide: PadTuckSide = PadTuckSide.TRAILING,
+    /** Which end of the score the pad is docked to — the other axis of the same drag, and the same kind of
+     * preference. Bottom by default: that is where a reader's hands already are. */
+    padPlacement: PadPlacement = PadPlacement.BOTTOM,
+    /** The drag's three outcomes, persisted by the caller so the pad stays where a reader put it. See
+     * [com.keynumber.folino.reader.editing.EditingPadTuck]. */
+    onTuckPad: (PadTuckSide) -> Unit = {},
+    onRestorePad: () -> Unit = {},
+    onDockPad: (PadPlacement) -> Unit = {},
+    /** The thresholds and release decisions behind that drag, answered by the shared Swift geometry. Required
+     * rather than defaulted: a stand-in would be a second implementation of the very rules this seam exists to
+     * keep single (see [PadTuckGeometry]). */
+    padTuckGeometry: PadTuckGeometry,
+    /** Steps the selection to the previous / next element. Their own pill at the bottom-left, level with the
+     * transport — see [com.keynumber.folino.reader.editing.EditingStepperPill]. */
     onSelectPreviousElement: () -> Unit = {},
     onSelectNextElement: () -> Unit = {},
     /**
@@ -767,6 +826,18 @@ fun ReaderScreen(
     // (`EditSessionRelay.relay` returns early when it is closed), so the effect needs no gate of its own.
     LaunchedEffect(isPlaying, editing.isEditing) { onPlaybackActiveChange(isPlaying) }
 
+    // A selection landing takes the drawn playhead off the score. iOS does this from
+    // `ReaderEditingHost.selection`'s own setter (`onSelectionMade` → `hideDisplayedCursor`), and for the reason
+    // recorded there: the score can only carry one "you are here" at a time, and here the caret and the playhead
+    // are literally the same translucent accent column. Keyed on the selection FRAME rather than on a boolean so
+    // moving the selection from note to note re-hides a playhead a seek in between had brought back.
+    //
+    // Only a real selection hides it — clearing one does not bring the playhead back, exactly as iOS fires only
+    // for `.single`. `hideDisplayedCursor` refuses while playing on its own.
+    LaunchedEffect(editing.selectedItem) {
+        if (editing.isEditing && editing.selectedItem != null) audioVm.hideDisplayedCursor()
+    }
+
     // Mutual exclusion: annotation is strictly VERTICAL + not-playing. Auto-exit whenever either
     // condition stops holding (layout mode switches away from VERTICAL, or playback starts) so
     // annotation mode never lingers active behind a layout that has no overlay/gating support for it.
@@ -896,6 +967,12 @@ fun ReaderScreen(
     // not, since re-deriving "version skew" from "version skew" is the correct answer either way.
     var editingAttempt by remember { mutableIntStateOf(0) }
     var editingUnavailableReason by remember { mutableStateOf<EditAvailability?>(null) }
+
+    // The element the last tap-to-seek landed on, handed to `onStartEditing` so a session opens on the note the
+    // reader was looking at. Keyed on the score handle: a different score's positional IDs mean nothing here, and
+    // the shared core would drop them anyway — this just keeps the stale bytes from travelling at all.
+    var lastTapSeekItem by remember(scoreHandle) { mutableStateOf<ByteArray?>(null) }
+
     LaunchedEffect(editingAttempt, editing.availability, editing.isEditing) {
         editingUnavailableReason = editingUnavailableReasonFor(editing.availability, editing.isEditing)
     }
@@ -908,18 +985,93 @@ fun ReaderScreen(
     // Reader's own state for "a `.mscz` score is laid out", so it is the whole condition — `Loading` and `Error`
     // have nothing to edit either.
     val canOfferEditing = state is ReaderState.Ready
-    // Editing is wired on the vertical surface only (see the PARITY marker at the `HorizontalScore` call site).
-    // The action is still OFFERED in page / horizontal mode rather than hidden, because "page" is the default
-    // layout preference — hiding it there would make the feature invisible to most users — and tapping it explains
-    // the one thing the user can do about it instead of silently doing nothing.
-    var showEditingLayoutModeNotice by remember { mutableStateOf(false) }
     // Gates ENTRY only, and needs nothing to end a session on a later change, because `layoutMode` cannot move while
     // one is open: the only in-app way to change it is the display inspector, whose top-bar action — like every
     // other reading action — is replaced by the editing set for the duration of a session (see `ReaderTopBar`), and
     // it is a modal sheet, so it can neither be open while "Edit notes" is tapped nor be reached afterwards. Every
     // other route out of this screen ends the session first: both back paths call `onEndEditing`, a playlist
     // retarget ends it on `currentScoreId`, and an Activity recreate disposes the controller.
-    val canEditInThisLayoutMode = layoutMode == ReaderLayoutMode.VERTICAL
+    // Every layout mode edits now, so there is no gate left here — iOS has never had one either.
+
+    // ── Coach marks ────────────────────────────────────────────────────────────────────────────────────────
+    // Icon-only and gesture-only affordances are hard to find by looking at them, so the Reader offers one hint
+    // per launch, pointing at a control that is actually on screen, and retires each for good the first time its
+    // feature is really used. All of that is decided by the shared `ReaderInteractionCore.ReaderHintEngine` —
+    // this screen reports anchors, runs the delays it asks for, and draws the bubble.
+    val hintState by ReaderHintController.state.collectAsStateWithLifecycle()
+    val hintContext = LocalContext.current
+    DisposableEffect(Unit) {
+        ReaderHintController.configure(hintContext)
+        // Anchors are reported by the controls that draw them, so a Reader that never re-renders one would
+        // otherwise leave a stale frame behind for the next score opened.
+        onDispose { ReaderHintController.clearAllAnchors() }
+    }
+    LaunchedEffect(editing.isEditing) { ReaderHintController.setEditing(editing.isEditing) }
+    ReaderHintDeferredOffers(hintState)
+
+    // A bubble must not land on top of something the user just opened, and the tap that dismisses that thing
+    // must not take the bubble with it — hence the settle delay after a blocker clears, which mirrors iOS's.
+    val hintsBlocked = showPdfNotice || showInspector || showDisplayInspector || annotationMode ||
+        editing.isEditing || isConfirmingDiscard
+    LaunchedEffect(hintsBlocked, state::class) {
+        if (hintsBlocked) return@LaunchedEffect
+        delay(HINT_OFFER_SETTLE_MILLIS)
+        // The engine's own per-launch budget is what stops this from offering twice; a call with nothing due, or
+        // with no eligible control on screen, is a no-op.
+        ReaderHintController.offerRotationHint()
+    }
+
+    // Swiping the transport sideways switches it between the two forms — right to shrink, left to enlarge. The
+    // thresholds, the rubber band and the animation pacing are all `ReaderInteractionCore.TransportModeSwipe`'s,
+    // which is also what iOS's transport calls; see `TransportModeSwipe.kt` for the Compose half.
+    //
+    // The preference write is DEFERRED (`preferenceCommitDelay`). Writing it immediately swaps the room reserved
+    // for the score, which re-paginates a page-mode score — heavy enough to eat the first frames of the release
+    // animation, which reads as the control snagging exactly as the finger lifts. The swipe holds the new form
+    // locally until the write lands, so nothing on screen waits for it.
+    val transportScope = rememberCoroutineScope()
+    var seekBarCommitJob by remember { mutableStateOf<Job?>(null) }
+    val transportSwipe = rememberTransportModeSwipe(showSeekBar) { visible ->
+        // Declined while editing, where the transport is pinned compact and a swipe would be teaching a gesture
+        // that currently does nothing. The control then animates back to the preference.
+        if (editing.isEditing) {
+            false
+        } else {
+            ReaderHintController.markUsed(
+                if (visible) ReaderFeatureHint.TRANSPORT_EXPAND else ReaderFeatureHint.TRANSPORT_COLLAPSE,
+            )
+            seekBarCommitJob?.cancel()
+            seekBarCommitJob = transportScope.launch {
+                delay(FolinoReaderJNI.nativeTransportPreferenceCommitDelayMillis().toLong())
+                onShowSeekBarChange(visible)
+            }
+            true
+        }
+    }
+
+    // The reader's seek-bar preference is overridden to false for the duration of an edit session: the pad already
+    // owns most of the bottom of the screen, and the full-width transport under it would push it up over the
+    // music. iOS makes exactly this trade (`ReaderRootScreen.showsSeekBarNow`), and the compact form each platform
+    // falls back to is its own — a 44 pt pill there, the floating FAB cluster here, which this file already
+    // describes as the port of that pill. The stored preference is untouched, so the seek bar is back the moment
+    // the session ends; only the display inspector still reads the raw value, since that row shows the SETTING.
+    //
+    // `rendersSeekBar` rather than the raw preference, so a committed swipe changes the form on the frame it
+    // commits instead of waiting for the deferred write above.
+    val showsSeekBarNow = transportSwipe.rendersSeekBar && !editing.isEditing
+
+    // The score-content Box's own size and the pad's measured height — the two numbers the floating editing chrome
+    // needs and nothing else does.
+    //
+    // The pad reserves scroll room at the end of the score only while it is OUT **and docked at the bottom**. A
+    // tucked pad gives that room back, and a TOP-docked one reserves nothing at all — iOS draws both lines in
+    // `EditorChromeView.publishInsets`, the second because a top inset shoved the whole score down the moment the
+    // pad arrived there, which read as a layout glitch rather than as reserved room.
+    var editingViewportPx by remember { mutableStateOf(IntSize.Zero) }
+    var editingPadHeight by remember { mutableStateOf(0.dp) }
+    val padReservesRoom = editing.isEditing && isPadExpanded && padPlacement == PadPlacement.BOTTOM
+    val editingBottomContentPad = (if (!showsSeekBarNow) fabClusterReservedHeight else 0.dp) +
+        (if (padReservesRoom) editingPadHeight else 0.dp)
 
     // The selection tint (Task 5's `ReaderViewModel.setEditSelection`). `EditUiState.selectedItem` is the raw
     // `ScoreItemID` wire the shared core published; decode it with ssm's own generated codec — a Kotlin second
@@ -963,57 +1115,294 @@ fun ReaderScreen(
         if (editing.didSaveAsSiblingMSCZ) editSaveNoticeHost.showSnackbar(siblingMSCZNotice)
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(editSaveNoticeHost) },
-        topBar = {
-            ReaderTopBar(
-                title = title,
-                onBack = onBack,
-                onShare = onShare,
-                onEditInfo = onEditInfo,
-                onPlaybackControls = { showInspector = true },
-                onDisplaySettings = { showDisplayInspector = true },
-                annotationMode = annotationMode,
-                // Available in every layout mode; only playback locks it out (a moving cursor and a
-                // pinned stylus fight over the same surface, and iOS gates it the same way).
-                annotationEnabled = !isPlaying,
-                onToggleAnnotate = readerVm::toggleAnnotationMode,
-                isPdf = isPdf,
-                onShowPdfNotice = { showPdfNotice = true },
-                editing = editing,
-                canEdit = canOfferEditing,
-                onStartEditing = {
-                    if (canEditInThisLayoutMode) {
-                        onStartEditing()
+    // The coach marks sit above every part of the Reader, so the strip, the transport and the score all share
+    // one overlay. Which hint is showing is `ReaderInteractionCore.ReaderHintEngine`'s answer — the same engine
+    // iOS's `ReaderHintCoordinator` wraps — and this Box only draws it and lets a tap through to what it hit.
+    Box(
+        Modifier
+            .fillMaxSize()
+            .readerHintDismissOnTap(hintState.hint != null),
+    ) {
+        Scaffold(
+            snackbarHost = { SnackbarHost(editSaveNoticeHost) },
+            topBar = {
+                ReaderTopBar(
+                    onBack = onBack,
+                    onShare = onShare,
+                    onEditInfo = onEditInfo,
+                    onPlaybackControls = { showInspector = true },
+                    onDisplaySettings = { showDisplayInspector = true },
+                    annotationMode = annotationMode,
+                    // Available in every layout mode; only playback locks it out (a moving cursor and a
+                    // pinned stylus fight over the same surface, and iOS gates it the same way).
+                    annotationEnabled = !isPlaying,
+                    onToggleAnnotate = {
+                        // The hint retires the first time the feature is really used — including when the user
+                        // found it without being told.
+                        ReaderHintController.markUsed(ReaderFeatureHint.ANNOTATION)
+                        readerVm.toggleAnnotationMode()
+                    },
+                    isPdf = isPdf,
+                    onShowPdfNotice = { showPdfNotice = true },
+                    editing = editing,
+                    canEdit = canOfferEditing,
+                    onStartEditing = {
+                        ReaderHintController.markUsed(ReaderFeatureHint.NOTE_EDITING)
+                        onStartEditing(lastTapSeekItem)
                         // Forces the unavailable-dialog effect above to re-run even when the resulting
                         // `editing.availability` is identical to before (see that effect's own comment).
                         editingAttempt++
-                    } else {
-                        // Refused, not ignored: the surface this mode renders has no hit-test, caret or tint of
-                        // its own (see the PARITY marker at the `HorizontalScore` call site), so opening a session
-                        // here would leave every tap inert with nothing to explain it.
-                        showEditingLayoutModeNotice = true
+                    },
+                    onUndo = onUndo,
+                    onRedo = onRedo,
+                    onSetVoice = onSetVoice,
+                    onEndEditing = onEndEditing,
+                    canRevertToOriginal = editing.canRevertToOriginal,
+                    onRevertToOriginal = onRevertToOriginal,
+                    onRequestDiscard = { isConfirmingDiscard = true },
+                )
+            },
+            bottomBar = {
+                if (editing.isEditing) {
+                    // Nothing at all: an edit session hands the whole bottom of the screen over. The pad floats over
+                    // the score now rather than reserving a band of it (see `EditingPadTuck` at the content Box
+                    // below, and iOS's `EditorChromeView`, whose cluster likewise never re-engraves the score), and
+                    // the transport drops to its compact form — the floating FAB cluster — for the duration.
+                } else if (annotationMode) {
+                    AnnotationToolbar(
+                        state = toolState,
+                        presetColors = AnnotationToolbarDefaults.DEFAULT_COLORS,
+                        canUndo = canUndo,
+                        canRedo = canRedo,
+                        // Optimistic VM write + persist callback: update the VM immediately so the
+                        // toolbar's selection ring / width reflect the change on this frame — the DataStore
+                        // round-trip through onAnnotationToolStateChange -> MainActivity -> collectAsState ->
+                        // LaunchedEffect(annotationToolState) above would otherwise visibly lag by a frame or
+                        // more. That later re-set is idempotent (see the LaunchedEffect's own comment).
+                        onSelect = { tool ->
+                            val next = toolState.copy(selected = tool)
+                            readerVm.setAnnotationToolState(next)
+                            onAnnotationToolStateChange(next)
+                        },
+                        onWidthChange = { width ->
+                            val next = toolState.withWidthForSelected(width)
+                            readerVm.setAnnotationToolState(next)
+                            onAnnotationToolStateChange(next)
+                        },
+                        onUndo = {
+                            // A not-yet-painted wet stroke must not linger on the wet layer for
+                            // MAX_WET_RETENTION_MS after undo removes the drawing it belongs to.
+                            inkHandoff.releaseAll()
+                            readerVm.undoDrawings()
+                        },
+                        onRedo = {
+                            inkHandoff.releaseAll()
+                            readerVm.redoDrawings()
+                        },
+                    )
+                } else if (showsSeekBarNow) {
+                    TransportBar(
+                        audioVm = audioVm,
+                        enabled = canPlayNow,
+                        swipe = transportSwipe,
+                        onAnalyticsTransportPrevious = onAnalyticsTransportPrevious,
+                        onAnalyticsTransportNext = onAnalyticsTransportNext,
+                        onAnalyticsSeek = onAnalyticsSeek,
+                    )
+                }
+            },
+            floatingActionButton = {
+                // The cluster fades and scales in over the shared swap duration, paced the way iOS paces its
+                // card's resize. Only this half is animated: the seek bar lives in `bottomBar`, whose height is
+                // part of the Scaffold's content inset, so animating it away would re-flow the score for the
+                // length of the animation — the very cost the deferred preference write exists to keep off the
+                // gesture. The FAB slot floats over the content and reserves a fixed inset, so it is free.
+                AnimatedVisibility(
+                    visible = !showsSeekBarNow,
+                    enter = fadeIn(tween(transportSwipe.modeSwapMillis)) + scaleIn(tween(transportSwipe.modeSwapMillis)),
+                    exit = fadeOut(tween(transportSwipe.modeSwapMillis)),
+                ) {
+                    PlaybackFab(
+                        audioVm,
+                        enabled = canPlayNow,
+                        swipe = transportSwipe,
+                        onAnalyticsSeek = onAnalyticsSeek,
+                    )
+                }
+            },
+            floatingActionButtonPosition = FabPosition.End,
+        ) { padding ->
+            Box(
+                Modifier
+                    .padding(padding)
+                    .fillMaxSize()
+                    // Fill the whole content area (incl. the band the floating FAB sits over) with the
+                    // same white the score page draws on, so the seek-bar-off bottom area reads as one
+                    // continuous white surface rather than the theme background tint.
+                    .background(Color.White)
+                    .padding(
+                        bottom = if (!showsSeekBarNow &&
+                            (layoutMode == ReaderLayoutMode.HORIZONTAL || layoutMode == ReaderLayoutMode.PAGE)
+                        ) {
+                            fabClusterReservedHeight
+                        } else {
+                            0.dp
+                        },
+                    )
+                    // Report the layout width from HERE, not from the score surface below. This Box is
+                    // composed for every state (Loading included), so the engine gets the real width before
+                    // it lays anything out. Measuring it inside the Ready branch instead meant the width was
+                    // only known after a layout had already been computed and drawn at the seed width — the
+                    // score then visibly stretched sideways when the second layout landed. The score
+                    // surfaces are `fillMaxSize` inside this Box, so the width measured here is the one they
+                    // render into; only the bottom padding above differs.
+                    .onSizeChanged { size ->
+                        if (size.width > 0) readerVm.setLayoutWidthMm(layoutWidthMm(size.width, readerDensity.density))
+                        // The same measurement the pad's tuck geometry needs: a threshold of "a fifth of the short
+                        // side" and a park "past the edge" are both answers about THIS box, which is what the editing
+                        // chrome floats in.
+                        editingViewportPx = size
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                when (val s = state) {
+                    is ReaderState.Loading -> Text("Loading…")
+                    is ReaderState.Error -> Text(s.message, style = MaterialTheme.typography.bodyLarge)
+                    is ReaderState.Ready -> when (layoutMode) {
+                        ReaderLayoutMode.VERTICAL -> ReadyScore(
+                            state = s,
+                            scoreHandle = scoreHandle,
+                            fontProvider = fontProvider,
+                            audioVm = audioVm,
+                            readerVm = readerVm,
+                            layoutOptions = layoutOptions,
+                            // Pad the scroll content's bottom by the FAB cluster height (when the seek bar
+                            // is off) so the last system can scroll out from under the floating play FAB.
+                            bottomContentPad = editingBottomContentPad,
+                            annotation = annotationSurface,
+                            autoFollowEnabled = autoFollowEnabled,
+                            layoutGeneration = layoutGeneration,
+                            isPlaybackActive = isPlaying,
+                            editing = editing,
+                            onSelectItem = onSelectItem,
+                            onTapSeekItem = { lastTapSeekItem = it },
+                            onSetSelectionDuration = onSetSelectionDuration,
+                            onSetSelectionDots = onSetSelectionDots,
+                            onToggleSelectionDot = onToggleSelectionDot,
+                            onShiftPitch = onShiftPitch,
+                            onShiftOctave = onShiftOctave,
+                        )
+                        ReaderLayoutMode.HORIZONTAL -> HorizontalScore(
+                            s, scoreHandle, fontProvider, audioVm, layoutOptions,
+                            autoFollowEnabled = autoFollowEnabled,
+                            annotation = annotationSurface,
+                            readerVm = readerVm,
+                            bottomContentPad = editingBottomContentPad,
+                            layoutGeneration = layoutGeneration,
+                            isPlaybackActive = isPlaying,
+                            editing = editing,
+                            onSelectItem = onSelectItem,
+                            onTapSeekItem = { lastTapSeekItem = it },
+                            onSetSelectionDuration = onSetSelectionDuration,
+                            onSetSelectionDots = onSetSelectionDots,
+                            onToggleSelectionDot = onToggleSelectionDot,
+                            onShiftPitch = onShiftPitch,
+                            onShiftOctave = onShiftOctave,
+                        )
+                        // No `bottomContentPad` here, deliberately: page mode paginates from the viewport's own
+                        // height, so reserving room for the editing chrome would re-flow the whole score the
+                        // moment the pad moved. iOS refuses the same inset for the same reason
+                        // (`horizontalEditingInsets` applies to HORIZONTAL only).
+                        ReaderLayoutMode.PAGE -> PagedScore(
+                            state = s,
+                            scoreHandle = scoreHandle,
+                            fontProvider = fontProvider,
+                            audioVm = audioVm,
+                            readerVm = readerVm,
+                            pageTapHintDismissed = pageTapHintDismissed,
+                            onDismissPageTapHint = onDismissPageTapHint,
+                            autoFollowEnabled = autoFollowEnabled,
+                            pageTurnButtonsVisible = pageTurnButtonsVisible,
+                            annotation = annotationSurface,
+                            layoutGeneration = layoutGeneration,
+                            isPlaybackActive = isPlaying,
+                            selectionTintArgb = selectionTintArgb,
+                            editing = editing,
+                            onSelectItem = onSelectItem,
+                            onTapSeekItem = { lastTapSeekItem = it },
+                            onSetSelectionDuration = onSetSelectionDuration,
+                            onSetSelectionDots = onSetSelectionDots,
+                            onToggleSelectionDot = onToggleSelectionDot,
+                            onShiftPitch = onShiftPitch,
+                            onShiftOctave = onShiftOctave,
+                        )
                     }
-                },
-                onUndo = onUndo,
-                onRedo = onRedo,
-                onSetVoice = onSetVoice,
-                onTogglePad = onTogglePad,
-                onEndEditing = onEndEditing,
-                canRevertToOriginal = editing.canRevertToOriginal,
-                onRevertToOriginal = onRevertToOriginal,
-                onRequestDiscard = { isConfirmingDiscard = true },
-            )
-        },
-        bottomBar = {
-            if (editing.isEditing) {
-                Column {
-                    // The pad is the WHOLE editing bottom bar now. It used to sit above a fixed row carrying the
-                    // voice selector, the pad toggle and the ← / → steppers; that row is gone (the first two are
-                    // app-bar actions — see `EditingTopBarActions` — and the steppers are on the pad itself), so
-                    // nothing is left below the pad but the transport, and the score keeps the band the row used
-                    // to hold for the whole session.
-                    if (editing.isPadVisible) {
+                    is ReaderState.ReadyPdf -> when (layoutMode) {
+                        // Horizontal is not reachable for a PDF (it is not among the offered modes for
+                        // this state), so it falls to the vertical surface below along with VERTICAL itself —
+                        // the same "everything else" fallback the plan calls for.
+                        ReaderLayoutMode.PAGE -> readerVm.pdfPageSource?.let { pdfSource ->
+                            PagedPdfScore(
+                                state = s,
+                                source = pdfSource,
+                                audioVm = audioVm,
+                                readerVm = readerVm,
+                                pageTapHintDismissed = pageTapHintDismissed,
+                                onDismissPageTapHint = onDismissPageTapHint,
+                                autoFollowEnabled = autoFollowEnabled,
+                                pageTurnButtonsVisible = pageTurnButtonsVisible,
+                                annotation = annotationSurface,
+                            )
+                        }
+                        else -> readerVm.pdfPageSource?.let { pdfSource ->
+                            PdfVerticalScore(
+                                state = s,
+                                source = pdfSource,
+                                audioVm = audioVm,
+                                readerVm = readerVm,
+                                bottomContentPad = if (!showsSeekBarNow) fabClusterReservedHeight else 0.dp,
+                                annotation = annotationSurface,
+                                autoFollowEnabled = autoFollowEnabled,
+                            )
+                        }
+                    }
+                }
+                // The editing chrome floats OVER the score rather than reserving a band of it, the way iOS's
+                // `EditorChromeView` does: the pad can tuck and re-emerge without the score re-engraving, and the
+                // steppers keep their corner whatever the pad is doing. Declared last in this Box so both take their
+                // own touches ahead of the score surface underneath.
+                if (editing.isEditing) {
+                    EditingStepperPill(
+                        // Playback only, deliberately not `hasEditTarget` — see the pill's own doc.
+                        enabled = !isPlaying,
+                        onSelectPreviousElement = onSelectPreviousElement,
+                        onSelectNextElement = onSelectNextElement,
+                        // No `navigationBarsPadding()` on either of these: this Box is already inside the Scaffold's
+                        // content padding, which carries the system-bar inset when — as an edit session always
+                        // arranges — there is no bottom bar to carry it instead. Adding it again would push the
+                        // chrome a gesture bar's height up the score.
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 12.dp, bottom = 12.dp),
+                    )
+                    EditingPadTuck(
+                        isExpanded = isPadExpanded,
+                        tuckSide = padTuckSide,
+                        placement = padPlacement,
+                        geometry = padTuckGeometry,
+                        viewportWidthPx = editingViewportPx.width.toFloat(),
+                        viewportHeightPx = editingViewportPx.height.toFloat(),
+                        // Clear of the compact transport, which an edit session always gets (see `showsSeekBarNow`):
+                        // the FAB cluster sits in that band at the bottom-end, and a bottom-docked pad parks above it
+                        // exactly as iOS's pad parks above its own collapsed transport. At the top there is nothing to
+                        // clear — this Box already starts below the app bar — so the inset is only breathing room.
+                        bottomInset = fabClusterReservedHeight,
+                        topInset = 4.dp,
+                        onTuck = onTuckPad,
+                        onRestore = onRestorePad,
+                        onDock = onDockPad,
+                        onCardHeightChange = { editingPadHeight = it },
+                    ) {
                         EditingPad(
                             armedDurationKind = editing.armedDurationKind,
                             armedDots = editing.armedDots,
@@ -1028,9 +1417,7 @@ fun ReaderScreen(
                             // Presentation, not policy: the keys go grey while the transport runs, exactly as iOS
                             // greys them (`EditorPadView`'s `.disabled(viewModel.isPlaybackActive || …)`). It is
                             // not redundant with the core dropping the selection — a tap mid-playback selects
-                            // again, and this is what keeps the keys inert afterwards. The one value the whole
-                            // screen derives, so the pad's steppers and the callout below say the same thing once
-                            // — including the gating the removed bottom bar spelled as `steppersEnabled`.
+                            // again, and this is what keeps the keys inert afterwards.
                             isPlaybackActive = isPlaying,
                             onArmDuration = onArmDuration,
                             onSetArmedDots = onSetArmedDots,
@@ -1042,181 +1429,55 @@ fun ReaderScreen(
                             onCreateTuplet = onCreateTuplet,
                             onRemoveTuplet = onRemoveTuplet,
                             onToggleAddToChord = onToggleAddToChord,
-                            onSelectPreviousElement = onSelectPreviousElement,
-                            onSelectNextElement = onSelectNextElement,
-                            modifier = Modifier
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                                // With the bar deleted the pad can be the bottom-most thing on screen, and the
-                                // gesture / navigation bar would otherwise sit on top of its lowest row of keys.
-                                // Only when the seek bar is hidden: `TransportBar` applies the same padding
-                                // itself, and two of them would double the inset.
-                                .then(if (showSeekBar) Modifier else Modifier.navigationBarsPadding()),
-                        )
-                    }
-                    if (showSeekBar) {
-                        TransportBar(
-                            audioVm = audioVm,
-                            enabled = canPlayNow,
-                            onAnalyticsTransportPrevious = onAnalyticsTransportPrevious,
-                            onAnalyticsTransportNext = onAnalyticsTransportNext,
-                            onAnalyticsSeek = onAnalyticsSeek,
+                            // The margin rides INSIDE the measured frame on purpose: the tuck aligns the card, not
+                            // the frame, so the geometry is handed the padded width and subtracts this back out.
+                            modifier = Modifier.padding(
+                                horizontal = PAD_TUCK_HORIZONTAL_MARGIN,
+                                vertical = 4.dp,
+                            ),
                         )
                     }
                 }
-            } else if (annotationMode) {
-                AnnotationToolbar(
-                    state = toolState,
-                    presetColors = AnnotationToolbarDefaults.DEFAULT_COLORS,
-                    canUndo = canUndo,
-                    canRedo = canRedo,
-                    // Optimistic VM write + persist callback: update the VM immediately so the
-                    // toolbar's selection ring / width reflect the change on this frame — the DataStore
-                    // round-trip through onAnnotationToolStateChange -> MainActivity -> collectAsState ->
-                    // LaunchedEffect(annotationToolState) above would otherwise visibly lag by a frame or
-                    // more. That later re-set is idempotent (see the LaunchedEffect's own comment).
-                    onSelect = { tool ->
-                        val next = toolState.copy(selected = tool)
-                        readerVm.setAnnotationToolState(next)
-                        onAnnotationToolStateChange(next)
-                    },
-                    onWidthChange = { width ->
-                        val next = toolState.withWidthForSelected(width)
-                        readerVm.setAnnotationToolState(next)
-                        onAnnotationToolStateChange(next)
-                    },
-                    onUndo = {
-                        // A not-yet-painted wet stroke must not linger on the wet layer for
-                        // MAX_WET_RETENTION_MS after undo removes the drawing it belongs to.
-                        inkHandoff.releaseAll()
-                        readerVm.undoDrawings()
-                    },
-                    onRedo = {
-                        inkHandoff.releaseAll()
-                        readerVm.redoDrawings()
-                    },
-                )
-            } else if (showSeekBar) {
-                TransportBar(
-                    audioVm = audioVm,
-                    enabled = canPlayNow,
-                    onAnalyticsTransportPrevious = onAnalyticsTransportPrevious,
-                    onAnalyticsTransportNext = onAnalyticsTransportNext,
-                    onAnalyticsSeek = onAnalyticsSeek,
-                )
             }
-        },
-        floatingActionButton = {
-            if (!showSeekBar) PlaybackFab(audioVm, enabled = canPlayNow, onAnalyticsSeek = onAnalyticsSeek)
-        },
-        floatingActionButtonPosition = FabPosition.End,
-    ) { padding ->
-        Box(
-            Modifier
-                .padding(padding)
-                .fillMaxSize()
-                // Fill the whole content area (incl. the band the floating FAB sits over) with the
-                // same white the score page draws on, so the seek-bar-off bottom area reads as one
-                // continuous white surface rather than the theme background tint.
-                .background(Color.White)
-                .padding(
-                    bottom = if (!showSeekBar &&
-                        (layoutMode == ReaderLayoutMode.HORIZONTAL || layoutMode == ReaderLayoutMode.PAGE)
-                    ) {
-                        fabClusterReservedHeight
-                    } else {
-                        0.dp
-                    },
-                )
-                // Report the layout width from HERE, not from the score surface below. This Box is
-                // composed for every state (Loading included), so the engine gets the real width before
-                // it lays anything out. Measuring it inside the Ready branch instead meant the width was
-                // only known after a layout had already been computed and drawn at the seed width — the
-                // score then visibly stretched sideways when the second layout landed. The score
-                // surfaces are `fillMaxSize` inside this Box, so the width measured here is the one they
-                // render into; only the bottom padding above differs.
-                .onSizeChanged { size ->
-                    if (size.width > 0) readerVm.setLayoutWidthMm(layoutWidthMm(size.width, readerDensity.density))
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            when (val s = state) {
-                is ReaderState.Loading -> Text("Loading…")
-                is ReaderState.Error -> Text(s.message, style = MaterialTheme.typography.bodyLarge)
-                is ReaderState.Ready -> when (layoutMode) {
-                    ReaderLayoutMode.VERTICAL -> ReadyScore(
-                        state = s,
-                        scoreHandle = scoreHandle,
-                        fontProvider = fontProvider,
-                        audioVm = audioVm,
-                        readerVm = readerVm,
-                        layoutOptions = layoutOptions,
-                        // Pad the scroll content's bottom by the FAB cluster height (when the seek bar
-                        // is off) so the last system can scroll out from under the floating play FAB.
-                        bottomContentPad = if (!showSeekBar) fabClusterReservedHeight else 0.dp,
-                        annotation = annotationSurface,
-                        autoFollowEnabled = autoFollowEnabled,
-                        layoutGeneration = layoutGeneration,
-                        isPlaybackActive = isPlaying,
-                        editing = editing,
-                        onSelectItem = onSelectItem,
-                        onSetSelectionDuration = onSetSelectionDuration,
-                        onSetSelectionDots = onSetSelectionDots,
-                        onToggleSelectionDot = onToggleSelectionDot,
-                        onShiftPitch = onShiftPitch,
-                        onShiftOctave = onShiftOctave,
-                    )
-                    // PARITY(android): note editing in page mode — editing is offered on the vertical surface only.
-                    //   iOS edits in every layout mode (`ReaderRootScreen` has no mode gate); Android's
-                    //   horizontal/page surface routes its taps through a separate paged-fetch path that would need
-                    //   its own hit-test, caret and tint wiring. Entering edit mode from page mode is refused rather
-                    //   than silently doing nothing.
-                    ReaderLayoutMode.HORIZONTAL -> HorizontalScore(
-                        s, scoreHandle, fontProvider, audioVm, layoutOptions,
-                        autoFollowEnabled = autoFollowEnabled,
-                        annotation = annotationSurface,
-                    )
-                    ReaderLayoutMode.PAGE -> PagedScore(
-                        state = s,
-                        scoreHandle = scoreHandle,
-                        fontProvider = fontProvider,
-                        audioVm = audioVm,
-                        readerVm = readerVm,
-                        pageTapHintDismissed = pageTapHintDismissed,
-                        onDismissPageTapHint = onDismissPageTapHint,
-                        autoFollowEnabled = autoFollowEnabled,
-                        pageTurnButtonsVisible = pageTurnButtonsVisible,
-                        annotation = annotationSurface,
-                    )
+        }
+
+        ReaderHintOverlay(hintState) { hint ->
+            when (hint) {
+                // Teach the gesture by performing it: the transport slides one commit distance the way the finger
+                // would have gone, and the form changes under it.
+                ReaderFeatureHint.TRANSPORT_COLLAPSE,
+                ReaderFeatureHint.TRANSPORT_EXPAND,
+                -> {
+                    ReaderHintController.dismiss()
+                    transportSwipe.performHintedModeSwitch()
                 }
-                is ReaderState.ReadyPdf -> when (layoutMode) {
-                    // Horizontal is not reachable for a PDF (it is not among the offered modes for
-                    // this state), so it falls to the vertical surface below along with VERTICAL itself —
-                    // the same "everything else" fallback the plan calls for.
-                    ReaderLayoutMode.PAGE -> readerVm.pdfPageSource?.let { pdfSource ->
-                        PagedPdfScore(
-                            state = s,
-                            source = pdfSource,
-                            audioVm = audioVm,
-                            readerVm = readerVm,
-                            pageTapHintDismissed = pageTapHintDismissed,
-                            onDismissPageTapHint = onDismissPageTapHint,
-                            autoFollowEnabled = autoFollowEnabled,
-                            pageTurnButtonsVisible = pageTurnButtonsVisible,
-                            annotation = annotationSurface,
-                        )
-                    }
-                    else -> readerVm.pdfPageSource?.let { pdfSource ->
-                        PdfVerticalScore(
-                            state = s,
-                            source = pdfSource,
-                            audioVm = audioVm,
-                            readerVm = readerVm,
-                            bottomContentPad = if (!showSeekBar) fabClusterReservedHeight else 0.dp,
-                            annotation = annotationSurface,
-                            autoFollowEnabled = autoFollowEnabled,
-                        )
+                ReaderFeatureHint.NOTE_EDITING -> {
+                    ReaderHintController.dismiss()
+                    if (canOfferEditing) {
+                        onStartEditing(lastTapSeekItem)
+                        editingAttempt++
                     }
                 }
+                ReaderFeatureHint.ANNOTATION -> {
+                    ReaderHintController.markUsed(ReaderFeatureHint.ANNOTATION)
+                    if (!isPlaying) readerVm.toggleAnnotationMode()
+                }
+                ReaderFeatureHint.STAFF_VISIBILITY -> {
+                    ReaderHintController.dismiss()
+                    showDisplayInspector = true
+                }
+                ReaderFeatureHint.METRONOME,
+                ReaderFeatureHint.REPEAT_PLAYBACK,
+                ReaderFeatureHint.MIXER,
+                -> {
+                    ReaderHintController.dismiss()
+                    showInspector = true
+                }
+                // Gesture hints have nothing to perform; tapping one just acknowledges it.
+                ReaderFeatureHint.PAD_HIDE,
+                ReaderFeatureHint.PAD_RESTORE,
+                ReaderFeatureHint.PAD_MOVE,
+                -> ReaderHintController.dismiss()
             }
         }
     }
@@ -1244,9 +1505,6 @@ fun ReaderScreen(
     }
     editingUnavailableReason?.let { reason ->
         EditingUnavailableDialog(reason = reason, onDismiss = { editingUnavailableReason = null })
-    }
-    if (showEditingLayoutModeNotice) {
-        EditingLayoutModeDialog(onDismiss = { showEditingLayoutModeNotice = false })
     }
     if (showInspector) {
         val openingQuarterBpm by readerVm.openingQuarterBpm.collectAsStateWithLifecycle()
@@ -1319,11 +1577,12 @@ private fun KeepScreenOn(enabled: Boolean) {
 }
 
 /**
- * The Reader's top app bar (back arrow + title + the share / edit-info / playback / display action
- * icons). Extracted from [ReaderScreen]'s Scaffold so the screenshot harness can render the REAL bar
- * over its score scenes (mirroring the [DisplayInspectorContent] / [PlaybackInspectorContent] seams).
- * Production behavior is unchanged: [ReaderScreen] delegates its `topBar` here, passing the same
- * callbacks it used inline.
+ * The Reader's top app bar (back arrow + the share / edit-info / playback / display action icons).
+ * Extracted from [ReaderScreen]'s Scaffold so the screenshot harness can render the REAL bar over its score
+ * scenes (mirroring the [DisplayInspectorContent] / [PlaybackInspectorContent] seams). Production behavior is
+ * unchanged: [ReaderScreen] delegates its `topBar` here, passing the same callbacks it used inline.
+ *
+ * **It carries no score title** — see the `title` slot below for why, and why iOS's own strip never had one.
  *
  * PiP is not exposed here — on Android it auto-enters when the user leaves the app during playback;
  * an explicit toolbar button is an iOS idiom we don't mirror.
@@ -1331,7 +1590,6 @@ private fun KeepScreenOn(enabled: Boolean) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderTopBar(
-    title: String,
     onBack: () -> Unit,
     onShare: () -> Unit,
     onEditInfo: () -> Unit,
@@ -1372,11 +1630,10 @@ fun ReaderTopBar(
     onStartEditing: () -> Unit = {},
     onUndo: () -> Unit = {},
     onRedo: () -> Unit = {},
-    /** The editing actions' voice picker and note-pad toggle — both session controls, both app-bar actions
-     * while a session is open; see [EditingTopBarActions] for why they are here and not in a row of their own. */
+    /** The editing actions' voice picker — a session control, and an app-bar action while a session is open; see
+     * [EditingTopBarActions] for why it is here and not in a row of its own. */
     onSetVoice: (Int) -> Unit = {},
-    onTogglePad: () -> Unit = {},
-    /** Ends the edit session — the back arrow while editing and the ✓ action both call this. */
+    /** Ends the edit session — the leading ✕ while editing and the ✓ action both call this. */
     onEndEditing: () -> Unit = {},
     /** Whether an original is recorded to go back to; gates the overflow's revert item. */
     canRevertToOriginal: Boolean = false,
@@ -1387,34 +1644,32 @@ fun ReaderTopBar(
     TopAppBar(
         modifier = modifier,
         windowInsets = windowInsets,
-        // Single-line title that ellipsizes when it doesn't fit, so a long score name never wraps the
-        // bar to two rows. A PDF adds the brand label after the title, mirroring iOS's PDF badge: it is
-        // what keeps the playback caveat reachable once "Don't show again" has silenced the automatic
-        // presentation. Placed here rather than in `actions` so it reads as a property of THIS document
-        // rather than as another command, and so it never competes with the action icons for width.
+        // **The Reader shows no score title at all**, reading or editing.
+        //
+        // It used to, and it never had the room: this bar carries five actions while reading and six while
+        // editing, so on a 360 dp phone the title ellipsized to two or three characters — a fragment that names
+        // nothing while still taking the width it took. And it was answering a question nobody had: you opened
+        // this score, and the score's own engraved title is right there on the first page.
+        //
+        // iOS reaches the same place and has for longer — `ReaderRootScreen` hides the navigation bar outright and
+        // draws its own strip, which has never carried a title.
+        //
+        // The PDF label stays. It is not decoration: it is what keeps the playback caveat reachable once "Don't
+        // show again" has silenced the automatic presentation, and iOS keeps its `PDFBadge` for the same reason.
+        // With the title gone it simply has the slot to itself.
         title = {
-            // No title while editing. The bar is a contextual one then — six controls on a 360 dp phone — and a
-            // document title is the first thing a contextual bar gives up (Material replaces it with the mode;
-            // iOS's `EditorTopBarView` drops it outright). You already know which score you are editing: you
-            // opened it. Without this the title ellipsizes to two or three characters and earns none of the width.
-            if (!editing.isEditing) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        title.ifEmpty { "folino" },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (isPdf) {
-                        Spacer(Modifier.width(8.dp))
-                        ReaderPdfLabel(onClick = onShowPdfNotice)
-                    }
-                }
+            if (isPdf && !editing.isEditing) {
+                ReaderPdfLabel(onClick = onShowPdfNotice)
             }
         },
         navigationIcon = {
-            // Leaving with edits asks first; leaving without them is just leaving. Back NEVER discards silently —
-            // see `DiscardEditsDialog` for why that rule is what keeps the two platforms teachable to each other.
+            // ✕ while editing, ← while reading. Editing turns this into a contextual bar, and a contextual bar's
+            // leading slot is Material's close — not a back arrow, which promises navigation the mode does not
+            // offer. It is also the control iOS puts in the same place (`EditorDiscardButton`), so the two
+            // platforms end a session by pressing the same thing.
+            //
+            // Leaving with edits asks first; leaving without them is just leaving. Neither ✕ nor the system back
+            // gesture ever discards silently — see `DiscardEditsDialog`.
             IconButton(
                 onClick = {
                     when {
@@ -1424,7 +1679,17 @@ fun ReaderTopBar(
                     }
                 },
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                if (editing.isEditing) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = stringResource(R.string.reader_editing_discard_action),
+                    )
+                } else {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.reader_back),
+                    )
+                }
             }
         },
         actions = {
@@ -1433,11 +1698,10 @@ fun ReaderTopBar(
                     canUndo = editing.canUndo,
                     canRedo = editing.canRedo,
                     activeVoice = editing.activeVoice,
-                    isPadVisible = editing.isPadVisible,
+                    sessionHasEdits = editing.sessionHasEdits,
                     onUndo = onUndo,
                     onRedo = onRedo,
                     onSetVoice = onSetVoice,
-                    onTogglePad = onTogglePad,
                     onEndEditing = onEndEditing,
                     canRevertToOriginal = editing.canRevertToOriginal,
                     onRevertToOriginal = onRevertToOriginal,
@@ -1455,29 +1719,79 @@ fun ReaderTopBar(
                         contentDescription = stringResource(R.string.reader_edit_info),
                     )
                 }
-                IconButton(onClick = onPlaybackControls) {
-                    Icon(Icons.Default.Tune, contentDescription = "Playback controls")
-                }
-                IconButton(onClick = onDisplaySettings) {
+                // The six reading actions have to be told apart at a glance, so no two of them may share a
+                // silhouette. `Tune` (horizontal sliders) and `ViewList` (horizontal rules) used to sit side by
+                // side here, and `EditNote` (pencil over rules) and `Edit` (pencil) right after them — four
+                // glyphs drawn from two families. An open book for the display inspector breaks the
+                // horizontal-rule family; the annotation toggle's marker (below) breaks the pencil one, leaving
+                // `EditNote` as the only pencil in the bar.
+                //
+                // The audio inspector keeps `Tune` — it is a mixer, and faders are what it should look like —
+                // but stood UP. Turning it 90° both clears the last horizontal-rule collision and says the same
+                // thing iOS says here, where this button is `slider.vertical.3`. Rotating the real glyph rather
+                // than drawing a vertical one keeps it Material's own geometry (there is no `TuneVertical` in
+                // the icon set; the whole `*Vert*` list is alignment and swap icons, no faders).
+                IconButton(
+                    onClick = onPlaybackControls,
+                    // Three hints point here — metronome, repeat and the mixer all live behind this button, and
+                    // only one of them is ever offered.
+                    modifier = Modifier.readerHintAnchor(ReaderHintTarget.PLAYBACK_INSPECTOR_BUTTON),
+                ) {
                     Icon(
-                        Icons.AutoMirrored.Filled.ViewList,
+                        Icons.Filled.Tune,
+                        contentDescription = stringResource(R.string.reader_playback_settings),
+                        modifier = Modifier.rotate(-90f),
+                    )
+                }
+                IconButton(
+                    onClick = onDisplaySettings,
+                    modifier = Modifier.readerHintAnchor(ReaderHintTarget.VISUAL_INSPECTOR_BUTTON),
+                ) {
+                    Icon(
+                        Icons.Filled.AutoStories,
                         contentDescription = stringResource(R.string.reader_display_settings),
                     )
                 }
                 if (canEdit) {
-                    IconButton(onClick = onStartEditing) {
+                    IconButton(
+                        onClick = onStartEditing,
+                        modifier = Modifier.readerHintAnchor(ReaderHintTarget.NOTE_EDITING_BUTTON),
+                    ) {
                         Icon(
                             Icons.Outlined.EditNote,
                             contentDescription = stringResource(R.string.reader_editing_start),
                         )
                     }
                 }
-                FilledIconToggleButton(
+                // Mode-on is the FILLED variant of the glyph plus the primary tint — Material's own convention
+                // for a toggle icon button, and the same statement iOS makes by swapping
+                // `pencil.tip.crop.circle` for its `.fill`.
+                //
+                // A `FilledIconToggleButton` used to sit here, and it is not a toggle that happens to be filled
+                // while on: `IconButtonDefaults.filledIconToggleButtonColors()` paints an opaque container in
+                // EVERY state — `surfaceContainerHighest` unchecked, `primary` checked, `onSurface` at 12%
+                // disabled. Next to five bare glyphs, the one control that was never active still read as
+                // permanently switched on, and during playback (when it is disabled) it was the most prominent
+                // thing in the bar.
+                IconToggleButton(
                     checked = annotationMode,
                     onCheckedChange = { onToggleAnnotate() },
                     enabled = annotationEnabled,
+                    modifier = Modifier.readerHintAnchor(ReaderHintTarget.ANNOTATION_BUTTON),
+                    colors = IconButtonDefaults.iconToggleButtonColors(
+                        checkedContentColor = MaterialTheme.colorScheme.primary,
+                    ),
                 ) {
-                    Icon(Icons.Filled.Edit, contentDescription = "Annotate")
+                    Icon(
+                        if (annotationMode) Icons.Filled.Draw else Icons.Outlined.Draw,
+                        contentDescription = stringResource(
+                            if (annotationMode) {
+                                R.string.reader_annotate_stop
+                            } else {
+                                R.string.reader_annotate_start
+                            },
+                        ),
+                    )
                 }
             }
         },
@@ -1543,7 +1857,7 @@ private fun ReadyScore(
     audioVm: ReaderAudioViewModel,
     /** The Reader's own view model — the same instance the caller renders from. Every read of the engine's cached
      * layout this surface performs (the editing hit test, the caret and callout frames) goes through its
-     * [ReaderViewModel.withVerticalLayout] guard rather than calling ssm directly; see the tap branch below. */
+     * [ReaderViewModel.withReaderLayout] guard rather than calling ssm directly; see the tap branch below. */
     readerVm: ReaderViewModel,
     layoutOptions: LayoutOptions,
     bottomContentPad: Dp = 0.dp,
@@ -1564,6 +1878,15 @@ private fun ReadyScore(
     /** Reached with the hit-test result of an editing tap (Task 4), or null to deselect. Never called while
      * `!editing.isEditing`. */
     onSelectItem: (ByteArray?) -> Unit = {},
+    /**
+     * Reached with the element a tap-to-seek landed on, so a LATER edit session can open on it — the note under
+     * the playhead is almost always the one the reader came to change.
+     *
+     * Only fires OUTSIDE edit mode (inside it the same tap picks an element to edit instead of seeking), and only
+     * for a tap that named an element: a cursor that resolved to a bare beat leaves the last one standing rather
+     * than clearing it. Android's half of iOS's `ReaderEditingHost.rememberTappedItem`, down to that rule.
+     */
+    onTapSeekItem: (ByteArray) -> Unit = {},
     /**
      * Ops the callout's keys (Task 8) call directly on
      * [com.keynumber.folino.editor.EditSessionController] — one per key group (length tray, dot, pitch step,
@@ -1605,6 +1928,7 @@ private fun ReadyScore(
     // a fresh lambda every recomposition (the later task wiring in `EditSessionController` will) still
     // reaches the latest callback without the handler restarting.
     val currentOnSelectItem by rememberUpdatedState(onSelectItem)
+    val currentOnTapSeekItem by rememberUpdatedState(onTapSeekItem)
 
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     // `deferRaster = true`: this surface's score is ONE page as tall as the whole document, so following
@@ -1789,7 +2113,7 @@ private fun ReadyScore(
                         //
                         // `nativeEditingHitTest` resolves the tap against the document the engine has CACHED for
                         // this handle, which PiP can have overwritten with a horizontal layout while the app was
-                        // backgrounded (see `ReaderViewModel.withVerticalLayout`). Answering from that document
+                        // backgrounded (see `ReaderViewModel.withReaderLayout`). Answering from that document
                         // names a real but DIFFERENT element, which then becomes the target of the next pad key —
                         // so the read goes through the view model's guard rather than calling ssm directly.
                         //
@@ -1809,7 +2133,7 @@ private fun ReadyScore(
                                 layoutOptionsBytes = optionsBytes,
                             )
                         }
-                        val immediate = readerVm.tryWithVerticalLayout(hitTest)
+                        val immediate = readerVm.tryWithReaderLayout(hitTest)
                         if (immediate != null) {
                             currentOnSelectItem(immediate.value)
                         } else {
@@ -1817,7 +2141,7 @@ private fun ReadyScore(
                                 // Only a guarded answer is reported: a `null` from the guard itself means the tap
                                 // could not be resolved at all, and mapping that to "deselect" would clear the
                                 // selection for a reason the user never gave.
-                                readerVm.withVerticalLayout(hitTest)?.let { currentOnSelectItem(it.value) }
+                                readerVm.withReaderLayout(hitTest)?.let { currentOnSelectItem(it.value) }
                             }
                         }
                         return@detectTapGestures
@@ -1831,6 +2155,15 @@ private fun ReadyScore(
                         layoutOptionsBytes = optionsBytes,
                     ) ?: return@detectTapGestures
                     audioVm.handleTap(cursor)
+                    // Remember what the playhead landed ON, so entering edit mode later starts there instead of on
+                    // an inert pad. `nativeNearestCursor` answers in the score's own addressing — the same
+                    // addressing an edit session speaks — so the bytes go straight across.
+                    //
+                    // A `.Beat` cursor names no element, and is IGNORED rather than treated as "nothing tapped":
+                    // iOS's `rememberTappedItem` is a `guard case .item else { return }`, so the last real element
+                    // survives a tap that resolved to a beat. Clearing here instead would open edit mode blank
+                    // after a sequence iOS opens on the note.
+                    (cursor as? ScoreCursor.Item)?.let { currentOnTapSeekItem(ScoreItemIDCodec.encode(it.arg0)) }
                 }
             }
             // Pan, pinch, and fling. While annotating only two-finger gestures are taken — a single finger
@@ -1947,7 +2280,7 @@ private fun ReadyScore(
                     // own doc). Null caret item ⇒ null rect, which the overlay draws as nothing.
                     //
                     // `nativeEditingCaretFrame` measures the CACHED layout, so like the tap hit test above it goes
-                    // through `ReaderViewModel.withVerticalLayout` — a PiP pass's horizontal document would put the
+                    // through `ReaderViewModel.withReaderLayout` — a PiP pass's horizontal document would put the
                     // caret somewhere the notation is not. This one is already inside a coroutine, so it can simply
                     // suspend on the guard; there is no fast path to keep and nothing on screen moves in the
                     // meantime (the previous rect stays drawn until this resolves).
@@ -1955,7 +2288,7 @@ private fun ReadyScore(
                     var caretRect by remember { mutableStateOf<EditCaretFrame?>(null) }
                     LaunchedEffect(handle, caretItem, layoutGeneration) {
                         caretRect = caretItem?.let { item ->
-                            readerVm.withVerticalLayout { h ->
+                            readerVm.withReaderLayout { h ->
                                 caretRectMm(h, item, EDIT_CARET_MINIMUM_WIDTH_MM)
                             }?.value
                         }
@@ -1980,7 +2313,7 @@ private fun ReadyScore(
                     var calloutRect by remember { mutableStateOf<EditCaretFrame?>(null) }
                     LaunchedEffect(handle, selectedItem, layoutGeneration) {
                         calloutRect = selectedItem?.let { item ->
-                            readerVm.withVerticalLayout { h ->
+                            readerVm.withReaderLayout { h ->
                                 caretRectMm(h, item, EDIT_CALLOUT_MINIMUM_WIDTH_MM)
                             }?.value
                         }
@@ -1997,6 +2330,10 @@ private fun ReadyScore(
                             vPadPx = vPadPx,
                             viewportPanPx = Offset(viewport.offsetX, viewport.offsetY),
                             viewportSizePx = viewportSize,
+                            // The same band the score's scroll content reserves at its end: the compact transport,
+                            // plus the pad while it is out. The chrome floats over this surface now, so without
+                            // this the callout's pitch steps could land underneath the keys.
+                            bottomClearancePx = with(density) { bottomContentPad.toPx() },
                             onSetDuration = onSetSelectionDuration,
                             onSetDots = onSetSelectionDots,
                             onToggleDot = onToggleSelectionDot,
@@ -2005,9 +2342,14 @@ private fun ReadyScore(
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
+                    // `displayCursor`, not `currentCursor`: an edit selection takes the drawn playhead off the
+                    // staff, because the caret above is the very same translucent accent column and two of them
+                    // read as one confused mark. The engine's position is untouched, so playback still resumes
+                    // from where it was — see `ReaderAudioViewModel.displayCursor` (iOS parity:
+                    // `ReaderPlaybackSession.hideDisplayedCursor`).
                     PlaybackCursorOverlay(
                         scoreHandle = handle,
-                        cursorFlow = audioVm.currentCursor,
+                        cursorFlow = audioVm.displayCursor,
                         pxPerMM = fitPxPerMM,
                         scale = scale,
                         panOffset = Offset.Zero,
@@ -2126,6 +2468,8 @@ private fun TransportBar(
      * a PDF's transport never lights up ahead of a real playable score existing, even if the engine
      * somehow reports a non-STOPPED playback state. */
     enabled: Boolean = true,
+    /** Swipe right on the button row to shrink the transport to [PlaybackFab]. */
+    swipe: TransportModeSwipeState,
     onAnalyticsTransportPrevious: () -> Unit = {},
     onAnalyticsTransportNext: () -> Unit = {},
     onAnalyticsSeek: () -> Unit = {},
@@ -2145,6 +2489,9 @@ private fun TransportBar(
             .fillMaxWidth()
             // Keep the bar clear of the gesture / navigation bar at the bottom of the screen.
             .navigationBarsPadding()
+            // The anchor sits on the whole bar rather than on the swiped row, so the caret does not chase the
+            // finger while the control is being dragged.
+            .readerHintAnchor(ReaderHintTarget.TRANSPORT_EXPANDED)
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         val marks by audioVm.rehearsalMarks.collectAsStateWithLifecycle()
@@ -2196,7 +2543,11 @@ private fun TransportBar(
             Modifier
                 .fillMaxWidth()
                 .padding(top = 4.dp)
-                .height(timeRowHeight + transportButtonSize - buttonTimeOverlap),
+                .height(timeRowHeight + transportButtonSize - buttonTimeOverlap)
+                // Only this row takes the mode swipe — deliberately NOT the seek bar or the rehearsal-mark row
+                // above it, which own their own horizontal drags (iOS draws the same line).
+                .offset { IntOffset(swipe.offsetPx.roundToInt(), 0) }
+                .transportModeSwipe(swipe),
         ) {
             Row(
                 Modifier.fillMaxWidth().align(Alignment.TopCenter).height(timeRowHeight),
@@ -2596,6 +2947,8 @@ fun PlaybackFab(
     audioVm: ReaderAudioViewModel,
     /** See [TransportBar]'s matching parameter — same gate, same reason. */
     enabled: Boolean = true,
+    /** Swipe the cluster left to bring the seek card back. Null in previews and the screenshot harness. */
+    swipe: TransportModeSwipeState? = null,
     onAnalyticsSeek: () -> Unit = {},
 ) {
     val playback by audioVm.state.collectAsStateWithLifecycle()
@@ -2615,6 +2968,14 @@ fun PlaybackFab(
         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
 
     Row(
+        modifier = if (swipe == null) {
+            Modifier
+        } else {
+            Modifier
+                .readerHintAnchor(ReaderHintTarget.TRANSPORT_COMPACT)
+                .offset { IntOffset(swipe.offsetPx.roundToInt(), 0) }
+                .transportModeSwipe(swipe)
+        },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -2690,9 +3051,40 @@ internal fun HorizontalScore(
     /** Annotation layers + capture pipeline, owned by ReaderScreen. Null on the PiP rendition, which
      * is a passive mirror and must not accept ink. */
     annotation: AnnotationSurfaceState? = null,
+    /**
+     * Editing seam — the same set [ReadyScore] takes, and for the same reasons; see its parameter docs.
+     *
+     * This surface can edit because it draws the very document the recompute loop publishes, at the document's own
+     * origin with no page offset: every input the hit test and the caret need is already here, and the guarded read
+     * ([ReaderViewModel.withReaderLayout]) already keys on the reader's live layout options, so horizontal mode is
+     * its own key rather than a foreign one. Nothing new had to be computed to enable it.
+     *
+     * All defaulted / nullable because the PiP rendition (`ReaderPipContent`) mounts this same surface as a passive
+     * mirror and must never accept an edit.
+     */
+    readerVm: ReaderViewModel? = null,
+    editing: EditUiState = EditUiState(),
+    onSelectItem: (ByteArray?) -> Unit = {},
+    onTapSeekItem: (ByteArray) -> Unit = {},
+    onSetSelectionDuration: (Int) -> Unit = {},
+    onSetSelectionDots: (Int) -> Unit = {},
+    onToggleSelectionDot: () -> Unit = {},
+    onShiftPitch: (Int) -> Unit = {},
+    onShiftOctave: (Int) -> Unit = {},
+    layoutGeneration: Int = 0,
+    isPlaybackActive: Boolean = false,
+    bottomContentPad: Dp = 0.dp,
 ) {
     val page = state.program.pages.first()
     val annotationMode = annotation?.annotationMode == true
+    // Editing needs the view model to reach the guarded layout read; PiP passes neither, and an edit session can
+    // never be open there anyway.
+    val isEditing = editing.isEditing && readerVm != null
+
+    // See [ReadyScore]'s identical pair for why the tap callbacks are read through `rememberUpdatedState` rather
+    // than keyed into the `pointerInput` below.
+    val currentOnSelectItem by rememberUpdatedState(onSelectItem)
+    val currentOnTapSeekItem by rememberUpdatedState(onTapSeekItem)
 
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     // `deferRaster = false`: a single row is cheap enough to re-record per frame, which this surface
@@ -2831,22 +3223,60 @@ internal fun HorizontalScore(
             // The row's position is now one offset pair, so both axes fold into the content offset
             // unconditionally — the short-row centering that used to need its own branch arrives as a
             // negative offsetY from `ViewportUnderfill.CENTER`.
-            .pointerInput(scoreHandle, fitPxPerMM, layoutOptions, annotationMode) {
+            .pointerInput(
+                scoreHandle,
+                fitPxPerMM,
+                layoutOptions,
+                annotationMode,
+                isEditing,
+                editing.activeVoice,
+            ) {
                 // While annotating, a tap is the start of a stroke — never a seek.
                 if (annotationMode) return@pointerInput
                 val handle = scoreHandle ?: return@pointerInput
                 if (fitPxPerMM <= 0f) return@pointerInput
                 val optionsBytes = layoutOptions.encode()
                 detectTapGestures { offset ->
+                    // One content offset serves both branches: this surface's Box IS the document, so there is
+                    // no page origin and no vertical inset to subtract — the only difference from [ReadyScore]'s
+                    // otherwise identical block.
+                    val contentOffsetPx = Offset(-viewport.offsetX, -viewport.offsetY)
+                    if (isEditing && readerVm != null) {
+                        // Editing replaces tap-to-seek on this surface too — see [ReadyScore]'s tap branch for
+                        // why the read is guarded and why it has a non-suspending fast path.
+                        val hitTest: (Long) -> ByteArray? = { h ->
+                            editingHitTestForTap(
+                                tap = offset,
+                                contentOffsetPx = contentOffsetPx,
+                                pxPerMM = fitPxPerMM,
+                                scale = viewport.scale,
+                                scoreHandle = h,
+                                activeVoice = editing.activeVoice,
+                                layoutOptionsBytes = optionsBytes,
+                            )
+                        }
+                        val immediate = readerVm.tryWithReaderLayout(hitTest)
+                        if (immediate != null) {
+                            currentOnSelectItem(immediate.value)
+                        } else {
+                            scope.launch {
+                                readerVm.withReaderLayout(hitTest)?.let { currentOnSelectItem(it.value) }
+                            }
+                        }
+                        return@detectTapGestures
+                    }
                     val cursor = nearestCursorForTap(
                         tap = offset,
-                        contentOffsetPx = Offset(-viewport.offsetX, -viewport.offsetY),
+                        contentOffsetPx = contentOffsetPx,
                         pxPerMM = fitPxPerMM,
                         scale = viewport.scale,
                         scoreHandle = handle,
                         layoutOptionsBytes = optionsBytes,
                     ) ?: return@detectTapGestures
                     audioVm.handleTap(cursor)
+                    // Remember what the playhead landed on, so a later edit session opens there — see
+                    // [ReadyScore]'s note, including why a bare `.Beat` cursor is ignored rather than clearing.
+                    (cursor as? ScoreCursor.Item)?.let { currentOnTapSeekItem(ScoreItemIDCodec.encode(it.arg0)) }
                 }
             }
             // Pan, pinch, and fling. While annotating only two-finger gestures are taken — a single finger
@@ -2909,9 +3339,63 @@ internal fun HorizontalScore(
                 val bPending by audioVm.repeatPendingB.collectAsStateWithLifecycle()
                 val repeatMode by audioVm.repeatMode.collectAsStateWithLifecycle()
                 scoreHandle?.let { handle ->
+                    // The editing caret and callout, mounted exactly as [ReadyScore] mounts them and for the same
+                    // reasons — see that block's comments. The only differences are this surface's geometry: no
+                    // vertical inset (`vPadPx = 0`), and the document's own origin, so `panOffset` stays zero like
+                    // every other overlay in this Box.
+                    val caretItem = if (isEditing) editing.caretItem else null
+                    var caretRect by remember { mutableStateOf<EditCaretFrame?>(null) }
+                    LaunchedEffect(handle, caretItem, layoutGeneration) {
+                        caretRect = caretItem?.let { item ->
+                            readerVm?.withReaderLayout { h ->
+                                caretRectMm(h, item, EDIT_CARET_MINIMUM_WIDTH_MM)
+                            }?.value
+                        }
+                    }
+                    EditingCaretOverlay(
+                        rectMm = caretRect,
+                        pxPerMM = fitPxPerMM,
+                        scale = scale,
+                        panOffset = Offset.Zero,
+                        color = abAccent.copy(alpha = ON_SCREEN_CURSOR_ALPHA),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    val selectedItem = if (isEditing) editing.selectedItem else null
+                    var calloutRect by remember { mutableStateOf<EditCaretFrame?>(null) }
+                    LaunchedEffect(handle, selectedItem, layoutGeneration) {
+                        calloutRect = selectedItem?.let { item ->
+                            readerVm?.withReaderLayout { h ->
+                                caretRectMm(h, item, EDIT_CALLOUT_MINIMUM_WIDTH_MM)
+                            }?.value
+                        }
+                    }
+                    if (isEditing && editing.hasSelectionCallout) {
+                        EditingCallout(
+                            rectMm = calloutRect,
+                            isNoteSelected = editing.isNoteSelected,
+                            durationKind = editing.calloutDurationKind,
+                            dots = editing.calloutDots,
+                            isPlaybackActive = isPlaybackActive,
+                            pxPerMM = fitPxPerMM,
+                            scale = scale,
+                            vPadPx = 0f,
+                            viewportPanPx = Offset(viewport.offsetX, viewport.offsetY),
+                            viewportSizePx = viewportSize,
+                            bottomClearancePx = with(density) { bottomContentPad.toPx() },
+                            onSetDuration = onSetSelectionDuration,
+                            onSetDots = onSetSelectionDots,
+                            onToggleDot = onToggleSelectionDot,
+                            onShiftPitch = onShiftPitch,
+                            onShiftOctave = onShiftOctave,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                     PlaybackCursorOverlay(
                         scoreHandle = handle,
-                        cursorFlow = audioVm.currentCursor,
+                        // `displayCursor` while editing, so the drawn playhead steps aside for the caret — the two
+                        // are the same translucent accent column and read as one confused mark together. Outside a
+                        // session (and in PiP, which never has one) this is the live cursor as before.
+                        cursorFlow = if (isEditing) audioVm.displayCursor else audioVm.currentCursor,
                         pxPerMM = fitPxPerMM,
                         scale = scale,
                         panOffset = Offset.Zero,

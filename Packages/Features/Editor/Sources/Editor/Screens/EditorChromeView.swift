@@ -1,3 +1,4 @@
+import EditorCore
 import Foundation
 import SheetMusicCore
 import SwiftUI

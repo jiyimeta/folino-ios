@@ -180,6 +180,21 @@ extension EditorSessionCore {
         audition(noteID)
     }
 
+    /// Selects an item that was picked OUTSIDE this session — the reader's last tap-to-seek — so entering edit mode
+    /// picks up where the finger left off instead of opening onto an inert pad.
+    ///
+    /// Two rules, and both are behavior rather than presentation, which is why they are here rather than in each
+    /// host: an ID the current score no longer contains is dropped (engine IDs are positional, and the score can
+    /// have moved on between that tap and this session), and **nothing is auditioned**. `selectFromTap` sounds
+    /// because a tap asked to hear that note; opening a session did not ask for anything.
+    public func selectCarriedItem(_ item: SheetMusicCore.ScoreItemID?) {
+        guard let item, let score, let slot = Self.slot(of: item), score[slot] != nil else {
+            select(nil)
+            return
+        }
+        select(item)
+    }
+
     /// Selects what a tap on the score resolved to, and previews it when it is a note.
     ///
     /// Hearing the note you just aimed at is half of how you know you hit the right one — and it would be odd for

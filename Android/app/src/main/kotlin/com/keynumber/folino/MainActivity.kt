@@ -58,7 +58,11 @@ import com.keynumber.folino.editor.EditSessionRelay
 import com.keynumber.folino.editor.EditorRoomFiles
 import com.keynumber.folino.editor.GeneratedEditBridging
 import com.keynumber.folino.editor.NoteAuditioning
+import com.keynumber.folino.editor.PadPlacement
+import com.keynumber.folino.editor.PadTuckSide
+import com.keynumber.folino.editor.SwiftPadTuckGeometry
 import com.keynumber.folino.editor.generated.EditorBridgeViewModel
+import com.keynumber.folino.editor.generated.EditorPadTuckBridgeViewModel
 import com.keynumber.folino.export.ScoreShareLauncher
 import com.keynumber.folino.library.HiddenStaffEntryWire
 import com.keynumber.folino.library.ReaderPreferencesController
@@ -569,7 +573,10 @@ private fun LibraryNavGraph(
                 ),
             ) { entry ->
                 val navId = entry.arguments?.getString("id") ?: ""
-                val navTitle = URLDecoder.decode(entry.arguments?.getString("title") ?: "", "UTF-8")
+                // The route still carries `{title}` — the Library tap, the playlist tap and the share-import
+                // flow all build it, and it is part of the URL those three agree on — but nothing on the Reader
+                // reads it any more, since the bar shows no score title. Decoding it here would be work whose
+                // only result is an unused string.
                 val navLocalFileName =
                     URLDecoder.decode(entry.arguments?.getString("localFileName").orEmpty(), "UTF-8")
                 val playlistId = entry.arguments?.getString("playlistId")
@@ -580,10 +587,11 @@ private fun LibraryNavGraph(
                 // which file to open. Seeded from the nav arg; the auto-advance path below re-seeds it
                 // from a Room lookup rather than a Reader-side one (see onRetargetScore).
                 var currentLocalFileName by rememberSaveable(navId) { mutableStateOf(navLocalFileName) }
-                // Also part of the same retarget event. The nav arg only ever describes the score the
-                // Reader was ENTERED on, so reading it directly left the app bar naming the previous
-                // score for the whole of every auto-advanced one.
-                var currentTitle by rememberSaveable(navId) { mutableStateOf(navTitle) }
+                // The Reader displays no score title any more — the bar carries five actions and had room for
+                // two or three characters of it — so the retarget event no longer has one to carry. The route
+                // argument and `PlaylistEntry.title` stay: they are what the Library and the share-import flow
+                // already write, and `PlaylistEntry`'s named shape is what makes a forgotten per-score field a
+                // compile error rather than a stale app bar.
                 // Reader display mode comes from the Settings → Layout pref (DataStore). Default
                 // "page" matches SettingsPrefs; until the page/horizontal surfaces land, those
                 // modes fall back to vertical scroll inside ReaderScreen.
@@ -693,6 +701,16 @@ private fun LibraryNavGraph(
                 val audioVm: ReaderAudioViewModel = viewModel()
                 val editBridgeVm: EditorBridgeViewModel =
                     viewModel(factory = remember(context) { EditorBridgeVMFactory(context) })
+                // The note pad's tuck geometry, answered by the same Swift the SwiftUI pad drag calls. A ViewModel
+                // rather than a `remember`, even though it holds no state, because it holds a native pointer that
+                // has to be released — `onCleared` is what does that. Deliberately NOT reached through
+                // `editController`: that one is confined to the `folino-edit` thread (below), and a gesture's
+                // release decision asked for there would queue behind a 200 ms save.
+                val padTuckBridgeVm: EditorPadTuckBridgeViewModel = viewModel(factory = PadTuckVMFactory)
+                val padTuckGeometry = remember(padTuckBridgeVm) { SwiftPadTuckGeometry(padTuckBridgeVm) }
+                val padExpanded by prefs.editorPadExpanded.collectAsState(initial = true)
+                val padTuckSide by prefs.editorPadTuckSide.collectAsState(initial = PadTuckSide.TRAILING)
+                val padPlacement by prefs.editorPadPlacement.collectAsState(initial = PadPlacement.BOTTOM)
                 val editScope = rememberCoroutineScope()
                 // The editing session's own thread. NOT the main thread: a save encodes the whole score, which
                 // measured 160-230 ms on a Pixel 8a, and every op reaching `EditorBridge` runs synchronously. See
@@ -761,7 +779,6 @@ private fun LibraryNavGraph(
                     audioVm = audioVm,
                     scoreId = currentScoreId,
                     localFileName = currentLocalFileName,
-                    title = currentTitle,
                     onEditInfo = {
                         AndroidAnalytics.log(AndroidAnalytics.bridge.scoreInfoOpened("readerOverlay"))
                         nav.navigate("editInfo/$currentScoreId")
@@ -959,7 +976,6 @@ private fun LibraryNavGraph(
                     onRetargetScore = { next ->
                         currentScoreId = next.id
                         currentLocalFileName = next.localFileName
-                        currentTitle = next.title
                     },
                     continuationModeWire = continuationModeWire,
                     onContinuationModeChange = { v -> scope.launch { prefs.setPlaylistContinuationMode(v) } },
@@ -987,11 +1003,15 @@ private fun LibraryNavGraph(
                     readerVm = readerVm,
                     // ── Note editing ──────────────────────────────────────────────────────────────────
                     editing = editing,
-                    onStartEditing = {
+                    onStartEditing = { carriedItem ->
                         editController.begin(
                             scorePath = java.io.File(scoresDir, currentLocalFileName).path,
                             scoresDirectory = scoresDir.path,
                             scoreId = currentScoreId,
+                            // The element the reader's last tap-to-seek landed on, so the session opens on the
+                            // note they were looking at. Empty means nothing was tapped; the shared core reads
+                            // that as "select nothing", which is the correct opening state for a cold session.
+                            carriedItem = carriedItem ?: ByteArray(0),
                         )
                     },
                     onEndEditing = { editController.end() },
@@ -1007,7 +1027,17 @@ private fun LibraryNavGraph(
                     // the transition, and this route is the layer that can see both it and the controller.
                     onPlaybackActiveChange = { active -> editController.setPlaybackActive(active) },
                     onSetVoice = { voice -> editController.setActiveVoice(voice) },
-                    onTogglePad = { editController.setPadVisible(!editing.isPadVisible) },
+                    // The pad's out / tucked state is a persisted reader preference, not session state — see
+                    // `SettingsPrefs.editorPadExpanded`. Nothing is written optimistically: the pad's own spring
+                    // settles on release and the DataStore round trip only confirms it, so a slow write shows as
+                    // nothing at all rather than as a lag in the gesture.
+                    isPadExpanded = padExpanded,
+                    padTuckSide = padTuckSide,
+                    padPlacement = padPlacement,
+                    onTuckPad = { side -> scope.launch { prefs.setEditorPadTucked(side) } },
+                    onRestorePad = { scope.launch { prefs.setEditorPadExpanded() } },
+                    onDockPad = { dock -> scope.launch { prefs.setEditorPadPlacement(dock) } },
+                    padTuckGeometry = padTuckGeometry,
                     onSelectPreviousElement = { editController.selectPreviousElement() },
                     onSelectNextElement = { editController.selectNextElement() },
                     // A null hit-test result means the tap landed on paper, and EMPTY bytes are how the shared
@@ -1194,6 +1224,12 @@ internal class EditorBridgeVMFactory(context: android.content.Context) : ViewMod
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
         // A SAM conversion of the method reference — `ScoreRowRefreshing` is a `fun interface`.
         EditorBridgeViewModel.create(EditorRoomFiles(rows::refreshRowAfterSave)) as T
+}
+
+/** The note pad's tuck geometry bridge. Stateless and context-free, so one object serves every reader entry. */
+internal object PadTuckVMFactory : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T = EditorPadTuckBridgeViewModel.create() as T
 }
 
 internal class LibraryVMFactory(private val context: android.content.Context) : ViewModelProvider.Factory {

@@ -23,12 +23,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
-import androidx.compose.material.icons.filled.NavigateBefore
-import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -55,25 +52,24 @@ import com.keynumber.folino.editor.DEFAULT_TUPLET_SIZE
 import com.keynumber.folino.reader.R
 
 /**
- * The note-input pad: the keys that arm a length and write a pitch, docked above the transport for the duration
- * of an edit session. Android's own placement for the controls iOS keeps in `EditorPadView` (spec §7).
+ * The note-input pad: the keys that arm a length and write a pitch, floating over the score for the duration of
+ * an edit session. Android's own placement for the controls iOS keeps in `EditorPadView` (spec §7).
  *
  * Two rows, split by job exactly as iOS splits them (`EditorPadView.stackedRows`):
  *  1. what the NEXT note will be — the durations, the tuplet key, the tie key, the dot key, the add-to-chord arm;
- *  2. where to write it and what to write — the ← / → selection steppers, then the pitch letters C-B and the
- *     rest key.
+ *  2. what to write — the pitch letters C-B and the rest key.
  *
  * Pitch letters are deliberately not localized (a note name is a note name in every language folino ships),
  * which is why [PadActions.onInputPitch] takes a plain, un-resourced one-letter string — see [PitchKeys] for why
  * it is sent lower-case even though the key reads upper-case.
  *
- * **The ← / → steppers live HERE, not in a bar of their own.** They used to sit in an `EditingBottomBar` beside
- * the voice selector; both moved (the voice selector to the app bar, see `EditingTopBarActions`), because a
- * whole fixed row for three controls cost the score a band of screen for the entire session and put stepping —
- * which only means anything while you are writing — as far from the keys as the layout allows. iOS reaches the
- * same conclusion from the other end: it carries the steppers in a small pill of their own rather than in any
- * global bar. They keep their own group at the head of row 2, told apart from the writing keys by a divider and
- * by being Material `IconButton`s rather than pad keys, so "move the caret" never reads as "write something".
+ * **The ← / → steppers are NOT here.** They were, briefly, and before that they had a fixed row of their own with
+ * the voice selector; both of those are gone. Stepping the caret is navigation, not writing, so it sits beside the
+ * transport in a pill of its own ([EditingStepperPill]) — where iOS puts it, and where it survives the pad being
+ * tucked away, which is exactly when you still want it.
+ *
+ * **The pad is dismissed by dragging it past a side edge**, not by a toggle in the app bar — see [EditingPadTuck],
+ * which owns that motion and hands this composable to it as content.
  *
  * A wide window puts every key on ONE row, chosen by MEASURED width ([BoxWithConstraints]'s `maxWidth`), not by a
  * window-size class — an iPad mini and a 13" iPad share the same "expanded" bucket with 400 dp less to spend, so
@@ -103,8 +99,6 @@ fun EditingPad(
     onCreateTuplet: (Int) -> Unit,
     onRemoveTuplet: () -> Unit,
     onToggleAddToChord: () -> Unit,
-    onSelectPreviousElement: () -> Unit,
-    onSelectNextElement: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // The whole card goes inert TOGETHER while there's nothing to edit, or while the transport is running (the
@@ -114,10 +108,6 @@ fun EditingPad(
     // because a `clickable` is disabled, so this value is what every key's own glyph color keys off of too (see
     // `keyContentColor`), and the per-key flags below (`canWriteRest`, `canTie`/`canAppendTiedNote`) narrow
     // individual keys ADDITIONALLY, matching iOS's own per-key `.disabled(...)` on the same conditions.
-    //
-    // It also subsumes what the old bottom bar spelled as a separate `steppersEnabled = !isPlaying`: the
-    // steppers are gated by the same `!isPlaybackActive` here, and the extra `hasEditTarget` they now also
-    // inherit costs nothing — with no caret and no selection, `selectNextElement` is a no-op in the shared core.
     val enabled = hasEditTarget && !isPlaybackActive
     val typeface = rememberBravuraTypeface()
     val arming = PadArming(
@@ -142,12 +132,16 @@ fun EditingPad(
         onCreateTuplet = onCreateTuplet,
         onRemoveTuplet = onRemoveTuplet,
         onToggleAddToChord = onToggleAddToChord,
-        onSelectPreviousElement = onSelectPreviousElement,
-        onSelectNextElement = onSelectNextElement,
     )
 
     Surface(
         tonalElevation = 3.dp,
+        // The pad floats over the score now, so it needs the same lift [EditingStepperPill] has: a light card on
+        // white paper otherwise has no edge at all and reads as part of the page. This is where the two platforms
+        // do the same thing by different means — iOS's card is a glass material (`regularGlassCompat`), which
+        // carries its own separation and needs no drop shadow; Material's answer to "this surface floats" is
+        // elevation.
+        shadowElevation = 3.dp,
         shape = RoundedCornerShape(20.dp),
         modifier = modifier.fillMaxWidth(),
     ) {
@@ -190,8 +184,6 @@ private data class PadActions(
     val onCreateTuplet: (Int) -> Unit,
     val onRemoveTuplet: () -> Unit,
     val onToggleAddToChord: () -> Unit,
-    val onSelectPreviousElement: () -> Unit,
-    val onSelectNextElement: () -> Unit,
 )
 
 // MARK: Layouts
@@ -213,8 +205,6 @@ private fun SingleRow(arming: PadArming, actions: PadActions, enabled: Boolean, 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ArmingKeys(arming, actions, enabled, typeface, isFlexible = false)
-        PadDivider()
-        StepperKeys(actions, enabled, isFlexible = false)
         PadDivider()
         PitchKeys(actions, enabled, isFlexible = false)
         RestKey(arming, actions, enabled, typeface, isFlexible = false)
@@ -240,8 +230,6 @@ private fun StackedRows(arming: PadArming, actions: PadActions, enabled: Boolean
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            StepperKeys(actions, enabled, isFlexible = true)
-            PadDivider()
             PitchKeys(actions, enabled, isFlexible = true)
             RestKey(arming, actions, enabled, typeface, isFlexible = true)
         }
@@ -455,25 +443,6 @@ private fun RowScope.AddToChordKey(
             ChordGlyph(typeface, enabled)
             AddBadge(enabled)
         }
-    }
-}
-
-/** The ← / → selection steppers. Material `IconButton`s rather than [PadKey]s on purpose: moving the caret is
- * navigation, not writing, and the difference in chrome is what says so at a glance — the same reason iOS keeps
- * them in a pill of their own instead of among the keys. */
-@Composable
-private fun RowScope.StepperKeys(actions: PadActions, enabled: Boolean, isFlexible: Boolean) {
-    IconButton(onClick = actions.onSelectPreviousElement, enabled = enabled, modifier = keyWidth(isFlexible)) {
-        Icon(
-            Icons.Filled.NavigateBefore,
-            contentDescription = stringResource(R.string.reader_editing_previous_element),
-        )
-    }
-    IconButton(onClick = actions.onSelectNextElement, enabled = enabled, modifier = keyWidth(isFlexible)) {
-        Icon(
-            Icons.Filled.NavigateNext,
-            contentDescription = stringResource(R.string.reader_editing_next_element),
-        )
     }
 }
 
@@ -744,25 +713,22 @@ internal val SINGLE_ROW_GAP: Dp = 6.dp
  * of it (see [PadDivider]) — what a fixed-width sibling actually costs the row, not just the line's width. */
 internal val DIVIDER_FOOTPRINT_WIDTH: Dp = DIVIDER_LINE_WIDTH + DIVIDER_HORIZONTAL_PADDING * 2
 
-/** How many [PadDivider]s [SingleRow] lays out — one between each pair of its three job groups. Counted here
- * rather than assumed to be 1, because [singleRowRequiredWidthDp] has to bill for every one of them. */
-internal const val SINGLE_ROW_DIVIDER_COUNT = 2
+/** How many [PadDivider]s [SingleRow] lays out — one between each pair of its two job groups. Counted here
+ * rather than assumed, because [singleRowRequiredWidthDp] has to bill for every one of them. */
+internal const val SINGLE_ROW_DIVIDER_COUNT = 1
 
 /**
  * How many individual keys [SingleRow] lays out today: [PadDuration.ordered]'s duration keys, the tuplet, tie,
- * dot and add-to-chord keys, the two ← / → steppers, the seven [PITCH_LETTERS] pitch keys, and the rest key —
- * the same counts [ArmingKeys]/[StepperKeys]/[PitchKeys]/[RestKey] actually emit, not a copy of the number.
+ * dot and add-to-chord keys, the seven [PITCH_LETTERS] pitch keys, and the rest key — the same counts
+ * [ArmingKeys]/[PitchKeys]/[RestKey] actually emit, not a copy of the number.
  * Anyone adding a key to [SingleRow] must add its count here too, or this value silently undercounts exactly as
  * [SINGLE_ROW_MIN_WIDTH] once did.
  */
 internal val SINGLE_ROW_KEY_COUNT: Int
-    get() = PadDuration.ordered.size + ARMING_EXTRA_KEY_COUNT + STEPPER_KEY_COUNT + PITCH_LETTERS.size + 1
+    get() = PadDuration.ordered.size + ARMING_EXTRA_KEY_COUNT + PITCH_LETTERS.size + 1
 
 /** The arming group's non-duration keys: tuplet, tie, dot, add-to-chord. */
 private const val ARMING_EXTRA_KEY_COUNT = 4
-
-/** The ← / → pair. */
-private const val STEPPER_KEY_COUNT = 2
 
 /**
  * Below this measured width the single row does not fit — see the class doc for why that has to be measured
@@ -891,7 +857,5 @@ private fun PreviewPad(
         onCreateTuplet = {},
         onRemoveTuplet = {},
         onToggleAddToChord = {},
-        onSelectPreviousElement = {},
-        onSelectNextElement = {},
     )
 }

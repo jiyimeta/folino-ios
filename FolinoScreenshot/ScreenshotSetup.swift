@@ -1,6 +1,7 @@
 import Domain
 import Foundation
 @testable import Reader
+import ReaderInteractionCore
 import SheetMusicLayoutApple
 
 /// Shared, idempotent setup that every screenshot scene needs in order to render
@@ -27,7 +28,7 @@ enum ScreenshotSetup {
         // suppressed without touching this file.
         UserDefaults.standard.register(
             defaults: Dictionary(
-                uniqueKeysWithValues: ReaderFeatureHint.allCases.map { (ReaderHintCoordinator.usedKey($0), true) },
+                uniqueKeysWithValues: ReaderFeatureHint.allCases.map { ($0.usedKey, true) },
             ),
         )
     }

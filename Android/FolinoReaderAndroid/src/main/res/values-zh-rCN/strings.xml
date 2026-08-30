@@ -17,7 +17,11 @@
     <!-- 与 iOS 的 "reader.pdf.settingsNote" 译文相同。 -->
     <string name="reader_pdf_settings_note">PDF 乐谱不支持谱表大小、隐藏谱表等显示调整，但可以使用播放设置。</string>
     <string name="reader_display_settings">显示设置</string>
+    <string name="reader_playback_settings">播放设置</string>
     <string name="reader_share">共享</string>
+    <string name="reader_back">返回</string>
+    <string name="reader_annotate_start">开始标注</string>
+    <string name="reader_annotate_stop">停止标注</string>
     <string name="reader_staff_hide">隐藏谱表</string>
     <string name="reader_staff_show">显示谱表</string>
     <string name="reader_clef_choose">选择谱号</string>
@@ -75,10 +79,13 @@
     <string name="reader_editing_undo">撤销</string>
     <string name="reader_editing_redo">重做</string>
     <string name="reader_editing_pad">音符面板</string>
+    <string name="reader_editing_discard_action">放弃更改</string>
+    <string name="reader_editing_pad_hide">隐藏音符键盘</string>
+    <string name="reader_editing_pad_show">显示音符键盘</string>
+    <string name="reader_editing_pad_move">移动编辑控件</string>
     <string name="reader_editing_voice">声部 %1$d</string>
     <string name="reader_editing_unavailable_version">无法编辑：此乐谱正由不同版本的引擎渲染。</string>
     <string name="reader_editing_unavailable_diverged">此乐谱目前无法编辑。</string>
-    <string name="reader_editing_unavailable_layout_mode">音符编辑仅在垂直滚动布局下可用。请在显示设置中切换布局。</string>
     <string name="reader_editing_duration_whole">全音符</string>
     <string name="reader_editing_duration_half">二分音符</string>
     <string name="reader_editing_duration_quarter">四分音符</string>
@@ -107,4 +114,25 @@
     <string name="reader_editing_more">更多</string>
     <string name="reader_editing_revert">恢复为原始乐谱</string>
     <string name="reader_editing_saved_as_mscz">编辑内容将保存为原文件旁的 MuseScore (.mscz) 副本。</string>
+    <!-- Reader coach marks. Copy is the same feature's copy on iOS
+         (Reader/Resources/Localizable.xcstrings, reader.hint.*) — the one deliberate change is the
+         annotation message, which names a stylus rather than Apple Pencil. Which of these is offered,
+         when, and when it retires is decided by the shared ReaderHintEngine, not here. -->
+    <string name="reader_hint_transport_collapse_title">向右滑动可缩小显示</string>
+    <string name="reader_hint_transport_collapse_message">将播放控件下方向右滑动，即可切换为小尺寸显示。</string>
+    <string name="reader_hint_transport_expand_title">向左滑动可放大显示</string>
+    <string name="reader_hint_transport_expand_message">将播放控件向左滑动，即可切换为大尺寸显示。</string>
+    <string name="reader_hint_note_editing_title">编辑音符</string>
+    <string name="reader_hint_note_editing_message">可直接改写乐谱中的音符。选中音符即可更改音高、时值、临时记号等，也可以输入新的音符。</string>
+    <string name="reader_hint_annotation_title">在乐谱上书写</string>
+    <string name="reader_hint_annotation_message_tablet">可用触控笔或手指直接在乐谱上做笔记。</string>
+    <string name="reader_hint_annotation_message_phone">可用手指直接在乐谱上做笔记。</string>
+    <string name="reader_hint_staff_visibility_title">隐藏声部</string>
+    <string name="reader_hint_staff_visibility_message">在显示设置中隐藏不演奏的声部，让自己的声部显示得更大。</string>
+    <string name="reader_hint_metronome_title">节拍器</string>
+    <string name="reader_hint_metronome_message">在播放设置中可切换是否播放节拍器。</string>
+    <string name="reader_hint_repeat_playback_title">重复与 A–B 循环</string>
+    <string name="reader_hint_repeat_playback_message">在播放设置中可设置整首重复，或只循环想要练习的片段的 A–B 循环。</string>
+    <string name="reader_hint_mixer_title">各声部音量</string>
+    <string name="reader_hint_mixer_message">在播放设置中可调整各声部的音量，或用静音/独奏只听想听的声部。</string>
 </resources>

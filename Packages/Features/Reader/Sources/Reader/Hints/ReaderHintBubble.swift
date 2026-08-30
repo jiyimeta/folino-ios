@@ -1,10 +1,12 @@
+import ReaderInteractionCore
 import SwiftUI
 import UIKit
 import UtilityUI
 
 // Anchored feature-hint bubble, ported from synclick's `FeatureHintBubble`. One hint at a time, anchored to a control,
 // with a caret pointing at it. No scrim: an outside tap dismisses the hint AND still activates whatever it hit (a
-// window-level `UITapGestureRecognizer` with `cancelsTouchesInView = false`). No × — the bubble times itself out.
+// window-level `UITapGestureRecognizer` with `cancelsTouchesInView = false`). No ×, and no timeout either: a bubble
+// stays until the screen is tapped, because a coach mark that expires on its own can vanish mid-read.
 //
 // What differs from synclick: anchors arrive as rects through `ReaderHintCoordinator` rather than as SwiftUI
 // `Anchor<CGRect>` preferences. Every control hinted here is in the Reader's own view tree (`ReaderTopBarControls`
@@ -62,11 +64,6 @@ private struct ReaderHintOverlay: View {
     let coordinator: ReaderHintCoordinator
     let onActivate: (ReaderFeatureHint) -> Void
 
-    private let caretGap: CGFloat = 4 // gap between the caret apex and the control
-    private let edgeMargin: CGFloat = 14 // min margin from the screen edge
-    private let maxBubbleWidth: CGFloat = 280
-    private let caretInset: CGFloat = 24 // keep the caret ≥ cornerRadius + halfCaret from the corners
-
     /// Where this overlay sits in the window. Measured the same way the anchors are, rather than read off the
     /// `GeometryProxy`, so both ends of the subtraction below are stated in one space by construction — the whole bug
     /// this fixes was two measurements that each looked right and were taken in different spaces.
@@ -76,41 +73,50 @@ private struct ReaderHintOverlay: View {
         GeometryReader { proxy in
             if let hint = coordinator.presentedHint, let anchor = coordinator.anchor(for: hint.target) {
                 // The anchor is in window coordinates; this overlay's own window origin converts it into its space.
+                // Where the card ends up is `ReaderHintBubbleLayout`'s answer, not this view's — the clamp that keeps
+                // the card on screen while the caret keeps tracking the control is the one piece of this bubble that
+                // is easy to get subtly wrong, so both platforms ask the same function.
                 let rect = anchor.offsetBy(dx: -windowOrigin.x, dy: -windowOrigin.y)
-                let width = min(maxBubbleWidth, proxy.size.width - 2 * edgeMargin)
-                let minCenterX = edgeMargin + width / 2
-                let maxCenterX = proxy.size.width - edgeMargin - width / 2
-                let centerX = min(max(rect.midX, minCenterX), max(minCenterX, maxCenterX))
-                // The caret keeps tracking the control even when the bubble itself is clamped to a screen edge.
-                let caretDX = min(max(rect.midX - centerX, -width / 2 + caretInset), width / 2 - caretInset)
-                let placement = hint.target.placement(anchorMidY: rect.midY, viewportHeight: proxy.size.height)
-                let below = placement == .below
-                // Pin the bubble's caret-side edge a fixed gap from the control — height-independent, so a long
-                // multi-line message grows away from the anchor instead of riding over it.
-                let edgeY = below ? rect.maxY + caretGap : rect.minY - caretGap
+                let frame = ReaderHintBubbleLayout.frame(
+                    anchor: ReaderHintRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height),
+                    target: hint.target,
+                    viewportWidth: proxy.size.width,
+                    viewportHeight: proxy.size.height,
+                )
+                let below = frame.placement == .below
 
                 ZStack {
                     TapThroughObserver { Task { @MainActor in coordinator.dismiss() } }
                         .allowsHitTesting(false)
 
-                    ReaderHintBubble(hint: hint, placement: placement, caretDX: caretDX) {
+                    ReaderHintBubble(hint: hint, placement: frame.placement, caretDX: frame.caretDX) {
                         onActivate(hint)
                     }
-                    .frame(width: width)
+                    .frame(width: frame.width)
                     .frame(
                         maxWidth: .infinity,
                         maxHeight: .infinity,
                         alignment: below ? .topLeading : .bottomLeading,
                     )
-                    .offset(x: centerX - width / 2, y: below ? edgeY : edgeY - proxy.size.height)
-                    .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: below ? .top : .bottom)))
+                    .offset(x: frame.originX, y: below ? frame.edgeY : frame.edgeY - proxy.size.height)
+                    .transition(
+                        .opacity.combined(
+                            with: .scale(
+                                scale: ReaderHintBubbleLayout.transitionScale,
+                                anchor: below ? .top : .bottom,
+                            ),
+                        ),
+                    )
                 }
             }
         }
         .onWindowFrameChange { frame in
             windowOrigin = frame.origin
         }
-        .animation(.easeOut(duration: 0.2), value: coordinator.presentedHint)
+        .animation(
+            .easeOut(duration: ReaderHintBubbleLayout.transitionDuration),
+            value: coordinator.presentedHint,
+        )
     }
 }
 
@@ -124,19 +130,19 @@ struct ReaderHintBubble: View {
 
     var body: some View {
         let shape = ReaderHintBubbleShape(caretUp: placement == .below, caretDX: caretDX)
-        return VStack(alignment: .leading, spacing: 3) {
+        return VStack(alignment: .leading, spacing: ReaderHintBubbleLayout.titleMessageSpacing) {
             ReaderHintCopy.title(hint)
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: ReaderHintBubbleLayout.titleFontSize, weight: .bold))
                 .foregroundStyle(Color.accentColor)
             ReaderHintCopy.message(hint)
-                .font(.system(size: 13))
+                .font(.system(size: ReaderHintBubbleLayout.messageFontSize))
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, ReaderHintBubbleLayout.horizontalPadding)
+        .padding(.vertical, ReaderHintBubbleLayout.verticalPadding)
         // Reserve the caret strip on the protruding side so text never overlaps the arrow.
-        .padding(placement == .below ? .top : .bottom, ReaderHintCaretMetrics.height)
+        .padding(placement == .below ? .top : .bottom, ReaderHintBubbleLayout.caretHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
         // Card and arrow are ONE shape, so a single shadow wraps the whole silhouette — no internal seam where the
         // arrow meets the body.
@@ -153,13 +159,6 @@ struct ReaderHintBubble: View {
     }
 }
 
-/// Caret geometry, shared by `ReaderHintBubbleShape` and the overlay's placement math.
-enum ReaderHintCaretMetrics {
-    static let width: CGFloat = 18
-    static let height: CGFloat = 8
-    static let cornerRadius: CGFloat = 14
-}
-
 /// A rounded-rectangle bubble with a triangular caret on one edge, traced as ONE continuous outline so fill, border and
 /// shadow treat card + arrow as a single component. `caretUp` puts the arrow on the top edge (bubble below its
 /// anchor); otherwise the bottom edge. `caretDX` shifts the arrow off-center so it keeps pointing at the anchor when
@@ -169,9 +168,9 @@ struct ReaderHintBubbleShape: Shape {
     var caretDX: CGFloat
 
     func path(in rect: CGRect) -> Path {
-        let radius = ReaderHintCaretMetrics.cornerRadius
-        let caretHeight = ReaderHintCaretMetrics.height
-        let halfCaret = ReaderHintCaretMetrics.width / 2
+        let radius = ReaderHintBubbleLayout.cornerRadius
+        let caretHeight = ReaderHintBubbleLayout.caretHeight
+        let halfCaret = ReaderHintBubbleLayout.caretWidth / 2
         let apexX = rect.midX + caretDX
         var path = Path()
 
