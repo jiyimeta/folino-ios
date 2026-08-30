@@ -52,6 +52,34 @@ struct AnnotatedPDFComposerTests {
         return CGPDFDictionaryGetCount(bucket)
     }
 
+    /// Rasterizes `page` at `scale`× into a white-filled RGBA bitmap, drawn straight into the context's native
+    /// bottom-left, y-up space — the same space the page's own content stream (and our composer's ink placement)
+    /// is expressed in, so a sample point can be given in plain PDF/page points with no extra flip bookkeeping.
+    private static func rasterize(_ page: CGPDFPage, size: CGSize, scale: CGFloat) throws -> CGContext {
+        let width = Int(size.width * scale), height = Int(size.height * scale)
+        let context = try #require(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue,
+        ))
+        context.setFillColor(gray: 1, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        context.scaleBy(x: scale, y: scale)
+        context.drawPDFPage(page)
+        return context
+    }
+
+    /// The red channel at `point` (in the page's own points, bottom-left origin) inside a bitmap `rasterize`
+    /// produced at `scale`. The raw buffer's row 0 is the bitmap's TOP scanline while the context's own drawing
+    /// space has y = 0 at the BOTTOM (Core Graphics' standard top-down-buffer / bottom-up-space split), hence the
+    /// `context.height - 1 - ...` flip when turning a page-space y into a buffer row. Good enough to tell solid
+    /// black ink from a blank white page without needing exact color fidelity.
+    private static func redChannel(of context: CGContext, at point: CGPoint, scale: CGFloat) throws -> UInt8 {
+        let pixels = try #require(context.data).assumingMemoryBound(to: UInt8.self)
+        let x = Int(point.x * scale)
+        let y = context.height - 1 - Int(point.y * scale)
+        return pixels[y * context.bytesPerRow + x * 4]
+    }
+
     @Test
     @MainActor
     func `composing with no placements returns a document with the same pages`() throws {
@@ -85,6 +113,43 @@ struct AnnotatedPDFComposerTests {
         let document = try Self.open(out)
         #expect(try Self.xObjectCount(of: document, page: 1) > 0)
         #expect(try Self.xObjectCount(of: document, page: 2) == 0)
+    }
+
+    @Test
+    @MainActor
+    func `ink lands where it was drawn, not mirrored by the coordinate flip`() throws {
+        // A short (20pt) horizontal stroke centered 40pt below the UIKit-space (top-left origin, y-down) top edge,
+        // 60pt wide, so a sample taken dead-center is robustly inside the ink regardless of PencilKit's own edge
+        // softening. `sp: 1, px: 0, py: 0` is the identity transform, so this placement lands at exactly x = 200,
+        // y = 40 in page-local UIKit space with no extra arithmetic to track. The two points must be distinct — an
+        // earlier version of this test used a single stationary point twice and PencilKit rendered no ink at all
+        // for the resulting zero-length path, which would have made the test pass for the wrong reason (nothing to
+        // sample) rather than the right one.
+        let stroke = InkStroke(
+            tool: .pen, colorRGBA: 0x0000_00FF, baseWidthSp: 60, opacity: 1,
+            x: [190, 210], y: [40, 40], width: [60, 60],
+            force: [1, 1], azimuth: [0, 0], altitude: [.pi / 2, .pi / 2], timeMillis: [0, 1],
+        )
+        let drawings = [
+            DrawingAnchor(kind: .page(PageAnchor(pageIndex: 0)), encodedDrawing: InkStrokeCodec.encode(stroke)),
+        ]
+        let placements = [
+            InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 1, px: 0, py: 0)),
+        ]
+        let base = try Self.baseDocument(pages: 1)
+        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements)
+        let page = try #require(try Self.open(out).page(at: 1))
+
+        // A correct flip puts a mark drawn 40pt from the UIKit top edge 40pt from the PDF page's top edge too —
+        // i.e. near PDF-space y = 600 - 40 = 560, not mirrored down near y = 40. `mirrored` is `expected` reflected
+        // about the page's vertical center (y = 300): an inverted flip, or a scale/translate applied in the wrong
+        // order, would move the ink there instead, and the two points are far enough apart (520pt) that both can
+        // never read as ink at once.
+        let expected = CGPoint(x: 200, y: 560)
+        let mirrored = CGPoint(x: 200, y: 40)
+        let context = try Self.rasterize(page, size: CGSize(width: 400, height: 600), scale: 2)
+        #expect(try Self.redChannel(of: context, at: expected, scale: 2) < 128, "expected ink near the top edge")
+        #expect(try Self.redChannel(of: context, at: mirrored, scale: 2) > 200, "expected blank page near the bottom")
     }
 
     @Test

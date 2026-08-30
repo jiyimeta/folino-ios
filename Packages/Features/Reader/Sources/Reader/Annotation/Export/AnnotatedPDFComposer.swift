@@ -53,6 +53,9 @@ enum AnnotatedPDFComposer {
         }
 
         for pageNumber in 1 ... source.numberOfPages {
+            // `source.page(at:)` cannot actually return nil here — `pageNumber` never leaves the
+            // already-validated `1...source.numberOfPages` range `CGPDFDocument` reports for itself — but the
+            // API is optional-returning, so this stays a defensive skip rather than a force-unwrap.
             guard let page = source.page(at: pageNumber) else { continue }
             var box = page.getBoxRect(.mediaBox)
             context.beginPDFPage([
