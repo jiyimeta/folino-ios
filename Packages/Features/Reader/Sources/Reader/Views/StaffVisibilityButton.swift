@@ -1,6 +1,7 @@
 import ReaderInteractionCore
 import SheetMusicCore
 import SwiftUI
+import UtilityUI
 
 /// Per-staff show/hide toggle, shared by the visual and playback inspectors so the same control appears (and behaves)
 /// in both. The eye glyph opens / closes with the staff's visibility, wrapped in the circular toggle style that the

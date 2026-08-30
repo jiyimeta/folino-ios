@@ -6,18 +6,18 @@ import UtilityUI
 // budget, the same reason `EditorTopBarView+Previews.swift` exists.
 
 extension EditorTopBarView {
-    /// Opens the instruments sheet — what the score is written for, and which staves are on screen. A plain SF
-    /// symbol (`music.note.list`) rather than a custom one: nothing about a list of instruments needs a glyph the
-    /// system doesn't already have, and it reads distinctly against the pad toggle's note-with-a-plus next door.
-    var instrumentsButton: some View {
-        topBarButton(system: "music.note.list", label: "editor.instruments.title") {
-            viewModel.isInstrumentsSheetPresented = true
-        }
-        .interactiveGlassCompat()
-    }
-
-    /// `instrumentsButton`'s form once the row has folded into `⋯` — it is the standalone button that goes away at
-    /// narrow widths, not the feature.
+    /// Opens the instruments sheet — what the score is written for, and which staves are on screen.
+    ///
+    /// A `⋯` row at every width rather than a standalone button that folds into one: the sheet is reached when the
+    /// ensemble changes, not while notes are being entered, and the slot it was holding on the strip is worth more
+    /// to the controls that are used every bar.
+    ///
+    /// Named for parts rather than instruments, because that is what the rows are: one per part, carrying its
+    /// name, its order, whether its staves are drawn — and, as a secondary line, the instrument it plays. Picking
+    /// an instrument only happens on the way to adding a part; no row here changes an existing part's instrument.
+    ///
+    /// `list.bullet` for the same reason: this is a list to work down, not a picker of instruments. The note-list
+    /// glyph it replaced also belongs to the Reader's playlist continuation row, one panel away.
     var instrumentsMenuRow: some View {
         Button {
             viewModel.isInstrumentsSheetPresented = true
@@ -25,7 +25,7 @@ extension EditorTopBarView {
             Label {
                 Text("editor.instruments.title", bundle: .module)
             } icon: {
-                Image(systemName: "music.note.list")
+                Image(systemName: "list.bullet")
             }
         }
     }

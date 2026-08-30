@@ -1,3 +1,4 @@
+import ScoreUI
 import SwiftUI
 
 // The bar-scoped entry points on the editing strip — the key-signature, time-signature and rehearsal-mark
@@ -21,7 +22,10 @@ extension EditorTopBarView {
             Label {
                 Text("editor.measure.keySignature", bundle: .module)
             } icon: {
-                Image(systemName: "music.quarternote.3")
+                // The sharp-and-flat pair the Reader's transpose row already uses — one glyph for "the written
+                // pitch moves", wherever it is asked for. Shared through ScoreUI because a Feature cannot reach
+                // another Feature's bundle.
+                ScoreSymbol.sharpFlat
             }
         }
         .disabled(viewModel.targetMeasureIndex == nil || viewModel.targetConcertKey == nil)
@@ -31,7 +35,9 @@ extension EditorTopBarView {
             Label {
                 Text("editor.measure.timeSignature", bundle: .module)
             } icon: {
-                Image(systemName: "metronome")
+                // A meter, not a metronome: the tempo is a different control, and this row changes what a bar
+                // holds rather than how fast it is played.
+                ScoreSymbol.timeSignature
             }
         }
         .disabled(viewModel.targetMeasureIndex == nil)
@@ -60,6 +66,9 @@ extension EditorTopBarView {
             }
             .sheet(isPresented: $viewModel.isRehearsalMarkSheetPresented) {
                 EditorRehearsalMarkSheet(viewModel: viewModel)
+            }
+            .sheet(isPresented: $viewModel.isAddMeasuresSheetPresented) {
+                EditorAddMeasuresSheet(viewModel: viewModel)
             }
     }
 }

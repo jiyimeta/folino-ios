@@ -23,17 +23,25 @@ import UtilityUI
 @MainActor
 struct EditorInstrumentsSheet: View {
     @Bindable var viewModel: EditorViewModel
-    @Environment(\.dismiss) private var dismiss
     /// The catalog, presented over this sheet when `+` is tapped.
     @State private var isCatalogPresented = false
     /// The row a swipe-delete is asking about, which is also what drives the confirmation. A row rather than an
     /// index: the dialog has to say the part's name, and the index alone would make that a second lookup that could
     /// disagree with what was swiped.
     @State private var partPendingRemoval: EditorViewModel.PartRow?
+    /// In-progress name edits, by part id. A row reads the score until it is typed into, and goes back to reading
+    /// it once the draft is written — so an undo, or an edit arriving from elsewhere, is never masked by a stale
+    /// buffer for a row nobody is editing.
+    @State private var nameDrafts: [String: String] = [:]
+    /// Which row's name field holds focus, by part id. Leaving a field is what commits it.
+    @FocusState private var focusedPartID: String?
+    /// The row whose abbreviation the alert is editing, and that edit's text.
+    @State private var shortNameTarget: String?
+    @State private var shortNameText = ""
 
     var body: some View {
-        NavigationStack {
-            List {
+        List {
+            Section {
                 ForEach(viewModel.partRows) { row in
                     partRow(row)
                 }
@@ -48,18 +56,55 @@ struct EditorInstrumentsSheet: View {
                     else { return }
                     partPendingRemoval = viewModel.partRows[offset]
                 }
-                // A score must keep one part, and the engine refuses the last removal anyway — so the swipe simply
+                // A score must keep one part, and the engine refuses the last removal anyway — so the delete simply
                 // isn't offered rather than being offered and rejected.
                 .deleteDisabled(!viewModel.canRemovePart)
+                // At the foot of the list rather than a `+` in the toolbar: the list is permanently in edit mode,
+                // so its rows carry the delete and reorder affordances and the only thing missing is the other
+                // end of the same job. Outside the `ForEach`, so edit mode leaves this row undecorated.
+                Button { isCatalogPresented = true } label: {
+                    Label {
+                        Text("editor.instruments.add", bundle: .module)
+                    } icon: {
+                        Image(systemName: "plus")
+                    }
+                }
+            } header: {
+                Text("editor.instruments.title", bundle: .module)
             }
-            .navigationTitle(Text("editor.instruments.title", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { toolbarContent }
+        }
+        // Always on, so a part can be reordered or removed without an `EditButton` first — the same reasoning
+        // as the creation wizard's list, and on the `List` itself because that is where edit mode is read
+        // from (a section-scoped write renders no affordances at all).
+        .environment(\.editMode, .constant(.active))
+        .contentMargins(.top, 4, for: .scrollContent)
+        // Opens at half height and pulls to full: half is enough to see what a small score holds, and an ensemble
+        // of any size does not fit there. No navigation bar, no confirming button — the section header names the
+        // list the way the Reader's inspectors name theirs, and every action here is already written to the score
+        // by the time you see it, so there is nothing for a "done" to confirm. Swipe down closes it.
+        .presentationDetents([.medium, .large])
+        // Leaving a field is what writes it. Watched here rather than per row, because the value that changes is
+        // one piece of state: the row losing focus is the PREVIOUS value, and the row gaining it is the new one.
+        .onChange(of: focusedPartID) { previous, _ in
+            guard let previous, let row = viewModel.partRows.first(where: { $0.id == previous }) else { return }
+            commitName(row)
         }
         // Both presentations hang off this view's ROOT, never off a `Section` or a row: a modifier attached inside
         // the list is torn down the moment the list rebuilds — which adding or deleting a part does — and the sheet
         // closes on the frame it opened (repo gotcha).
         .sheet(isPresented: $isCatalogPresented) { catalogSheet }
+        .alert(
+            Text("editor.instruments.shortName", bundle: .module),
+            isPresented: shortNamePresentationBinding,
+        ) {
+            TextField(text: $shortNameText) {
+                Text("editor.instruments.shortName", bundle: .module)
+            }
+            Button { shortNameTarget = nil } label: { L10n.Common.cancel }
+            Button(action: commitShortName) { L10n.Common.ok }
+        } message: {
+            Text("editor.instruments.shortName.message", bundle: .module)
+        }
         .confirmationDialog(
             deletionTitle,
             isPresented: isRemovalConfirmationPresented,
@@ -91,51 +136,112 @@ struct EditorInstrumentsSheet: View {
     @ViewBuilder
     private func partRow(_ row: EditorViewModel.PartRow) -> some View {
         if row.staffAddresses.count == 1, let address = row.staffAddresses.first {
-            Toggle(isOn: visibility(of: address)) {
-                Text(row.name)
+            HStack {
+                partName(row)
+                Spacer(minLength: 8)
+                visibilityButton(address)
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                Text(row.name)
+                partName(row)
                 ForEach(Array(row.staffAddresses.enumerated()), id: \.element) { index, address in
-                    Toggle(isOn: visibility(of: address)) {
+                    HStack {
                         Text("editor.instruments.showStaff \(index + 1)", bundle: .module)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        visibilityButton(address, staffNumber: index + 1)
                     }
                 }
             }
         }
     }
 
-    /// Reads and writes one staff's visibility through the App-wired seams. The setter ignores its argument and
-    /// toggles: the store the seam points at exposes a flip, not an assignment, and a switch can only ever ask for
-    /// the value it isn't already showing.
-    private func visibility(of address: StaffAddress) -> Binding<Bool> {
+    /// The staff's show/hide control — the same drawn eye and circular toggle the Reader's inspectors use, rather
+    /// than a switch. A switch reads as a setting; this is the same question ("am I looking at this staff?") the
+    /// Reader asks with an eye, and the two screens should not answer it with two different controls.
+    private func visibilityButton(_ address: StaffAddress, staffNumber: Int? = nil) -> some View {
+        let isVisible = viewModel.isStaffVisible(address)
+        return Button {
+            viewModel.onToggleStaffVisibility(address)
+        } label: {
+            EyeIcon(isOpen: isVisible, lineWidth: 1.6)
+                .frame(width: 18, height: 13)
+        }
+        .buttonStyle(CircleBorderedToggleButtonStyle(isOn: isVisible))
+        .accessibilityLabel(visibilityLabel(staffNumber: staffNumber))
+    }
+
+    private func visibilityLabel(staffNumber: Int?) -> Text {
+        guard let staffNumber else {
+            return Text("editor.instruments.staffVisibility", bundle: .module)
+        }
+        return Text("editor.instruments.showStaff \(staffNumber)", bundle: .module)
+    }
+
+    /// The part's name, editable in place, with its abbreviation and the instrument it plays beside it —
+    /// "[なおき]  (な)  ピアノ".
+    ///
+    /// A score whose parts were renamed lists as names that say nothing about what plays them, which is what the
+    /// instrument name is for; it is hidden when it would only repeat the field. The abbreviation is a chip rather
+    /// than a second field, the same control the creation wizard uses for the same setting.
+    ///
+    /// The field writes on COMMIT, not per keystroke: every write here is a score edit with its own undo entry,
+    /// and a name typed letter by letter would fill the stack with one entry per character.
+    private func partName(_ row: EditorViewModel.PartRow) -> some View {
+        HStack(spacing: 8) {
+            TextField(text: nameBinding(row)) {
+                Text("editor.instruments.partName", bundle: .module)
+            }
+            .focused($focusedPartID, equals: row.id)
+            .onSubmit { commitName(row) }
+            shortNameChip(row)
+            if let instrumentName = row.instrumentName, instrumentName != row.name {
+                Text(instrumentName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// The row's field text: the draft while it is being typed, the score's own name otherwise. Keyed by part id
+    /// rather than index — the list can be reordered while a field holds focus.
+    private func nameBinding(_ row: EditorViewModel.PartRow) -> Binding<String> {
         Binding(
-            get: { viewModel.isStaffVisible(address) },
-            set: { _ in viewModel.onToggleStaffVisibility(address) },
+            get: { nameDrafts[row.id] ?? row.name },
+            set: { nameDrafts[row.id] = $0 },
         )
     }
 
-    // MARK: - Toolbar / catalog
-
-    @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
-        // Reordering needs edit mode, and nothing else in this sheet does — same placement reasoning as the new-score
-        // wizard's instrumentation section, one level up because here the list IS the sheet.
-        ToolbarItem(placement: .topBarLeading) {
-            EditButton()
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            Button { isCatalogPresented = true } label: {
-                Image(systemName: "plus")
-            }
-            .accessibilityLabel(Text("editor.instruments.add", bundle: .module))
-        }
-        ToolbarItem(placement: .confirmationAction) {
-            Button { dismiss() } label: { L10n.Common.done }
-        }
+    /// Writes the draft to the score and drops it, so the row goes back to reading the score. Re-resolved by id,
+    /// because the index the row was drawn with can have moved under a reorder or an undo since.
+    private func commitName(_ row: EditorViewModel.PartRow) {
+        guard let draft = nameDrafts.removeValue(forKey: row.id),
+              let current = viewModel.partRows.first(where: { $0.id == row.id })
+        else { return }
+        viewModel.renamePart(at: current.index, longName: draft, shortName: current.shortName)
     }
+
+    /// The part's abbreviation, shown and edited in one control — see the creation wizard's copy for why a chip
+    /// rather than a second field. An em dash stands in for a part that carries none, which is a real setting:
+    /// no label at all from the second system on.
+    private func shortNameChip(_ row: EditorViewModel.PartRow) -> some View {
+        Button {
+            shortNameTarget = row.id
+            shortNameText = row.shortName ?? ""
+        } label: {
+            Text(row.shortName ?? "—")
+                .font(.caption)
+                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Color(.tertiarySystemFill), in: .capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("editor.instruments.shortName", bundle: .module))
+    }
+
+    // MARK: - Toolbar / catalog
 
     /// The shared instrument catalog. The picked instrument's name is overridden with the localized catalog name —
     /// `partPlan()` carries the English one — so a part added here is named the way the new-score wizard names one.
@@ -164,6 +270,26 @@ struct EditorInstrumentsSheet: View {
 
     private var deletionTitle: Text {
         Text("editor.instruments.delete.title \(partPendingRemoval?.name ?? "")", bundle: .module)
+    }
+
+    private var shortNamePresentationBinding: Binding<Bool> {
+        Binding(
+            get: { shortNameTarget != nil },
+            set: { isPresented in
+                guard !isPresented else { return }
+                shortNameTarget = nil
+            },
+        )
+    }
+
+    /// Writes the edited abbreviation, keeping the long name as it stands. Re-resolved by id for the reason the
+    /// deletion dialog is: the alert is modal to this sheet but not to the score.
+    private func commitShortName() {
+        defer { shortNameTarget = nil }
+        guard let shortNameTarget,
+              let row = viewModel.partRows.first(where: { $0.id == shortNameTarget })
+        else { return }
+        viewModel.renamePart(at: row.index, longName: row.name, shortName: shortNameText)
     }
 
     private var isRemovalConfirmationPresented: Binding<Bool> {

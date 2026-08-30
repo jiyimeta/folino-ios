@@ -16,18 +16,27 @@ import UtilityUI
 struct NewScoreSheet: View {
     let viewModel: LibraryViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var form: NewScoreForm
+    /// Internal rather than private, here and below, because the instrumentation half of this view lives in
+    /// `NewScoreSheet+Instrumentation.swift` and `private` is file-scoped.
+    @State var form: NewScoreForm
+    /// Whether one of the number-pad fields is being edited. A number pad has no return key, so without a
+    /// keyboard toolbar to dismiss it there is no way back to the Create button on a phone.
+    @FocusState private var isEditingNumber: Bool
+    /// The row whose abbreviation is being edited, and the text of that edit. Held by id rather than index: the
+    /// list can be reordered while the alert is up, and an index would then name a different part.
+    @State var shortNameTarget: NewScoreForm.PartDraft.ID?
+    @State var shortNameText = ""
     /// Which picker is up, if any. One piece of state for all three because they share one `.sheet(item:)`:
     /// two `.sheet` modifiers on the same view is a long-standing source of SwiftUI presentation races, where
     /// dismissing one and presenting the other in the same runloop turn drops the second.
-    @State private var picker: PickerSheet?
+    @State var picker: PickerSheet?
 
     /// `.replace` swaps the whole instrumentation for one instrument ("start from an instrument"); `.append`
     /// adds a part to the list; `.sourceScore` copies an existing score's ensemble wholesale.
     ///
     /// Named `PickerSheet`, not `Picker`: a nested type called `Picker` shadows SwiftUI's inside this view, and
     /// the key/time `Picker`s below stop resolving.
-    private enum PickerSheet: Identifiable {
+    enum PickerSheet: Identifiable {
         case replace
         case append
         case sourceScore
@@ -52,6 +61,12 @@ struct NewScoreSheet: View {
                 layoutSection
                 lengthSection
             }
+            // Always on, so the instrumentation list can be reordered and deleted from without an `EditButton`
+            // first. On the `Form` rather than on that one section: a `List` reads edit mode from its own
+            // environment, not from each row's, so a section-scoped write renders no affordances at all
+            // (verified in the preview). Nothing else in this form declares `onMove` / `onDelete`, so nothing
+            // else gains an affordance from it.
+            .environment(\.editMode, .constant(.active))
             .navigationTitle(Text("library.newScore.title", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
@@ -74,6 +89,42 @@ struct NewScoreSheet: View {
         } message: { error in
             Text(describeLibraryError(error))
         }
+        // On the ROOT, like the error alert above and for the same reason the pickers are: a presentation attached
+        // inside the list is torn down when the list rebuilds, which every rename does.
+        .alert(
+            Text("library.newScore.field.shortName", bundle: .module),
+            isPresented: shortNamePresentationBinding,
+        ) {
+            TextField(text: $shortNameText) {
+                Text("library.newScore.field.shortName", bundle: .module)
+            }
+            Button { shortNameTarget = nil } label: { L10n.Common.cancel }
+            Button(action: commitShortName) { L10n.Common.ok }
+        } message: {
+            Text("library.newScore.field.shortName.message", bundle: .module)
+        }
+    }
+
+    private var shortNamePresentationBinding: Binding<Bool> {
+        Binding(
+            get: { shortNameTarget != nil },
+            set: { isPresented in
+                guard !isPresented else { return }
+                shortNameTarget = nil
+            },
+        )
+    }
+
+    /// Writes the edited abbreviation back to its row, resolved by id — the list can be reordered while the alert
+    /// is up. An empty value is stored as `nil`, which is what engraves no label from the second system on: it is
+    /// a choice a score can make, not a missing entry to be filled in with a default.
+    private func commitShortName() {
+        defer { shortNameTarget = nil }
+        guard let shortNameTarget,
+              let index = form.instrumentation.firstIndex(where: { $0.id == shortNameTarget })
+        else { return }
+        let trimmed = shortNameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        form.instrumentation[index].shortName = trimmed.isEmpty ? nil : trimmed
     }
 
     /// Mirrors `LibraryRootPresentations.ImportErrorAlert.presentationBinding` — same shared `currentError`, its own
@@ -99,149 +150,6 @@ struct NewScoreSheet: View {
         }
     }
 
-    // MARK: - Instrumentation
-
-    /// The parts the new score is built from: a seeding menu (ready-made templates, an existing score's ensemble,
-    /// or a single instrument) over the editable list itself.
-    private var instrumentationSection: some View {
-        Section {
-            templateMenu
-            ForEach(form.instrumentation) { draft in
-                partRow(draft)
-            }
-            .onMove { source, destination in
-                form.moveInstruments(fromOffsets: source, toOffset: destination)
-            }
-            .onDelete { offsets in
-                form.removeInstruments(at: offsets)
-            }
-            Button { picker = .append } label: {
-                Label {
-                    Text("library.newScore.addInstrument", bundle: .module)
-                } icon: {
-                    Image(systemName: "plus")
-                }
-            }
-        } header: {
-            HStack {
-                Text("library.newScore.section.instrumentation", bundle: .module)
-                Spacer()
-                // Reordering needs edit mode, and this sheet has no other reason to enter it — so the button
-                // lives on the one section it affects rather than in the toolbar, where it would read as
-                // applying to the whole form.
-                EditButton()
-                    .textCase(nil)
-            }
-        }
-    }
-
-    private var templateMenu: some View {
-        Menu {
-            ForEach(ScoreCreationTemplate.all) { template in
-                Button { form.applyTemplate(template) } label: {
-                    Text(Self.templateNameKey(template.id), bundle: .module)
-                }
-            }
-            Divider()
-            Button { picker = .sourceScore } label: {
-                Text("library.newScore.sameAsExisting", bundle: .module)
-            }
-            Button { picker = .replace } label: {
-                Text("library.newScore.chooseInstruments", bundle: .module)
-            }
-        } label: {
-            HStack {
-                Text("library.newScore.template", bundle: .module)
-                    .foregroundStyle(.primary)
-                Spacer()
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .contentShape(.rect)
-        }
-    }
-
-    private func partRow(_ draft: NewScoreForm.PartDraft) -> some View {
-        HStack {
-            Text(draft.displayName)
-            Spacer()
-            // Only worth saying for a multi-staff part: a single staff is what every row is assumed to be.
-            if draft.plan.staves.count > 1 {
-                Text("library.newScore.staffCount \(draft.plan.staves.count)", bundle: .module)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    /// The catalog picker, in either of its two modes. Takes a `Bool` rather than the case so there is no
-    /// `.sourceScore` branch here to leave unhandled — that case never reaches this function.
-    private func catalogSheet(replacing: Bool) -> some View {
-        NavigationStack {
-            InstrumentCatalogPicker { instrument in
-                if replacing {
-                    form.replaceInstrumentation(with: instrument)
-                } else {
-                    form.addInstrument(instrument)
-                }
-                picker = nil
-            }
-            .navigationTitle(Text(
-                replacing ? "library.newScore.chooseInstruments" : "library.newScore.addInstrument",
-                bundle: .module,
-            ))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button { picker = nil } label: { L10n.Common.cancel }
-                }
-            }
-        }
-    }
-
-    /// Pick an existing score to copy the instrumentation from. Soft-deleted rows are already out of
-    /// `repository.scoreItems`, so nothing extra filters them here.
-    private var sourceScoreSheet: some View {
-        NavigationStack {
-            List(viewModel.repository.scoreItems) { item in
-                Button { copyInstrumentation(from: item) } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.title).foregroundStyle(.primary)
-                        if let summary = item.instrumentationSummary, !summary.isEmpty {
-                            Text(summary).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(.rect)
-                }
-            }
-            .overlay {
-                if viewModel.repository.scoreItems.isEmpty {
-                    Text("library.newScore.noScoresToCopy", bundle: .module)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle(Text("library.newScore.chooseSourceScore", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button { picker = nil } label: { L10n.Common.cancel }
-                }
-            }
-        }
-    }
-
-    /// Dismisses the picker BEFORE awaiting the parse: a load failure lands on `viewModel.currentError`, and the
-    /// alert that presents it belongs to this sheet — it cannot reach the screen while the picker covers it.
-    private func copyInstrumentation(from item: ScoreItem) {
-        picker = nil
-        Task {
-            guard let score = await viewModel.instrumentation(of: item) else { return }
-            form.applyInstrumentation(of: score)
-        }
-    }
-
     // MARK: - Layout / length
 
     /// Key signature, time signature and the optional pickup — the fields that shape the blank score's layout.
@@ -250,7 +158,11 @@ struct NewScoreSheet: View {
         Section {
             KeySignaturePicker(selection: $form.concertKey)
             TimeSignaturePicker(numerator: $form.timeNumerator, denominator: $form.timeDenominator)
-            pickupRow
+            NewScorePickupRow(
+                pickup: $form.pickup,
+                timeNumerator: form.timeNumerator,
+                timeDenominator: form.timeDenominator,
+            )
         } footer: {
             // Only once a pickup is actually chosen: the measure count is unambiguous without one, and this is
             // the cheapest place to say what it means with one (the count lives in the next section).
@@ -260,44 +172,48 @@ struct NewScoreSheet: View {
         }
     }
 
-    /// The opening bar's length, or none. The rows are rebuilt from the current meter, so the list never offers
-    /// a pickup longer than the bar it opens, and `NewScoreForm.pickup` answers `nil` for a chosen value the
-    /// current meter does not offer — the selection can never point at a row that is not there.
-    private var pickupRow: some View {
-        Picker(selection: $form.pickup) {
-            Text("library.newScore.field.pickup.none", bundle: .module).tag(Fraction?.none)
-            ForEach(
-                NewScoreForm.pickupChoices(
-                    numerator: form.timeNumerator, denominator: form.timeDenominator,
-                ),
-                id: \.self,
-            ) { choice in
-                // Note values, not prose: "3/8" reads the same in every language folino ships.
-                Text(verbatim: "\(choice.numerator)/\(choice.denominator)").tag(Fraction?.some(choice))
-            }
-        } label: {
-            Text("library.newScore.field.pickup", bundle: .module)
+    /// Tempo and measure count — how long the blank score plays and how many bars it starts with. Typed rather
+    /// than stepped: 200 bars is 168 taps away from the default, and both fields are numbers a user arrives with
+    /// already in mind.
+    private var lengthSection: some View {
+        Section {
+            numberField(
+                Text("library.newScore.field.tempo", bundle: .module),
+                value: $form.tempoBPM, in: 20 ... 300,
+            )
+            numberField(
+                Text("library.newScore.field.measures", bundle: .module),
+                value: $form.measureCount, in: 1 ... 200,
+            )
         }
     }
 
-    /// Tempo and measure count — how long the blank score plays and how many bars it starts with.
-    private var lengthSection: some View {
-        Section {
-            Stepper(value: $form.tempoBPM, in: 20 ... 300) {
-                LabeledContent {
-                    Text(form.tempoBPM, format: .number)
-                } label: {
-                    Text("library.newScore.field.tempo", bundle: .module)
-                }
-            }
-            Stepper(value: $form.measureCount, in: 1 ... 200) {
-                LabeledContent {
-                    Text(form.measureCount, format: .number)
-                } label: {
-                    Text("library.newScore.field.measures", bundle: .module)
-                }
-            }
+    /// A whole number on a number pad, clamped to `range`.
+    ///
+    /// The clamp lives in the binding rather than in an `onChange`, because `TextField(value:format:)` writes its
+    /// binding when editing *ends*, not per keystroke — so the binding sees the finished number, never the "1" on
+    /// the way to "120". A number pad has no return key, which is what the keyboard toolbar below is for.
+    ///
+    /// `LabeledContent` rather than the field's own label: unlike `TextField(_:text:)`, the `value:format:label:`
+    /// form does not draw its label in a `Form` row (it is the accessibility label), which left these two rows as
+    /// bare numbers with nothing naming them.
+    private func numberField(_ label: Text, value: Binding<Int>, in range: ClosedRange<Int>) -> some View {
+        LabeledContent {
+            TextField(value: clamping(value, to: range), format: .number) { label }
+                .labelsHidden()
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.trailing)
+                .focused($isEditingNumber)
+        } label: {
+            label
         }
+    }
+
+    private func clamping(_ value: Binding<Int>, to range: ClosedRange<Int>) -> Binding<Int> {
+        Binding(
+            get: { value.wrappedValue },
+            set: { value.wrappedValue = min(max($0, range.lowerBound), range.upperBound) },
+        )
     }
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
@@ -312,18 +228,13 @@ struct NewScoreSheet: View {
             }
             .disabled(form.template() == nil)
         }
-    }
-
-    /// Template names live in this module's catalog, not in Domain — `ScoreCreationTemplate` stores nothing a user
-    /// reads. The switch (rather than string interpolation into a key) keeps the catalog's keys greppable and makes
-    /// a template added to Domain without a name a compile-time miss instead of a runtime raw key.
-    private static func templateNameKey(_ id: String) -> LocalizedStringKey {
-        switch id {
-        case "solo-piano": "library.newScore.template.solo-piano"
-        case "voice-piano": "library.newScore.template.voice-piano"
-        case "satb": "library.newScore.template.satb"
-        case "string-quartet": "library.newScore.template.string-quartet"
-        default: LocalizedStringKey(id)
+        // Only while a number pad is up: the title and composer fields dismiss themselves with their return key,
+        // and a Done bar over those would be a second way to do what the keyboard already does.
+        ToolbarItemGroup(placement: .keyboard) {
+            if isEditingNumber {
+                Spacer()
+                Button { isEditingNumber = false } label: { L10n.Common.done }
+            }
         }
     }
 }

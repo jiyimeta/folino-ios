@@ -64,6 +64,8 @@ struct EditorRehearsalMarkSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
         }
+        // Same as the signature sheets: one short question about one bar, asked over the score it is about.
+        .presentationDetents([.medium])
     }
 
     /// The bar being named. An unnumbered bar (a pickup) is named "this measure": the score draws no number there,
@@ -81,10 +83,8 @@ struct EditorRehearsalMarkSheet: View {
             Button { dismiss() } label: { L10n.Common.cancel }
         }
         ToolbarItem(placement: .confirmationAction) {
-            Button(action: apply) {
-                Text("editor.rehearsalMark.apply", bundle: .module)
-            }
-            .disabled(trimmed.isEmpty)
+            EditorConfirmButton(label: Text("editor.rehearsalMark.apply", bundle: .module), action: apply)
+                .disabled(trimmed.isEmpty)
         }
     }
 

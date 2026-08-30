@@ -13,6 +13,19 @@ public func localizedInstrumentName(_ instrument: ScoreInstrument) -> String {
     localizedName(forKey: "instrument.\(instrument.id)", fallback: instrument.englishName)
 }
 
+/// The instrument a part plays, named in the reader's language — as distinct from what the part is *called*.
+///
+/// A renamed part is still an instrument: a staff labelled "なおき" plays a piano, and both the creation wizard's
+/// list and the editing strip's instruments sheet have to be able to say so. MuseScore keeps the two apart the same
+/// way — `Instrument.longName` is the engraved part name, `Instrument.id` is what it plays.
+///
+/// `nil` only when neither is available: an instrument id this build's catalog does not know, in a score that
+/// carried no track name either. `Part.trackName` is the fallback because MuseScore stores the instrument's own
+/// name there, untouched by a part rename.
+public func instrumentDisplayName(of part: Part) -> String? {
+    ScoreInstrument.instrument(id: part.instrument.id).map(localizedInstrumentName) ?? part.trackName
+}
+
 /// The family's section header in the reader's language. The fallback is the raw case name — deliberately ugly,
 /// because the seven families are fixed and a miss here is a build-time mistake, not a shipped state.
 func localizedInstrumentFamilyName(_ family: ScoreInstrument.Family) -> String {

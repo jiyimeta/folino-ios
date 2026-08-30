@@ -1,14 +1,24 @@
 import SwiftUI
 
-struct EyeIcon: View {
+/// An eye that opens and closes with `isOpen`, drawn rather than an SF Symbol so the lid can animate between the
+/// two states instead of cutting from `eye` to `eye.slash`.
+///
+/// App-agnostic on purpose: it knows nothing about staves. The Reader's per-staff visibility buttons and the
+/// editing strip's parts sheet both draw it, and a Feature cannot reach another Feature.
+public struct EyeIcon: View {
     let isOpen: Bool
     var lineWidth: CGFloat
+
+    public init(isOpen: Bool, lineWidth: CGFloat) {
+        self.isOpen = isOpen
+        self.lineWidth = lineWidth
+    }
 
     private var openness: CGFloat {
         isOpen ? 1 : 0
     }
 
-    var body: some View {
+    public var body: some View {
         GeometryReader { geo in
             ZStack {
                 eyeball(in: geo.size)

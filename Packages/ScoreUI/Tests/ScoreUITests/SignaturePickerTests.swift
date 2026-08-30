@@ -36,19 +36,15 @@ struct SignaturePickerTests {
         #expect(KeySignaturePicker.keys == Self.expectedLabels.map(\.0))
     }
 
-    @Test func `the time picker offers the ten preset meters`() {
-        let expected = [(4, 4), (3, 4), (2, 4), (6, 8), (12, 8), (2, 2), (5, 4), (7, 8), (9, 8), (3, 8)]
-        #expect(TimeSignaturePicker.presets.count == expected.count)
-        for pair in expected {
-            #expect(
-                TimeSignaturePicker.presets.contains { $0.0 == pair.0 && $0.1 == pair.1 },
-                "missing preset \(pair.0)/\(pair.1)",
-            )
-        }
+    /// A denominator menu offers note values rather than numbers — 5/3 is not a time signature.
+    @Test func `a fraction's denominator offers the note values`() {
+        #expect(FractionMenuRow.noteValues == [1, 2, 4, 8, 16, 32])
     }
 
-    /// The free-form denominator walks a fixed set of note values rather than ±1 — 5/3 is not a time signature.
-    @Test func `the denominator steps through note values`() {
-        #expect(TimeSignaturePicker.denominators == [1, 2, 4, 8, 16, 32])
+    /// Every meter is reachable, not just the ten that used to be preset chips.
+    @Test func `the time picker offers every beat count up to two digits`() {
+        #expect(TimeSignaturePicker.numerators.first == 1)
+        #expect(TimeSignaturePicker.numerators.last == 63)
+        #expect(TimeSignaturePicker.numerators.count == 63)
     }
 }

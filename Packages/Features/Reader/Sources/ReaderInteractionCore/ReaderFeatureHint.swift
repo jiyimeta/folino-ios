@@ -21,8 +21,18 @@ public enum ReaderFeatureHint: String, CaseIterable, Sendable {
     /// A compact pill gives no hint that anything larger exists, and the moment it matters most is right after the
     /// user has just shrunk it — which is exactly when a once-per-launch budget would already be spent.
     case transportExpand
-    /// The note-editing entry point (`square.and.pencil` on iOS, `EditNote` on Android).
-    case noteEditing
+    /// The note-editing entry point (`music.quarternote.3` on iOS, `EditNote` on Android).
+    ///
+    /// The raw value is deliberately not `noteEditing`: it is the persistence key
+    /// (`readerHint.used.<rawValue>`), so changing it retires the OLD record and offers this hint again to everyone
+    /// who had already dismissed it. iOS's glyph moved from `square.and.pencil` — the compose icon the platform uses
+    /// for a NEW document — to the notes this button actually writes, and someone who learned the old one deserves an
+    /// introduction rather than a silently swapped button.
+    ///
+    /// Android's glyph did not change, so this re-offers a hint there for a button that looks the same. That is the
+    /// cost of one key for one feature across both platforms, and it is the cheaper mistake: a hint shown twice is a
+    /// moment's noise, where a per-platform key would be a second thing to keep in step.
+    case noteEditing = "noteEditing.quarternote"
     /// The ink-annotation toggle (`pencil.tip.crop.circle` on iOS, `Draw` on Android).
     case annotation
     /// Per-part show/hide — lives in the display inspector.

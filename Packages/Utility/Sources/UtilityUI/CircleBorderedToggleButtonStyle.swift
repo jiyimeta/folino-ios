@@ -5,8 +5,12 @@ import SwiftUI
 /// solo / mute / visibility toggles so they read as a consistent control cluster.
 ///
 /// Ported from VocalTuner's mixer toggle so the two apps' staff controls match.
-struct CircleBorderedToggleButtonStyle: ButtonStyle {
+public struct CircleBorderedToggleButtonStyle: ButtonStyle {
     let isOn: Bool
+
+    public init(isOn: Bool) {
+        self.isOn = isOn
+    }
 
     @Environment(\.isEnabled) private var isEnabled
 
@@ -18,7 +22,7 @@ struct CircleBorderedToggleButtonStyle: ButtonStyle {
         }
     }
 
-    func makeBody(configuration: Configuration) -> some View {
+    public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.callout)
             .foregroundStyle(foregroundColor)
