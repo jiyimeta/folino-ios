@@ -58,17 +58,58 @@ enum MacPageDeckMetrics {
     }
 }
 
-/// The playback cursor, held in an observable the deck's leaves read.
+/// One sheet's cursor. The observable a single page leaf reads, and the smallest thing a playback tick can invalidate.
+@MainActor
+@Observable
+final class MacPageCursorSlot {
+    /// The cursor when it is on THIS page, `nil` otherwise. Never the deck-wide cursor.
+    var cursor: ScoreCursor?
+}
+
+/// The deck's playback cursor, held as one observable slot per sheet.
 ///
 /// The deck lives inside one `NSHostingView` whose `rootView` is only reassigned when the engraving changes (see
 /// `MagnifyingScoreScrollView.contentGeneration`). Passing the cursor down as a value would therefore either strand it
 /// — the deck would keep the cursor it was built with — or force a full rootView rebuild on every playback tick.
-/// Routing it through observation instead invalidates only the leaves that read it, which is the same boundary
-/// `MacScoreContentView` draws one level up: the root never sees a cursor tick at all.
+/// Routing it through observation instead invalidates only what reads it.
+///
+/// **Per sheet, not one shared property, and that is the whole point.** Observation invalidates on the READ, so a
+/// single `cursor` here would be read by every sheet's leaf and re-render all of them on every tick — and each leaf
+/// drives `SystemLayerView.updateNSView` for every system on its page, which opens a `CATransaction` per system even
+/// when the diff early-outs. iOS gets away with the shared read because its paged reader has one page on screen; this
+/// deck has all of them. With a slot per sheet, a tick touches the sheet the cursor is on (and, when it crosses a page
+/// boundary, the one it left) and nothing else.
+///
+/// This type is deliberately NOT `@Observable` itself — only the slots are. Anything that observed the container here
+/// would be back to a deck-wide invalidation.
 @MainActor
-@Observable
 final class MacPageDeckCursorState {
-    var cursor: ScoreCursor?
+    private var slots: [MacPageCursorSlot] = []
+    /// Which sheet currently holds the cursor, so it can be cleared when the cursor moves off it.
+    private var occupiedPage: Int?
+
+    /// Re-sizes the slot array for a fresh engraving. Called from `rebuildLayout`, never from a view body — a body
+    /// that allocated a slot would be mutating state while rendering.
+    func resize(pageCount: Int) {
+        slots = (0 ..< max(0, pageCount)).map { _ in MacPageCursorSlot() }
+        occupiedPage = nil
+    }
+
+    /// The slot for a sheet. A pure read: `resize` has already allocated it.
+    func slot(forPage index: Int) -> MacPageCursorSlot? {
+        slots.indices.contains(index) ? slots[index] : nil
+    }
+
+    /// Place the cursor on `page`, clearing whichever sheet held it before. Passing `page: nil` clears it entirely
+    /// (no cursor, or a cursor whose measure resolves to no engraved system).
+    func place(cursor: ScoreCursor?, onPage page: Int?) {
+        if let occupiedPage, occupiedPage != page {
+            slot(forPage: occupiedPage)?.cursor = nil
+        }
+        occupiedPage = page
+        guard let page, let slot = slot(forPage: page) else { return }
+        slot.cursor = cursor
+    }
 }
 
 /// The Mac's page-mode score viewport, and the Mac reader's default: the engraved score cut into sheets of paper and
@@ -142,8 +183,8 @@ struct MacPagedScoreContainer: View {
         .task(id: layoutKey) {
             await rebuildLayout()
         }
-        .onChange(of: playbackCursor, initial: true) { _, newValue in
-            cursorState.cursor = newValue
+        .onChange(of: playbackCursor, initial: true) { _, _ in
+            placeCursor()
         }
         .onChange(of: MacDeckFitKey(viewport: viewport, pageSize: pageSize), initial: true) { _, key in
             seedMagnification(key)
@@ -213,18 +254,33 @@ struct MacPagedScoreContainer: View {
         )
         layoutState.document = newDoc
         layoutState.pages = newPages
+        // Slots first, then the generation bump: the deck's body reads the slots, so they have to exist for the page
+        // count it is about to draw. Re-placing the cursor afterwards is what keeps it visible across a re-engrave —
+        // `resize` drops the old slots, and nothing else would put it back.
+        cursorState.resize(pageCount: newPages.count)
         layoutGeneration += 1
+        placeCursor()
+    }
+
+    /// Hand the cursor to the slot of the sheet that owns it, and to no other. See `MacPageDeckCursorState`.
+    private func placeCursor() {
+        cursorState.place(cursor: playbackCursor, onPage: playbackCursor.flatMap(pageIndex(containing:)))
+    }
+
+    /// The sheet a cursor's measure is engraved on, or `nil` when the layout has no system for it.
+    private func pageIndex(containing cursor: ScoreCursor) -> Int? {
+        guard let doc = layoutState.document else { return nil }
+        let measure = measureIndex(of: cursor)
+        guard let system = doc.systems.firstIndex(where: { layoutSystem in
+            layoutSystem.measures.contains { $0.measureIndex == measure }
+        }) else { return nil }
+        return layoutState.pages.firstIndex { $0.contains(system) }
     }
 
     /// Bring the sheet holding `cursor` into view. The Mac's answer to the iOS container's page turn: there is one
     /// deck rather than one visible page, so "turning to a page" is scrolling it into the window.
     private func scrollToPage(containing cursor: ScoreCursor?) {
-        guard let cursor, let doc = layoutState.document, let sheet = pageSize else { return }
-        let measure = measureIndex(of: cursor)
-        guard let system = doc.systems.firstIndex(where: { layoutSystem in
-            layoutSystem.measures.contains { $0.measureIndex == measure }
-        }) else { return }
-        guard let target = layoutState.pages.firstIndex(where: { $0.contains(system) }) else { return }
+        guard let cursor, let sheet = pageSize, let target = pageIndex(containing: cursor) else { return }
         scrollToken += 1
         scrollRequest = MacDeckScrollRequest(
             token: scrollToken,

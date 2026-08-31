@@ -1,6 +1,7 @@
 import AppKit
 import Domain
 import Library
+import Reader
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -19,12 +20,23 @@ struct MacCommands: Commands {
 
     /// The reader's shared display-mode preference — the same key and the same raw values the iOS reader's visual
     /// inspector writes, so a score opened on the Mac and on the iPad agrees about what mode it is in.
-    ///
-    /// Only the two modes the Mac can draw are listed. `ReaderLayoutMode.horizontal` exists and iOS offers it, but the
-    /// Mac has no horizontal container yet and a menu entry that renders nothing is worse than a missing one — see
-    /// `MacReaderRootScreen.layoutMode`, which reads a stored `horizontal` as Page rather than clobbering it.
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
+
+    /// The picker's selection, folded through `macDisplayMode` on the way out and written back raw.
+    ///
+    /// Only the two modes the Mac can draw get menu entries — `ReaderLayoutMode.horizontal` exists and iOS offers it,
+    /// but the Mac has no horizontal container yet and an entry that renders nothing is worse than a missing one.
+    /// Binding the picker straight to the stored value would then mean a stored `horizontal` matches neither tag and
+    /// the menu shows **no** checkmark while the reader is drawing Page. The getter resolves it to the mode actually
+    /// on screen; the setter writes the user's pick verbatim, so choosing Page from a stored `horizontal` is what
+    /// retires it — never this menu on its own.
+    private var displayMode: Binding<String> {
+        Binding(
+            get: { ReaderLayoutMode.macDisplayMode(storedRawValue: layoutModeRaw).rawValue },
+            set: { layoutModeRaw = $0 },
+        )
+    }
 
     var body: some Commands {
         // Import lands beside the system's own New/Open items rather than in a menu of its own.
@@ -49,7 +61,7 @@ struct MacCommands: Commands {
             .disabled(currentScoreID == nil)
         }
         CommandGroup(before: .toolbar) {
-            Picker(selection: $layoutModeRaw) {
+            Picker(selection: displayMode) {
                 Text("mac.menu.displayMode.page")
                     .tag(ReaderLayoutMode.page.rawValue)
                 Text("mac.menu.displayMode.vertical")

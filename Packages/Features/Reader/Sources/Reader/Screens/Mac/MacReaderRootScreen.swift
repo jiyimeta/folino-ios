@@ -85,14 +85,10 @@ public struct MacReaderRootScreen: View {
         )
     }
 
-    /// The mode this screen can actually draw. Page and Vertical come across verbatim; `horizontal` — which only the
-    /// iOS reader offers, and which the Mac's View menu therefore does not list — reads as Page, the Mac's default.
-    ///
-    /// Deliberately a read, not a write-back: clamping the stored value would silently retire the horizontal mode a
-    /// user chose on their iPad, and the preference is shared.
+    /// The mode this screen can actually draw. See `ReaderLayoutMode.macDisplayMode(storedRawValue:)` — the same fold
+    /// the View menu's picker resolves its selection with, so the checkmark and the container can never disagree.
     private var layoutMode: ReaderLayoutMode {
-        let stored = ReaderLayoutMode(rawValue: layoutModeRaw) ?? .page
-        return stored == .vertical ? .vertical : .page
+        .macDisplayMode(storedRawValue: layoutModeRaw)
     }
 
     public var body: some View {

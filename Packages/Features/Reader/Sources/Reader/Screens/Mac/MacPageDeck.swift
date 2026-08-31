@@ -23,7 +23,10 @@ struct MacPageDeck: View {
                 ForEach(pages.indices, id: \.self) { index in
                     MacScorePage(
                         viewModel: viewModel,
-                        cursorState: cursorState,
+                        // The sheet's OWN cursor slot, resolved here where nothing reads its value — the deck's body
+                        // must not depend on the cursor, or a tick would rebuild every sheet. See
+                        // `MacPageDeckCursorState`.
+                        cursorSlot: cursorState.slot(forPage: index),
                         pageDocument: pageDocument(forPage: index, in: doc),
                         pageStartY: PagedPageGeometry.pageStartY(forPage: index, pages: pages, doc: doc),
                         pageNumber: index + 1,
@@ -59,7 +62,7 @@ struct MacPageDeck: View {
 /// cursor — the leaf inside it does, so a playback tick redraws the engraving without re-laying-out the card.
 struct MacScorePage: View {
     let viewModel: ReaderViewModel
-    let cursorState: MacPageDeckCursorState
+    let cursorSlot: MacPageCursorSlot?
     let pageDocument: LayoutDocument
     let pageStartY: CGFloat
     let pageNumber: Int
@@ -86,7 +89,7 @@ struct MacScorePage: View {
         // for the same reason: the run-out beneath the last system on a page is still page.
         return MacPageScoreLayer(
             viewModel: viewModel,
-            cursorState: cursorState,
+            cursorSlot: cursorSlot,
             pageDocument: pageDocument,
             pageStartY: pageStartY,
             score: score,
@@ -107,7 +110,7 @@ struct MacScorePage: View {
 /// cursor and the AB-loop markers.
 struct MacPageScoreLayer: View {
     let viewModel: ReaderViewModel
-    let cursorState: MacPageDeckCursorState
+    let cursorSlot: MacPageCursorSlot?
     let pageDocument: LayoutDocument
     let pageStartY: CGFloat
     let score: Score
@@ -122,7 +125,9 @@ struct MacPageScoreLayer: View {
         ZStack(alignment: .topLeading) {
             ScoreView(
                 document: pageDocument, score: score, options: scoreOptions,
-                playbackCursor: cursorState.cursor, playbackCursorColor: .accentColor.opacity(0.6),
+                // The ONLY cursor read in the deck, and it is this sheet's own slot — `nil` on every sheet the cursor
+                // is not on. See `MacPageDeckCursorState` for why it is not one shared property.
+                playbackCursor: cursorSlot?.cursor, playbackCursorColor: .accentColor.opacity(0.6),
             )
             .gesture(tapSeekGesture())
 
