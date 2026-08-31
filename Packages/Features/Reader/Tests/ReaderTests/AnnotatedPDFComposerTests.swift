@@ -56,20 +56,28 @@ struct AnnotatedPDFComposerTests {
         return try #require(document.dataRepresentation())
     }
 
-    private static func xObjectCount(of document: CGPDFDocument, page index: Int) throws -> Int {
-        let page = try #require(document.page(at: index))
-        let dict = try #require(page.dictionary)
-        var resources: CGPDFDictionaryRef?
-        guard CGPDFDictionaryGetDictionary(dict, "Resources", &resources), let resources else { return 0 }
-        var bucket: CGPDFDictionaryRef?
-        guard CGPDFDictionaryGetDictionary(resources, "XObject", &bucket), let bucket else { return 0 }
-        return CGPDFDictionaryGetCount(bucket)
+    /// Rasterizes `page` at `scale`× into a white-filled RGBA bitmap, drawn straight into the context's native
+    /// bottom-left, y-up space — the page's own content-stream space, with no annotations involved (`drawPDFPage`
+    /// replays the content stream alone), so this is the "content-stream-only" half of the annotation-vs-flattened
+    /// pair below.
+    private static func rasterizeContentOnly(_ page: CGPDFPage, size: CGSize, scale: CGFloat) throws -> CGContext {
+        let context = try Self.blankContext(size: size, scale: scale)
+        context.scaleBy(x: scale, y: scale)
+        context.drawPDFPage(page)
+        return context
     }
 
-    /// Rasterizes `page` at `scale`× into a white-filled RGBA bitmap, drawn straight into the context's native
-    /// bottom-left, y-up space — the same space the page's own content stream (and our composer's ink placement)
-    /// is expressed in, so a sample point can be given in plain PDF/page points with no extra flip bookkeeping.
-    private static func rasterize(_ page: CGPDFPage, size: CGSize, scale: CGFloat) throws -> CGContext {
+    /// Rasterizes `page` THROUGH PDFKIT — content stream and annotations both — into the same bottom-left, y-up
+    /// bitmap convention as `rasterizeContentOnly`, so the two can be sampled at identical points. This is what a
+    /// real PDF viewer shows; the ink annotation only appears here, never in the content-stream-only rasterization.
+    private static func rasterizeWithAnnotations(_ page: PDFPage, size: CGSize, scale: CGFloat) throws -> CGContext {
+        let context = try Self.blankContext(size: size, scale: scale)
+        context.scaleBy(x: scale, y: scale)
+        page.draw(with: .mediaBox, to: context)
+        return context
+    }
+
+    private static func blankContext(size: CGSize, scale: CGFloat) throws -> CGContext {
         let width = Int(size.width * scale), height = Int(size.height * scale)
         let context = try #require(CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
@@ -77,14 +85,12 @@ struct AnnotatedPDFComposerTests {
         ))
         context.setFillColor(gray: 1, alpha: 1)
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-        context.scaleBy(x: scale, y: scale)
-        context.drawPDFPage(page)
         return context
     }
 
-    /// The red channel at `point` (in the page's own points, bottom-left origin) inside a bitmap `rasterize`
-    /// produced at `scale`. The raw buffer's row 0 is the bitmap's TOP scanline while the context's own drawing
-    /// space has y = 0 at the BOTTOM (Core Graphics' standard top-down-buffer / bottom-up-space split), hence the
+    /// The red channel at `point` (in the page's own points, bottom-left origin) inside a bitmap rasterized at
+    /// `scale`. The raw buffer's row 0 is the bitmap's TOP scanline while the context's own drawing space has y = 0
+    /// at the BOTTOM (Core Graphics' standard top-down-buffer / bottom-up-space split), hence the
     /// `context.height - 1 - ...` flip when turning a page-space y into a buffer row. Good enough to tell solid
     /// black ink from a blank white page without needing exact color fidelity.
     private static func redChannel(of context: CGContext, at point: CGPoint, scale: CGFloat) throws -> UInt8 {
@@ -115,40 +121,51 @@ struct AnnotatedPDFComposerTests {
 
     @Test
     @MainActor
-    func `an annotated page gains an image and an unannotated one does not`() throws {
+    func `an annotated page gains one ink annotation per placement and an unannotated one gains none`() throws {
         let base = try Self.baseDocument(pages: 2)
-        let drawings = [Self.drawing(kind: .page(PageAnchor(pageIndex: 0)))]
+        let drawings = [
+            Self.drawing(kind: .page(PageAnchor(pageIndex: 0))),
+            Self.drawing(kind: .page(PageAnchor(pageIndex: 0))),
+        ]
         let placements = [
             InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 400, px: 0, py: 0)),
+            InkPlacement(pageIndex: 0, drawingIndex: 1, transform: StrokeTransform(sp: 400, px: 50, py: 50)),
         ]
-        let out = try AnnotatedPDFComposer.compose(
-            basePDF: base, drawings: drawings, placements: placements,
-        )
-        let document = try Self.open(out)
-        #expect(try Self.xObjectCount(of: document, page: 1) > 0)
-        #expect(try Self.xObjectCount(of: document, page: 2) == 0)
+        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements)
+        let document = try #require(PDFDocument(data: out))
+        let firstPage = try #require(document.page(at: 0))
+        let secondPage = try #require(document.page(at: 1))
+        #expect(firstPage.annotations.filter { $0.type == "Ink" }.count == 2)
+        #expect(secondPage.annotations.isEmpty)
     }
 
-    /// Two strokes in one page-local UIKit-space (top-left origin, y-down) drawing whose combined bounding box is
-    /// tall and vertically *asymmetric*: `strokeMark` is a short, wide capsule near the box's own top; `strokeAnchor`
-    /// sits far below it but shifted well off to one side in x, so it extends the box downward without adding any
-    /// ink under `sampleX`. That asymmetry is the point — a horizontal capsule centered in its own bounding box (the
-    /// fixture this replaced) is vertically symmetric, so mirroring it top-to-bottom *inside that box* changes
-    /// nothing either sample point can see, even though the box's own placement on the page is unaffected by the
-    /// bug this is meant to catch. With this fixture, the two samples below are dead-center on `strokeMark`'s
-    /// (ink) and comfortably below it under `sampleX` (background) — content that must trade places if the ink
-    /// image is flipped within its own box, and must not if it isn't.
+    /// Two identical-width strokes in one page-local UIKit-space (top-left origin, y-down) drawing, placed 200 points
+    /// apart vertically and well away from every page edge so neither one's bounding box gets clipped. `strokeMark`
+    /// sits near the page's top under `sampleX`; `strokeAnchor` sits far below it and shifted off to one side in x,
+    /// so it adds no ink under `sampleX` at all.
+    ///
+    /// Two properties come out of that arrangement, and both are load-bearing below. Because the two strokes are the
+    /// same width, `PKDrawing.bounds` inflates each by the same amount, so the *distance between the two boxes'
+    /// centers* is exactly their 200-point separation whatever that inflation happens to be — which pins the y-flip's
+    /// sign and unit scale without pinning PencilKit's padding. And because the ink under `sampleX` is confined to
+    /// `strokeMark`, a sample dead-center on it and a sample between the two boxes tell "the ink rendered where the
+    /// placement put it" apart from "the ink rendered somewhere else", which is the class of bug that shipped before.
     private static let sampleX: CGFloat = 200
+    /// `strokeMark`'s page-local y, and the page-space y it must render at once flipped.
+    private static let markPageLocalY: Float = 80
+    private static let markPageSpaceY: CGFloat = 600 - CGFloat(markPageLocalY)
+    /// `strokeAnchor`'s page-local y. The 200-point separation is what the bounds test pins.
+    private static let anchorPageLocalY: Float = 280
 
     private static func asymmetricFixture() -> [DrawingAnchor] {
         let strokeMark = InkStroke(
             tool: .pen, colorRGBA: 0x0000_00FF, baseWidthSp: 60, opacity: 1,
-            x: [190, 210], y: [40, 40], width: [60, 60],
+            x: [190, 210], y: [markPageLocalY, markPageLocalY], width: [60, 60],
             force: [1, 1], azimuth: [0, 0], altitude: [.pi / 2, .pi / 2], timeMillis: [0, 1],
         )
         let strokeAnchor = InkStroke(
             tool: .pen, colorRGBA: 0x0000_00FF, baseWidthSp: 60, opacity: 1,
-            x: [350, 370], y: [280, 280], width: [60, 60],
+            x: [300, 320], y: [anchorPageLocalY, anchorPageLocalY], width: [60, 60],
             force: [1, 1], azimuth: [0, 0], altitude: [.pi / 2, .pi / 2], timeMillis: [0, 1],
         )
         return [
@@ -164,86 +181,211 @@ struct AnnotatedPDFComposerTests {
         ]
     }
 
-    @Test
+    /// Composes a single placement in isolation and returns its one annotation's bounds (bottom-left origin).
     @MainActor
-    func `ink lands where it was drawn, not mirrored by the coordinate flip`() throws {
+    private static func soleAnnotationBounds(drawing: DrawingAnchor) throws -> CGRect {
         let base = try Self.baseDocument(pages: 1)
         let out = try AnnotatedPDFComposer.compose(
-            basePDF: base, drawings: Self.asymmetricFixture(), placements: Self.asymmetricPlacements(),
+            basePDF: base, drawings: [drawing],
+            placements: [InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 1, px: 0, py: 0))],
         )
-        let page = try #require(try Self.open(out).page(at: 1))
-
-        // `expected` is dead-center on `strokeMark`, mapped straight across the page/PDF-space flip (600 - 40).
-        // `mirrored` sits well below it under the same x, still inside the combined bounding box (it's within
-        // `strokeAnchor`'s extended box, but away from `strokeAnchor`'s own ink at x = 350...370) — so it reads as
-        // background under a correct flip. A composer that mirrors the ink image *inside its own bounding box*
-        // (rather than only flipping the box's position) would swap what shows at these two points instead of just
-        // moving the box, which is exactly the bug an earlier, vertically symmetric fixture could not see.
-        let expected = CGPoint(x: Self.sampleX, y: 560)
-        let mirrored = CGPoint(x: Self.sampleX, y: 320)
-        let context = try Self.rasterize(page, size: CGSize(width: 400, height: 600), scale: 2)
-        #expect(try Self.redChannel(of: context, at: expected, scale: 2) < 128, "expected ink near the top edge")
-        #expect(try Self.redChannel(of: context, at: mirrored, scale: 2) > 200, "expected blank page near the bottom")
+        let document = try #require(PDFDocument(data: out))
+        let page = try #require(document.page(at: 0))
+        return try #require(page.annotations.first).bounds
     }
 
     @Test
     @MainActor
-    func `a rotated source page exports upright, with ink still where it was drawn`() throws {
-        // A 40×40 mark near the unrotated page's top-right corner — well off the page's center — so a 90°
-        // rotation moves it to a clearly different spot rather than leaving it roughly in place.
-        let markRect = CGRect(x: 300, y: 500, width: 40, height: 40)
-        let unrotated = NSMutableData()
-        let consumer = try #require(CGDataConsumer(data: unrotated))
-        var box = CGRect(origin: .zero, size: CGSize(width: 400, height: 600))
-        let markContext = try #require(CGContext(consumer: consumer, mediaBox: &box, nil))
-        markContext.beginPDFPage(nil)
-        markContext.setFillColor(gray: 0, alpha: 1)
-        markContext.fill(markRect)
-        markContext.endPDFPage()
-        markContext.closePDF()
-        let base = try Self.rotated(unrotated as Data, degrees: 90)
+    func `an annotation's bounds land where the placement put them, in page space with y flipped`() throws {
+        // `strokeMark` is drawn at page-local (top-left, y-down) y = 80; `strokeAnchor` at page-local y = 280, 200
+        // points below it. Annotation space is the page's own space with a BOTTOM-LEFT origin, so a correct
+        // conversion must reverse that order AND preserve the separation exactly: the mark's box must sit 200 points
+        // ABOVE the anchor's. Both strokes are the same width, so `PKDrawing.bounds` inflates each by the same
+        // amount and the centers' separation is padding-independent — which is what lets this pin the flip's sign
+        // and its unit scale numerically rather than settling for an ordering check.
+        let topBounds = try Self.soleAnnotationBounds(drawing: Self.asymmetricFixture()[0])
+        let bottomBounds = try Self.soleAnnotationBounds(drawing: Self.asymmetricFixture()[1])
 
-        // Predict where the mark should land using the SAME CoreGraphics API the composer concatenates —
-        // `getDrawingTransform` — rather than hand-deriving the rotation/fit math, so this is decisive about
-        // whether the composer applies that transform at all, without being fragile to its exact geometry.
-        let sourcePage = try #require(try Self.open(base).page(at: 1))
-        let destinationBox = CGRect(origin: .zero, size: sourcePage.getBoxRect(.mediaBox).size)
-        let transform = sourcePage.getDrawingTransform(
-            .mediaBox, rect: destinationBox, rotate: 0, preserveAspectRatio: true,
+        let separation = CGFloat(Self.anchorPageLocalY - Self.markPageLocalY)
+        #expect(
+            abs((topBounds.midY - bottomBounds.midY) - separation) < 0.01,
+            "expected the flip to put the mark exactly 200 points above the anchor in bottom-left page space",
         )
-        let markCenter = CGPoint(x: markRect.midX, y: markRect.midY)
-        let rotationCorrected = markCenter.applying(transform)
-        let unrotatedPosition = markCenter // where an un-adjusted `drawPDFPage` would leave it
+        #expect(
+            topBounds.minY > bottomBounds.maxY,
+            "expected the near-the-top mark's bounds entirely above the near-the-bottom mark's, in bottom-left space",
+        )
+        // Neither box is clipped by the page, so the flip above is measured on unclipped geometry.
+        let pageBounds = CGRect(x: 0, y: 0, width: 400, height: 600)
+        #expect(pageBounds.contains(topBounds), "expected the top mark's bounds to stay on the page")
+        #expect(pageBounds.contains(bottomBounds), "expected the bottom mark's bounds to stay on the page")
+    }
 
-        // The same asymmetric fixture as `ink lands where it was drawn...` above — rotation must not perturb the
-        // ink math at all, since `pageSize` stays the source's raw (unrotated) box size either way.
+    @Test
+    @MainActor
+    func `rendering through PDFKit shows the ink; rendering only the content stream does not`() throws {
+        let base = try Self.baseDocument(pages: 1)
         let out = try AnnotatedPDFComposer.compose(
             basePDF: base, drawings: Self.asymmetricFixture(), placements: Self.asymmetricPlacements(),
         )
-        let page = try #require(try Self.open(out).page(at: 1))
 
-        // Destination media box keeps the source's raw (unrotated) size — no page-size swap.
-        let outBox = page.getBoxRect(.mediaBox)
-        #expect(abs(outBox.width - 400) < 0.5)
-        #expect(abs(outBox.height - 600) < 0.5)
+        // Dead-center on strokeMark, mapped straight across the page/PDF-space flip.
+        let onTheInk = CGPoint(x: Self.sampleX, y: Self.markPageSpaceY)
+        // Between the two strokes' boxes, under `sampleX` where only strokeMark ever puts ink: background unless the
+        // ink drifted off its placement. The base fixture's own vector content is nowhere near this point.
+        let offTheInk = CGPoint(x: Self.sampleX, y: 420)
+        let size = CGSize(width: 400, height: 600)
 
-        let context = try Self.rasterize(page, size: destinationBox.size, scale: 2)
+        let cgPage = try #require(try Self.open(out).page(at: 1))
+        let contentOnly = try Self.rasterizeContentOnly(cgPage, size: size, scale: 2)
         #expect(
-            try Self.redChannel(of: context, at: rotationCorrected, scale: 2) < 128,
-            "expected the mark at the rotation-corrected position",
+            try Self.redChannel(of: contentOnly, at: onTheInk, scale: 2) > 200,
+            "the content stream alone must not carry the ink — it was never rewritten",
+        )
+
+        let kitDocument = try #require(PDFDocument(data: out))
+        let kitPage = try #require(kitDocument.page(at: 0))
+        let withAnnotations = try Self.rasterizeWithAnnotations(kitPage, size: size, scale: 2)
+        #expect(
+            try Self.redChannel(of: withAnnotations, at: onTheInk, scale: 2) < 128,
+            "PDFKit (which draws annotations) must show the ink, at the point the placement put it",
         )
         #expect(
-            try Self.redChannel(of: context, at: unrotatedPosition, scale: 2) > 200,
-            "expected blank page at the un-rotated position — drawPDFPage must honor /Rotate",
+            try Self.redChannel(of: withAnnotations, at: offTheInk, scale: 2) > 200,
+            "the ink must be confined to where it was placed, not smeared or shifted across the page",
         )
+    }
+
+    @Test
+    @MainActor
+    func `removing the annotations and re-saving removes the ink`() throws {
+        let base = try Self.baseDocument(pages: 1)
+        let out = try AnnotatedPDFComposer.compose(
+            basePDF: base, drawings: Self.asymmetricFixture(), placements: Self.asymmetricPlacements(),
+        )
+        let sample = CGPoint(x: Self.sampleX, y: Self.markPageSpaceY)
+        let size = CGSize(width: 400, height: 600)
+        let document = try #require(PDFDocument(data: out))
+        let page = try #require(document.page(at: 0))
+        // Assert the ink is there first: without this the erasure below would also "pass" on a document that never
+        // carried any ink at all.
+        let before = try Self.rasterizeWithAnnotations(page, size: size, scale: 2)
+        #expect(try Self.redChannel(of: before, at: sample, scale: 2) < 128)
+
+        for annotation in page.annotations {
+            page.removeAnnotation(annotation)
+        }
+        let stripped = try #require(document.dataRepresentation())
+
+        let strippedDocument = try #require(PDFDocument(data: stripped))
+        let strippedPage = try #require(strippedDocument.page(at: 0))
+        let context = try Self.rasterizeWithAnnotations(strippedPage, size: size, scale: 2)
         #expect(
-            try Self.redChannel(of: context, at: CGPoint(x: Self.sampleX, y: 560), scale: 2) < 128,
-            "ink near top edge",
+            try Self.redChannel(of: context, at: sample, scale: 2) > 200,
+            "removing the annotations must remove the ink from what PDFKit renders",
         )
-        #expect(
-            try Self.redChannel(of: context, at: CGPoint(x: Self.sampleX, y: 320), scale: 2) > 200,
-            "no ink at the mirror-vulnerable point inside the box",
+    }
+
+    /// The `/PPK` blob's whole point is that a PencilKit-aware reader can hand it back to PencilKit, so what has to
+    /// survive the PDF round-trip is a decodable `PKDrawing` carrying the PLACED geometry — the stroke as it sits on
+    /// the exported page, not the normalized geometry that was stored. (The blob is not byte-identical to Apple
+    /// Books', whose own container decodes to bytes beginning `crdt`; `PKDrawing.dataRepresentation()` emits a
+    /// different, `wrd`-prefixed container for a drawing built from control points. `PKDrawing(data:)` reads both,
+    /// and folino cannot synthesize Apple's private variant, so the magic is not something to assert.)
+    @Test
+    @MainActor
+    func `the PPK value round-trips and decodes back to the placed PencilKit drawing`() throws {
+        let base = try Self.baseDocument(pages: 1)
+        let drawings = [Self.drawing(kind: .page(PageAnchor(pageIndex: 0)))]
+        let placements = [
+            InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 400, px: 20, py: 30)),
+        ]
+        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements)
+        let document = try #require(PDFDocument(data: out))
+        let annotation = try #require(document.page(at: 0)?.annotations.first)
+
+        let base64 = try #require(
+            annotation.value(forAnnotationKey: AnnotatedPDFComposer.pencilKitBlobAnnotationKey) as? String,
         )
+        let decoded = try #require(Data(base64Encoded: base64))
+        let drawing = try PKDrawing(data: decoded)
+        let points = try Array(#require(drawing.strokes.first).path)
+        #expect(drawing.strokes.count == 1)
+        #expect(points.count == 3)
+        // The fixture's normalized xy are (0, 0), (0.1, 0.1), (0.2, 0.2); the placement scales by 400 and translates
+        // by (20, 30), so the middle control point must have landed at (60, 70) — i.e. the transform was baked into
+        // the stored blob rather than the stored geometry being copied through untouched.
+        #expect(abs(points[1].location.x - 60) < 0.5)
+        #expect(abs(points[1].location.y - 70) < 0.5)
+    }
+
+    @Test
+    @MainActor
+    func `the annotation's line width is the median of the stroke's per-point widths, not the mean`() throws {
+        let stroke = InkStroke(
+            tool: .pen, colorRGBA: 0x0000_00FF, baseWidthSp: 1, opacity: 1,
+            x: [0, 10, 20], y: [0, 0, 0], width: [1, 2, 100],
+            force: [], azimuth: [], altitude: [], timeMillis: [],
+        )
+        let drawing = DrawingAnchor(
+            kind: .page(PageAnchor(pageIndex: 0)), encodedDrawing: InkStrokeCodec.encode(stroke),
+        )
+        let base = try Self.baseDocument(pages: 1)
+        let out = try AnnotatedPDFComposer.compose(
+            basePDF: base, drawings: [drawing],
+            placements: [InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 1, px: 0, py: 0))],
+        )
+        let document = try #require(PDFDocument(data: out))
+        let annotation = try #require(document.page(at: 0)?.annotations.first)
+        let lineWidth = try #require(annotation.border?.lineWidth)
+        #expect(abs(lineWidth - 2) < 0.01, "expected the median (2), not the mean (~34.3) or the first sample (1)")
+    }
+
+    @Test
+    @MainActor
+    func `the base document's page count, page sizes and existing annotations survive`() throws {
+        let plain = try Self.baseDocument(pages: 2)
+        let document = try #require(PDFDocument(data: plain))
+        let existingPage = try #require(document.page(at: 0))
+        let existing = PDFAnnotation(
+            bounds: CGRect(x: 10, y: 10, width: 20, height: 20), forType: .text, withProperties: nil,
+        )
+        existingPage.addAnnotation(existing)
+        let base = try #require(document.dataRepresentation())
+
+        let drawings = [Self.drawing(kind: .page(PageAnchor(pageIndex: 1)))]
+        let placements = [
+            InkPlacement(pageIndex: 1, drawingIndex: 0, transform: StrokeTransform(sp: 400, px: 0, py: 0)),
+        ]
+        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements)
+        let composed = try #require(PDFDocument(data: out))
+
+        #expect(composed.pageCount == 2)
+        for index in 0 ..< 2 {
+            let page = try #require(composed.page(at: index))
+            let box = try #require(document.page(at: index)).bounds(for: .mediaBox)
+            #expect(page.bounds(for: .mediaBox) == box)
+        }
+        let firstPage = try #require(composed.page(at: 0))
+        #expect(firstPage.annotations.contains { $0.type == "Text" })
+        let secondPage = try #require(composed.page(at: 1))
+        #expect(secondPage.annotations.contains { $0.type == "Ink" })
+    }
+
+    @Test
+    @MainActor
+    func `a rotated source page's rotation and ink annotation both survive composition`() throws {
+        let plain = try Self.baseDocument(pages: 1)
+        let base = try Self.rotated(plain, degrees: 90)
+        let drawings = [Self.drawing(kind: .page(PageAnchor(pageIndex: 0)))]
+        let placements = [
+            InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 400, px: 0, py: 0)),
+        ]
+        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements)
+        let document = try #require(PDFDocument(data: out))
+        let page = try #require(document.page(at: 0))
+        #expect(page.rotation == 90, "the composer never touches the page, so /Rotate must pass through untouched")
+        #expect(page.annotations.contains { $0.type == "Ink" })
     }
 
     @Test
@@ -268,7 +410,9 @@ struct AnnotatedPDFComposerTests {
             InkPlacement(pageIndex: 0, drawingIndex: 3, transform: StrokeTransform(sp: 400, px: 0, py: 0)),
         ]
         let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: [], placements: placements)
-        #expect(try Self.xObjectCount(of: Self.open(out), page: 1) == 0)
+        let document = try #require(PDFDocument(data: out))
+        let page = try #require(document.page(at: 0))
+        #expect(page.annotations.isEmpty)
     }
 
     @Test
