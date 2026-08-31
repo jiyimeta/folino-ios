@@ -190,8 +190,11 @@ struct MacShellView: View {
         }
     }
 
-    /// The `ScoreItem` this window's `scoreID` names, resolved from the library's live rows so a title or a revert
-    /// edited elsewhere reaches the reader.
+    /// The `ScoreItem` this window's `scoreID` names, looked up in the library's live rows (`scoreItems` excludes
+    /// soft-deleted ones — those are `deletedScoreItems`). Two things only: the reader is built from the current row
+    /// rather than a stale copy, and a `scoreID` whose row is gone yields `nil` and an empty detail. It does NOT
+    /// push later edits into a reader that is already open — `MacReaderRootScreen` seeds its view model once per
+    /// `.id(item.id)`, and a title edit does not change the id.
     private var openScoreItem: ScoreItem? {
         guard let scoreID else { return nil }
         return repository.scoreItems.first { $0.id == scoreID }

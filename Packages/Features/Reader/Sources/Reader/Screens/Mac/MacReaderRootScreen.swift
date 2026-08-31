@@ -80,6 +80,20 @@ public struct MacReaderRootScreen: View {
     }
 
     public var body: some View {
+        // `frame` + `background` below paint the reading surface as one sheet of paper. `ScoreView` paints itself
+        // opaque white, and iOS pins the whole Reader to a light appearance (`hostingAppearance(.light)`) so the
+        // margins around it match; that compat helper is a no-op on macOS, so the ground is painted here instead.
+        // A later task gives the Mac reader the proper scoped appearance and both lines go with it.
+        //
+        // On the ROOT, not on the score container: applied there it covered only the `.loaded` branch, so the
+        // spinner, the load-failure panel and the PDF placeholder each sat on the window's dark ground in dark
+        // mode — a dark-to-white flash on every open, and a dark error sheet inside an otherwise white reader. It
+        // also has to hold for Page mode's container, which is a second view; up here it covers every load state
+        // and every layout mode at once.
+        //
+        // The `frame` is what makes that true: the score container fills its column on its own (`GeometryReader`)
+        // but the spinner does not, and a background sizes itself to what it is behind — without it the ground
+        // would be a white disc the size of a `ProgressView` on an otherwise dark column.
         MacScoreContentView(
             viewModel: viewModel,
             collapseMultiMeasureRests: collapseMultiMeasureRests,
@@ -87,6 +101,8 @@ public struct MacReaderRootScreen: View {
             showAllMeasureNumbers: showAllMeasureNumbers,
             autoFollowEnabled: autoFollowEnabled,
         )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.white)
         .navigationTitle(viewModel.scoreItem.title)
         .task {
             // Vertical is the only mode the Mac can draw today, so the view model is told that rather than being
@@ -104,9 +120,9 @@ public struct MacReaderRootScreen: View {
         .onAppear { viewModel.analytics.logScreen(.reader) }
         .onDisappear {
             // Unconditional, unlike iOS: that screen guards this teardown on `scenePhase == .active` because
-            // backgrounding an iPad mid-PiP fires `onDisappear` without the user having left the Reader. There is no
-            // PiP on the Mac, and closing the window (or switching the detail column to another score) is always a
-            // real close.
+            // backgrounding an iPad mid-PiP fires `onDisappear` without the user having left the Reader. There is
+            // no PiP on the Mac, and closing the window (or switching the detail column to another score) is
+            // always a real close.
             let viewModel = viewModel
             viewModel.endAnnotationSessionIfNeeded()
             Task {

@@ -62,11 +62,6 @@ struct MacVerticalScoreContainer: View {
         GeometryReader { proxy in
             scoreScroll(viewport: proxy.size)
         }
-        // The reading surface is one sheet of paper: `ScoreView` paints itself opaque white, and iOS pins the whole
-        // Reader to a light appearance (`hostingAppearance(.light)`) so the margins around it match. That compat
-        // helper is a no-op on macOS, so the ground is painted here instead — a later task gives the Mac reader the
-        // proper scoped appearance and this line goes with it.
-        .background(Color.white)
     }
 
     private func scoreScroll(viewport: CGSize) -> some View {
@@ -267,7 +262,7 @@ struct MacVerticalScoreSurface: View {
 /// Fit-to-width factor times the user's zoom, so "zoom 1.0 = the whole system fits" regardless of what the engine's
 /// right margin, spanners or ties added to `doc.size.width`. Free function rather than a method because the container
 /// (for the follow math) and the leaf (for the render) must agree on it exactly.
-func macVerticalZoom(
+private func macVerticalZoom(
     document doc: LayoutDocument,
     viewportWidth: CGFloat,
     horizontalPadding: CGFloat,
