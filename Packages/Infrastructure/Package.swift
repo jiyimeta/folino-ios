@@ -23,7 +23,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/groue/GRDB.swift", exact: "7.11.1"),
     .package(
         url: "https://github.com/jiyimeta/swift-sheet-music.git",
-        exact: "2.3.0",
+        exact: "2.3.1",
     ),
     .package(path: "../Domain"),
     .package(path: "../Utility"),
@@ -141,7 +141,7 @@ if isAndroid {
 
 let package = Package(
     name: "Infrastructure",
-    platforms: [.iOS(.v18)],
+    platforms: [.iOS(.v18), .macOS(.v15)],
     products: products,
     dependencies: packageDependencies,
     targets: targets,

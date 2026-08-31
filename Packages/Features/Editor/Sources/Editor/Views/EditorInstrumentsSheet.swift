@@ -75,8 +75,9 @@ struct EditorInstrumentsSheet: View {
         }
         // Always on, so a part can be reordered or removed without an `EditButton` first — the same reasoning
         // as the creation wizard's list, and on the `List` itself because that is where edit mode is read
-        // from (a section-scoped write renders no affordances at all).
-        .environment(\.editMode, .constant(.active))
+        // from (a section-scoped write renders no affordances at all). macOS has no `EditMode` — see
+        // `activeEditModeCompat()`, which carries the parity marker for that gap.
+        .activeEditModeCompat()
         .contentMargins(.top, 4, for: .scrollContent)
         // Opens at half height and pulls to full: half is enough to see what a small score holds, and an ensemble
         // of any size does not fit there. No navigation bar, no confirming button — the section header names the
@@ -257,7 +258,7 @@ struct EditorInstrumentsSheet: View {
                 isCatalogPresented = false
             }
             .navigationTitle(Text("editor.instruments.add", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { isCatalogPresented = false } label: { L10n.Common.cancel }

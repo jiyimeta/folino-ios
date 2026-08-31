@@ -1,6 +1,9 @@
 import Domain
 import SwiftUI
+
+#if os(iOS)
 import UIKit
+#endif
 
 /// Repeat-mode menu row for Settings. Mirrors the Reader playback inspector's repeat control: the mode is global /
 /// sticky (shared by every score); the A–B loop's measure endpoints stay per-score and are set in the Reader, not here.
@@ -41,15 +44,26 @@ struct RepeatModeSettingRow: View {
         switch mode {
         case .off: Image(systemName: "repeat.badge.xmark")
         case .loopAll: Image(systemName: "repeat.1")
-        // Custom AB asset (duplicated from the Reader bundle). Pre-rasterize to symbol scale — its large intrinsic size
-        // can't be tamed by a SwiftUI `.frame` inside a menu label. Falls back to an SF Symbol if the asset is missing.
         case .abLoop:
+            // Custom AB asset (duplicated from the Reader bundle). Pre-rasterize to symbol scale — its large
+            // intrinsic size can't be tamed by a SwiftUI `.frame` inside a menu label. Falls back to an SF Symbol if
+            // the asset is missing.
+            //
+            // PARITY(macos): A–B repeat row glyph — iOS rasterizes because a Menu row will not draw a custom View;
+            //   the Mac menu has no such restriction, so the two branches are expected to stay different.
+            #if os(iOS)
             if let image = UIImage(named: "repeat_a_b", in: .module, with: nil) {
                 Image(uiImage: image.resized(to: CGSize(width: 16, height: 16)))
                     .renderingMode(.template)
             } else {
                 Image(systemName: "repeat")
             }
+            #else
+            Image("repeat_a_b", bundle: .module)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 16, height: 16)
+            #endif
         }
     }
 }
@@ -152,6 +166,7 @@ private struct ReaderModeMenuRowLayout<ValueIcon: View, MenuContent: View>: View
     }
 }
 
+#if os(iOS)
 extension UIImage {
     func resized(to size: CGSize) -> UIImage {
         UIGraphicsImageRenderer(size: size).image { _ in
@@ -159,3 +174,4 @@ extension UIImage {
         }
     }
 }
+#endif

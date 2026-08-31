@@ -1,5 +1,8 @@
 import SwiftUI
+
+#if os(iOS)
 import UIKit
+#endif
 
 extension View {
     /// Pins this screen — and only this screen — to a light or dark appearance, by overriding the traits of the view
@@ -31,15 +34,26 @@ extension View {
     /// **A navigation bar is NOT covered**: it belongs to the enclosing `UINavigationController`, which is this
     /// controller's parent, and trait overrides do not travel upward. Pair this with
     /// `.toolbarColorScheme(_:for: .navigationBar)` on the same screen.
+    ///
+    /// On macOS this is a no-op: the Mac shell has no per-screen appearance scoping yet.
+    @ViewBuilder
     public func hostingAppearance(_ scheme: ColorScheme) -> some View {
+        #if os(iOS)
         background(
             HostingAppearanceApplier(style: scheme == .dark ? .dark : .light)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true),
         )
+        #else
+        self
+        #endif
     }
 }
 
+// PARITY(macos): per-screen light/dark scoping — macOS would set NSAppearance on the hosting view instead of
+//   UITraitOverrides.
+
+#if os(iOS)
 private struct HostingAppearanceApplier: UIViewRepresentable {
     let style: UIUserInterfaceStyle
 
@@ -107,9 +121,12 @@ private final class HostingAppearanceProbe: UIView {
     private var owningController: UIViewController? {
         var responder: UIResponder? = next
         while let current = responder {
-            if let controller = current as? UIViewController { return controller }
+            if let controller = current as? UIViewController {
+                return controller
+            }
             responder = current.next
         }
         return nil
     }
 }
+#endif

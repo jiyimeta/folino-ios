@@ -27,7 +27,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(path: "../../ScoreUI"),
     .package(
         url: "https://github.com/jiyimeta/swift-sheet-music.git",
-        exact: "2.3.0",
+        exact: "2.3.1",
     ),
 ]
 
@@ -136,7 +136,7 @@ if isAndroid {
 let package = Package(
     name: "Editor",
     defaultLocalization: "en",
-    platforms: [.iOS(.v18)],
+    platforms: [.iOS(.v18), .macOS(.v15)],
     products: products,
     dependencies: packageDependencies,
     targets: targets,

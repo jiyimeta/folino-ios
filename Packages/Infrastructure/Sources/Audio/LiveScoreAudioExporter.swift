@@ -1,3 +1,6 @@
+// PARITY(macos): offline audio export — macOS needs the AVAudioSession-free equivalent of `.hostManaged` export.
+
+#if os(iOS)
 import Domain
 import Foundation
 import SheetMusicAudio
@@ -111,3 +114,4 @@ public final class LiveScoreAudioExporter: Domain.ScoreAudioExporter {
         }
     }
 }
+#endif

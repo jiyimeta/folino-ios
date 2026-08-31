@@ -8,7 +8,7 @@ let swiftLintPlugins: [Target.PluginUsage] = [
 let package = Package(
     name: "Domain",
     defaultLocalization: "en",
-    platforms: [.iOS(.v18), .macOS(.v14)],
+    platforms: [.iOS(.v18), .macOS(.v15)],
     products: [
         .library(name: "Domain", targets: ["Domain"]),
     ],
@@ -16,7 +16,7 @@ let package = Package(
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", exact: "0.63.2"),
         .package(
             url: "https://github.com/jiyimeta/swift-sheet-music.git",
-            exact: "2.3.0",
+            exact: "2.3.1",
         ),
         .package(path: "../Utility"),
     ],

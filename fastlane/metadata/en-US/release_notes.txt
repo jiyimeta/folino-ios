@@ -1,3 +1,4 @@
-- Improved audio export
-- Improved usability in editing mode
-- Improved the display and playback of bends, slurs and crescendos
+- Added creating a score from scratch
+- Added note entry for drum staves
+- Added rehearsal mark editing
+- Improved editing mode

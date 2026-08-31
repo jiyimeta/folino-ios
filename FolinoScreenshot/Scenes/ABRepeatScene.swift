@@ -85,8 +85,9 @@ struct ABRepeatScene: View {
                     annotationCoordinator: .fixture,
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                 )
+                // Inside the stack — see `ReaderScene` for why.
+                .readerStatusBarBand(for: idiom)
             }
-            .readerStatusBarBand(for: idiom)
         } overlay: {
             EmptyView()
         }

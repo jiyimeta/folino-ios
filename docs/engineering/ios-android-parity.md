@@ -1,9 +1,9 @@
-# iOS / Android parity ledger
+# iOS / Android / macOS parity ledger
 
-Folino ships on two platforms, and one of them regularly lands a feature first.
-This file records what is **deliberately** owed to the other platform, so a
-half-crossed feature is a tracked debt rather than something rediscovered months
-later by a user.
+Folino ships on three platforms — iOS, Android, and (as of sub-project Ⅲa) macOS —
+and they regularly land a feature unevenly. This file records what is
+**deliberately** owed to whichever platform is behind, so a half-crossed feature
+is a tracked debt rather than something rediscovered months later by a user.
 
 It is not a TODO list. Only record a gap that is real and intended — an ordinary
 "would be nice" belongs in the roadmap, and a bug belongs in an issue. A ledger
@@ -20,10 +20,10 @@ Leave a marker where the code diverges — not here:
 public static let showAllMeasureNumbers = "readerShowAllMeasureNumbers"
 ```
 
-Format: `PARITY(<platform>): <title> — <what the other platform still needs>`,
-where `<platform>` is the platform the work is **owed to**. The separator is an
-em dash (` -- ` also works). A continuation line repeats the comment token and
-indents.
+Format: `PARITY(<android|ios|macos>): <title> — <what the other platform still needs>`,
+where `<platform>` is the platform the work is **owed to** — `macos` is a valid
+value alongside `android` and `ios`. The separator is an em dash (` -- ` also
+works). A continuation line repeats the comment token and indents.
 
 `Scripts/parity-report.py` collects the markers into the generated block below,
 and the `parity-ledger` pre-commit hook rewrites it and fails if it had drifted —
@@ -70,5 +70,31 @@ line of source represents. Keep each to a sentence and delete it when it closes.
 ### Owed to iOS
 
 Nothing is currently owed to iOS.
+
+### Owed to macOS
+
+| Item | Where it diverges | What macOS still needs |
+| --- | --- | --- |
+| drum icon ink | `Packages/Features/Editor/Sources/Editor/Views/DrumInstrumentIcon.swift:184` | AppKit's labelColor / tertiaryLabelColor are the same two semantic colours, and the reason for naming a concrete colour rather than `.primary` holds on both platforms. A provisional pairing until a Mac pad exists to look at. |
+| dotted-duration menu glyph | `Packages/Features/Editor/Sources/Editor/Views/EditorPadButtons.swift:8` | iOS rasterizes because a UIKit `Menu` row will not draw a custom View or apply a custom font. AppKit menus have no such restriction, so the Mac pad should draw the glyph as a View rather than port the rasterizer. |
+| pad-tuck-handle preview background | `Packages/Features/Editor/Sources/Editor/Views/EditorPadTuckHandle.swift:65` | `.systemGroupedBackground` has no macOS analogue, so the preview stands in with `.windowBackgroundColor`, a provisional pick until Reader's own port settles what a Mac grouped surface should read as. |
+| A–B repeat row glyph | `Packages/Features/Settings/Sources/Settings/Screens/ReaderModeSettingRows.swift:52` | iOS rasterizes because a Menu row will not draw a custom View; the Mac menu has no such restriction, so the two branches are expected to stay different. |
+| version-history row background | `Packages/Features/Settings/Sources/Settings/VersionHistory/VersionHistoryScreen.swift:97` | iOS uses the grouped-list "secondary system background" gray, a raised card on top of the grouped-list base. macOS substitutes `.underPageBackgroundColor`, a provisional pick until Reader's own port settles what a Mac grouped surface should read as. |
+| feedback mail composer | `Packages/Features/Settings/Sources/Settings/Views/FeedbackMailView.swift:3` | macOS has no MessageUI. The Mac path is an `NSWorkspace.open` of a `mailto:` URL built from the same subject and body; until then `canSendMail` is false and the row disables itself, exactly as on an iPhone with no mail account configured. |
+| loop-bounds mapping | `Packages/Infrastructure/Sources/Audio/LivePlaybackController+LoopBounds.swift:1` | depends on the gated LivePlaybackController; ports once that type does. |
+| note preview forwarding | `Packages/Infrastructure/Sources/Audio/LivePlaybackController+Preview.swift:1` | depends on the gated LivePlaybackController; ports once that type does. |
+| soundfont-reload rebuild | `Packages/Infrastructure/Sources/Audio/LivePlaybackController+Reload.swift:1` | depends on the gated LivePlaybackController; ports once that type does. |
+| transpose forwarding | `Packages/Infrastructure/Sources/Audio/LivePlaybackController+Transpose.swift:1` | depends on the gated LivePlaybackController; ports once that type does. |
+| live playback controller | `Packages/Infrastructure/Sources/Audio/LivePlaybackController.swift:1` | macOS needs the AVAudioSession-free equivalent (no session category, NSImage-backed now-playing artwork, and CoreAudio default-device observation in place of route notifications). |
+| offline audio export | `Packages/Infrastructure/Sources/Audio/LiveScoreAudioExporter.swift:1` | macOS needs the AVAudioSession-free equivalent of `.hostManaged` export. |
+| output-route disconnect watcher | `Packages/Infrastructure/Sources/Audio/OutputRouteDisconnectWatcher.swift:1` | macOS needs CoreAudio default-device-change observation in place of `AVAudioSession.routeChangeNotification`. |
+| system share sheet | `Packages/Utility/Sources/UtilityUI/ActivityViewControllerRepresentable.swift:1` | macOS needs an NSSharingServicePicker equivalent, wired into ScoreShareTarget's call sites. |
+| screen corner radius | `Packages/Utility/Sources/UtilityUI/Device+CornerRadius.swift:21` | DeviceKit has no macOS device geometry to read, so `screenCornerRadius` returns 0 there. Revisit only if a Mac window ever needs concentric corner nesting against real display bezel geometry. |
+| per-screen light/dark scoping | `Packages/Utility/Sources/UtilityUI/HostingAppearance.swift:53` | macOS would set NSAppearance on the hosting view instead of UITraitOverrides. |
+| interactive pop gesture | `Packages/Utility/Sources/UtilityUI/InteractivePopGestureEnabler.swift:3` | no macOS analogue; the modifier is a no-op there. Revisit only if the Mac shell ever adopts a navigation stack with a swipe-back affordance. |
+| toolbar placement and title display mode | `Packages/Utility/Sources/UtilityUI/PlatformToolbarCompat.swift:3` | these substitute neutral macOS behavior so shared screens compile. Ⅲb migrates each call site to a semantic placement (.cancellationAction / .confirmationAction), which is what actually earns Esc / Return key equivalents on a Mac sheet. |
+| list reordering and deletion | `Packages/Utility/Sources/UtilityUI/PlatformToolbarCompat.swift:65` | the sheets that call this show no reorder handle and no delete minus on macOS. AppKit reorders by drag with no edit mode at all, so the fix is an affordance, not a port. |
+| window-coordinate frame probe | `Packages/Utility/Sources/UtilityUI/WindowFrameReader.swift:35` | macOS needs the NSView equivalent before any Mac code can measure across view trees. |
+| window top safe-area probe | `Packages/Utility/Sources/UtilityUI/WindowSafeAreaReader.swift:47` | macOS needs an NSView/NSWindow-backed equivalent that reads `NSWindow.contentView?.safeAreaInsets.top` before any Mac screen can report it. |
 
 <!-- /generated:parity -->

@@ -59,8 +59,11 @@ struct ReaderScene: View {
                     annotationCoordinator: .fixture,
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                 )
+                // Inside the stack, not around it: the band is the screen's top safe area now, and a
+                // `safeAreaInset` applied outside a `NavigationStack` does not reach the UIKit-hosted content —
+                // the strip laid out at the frame's top edge instead and the band painted over it.
+                .readerStatusBarBand(for: idiom)
             }
-            .readerStatusBarBand(for: idiom)
         } overlay: {
             EmptyView()
         }

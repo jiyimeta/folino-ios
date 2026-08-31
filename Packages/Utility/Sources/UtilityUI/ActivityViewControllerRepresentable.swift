@@ -1,3 +1,7 @@
+// PARITY(macos): system share sheet — macOS needs an NSSharingServicePicker equivalent, wired into
+//   ScoreShareTarget's call sites.
+
+#if os(iOS)
 import SwiftUI
 import UIKit
 
@@ -18,3 +22,4 @@ public struct ActivityViewControllerRepresentable: UIViewControllerRepresentable
 
     public func updateUIViewController(_: UIActivityViewController, context _: Context) {}
 }
+#endif

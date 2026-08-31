@@ -68,26 +68,25 @@ struct AnnotationScene: View {
                     scoresDirectory: URL(filePath: NSTemporaryDirectory()),
                     scoreContentOverride: AnyView(deviceCapture),
                 )
+                // Inside the stack — see `ReaderScene` for why. Lighter edge than the other Reader scenes: this
+                // one's pill row is sparser, so less shadow reaches the clip.
+                .readerStatusBarBand(for: idiom, shadowEdge: 0.993)
             }
-            // Lighter edge than the other Reader scenes: this one's pill row is sparser, so less shadow reaches the
-            // clip.
-            .readerStatusBarBand(for: idiom, shadowEdge: 0.993)
         } overlay: {
             EmptyView()
         }
     }
 
     /// The real-device score+ink capture, standing in for the live (unreproducible) score surface.
+    @ViewBuilder
     private var deviceCapture: some View {
-        Group {
-            if let img = UIImage(named: idiom == .iPad ? "annotated-device" : "annotated-device-iphone") {
-                Image(uiImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            } else {
-                Color.white
-            }
+        if let img = UIImage(named: idiom == .iPad ? "annotated-device" : "annotated-device-iphone") {
+            Image(uiImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        } else {
+            Color.white
         }
     }
 }

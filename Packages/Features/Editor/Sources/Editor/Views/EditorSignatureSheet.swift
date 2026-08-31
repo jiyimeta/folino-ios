@@ -58,7 +58,7 @@ struct EditorSignatureSheet<Picker: View>: View {
                 }
             }
             .navigationTitle(Text(title, bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar { toolbarContent }
         }
         // Half height, and only half: this sheet asks one short question about one bar, and the score it is asking
@@ -103,10 +103,15 @@ struct EditorSignatureSheet<Picker: View>: View {
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button { dismiss() } label: { L10n.Common.cancel }
+            Button { dismiss() } label: {
+                SheetActionLabel(.close, title: L10n.Common.cancel)
+            }
         }
         ToolbarItem(placement: .confirmationAction) {
-            EditorConfirmButton(label: Text("editor.signature.apply", bundle: .module)) {
+            // No discard confirmation here, unlike the drum layout and rehearsal mark sheets. What this one holds
+            // is a picker's position — two taps to re-make — and an alert guarding that is friction with nothing
+            // behind it.
+            SheetConfirmButton(title: Text("editor.signature.apply", bundle: .module)) {
                 finish(apply())
             }
         }

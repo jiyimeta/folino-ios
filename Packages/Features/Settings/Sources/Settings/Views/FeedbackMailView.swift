@@ -1,7 +1,8 @@
-import DeviceKit
-import Foundation
-import MessageUI
 import SwiftUI
+
+// PARITY(macos): feedback mail composer — macOS has no MessageUI. The Mac path is an `NSWorkspace.open` of a
+//   `mailto:` URL built from the same subject and body; until then `canSendMail` is false and the row disables
+//   itself, exactly as on an iPhone with no mail account configured.
 
 enum FeedbackMailComposeResult: Equatable {
     case cancelled
@@ -9,6 +10,11 @@ enum FeedbackMailComposeResult: Equatable {
     case sent
     case failed
 }
+
+#if os(iOS)
+import DeviceKit
+import Foundation
+import MessageUI
 
 struct FeedbackMailView: UIViewControllerRepresentable {
     @Environment(\.dismiss) private var dismiss
@@ -91,3 +97,22 @@ private enum FeedbackMailConfiguration {
         Device.current.description
     }
 }
+
+#else
+
+/// macOS has no `MessageUI` composer. `canSendMail` is unconditionally `false`, so `AboutSettingsSection` disables
+/// the feedback row — the same disabled state an iPhone with no mail account configured already falls into — and
+/// this body never actually presents.
+struct FeedbackMailView: View {
+    @Binding var result: FeedbackMailComposeResult?
+
+    static var canSendMail: Bool {
+        false
+    }
+
+    var body: some View {
+        EmptyView()
+    }
+}
+
+#endif

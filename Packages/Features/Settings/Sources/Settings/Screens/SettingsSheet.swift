@@ -47,7 +47,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
             // Screen level on purpose — see `FeedbackMailPresentation`.
             .feedbackMailPresentation(isPresented: $isFeedbackMailPresented)
             .navigationTitle(Text("settings.title", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar { doneToolbar }
         }
         .onAppear { analytics.logScreen(.settings) }
@@ -55,7 +55,7 @@ public struct SettingsSheet<LicenseContent: View>: View {
 
     @ToolbarContentBuilder
     private var doneToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(placement: .topBarTrailingCompat) {
             Button { dismiss() } label: { L10n.Common.done }
         }
     }

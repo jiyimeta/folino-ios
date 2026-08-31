@@ -19,7 +19,7 @@ repos:
       # Keeps docs/engineering/ios-android-parity.md in step with the PARITY(...) markers in the source. Rewrites the
       # generated block and fails when it had drifted, so re-stage and commit again.
       - id: parity-ledger
-        name: iOS/Android parity ledger
+        name: platform parity ledger
         entry: Scripts/parity-report.py --check
         language: system
         pass_filenames: false
