@@ -56,7 +56,7 @@ public struct LiveScoreShareService: ScoreShareService {
             hasOriginalPDF: item.originalPDFFileName != nil,
             isEngravable: item.pdfOriginState != .unconverted,
         ).map { ScoreShareFormatOption(format: $0) }
-        return plain + annotated
+        return ScoreShareFormatOption.menu(plain: plain, annotated: annotated)
     }
 
     /// The item's stored drawing anchors, or none. A store failure degrades to "no ink" — the plain formats still
@@ -148,9 +148,8 @@ public struct LiveScoreShareService: ScoreShareService {
     }
 
     private func write(_ data: Data, item: ScoreItem, format: ScoreShareFormat) throws -> URL {
-        let destination = shareTempDirectory.appending(
-            path: ScoreExportNaming.fileName(title: item.title, format: format),
-        )
+        let fileName = ScoreExportNaming.fileName(title: item.title, format: format)
+        let destination = shareTempDirectory.appending(path: fileName)
         try? FileManager.default.removeItem(at: destination)
         do {
             try data.write(to: destination)

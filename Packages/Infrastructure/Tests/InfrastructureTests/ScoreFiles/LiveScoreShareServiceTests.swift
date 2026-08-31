@@ -303,11 +303,27 @@ struct LiveScoreShareServiceTests {
     }
 
     @Test
-    func `musical ink adds the engraved annotated row after the plain formats`() async throws {
+    func `musical ink inserts the engraved annotated row directly after the plain PDF row`() async throws {
         let rig = try Self.makeRig(scoreData: Fixtures.minimalMSCZData(), localFileName: "s.mscz")
         rig.annotations.layer = Self.layer(for: rig.item.id, drawings: [Self.musicalDrawing()])
         let formats = await rig.svc.availableFormats(for: rig.item).map(\.format)
-        #expect(formats == ScoreShareFormat.allOrdered + [.annotatedPDF])
+        #expect(formats == [.museScoreV4, .museScoreV3, .pdf, .annotatedPDF, .midi, .audioM4A])
+    }
+
+    @Test
+    func `both annotated rows land between the plain PDF and MIDI rows, in order`() async throws {
+        // A converted-PDF item — `localFileName` is the score (engravable), but `sourcePDFFileName` still names the
+        // original PDF sidecar, so both the engraved and the original-PDF annotated rows are on offer at once.
+        let rig = try Self.makeRig(scoreData: Fixtures.minimalMSCZData(), localFileName: "s.mscz")
+        var item = rig.item
+        item.sourcePDFFileName = "original.pdf"
+        rig.annotations.layer = Self.layer(
+            for: rig.item.id, drawings: [Self.musicalDrawing(), Self.pageDrawing()],
+        )
+        let formats = await rig.svc.availableFormats(for: item).map(\.format)
+        #expect(formats == [
+            .museScoreV4, .museScoreV3, .pdf, .annotatedPDF, .annotatedOriginalPDF, .midi, .audioM4A,
+        ])
     }
 
     @Test
