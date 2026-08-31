@@ -23,6 +23,10 @@ struct UnavailableScoreAudioExporter: ScoreAudioExporter {
     }
 }
 
+// PARITY(macos): score playback — `LivePlaybackController` (Infrastructure/Audio) is `#if os(iOS)`-gated and does
+//   not exist as a nominal type on macOS at all, until a later task builds the AVAudioSession-free equivalent. Until
+//   then `AudioStack.playbackController` is `nil` on macOS, and every Mac screen that would drive playback has
+//   nothing to call.
 /// Builds the macOS audio and sharing adapter stack for `AppBootstrap`. Same shape as the iOS `AudioStackFactory` in
 /// `App/iOS/AudioStackFactory.swift` minus the two platform-bound pieces: `UIKitInstalledAppChecker` (replaced by
 /// `NoSiblingAppChecker`) and `LiveScoreAudioExporter`/`LivePlaybackController` (iOS-gated until a later task; the
