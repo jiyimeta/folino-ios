@@ -216,8 +216,6 @@ struct MacShellView: View {
                 metadataReader: metadataReader,
                 annotationCoordinator: annotationCoordinator,
                 scoresDirectory: AppPaths.scoresDirectory,
-                // PARITY(macos): score playback from the Mac reader — `AudioStack.playbackController` is nil until a
-                //   later task builds the AVAudioSession-free controller, so the transport has nothing to drive.
                 playbackController: bootstrap.playbackController,
                 // The same OMR parser the iOS shell passes. It is what gives an imported PDF its on-PDF cursor and
                 // click-to-seek; without it the document still reads, it just carries no musical positions.

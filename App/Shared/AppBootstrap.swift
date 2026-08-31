@@ -21,10 +21,9 @@ private enum AnnotationMigrationKey {
 /// What the platform's audio and sharing adapters amount to, handed back by the per-platform `AudioStackFactory`.
 ///
 /// `playbackController` is typed through the `Domain.PlaybackController` protocol rather than the concrete
-/// `LivePlaybackController` — that type is `#if os(iOS)`-gated inside `Audio` and does not exist as a nominal type on
-/// macOS at all, so a macOS-visible struct cannot name it even to store `nil`. Every consumer already takes the
-/// protocol (`EditableReaderScreen.init(playbackController:)`), so this is a pure widening, not a behavior change.
-/// `nil` on macOS because there is no Mac playback engine yet, until sub-project Ⅲb's audio milestone lands.
+/// `LivePlaybackController`, and stays optional. Both platforms now build a real one — `LivePlaybackController` is no
+/// longer iOS-gated — so the optionality is no longer a macOS gap; it is what every consumer already takes
+/// (`EditableReaderScreen.init(playbackController:)`), and what a test or a preview passes `nil` for.
 struct AudioStack {
     let museScoreGeneralProvider: LiveMuseScoreGeneralProvider
     let soundfontResolver: GMSoundfontResolver

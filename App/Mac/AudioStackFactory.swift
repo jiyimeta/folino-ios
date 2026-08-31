@@ -1,5 +1,7 @@
+import Audio
 import Domain
 import Foundation
+import Reader
 import ScoreFiles
 import Soundfonts
 
@@ -12,25 +14,11 @@ struct NoSiblingAppChecker: InstalledAppChecking {
     }
 }
 
-// PARITY(macos): offline audio export — `LiveScoreAudioExporter` (Infrastructure/Audio) is `#if os(iOS)`-gated
-//   until a later task builds the AVAudioSession-free equivalent. Until then the Mac share service is handed this
-//   stub, which fails the m4a export path loudly instead of writing a silent zero-length file.
-/// Stub `ScoreAudioExporter` for macOS. `LiveScoreShareService.audioExporter` stays non-optional (a Domain protocol
-/// injected by the composition root), so this adapter fills the slot until the real Mac exporter lands.
-struct UnavailableScoreAudioExporter: ScoreAudioExporter {
-    func exportM4A(score: Score, to url: URL) throws {
-        throw DomainError.audioEngineFailed(reason: "Audio export is not available on macOS yet")
-    }
-}
-
-// PARITY(macos): score playback — `LivePlaybackController` (Infrastructure/Audio) is `#if os(iOS)`-gated and does
-//   not exist as a nominal type on macOS at all, until a later task builds the AVAudioSession-free equivalent. Until
-//   then `AudioStack.playbackController` is `nil` on macOS, and every Mac screen that would drive playback has
-//   nothing to call.
 /// Builds the macOS audio and sharing adapter stack for `AppBootstrap`. Same shape as the iOS `AudioStackFactory` in
-/// `App/iOS/AudioStackFactory.swift` minus the two platform-bound pieces: `UIKitInstalledAppChecker` (replaced by
-/// `NoSiblingAppChecker`) and `LiveScoreAudioExporter`/`LivePlaybackController` (iOS-gated until a later task; the
-/// share service gets `UnavailableScoreAudioExporter` and `playbackController` is `nil`).
+/// `App/iOS/AudioStackFactory.swift`, and now the same adapters too: `LivePlaybackController` and
+/// `LiveScoreAudioExporter` are no longer iOS-gated, so the Mac gets the real ones rather than a `nil` controller and
+/// an export stub. The single remaining difference is `UIKitInstalledAppChecker`, replaced here by
+/// `NoSiblingAppChecker` — there is no Mac sibling app to probe for a shared soundfont.
 ///
 /// `@MainActor` because `LiveMuseScoreGeneralProvider.init` is — mirrors the iOS factory's annotation.
 @MainActor
@@ -54,23 +42,35 @@ enum AudioStackFactory {
             targetDirectory: AppPaths.soundfontsDirectory, reclaimer: reclaimer,
         )
         let resolver = GMSoundfontResolver(provider: provider)
+        let clickProvider = BundledMetronomeClickProvider()
+        let audioExporter = LiveScoreAudioExporter(
+            soundfontResolver: resolver,
+            metronomeClickProvider: clickProvider,
+            metronomeEnabled: {
+                UserDefaults.standard.bool(forKey: ReaderGlobalSettingsKey.metronomeEnabled)
+            },
+        )
         let shareService = LiveScoreShareService(
             scoresDirectory: scoresDirectory,
             shareTempDirectory: shareTempDirectory,
             gateway: gateway,
-            audioExporter: UnavailableScoreAudioExporter(),
+            audioExporter: audioExporter,
             pdfRenderer: CoreGraphicsPDFRenderer(),
         )
         let metadataReader = LiveScoreMetadataReader(
             gateway: gateway,
             scoresDirectory: scoresDirectory,
         )
+        let playbackController = LivePlaybackController(
+            soundfontResolver: resolver,
+            metronomeClickProvider: clickProvider,
+        )
         return AudioStack(
             museScoreGeneralProvider: provider,
             soundfontResolver: resolver,
             shareService: shareService,
             metadataReader: metadataReader,
-            playbackController: nil,
+            playbackController: playbackController,
         )
     }
 }

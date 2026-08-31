@@ -1,7 +1,7 @@
 // PARITY(macos): the Mac reading surface's chrome — this screen renders the score in Page or Vertical mode, shows an
-//   imported PDF and the ink committed on either, and lets them scroll. The transport, the inspectors, the share /
-//   annotate / edit controls, Horizontal layout mode, and the score ⇄ original-PDF switch are all still iOS-only; see
-//   `ReaderRootScreen` for the surface being caught up to.
+//   imported PDF and the ink committed on either, lets them scroll, and plays them from a transport bar. The
+//   inspectors, the share / annotate / edit controls, Horizontal layout mode, and the score ⇄ original-PDF switch are
+//   all still iOS-only; see `ReaderRootScreen` for the surface being caught up to.
 
 #if os(macOS)
 import Domain
@@ -19,9 +19,10 @@ import UtilityCore
 /// and the interactive-pop-gesture restoration. None of that comes across, so the two screens diverge rather than
 /// growing a seam of `#if`s down the middle of an 800-line file.
 ///
-/// What it deliberately does NOT do yet, each owned by a later task: the transport control, the inspectors, the
-/// note-editing seam (`ReaderEditingHost`), Horizontal layout mode, and the score ⇄ original-PDF switch (the reader
-/// shows whichever rendition `displaySource` names, but has no chrome to change it).
+/// What it deliberately does NOT do yet, each owned by a later task: the inspectors, the note-editing seam
+/// (`ReaderEditingHost`), Horizontal layout mode, and the score ⇄ original-PDF switch (the reader shows whichever
+/// rendition `displaySource` names, but has no chrome to change it). The transport is here — `MacTransportBar`, its
+/// own sibling of `ReaderTransportControl`.
 @MainActor
 public struct MacReaderRootScreen: View {
     @State private var viewModel: ReaderViewModel
@@ -51,8 +52,9 @@ public struct MacReaderRootScreen: View {
     /// callbacks (`onBack` / `onToggleSidebar` — the Mac's sidebar belongs to `NavigationSplitView`), the status-bar
     /// handoff, the screenshot override, and the VocalTuner handoff (a URL-scheme jump to an iOS sibling app).
     ///
-    /// `playbackController` is `nil` on macOS today — `AudioStackFactory` has no Mac `LivePlaybackController` yet — so
-    /// the whole playback surface is inert rather than absent: `ReaderPlaybackSession` guards every controller call.
+    /// `playbackController` is a real `LivePlaybackController` on macOS now, built by the Mac `AudioStackFactory`
+    /// exactly as the iOS one builds its own. It stays optional because `ReaderPlaybackSession` guards every
+    /// controller call anyway, which is what lets a preview or a test pass `nil` and get an inert transport.
     ///
     /// `pdfPlaybackParser` is what an imported PDF's on-PDF cursor and click-to-seek are built out of: without it
     /// `loadPDF`'s background parse resolves to `.unavailable` and the document reads as a plain PDF. Optional for the
@@ -100,14 +102,23 @@ public struct MacReaderRootScreen: View {
     }
 
     public var body: some View {
-        MacScoreContentView(
-            viewModel: viewModel,
-            layoutMode: layoutMode,
-            collapseMultiMeasureRests: collapseMultiMeasureRests,
-            showInvisibleElements: showInvisibleElements,
-            showAllMeasureNumbers: showAllMeasureNumbers,
-            autoFollowEnabled: autoFollowEnabled,
-        )
+        // Two children, and this body reads no playback state of its own: `MacScoreContentView` reads the cursors,
+        // and the transport's seek region reads the position, each inside its own body. A tick therefore never
+        // reaches this screen. Docking the bar rather than floating it over the score is deliberate — the iOS
+        // transport overlays because a phone has no room to spare, and paying for that here would mean insetting
+        // every container's viewport to keep the score out from under it.
+        VStack(spacing: 0) {
+            MacScoreContentView(
+                viewModel: viewModel,
+                layoutMode: layoutMode,
+                collapseMultiMeasureRests: collapseMultiMeasureRests,
+                showInvisibleElements: showInvisibleElements,
+                showAllMeasureNumbers: showAllMeasureNumbers,
+                autoFollowEnabled: autoFollowEnabled,
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            MacTransportBar(viewModel: viewModel)
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // **This screen pins no appearance at all, and that is a measured decision rather than an omission.**
         //
