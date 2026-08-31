@@ -1330,7 +1330,11 @@ git commit -m "feat(audio): un-gate the playback controller and exporter for mac
 - Consumes: nothing.
 - Produces: `OutputRouteDisconnectWatcher` exists on both platforms with an unchanged `onDisconnect` contract.
 
-The iOS body observes `AVAudioSession.routeChangeNotification` for `.oldDeviceUnavailable`. The macOS equivalent is CoreAudio: listen for `kAudioHardwarePropertyDefaultOutputDevice` on `kAudioObjectSystemObject`, and treat a change of default output as the disconnect signal.
+The iOS body observes `AVAudioSession.routeChangeNotification` for `.oldDeviceUnavailable`. The macOS equivalent is CoreAudio: listen on `kAudioObjectSystemObject` for `kAudioHardwarePropertyDefaultOutputDevice` **plus the device list** (`kAudioHardwarePropertyDevices`), per design §6.1.
+
+**Both are required — the default moving is not the disconnect signal.** On macOS, plugging a device IN usually promotes it to default output, which moves `kAudioHardwarePropertyDefaultOutputDevice` exactly as unplugging one does. Treating every move as a disconnect would pause playback when the user connects headphones mid-score — the one transition iOS deliberately plays through, since the iOS body filters `.newDeviceAvailable` out. So the default moving is only a question; the device list answers it: a disconnect is *the device that was the default having left the device list*.
+
+Do not assume an ordering between the two notifications — CoreAudio does not document one, and this repo's audio history is ordering races. Reconcile so that whichever callback arrives holding the evidence reports it.
 
 **No protocol.** Same type name, same file, `#if` at type scope — a third implementation will never exist. And **do not** add an `AVAudioEngineConfigurationChange` observer while in this file: that is sub-project Ⅱ's work inside ssm, and a second observer races the engine's own teardown.
 
@@ -1340,17 +1344,19 @@ Read all 53 lines. Note what `onDisconnect` promises the caller (when it fires, 
 
 - [ ] **Step 2: Write the macOS body**
 
-Add an `#else` branch registering an `AudioObjectPropertyListenerBlock` for:
+Add an `#else` branch registering an `AudioObjectPropertyListenerBlock` on `AudioObjectID(kAudioObjectSystemObject)` for **each** of:
 
 ```swift
 var address = AudioObjectPropertyAddress(
-    mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+    mSelector: kAudioHardwarePropertyDefaultOutputDevice,   // and kAudioHardwarePropertyDevices
     mScope: kAudioObjectPropertyScopeGlobal,
     mElement: kAudioObjectPropertyElementMain,
 )
 ```
 
-on `AudioObjectID(kAudioObjectSystemObject)`, dispatching `onDisconnect` on the same actor the iOS body uses. Unregister in `deinit` (or in whatever teardown method the iOS body already has) — a leaked CoreAudio listener fires into a deallocated object.
+Keep a cached `Set<AudioDeviceID>` device list and the current default output. A default-output change whose old device is *still listed* is a user switch (or a removal not yet published) — not a disconnect; park the old id rather than discarding it, since that callback is the last place it is known. A device-list change reports when the id that left is the one being played through, or the parked one. Park for exactly one device-list change so a hand switch cannot leave the watcher primed. Both callbacks land on `.main`, so the state needs no further synchronization.
+
+Dispatch `onDisconnect` on the same actor the iOS body uses. Unregister **every** listener in `deinit` (or in whatever teardown method the iOS body already has), on the same block identity — a leaked CoreAudio listener fires into a deallocated object. Log a failed registration; silently never pausing is undiagnosable.
 
 Import `CoreAudio` in the macOS branch only.
 
