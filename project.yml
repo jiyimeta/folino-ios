@@ -70,6 +70,24 @@ targets:
     sources:
       - path: App/Shared
       - path: App/iOS
+      - path: App/GoogleService-Info.plist
+        type: file
+        buildPhase: resources
+      - path: App/PrivacyInfo.xcprivacy
+        type: file
+        buildPhase: resources
+      - path: App/Resources/Assets.xcassets
+        type: file
+        buildPhase: resources
+      - path: App/Resources/InfoPlist.xcstrings
+        type: file
+        buildPhase: resources
+      - path: App/Resources/Localizable.xcstrings
+        type: file
+        buildPhase: resources
+      - path: App/Resources/VersionHistory.yml
+        type: file
+        buildPhase: resources
       - path: App/Resources/folino.icon
         type: file
         buildPhase: resources
@@ -177,6 +195,24 @@ targets:
       - path: App/iOS
         excludes:
           - FolinoApp.swift
+      - path: App/GoogleService-Info.plist
+        type: file
+        buildPhase: resources
+      - path: App/PrivacyInfo.xcprivacy
+        type: file
+        buildPhase: resources
+      - path: App/Resources/Assets.xcassets
+        type: file
+        buildPhase: resources
+      - path: App/Resources/InfoPlist.xcstrings
+        type: file
+        buildPhase: resources
+      - path: App/Resources/Localizable.xcstrings
+        type: file
+        buildPhase: resources
+      - path: App/Resources/VersionHistory.yml
+        type: file
+        buildPhase: resources
       - path: App/Resources/folino.icon
         type: file
         buildPhase: resources
