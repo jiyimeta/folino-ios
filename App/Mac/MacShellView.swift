@@ -111,7 +111,37 @@ struct MacShellView: View {
                   let item = libraryVM.pendingScoreToOpen,
                   item.id == newID else { return }
             libraryVM.pendingScoreToOpen = nil
+            openScore(item)
+        }
+    }
+
+    /// Show `item` in this window and put the sidebar behind it. The one place all three callers — a click in the
+    /// library, a playlist open, and the post-import watcher above — express "open this score here".
+    ///
+    /// **Both writes are guarded on inequality, and that is not only hygiene.** Making both of them inside a single
+    /// SwiftUI update pass asks the split view's navigation observer to update twice in one frame, and SwiftUI logs
+    /// `Update NavigationRequestObserver tried to update multiple times per frame` at FAULT level. Measured on the
+    /// watcher above — the only caller that runs inside an update — one mode per instrumented launch:
+    ///
+    /// * Either write ALONE from the watcher is clean. The two together are not, and so is either one paired with
+    ///   `pendingScoreToOpen = nil` (clearing the value the watcher itself observes re-fires it in the same frame).
+    /// * The identical pair made from a settled async context is clean. That is why the two user-driven callers do
+    ///   not trigger it: a button action runs outside any update, so SwiftUI coalesces the pair into one update.
+    /// * Nothing rearranges out of it. Splitting the two writes across two chained `onChange`s, deferring with
+    ///   `Task { @MainActor }` or `DispatchQueue.main.async`, moving the watcher onto the sidebar column, running the
+    ///   handoff from `.task(id:)`, and making `columnVisibility` per-window `@State` instead of the App's were each
+    ///   built and launched, and each still faulted. SwiftUI runs all of those within the pass the observable change
+    ///   started.
+    ///
+    /// So the guards are the reduction actually available here: every later open in a window whose sidebar is already
+    /// collapsed makes one write, not two. Closing the last case is a decision above this seam — either the Mac stops
+    /// auto-collapsing the sidebar when a score opens (which is the macOS idiom; ⌘0 still collapses it), or the
+    /// post-import handoff waits for the update to settle, at the cost of a visible delay before the score appears.
+    private func openScore(_ item: ScoreItem) {
+        if scoreID != item.id {
             scoreID = item.id
+        }
+        if columnVisibility != .detailOnly {
             columnVisibility = .detailOnly
         }
     }
@@ -121,8 +151,7 @@ struct MacShellView: View {
             viewModel: libraryVM,
             path: $sidebarPath,
             onOpenScore: { item in
-                scoreID = item.id
-                columnVisibility = .detailOnly
+                openScore(item)
             },
             readerDestination: { _ in
                 // PARITY(macos): library → reader navigation seam — LibraryRootScreen's readerDestination closures
@@ -139,8 +168,7 @@ struct MacShellView: View {
                 //   `MacReaderRootScreen` opens the score standalone and the playlist's continuation control and
                 //   end-of-score auto-advance are unreachable. Threading a `PlaylistID` through `MacWindowScore` is
                 //   what closes it.
-                scoreID = item.id
-                columnVisibility = .detailOnly
+                openScore(item)
             },
             licenseContent: { LicenseListView() },
             leadingToolbarItem: { EmptyView() },
@@ -174,6 +202,9 @@ struct MacShellView: View {
                 // PARITY(macos): score playback from the Mac reader — `AudioStack.playbackController` is nil until a
                 //   later task builds the AVAudioSession-free controller, so the transport has nothing to drive.
                 playbackController: bootstrap.playbackController,
+                // The same OMR parser the iOS shell passes. It is what gives an imported PDF its on-PDF cursor and
+                // click-to-seek; without it the document still reads, it just carries no musical positions.
+                pdfPlaybackParser: bootstrap.pdfPlaybackParser,
                 analytics: bootstrap.analytics ?? NoopAnalytics(),
             )
             .id(item.id)

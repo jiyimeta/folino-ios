@@ -1,7 +1,7 @@
-// PARITY(macos): page-mode reader extras — the Mac deck draws every page and lets the scroll view magnify them, and
-//   nothing else. The iOS `PagedScoreContainer`'s page-turn tap zones, swipe-to-turn, the PencilKit annotation
-//   overlay, and the note-editing seam have no Mac equivalent yet; the deck also has no counterpart to the reader's
-//   pinch-zoom commit, because zoom lives on `NSScrollView.magnification` here instead.
+// PARITY(macos): page-mode reader extras — the Mac deck draws every page with its committed ink and lets the scroll
+//   view magnify them, and nothing else. The iOS `PagedScoreContainer`'s page-turn tap zones, swipe-to-turn, the live
+//   annotation canvas, and the note-editing seam have no Mac equivalent yet; the deck also has no counterpart to the
+//   reader's pinch-zoom commit, because zoom lives on `NSScrollView.magnification` here instead.
 
 #if os(macOS)
 import Domain
@@ -180,11 +180,22 @@ struct MacPagedScoreContainer: View {
                 pageSize: sheet,
             )
         }
+        // The desk the sheets lie on. `MagnifyingScoreScrollView` sets `drawsBackground = false`, so this is the one
+        // ground behind the deck — see `MacReaderGround` for why it is grey and why the root paints none.
+        .background(MacReaderGround.desk)
         .task(id: layoutKey) {
             await rebuildLayout()
         }
         .onChange(of: playbackCursor, initial: true) { _, _ in
             placeCursor()
+        }
+        // The stored ink lands from `loadAnnotations()` a beat after the score does, which can be after the deck's
+        // first engraving is already installed. `MacPageDeck` reads `annotationDrawings` in its body, so observation
+        // ought to redraw the sheets on its own — but the deck lives in a hand-built `NSHostingView` whose root view
+        // this container replaces only on a generation bump, and ink that fails to appear is indistinguishable from
+        // ink that was lost. Bumping the generation makes it certain. Once per open, not per tick.
+        .onChange(of: viewModel.annotationDrawings) { _, _ in
+            layoutGeneration += 1
         }
         .onChange(of: MacDeckFitKey(viewport: viewport, pageSize: pageSize), initial: true) { _, key in
             seedMagnification(key)

@@ -35,7 +35,10 @@ extension View {
     /// controller's parent, and trait overrides do not travel upward. Pair this with
     /// `.toolbarColorScheme(_:for: .navigationBar)` on the same screen.
     ///
-    /// On macOS this is a no-op: the Mac shell has no per-screen appearance scoping yet.
+    /// On macOS this is a no-op: the Mac shell has no per-screen appearance scoping yet. The Mac reader — the one
+    /// screen that needs a pin today — uses `preferredColorScheme(.light)` instead, which on macOS lands on the
+    /// window's `NSAppearance` and so reaches AppKit-hosted content the way the trait override does on iOS. It is a
+    /// window-wide pin, not a per-screen one, which is why this helper is still owed a Mac implementation.
     @ViewBuilder
     public func hostingAppearance(_ scheme: ColorScheme) -> some View {
         #if os(iOS)
@@ -50,8 +53,11 @@ extension View {
     }
 }
 
-// PARITY(macos): per-screen light/dark scoping — macOS would set NSAppearance on the hosting view instead of
-//   UITraitOverrides.
+// PARITY(macos): per-screen light/dark scoping — this helper is still a no-op on macOS. The one screen that needed a
+//   pin, the Mac reader, solved it locally with `preferredColorScheme(.light)`, which on macOS sets the WINDOW's
+//   `NSAppearance` and therefore reaches AppKit-hosted content (see `MacReaderRootScreen` for the full argument).
+//   What is still owed is the per-SCREEN scoping this helper's name promises: a Mac screen that wants a fixed
+//   appearance without taking its window's other columns with it needs `NSAppearance` set on its own hosting view.
 
 #if os(iOS)
 private struct HostingAppearanceApplier: UIViewRepresentable {

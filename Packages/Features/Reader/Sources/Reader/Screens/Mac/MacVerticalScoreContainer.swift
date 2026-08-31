@@ -1,6 +1,7 @@
-// PARITY(macos): vertical reader extras — the Mac container renders and scrolls the score, nothing else. Pinch zoom
-//   (`PinchState` / `ScoreScrollHost`), the PencilKit annotation canvas, and the note-editing overlay all live in the
-//   iOS `VerticalScoreContainer`'s UIKit-hosted subtree and have no Mac equivalent yet.
+// PARITY(macos): vertical reader extras — the Mac container renders and scrolls the score and draws committed ink,
+//   and nothing else. Pinch zoom (`PinchState` / `ScoreScrollHost`), the live annotation canvas, and the note-editing
+//   overlay all live in the iOS `VerticalScoreContainer`'s UIKit-hosted subtree and have no Mac equivalent yet —
+//   PencilKit ships no `PKCanvasView` on macOS at all, so annotation input needs a drawing surface of its own.
 
 #if os(macOS)
 import Domain
@@ -79,6 +80,9 @@ struct MacVerticalScoreContainer: View {
                 playbackCursor: playbackCursor,
             )
         }
+        // Vertical mode's ground is the paper: one continuous sheet, edge to edge, the way the iOS reader draws it.
+        // See `MacReaderGround` for why Page mode's is a grey desk instead and why neither is painted at the root.
+        .background(MacReaderGround.paper)
         .scrollPosition($scrollPosition)
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
             geometry.contentOffset.y
@@ -234,6 +238,19 @@ struct MacVerticalScoreSurface: View {
                 playbackCursor: playbackCursor, playbackCursorColor: .accentColor.opacity(0.6),
             )
             .gesture(tapSeekGesture(document: doc))
+
+            // Committed ink, read-only. Projected into this document's own space by the same shared anchoring the iOS
+            // reader uses, so a mark made on an iPad lands on the same note here whatever the Mac re-engraved the
+            // score to. Above `ScoreView` (annotations are drawn over the notation) and below the loop overlays.
+            MacScoreInkOverlay(
+                drawing: AnnotationAnchoring.display(
+                    viewModel.annotationDrawings, in: doc,
+                    // Stored anchors are in source addressing; `doc` is engraved from the staff-filtered score.
+                    staffFilter: .current(viewModel: viewModel, editingHost: nil),
+                ),
+                surfaceSize: doc.size,
+                band: CGRect(origin: .zero, size: doc.size),
+            )
 
             if viewModel.repeatModel.mode == .abLoop {
                 LoopRegionOverlay(document: doc, range: viewModel.repeatModel.abRange)

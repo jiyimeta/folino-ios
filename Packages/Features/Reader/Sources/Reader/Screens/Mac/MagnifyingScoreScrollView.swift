@@ -57,9 +57,10 @@ struct MagnifyingScoreScrollView<Content: View>: NSViewRepresentable {
         // A page deck is scrolled diagonally as often as it is scrolled along one axis — predominant-axis scrolling
         // would lock a two-finger swipe to whichever direction it started in.
         scrollView.usesPredominantAxisScrolling = false
-        // The reading surface's ground is painted once, at `MacReaderRootScreen`. Drawing a second one here is exactly
-        // the two-sources-of-truth problem that put a dark slab behind the spinner before; the individual page cards
-        // paint their own paper white, which is a different thing — that white is the sheet, not the desk.
+        // The desk is painted once, by `MacPagedScoreContainer` behind this host (`MacReaderGround.desk`). Drawing a
+        // second one here is exactly the two-sources-of-truth problem that put a dark slab behind the spinner before;
+        // the individual page cards paint their own paper white, which is a different thing — that white is the
+        // sheet, not the desk.
         scrollView.drawsBackground = false
 
         let hosting = NSHostingView(rootView: content())

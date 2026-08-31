@@ -1,13 +1,15 @@
 #if os(macOS)
 import Domain
+import PencilKit
 import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicUI
 import SwiftUI
 
 /// The deck itself: every sheet, side by side. This is the `NSHostingView`'s root view, so its body runs only when the
-/// engraving changes — which is why the per-sheet sub-documents are built here rather than inside the leaves that
-/// redraw on a playback tick.
+/// engraving changes — or when the score's committed ink is replaced, which happens once per open — which is why the
+/// per-sheet sub-documents and the projected ink are built here rather than inside the leaves that redraw on a
+/// playback tick.
 struct MacPageDeck: View {
     let viewModel: ReaderViewModel
     let cursorState: MacPageDeckCursorState
@@ -19,6 +21,14 @@ struct MacPageDeck: View {
 
     var body: some View {
         if let doc = document, !pages.isEmpty {
+            // Projected ONCE for the whole deck, not per sheet: `AnnotationAnchoring.display` decodes and places every
+            // stored stroke, and doing that 27 times for a 27-page score would pay for the whole layer per page.
+            // `MacScoreInkOverlay` picks each sheet's share out of it by geometry.
+            let ink = AnnotationAnchoring.display(
+                viewModel.annotationDrawings, in: doc,
+                // Stored anchors are in source addressing; `doc` is engraved from the staff-filtered score.
+                staffFilter: .current(viewModel: viewModel, editingHost: nil),
+            )
             HStack(alignment: .top, spacing: MacPageDeckMetrics.pageGap) {
                 ForEach(pages.indices, id: \.self) { index in
                     MacScorePage(
@@ -33,6 +43,7 @@ struct MacPageDeck: View {
                         score: score,
                         scoreOptions: scoreOptions,
                         pageSize: pageSize,
+                        ink: ink,
                     )
                 }
             }
@@ -69,6 +80,9 @@ struct MacScorePage: View {
     let score: Score
     let scoreOptions: ScoreViewOptions
     let pageSize: CGSize
+    /// The whole score's committed ink, already projected into document space by the deck. This sheet draws its own
+    /// share of it — see `MacScoreInkOverlay`.
+    let ink: PKDrawing
 
     var body: some View {
         VStack(spacing: 6) {
@@ -84,9 +98,9 @@ struct MacScorePage: View {
             width: pageSize.width - MacPageDeckMetrics.margin * 2,
             height: pageSize.height - MacPageDeckMetrics.margin * 2,
         )
-        // The paper. This is the sheet, not the reading surface's ground — the ground is painted once at
-        // `MacReaderRootScreen` and this container adds none of its own. The iOS paged surface paints the same white
-        // for the same reason: the run-out beneath the last system on a page is still page.
+        // The paper. This is the sheet, not the desk — the desk is `MacReaderGround.desk`, painted once behind the
+        // whole deck by `MacPagedScoreContainer`. The iOS paged surface paints the same white for the same reason:
+        // the run-out beneath the last system on a page is still page.
         return MacPageScoreLayer(
             viewModel: viewModel,
             cursorSlot: cursorSlot,
@@ -95,6 +109,7 @@ struct MacScorePage: View {
             score: score,
             scoreOptions: scoreOptions,
             contentSize: content,
+            ink: ink,
         )
         .frame(width: content.width, height: content.height, alignment: .topLeading)
         .clipped()
@@ -116,6 +131,8 @@ struct MacPageScoreLayer: View {
     let score: Score
     let scoreOptions: ScoreViewOptions
     let contentSize: CGSize
+    /// The whole score's committed ink in document space; this layer draws the band the sheet shows.
+    let ink: PKDrawing
 
     /// The name the click-to-seek gesture reads its location in: the full document's own coordinate space, which is
     /// what `nearestCursor` expects. The sheet is a window onto it, opened by the `-pageStartY` offset below.
@@ -130,6 +147,15 @@ struct MacPageScoreLayer: View {
                 playbackCursor: cursorSlot?.cursor, playbackCursorColor: .accentColor.opacity(0.6),
             )
             .gesture(tapSeekGesture())
+
+            // Committed ink over the notation. The band is what this sheet shows of the document, so a stroke drawn
+            // across a page boundary appears on both sheets and is clipped by each — the card's `.clipped()` does
+            // that, the same way it clips the engraving.
+            MacScoreInkOverlay(
+                drawing: ink,
+                surfaceSize: CGSize(width: contentSize.width, height: pageDocument.size.height),
+                band: CGRect(x: 0, y: pageStartY, width: contentSize.width, height: contentSize.height),
+            )
 
             if viewModel.repeatModel.mode == .abLoop {
                 LoopRegionOverlay(document: pageDocument, range: viewModel.repeatModel.abRange)
