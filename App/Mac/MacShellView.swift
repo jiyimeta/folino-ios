@@ -2,6 +2,7 @@ import Domain
 import Foundation
 import Library
 import LicenseList
+import Reader
 import ScoreFiles
 import SwiftUI
 import UtilityCore
@@ -19,6 +20,15 @@ struct MacShellView: View {
 
     @State private var libraryVM: LibraryViewModel
     @State private var sidebarPath = NavigationPath()
+
+    /// The adapters the detail column's reader needs, unwrapped once in `init` (see the guard there for why they are
+    /// guaranteed non-nil) rather than at every use site.
+    private let repository: any ScoreLibraryRepository
+    private let originalStore: any ScoreOriginalStore
+    private let gateway: any ScoreFileGateway
+    private let shareService: any ScoreShareService
+    private let metadataReader: any ScoreMetadataReading
+    private let annotationCoordinator: AnnotationSaveCoordinator
 
     /// The score this window is showing. Reads/writes go through `window` rather than being the window's identity
     /// value directly, because that identity value also carries a `tabInstance` — see `MacWindowScore`'s doc
@@ -53,10 +63,17 @@ struct MacShellView: View {
               let gateway = bootstrap.gateway,
               let originalStore = bootstrap.originalStore,
               let shareService = bootstrap.shareService,
-              let metadataReader = bootstrap.metadataReader
+              let metadataReader = bootstrap.metadataReader,
+              let annotationCoordinator = bootstrap.annotationCoordinator
         else {
             fatalError("MacShellView built before AppBootstrap finished starting")
         }
+        self.repository = repository
+        self.originalStore = originalStore
+        self.gateway = gateway
+        self.shareService = shareService
+        self.metadataReader = metadataReader
+        self.annotationCoordinator = annotationCoordinator
         _libraryVM = State(
             wrappedValue: LibraryViewModel(
                 repository: repository,
@@ -89,8 +106,7 @@ struct MacShellView: View {
         .focusedCurrentScoreID(scoreID)
         .onChange(of: libraryVM.pendingScoreToOpen?.id) { _, newID in
             // Mirrors `AppShellView.ReadyShell`'s watcher: a successful import (File ▸ Import, or a drag onto the
-            // sidebar) jumps straight to the new score, same as iOS. The Reader itself is still Task 8's; today
-            // this only swaps the detail placeholder and collapses the sidebar.
+            // sidebar) jumps straight to the new score, same as iOS.
             guard let newID,
                   let item = libraryVM.pendingScoreToOpen,
                   item.id == newID else { return }
@@ -119,8 +135,10 @@ struct MacShellView: View {
                 EmptyView()
             },
             onOpenInPlaylist: { item, _ in
-                // The playlist is dropped rather than threaded through: the detail column is still a placeholder
-                // (Task 8), so there is nowhere yet for "which playlist underlies this score" to matter.
+                // PARITY(macos): playlist context in the reader — the window carries a score id and nothing else, so
+                //   `MacReaderRootScreen` opens the score standalone and the playlist's continuation control and
+                //   end-of-score auto-advance are unreachable. Threading a `PlaylistID` through `MacWindowScore` is
+                //   what closes it.
                 scoreID = item.id
                 columnVisibility = .detailOnly
             },
@@ -141,7 +159,27 @@ struct MacShellView: View {
 
     @ViewBuilder
     private var detail: some View {
-        if scoreID == nil {
+        if let item = openScoreItem {
+            // `id(item.id)` so switching the detail column to another score builds a fresh `MacReaderRootScreen` —
+            // and with it a fresh `ReaderViewModel`, which is created once per screen instance in a `@State`.
+            MacReaderRootScreen(
+                scoreItem: item,
+                repository: repository,
+                originalStore: originalStore,
+                gateway: gateway,
+                shareService: shareService,
+                metadataReader: metadataReader,
+                annotationCoordinator: annotationCoordinator,
+                scoresDirectory: AppPaths.scoresDirectory,
+                // PARITY(macos): score playback from the Mac reader — `AudioStack.playbackController` is nil until a
+                //   later task builds the AVAudioSession-free controller, so the transport has nothing to drive.
+                playbackController: bootstrap.playbackController,
+                analytics: bootstrap.analytics ?? NoopAnalytics(),
+            )
+            .id(item.id)
+        } else {
+            // No score chosen yet — or the window's `scoreID` names a row the library no longer holds (deleted in
+            // another window, or a restored window value that outlived its score). Both read as an empty detail.
             ContentUnavailableView {
                 Label {
                     Text("app.detail.empty.title")
@@ -149,10 +187,14 @@ struct MacShellView: View {
                     Image(systemName: "music.note")
                 }
             }
-        } else {
-            // Task 8 replaces this with MacReaderRootScreen.
-            Text(verbatim: "score")
         }
+    }
+
+    /// The `ScoreItem` this window's `scoreID` names, resolved from the library's live rows so a title or a revert
+    /// edited elsewhere reaches the reader.
+    private var openScoreItem: ScoreItem? {
+        guard let scoreID else { return nil }
+        return repository.scoreItems.first { $0.id == scoreID }
     }
 }
 
