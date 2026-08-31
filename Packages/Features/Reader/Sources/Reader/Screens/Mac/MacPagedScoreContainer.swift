@@ -1,0 +1,281 @@
+// PARITY(macos): page-mode reader extras — the Mac deck draws every page and lets the scroll view magnify them, and
+//   nothing else. The iOS `PagedScoreContainer`'s page-turn tap zones, swipe-to-turn, the PencilKit annotation
+//   overlay, and the note-editing seam have no Mac equivalent yet; the deck also has no counterpart to the reader's
+//   pinch-zoom commit, because zoom lives on `NSScrollView.magnification` here instead.
+
+#if os(macOS)
+import Domain
+import SheetMusicCore
+import SheetMusicLayout
+import SheetMusicUI
+import SwiftUI
+
+/// Paper geometry for the Mac's page deck.
+///
+/// **The page is a fixed sheet, not the window.** iOS paginates to the viewport, because a phone or an iPad shows one
+/// page at a time and the page may as well be the screen. The Mac shows a deck of sheets that the user magnifies, so
+/// the sheet has to have a size of its own that does not move when the window is resized — otherwise every resize
+/// re-paginates the score and the page the reader was looking at is a different page afterwards.
+///
+/// A4 at 72 dpi is that size: it is the paper the engraving would be printed on, and it makes the deck's proportions
+/// the proportions of the printed score.
+enum MacPageDeckMetrics {
+    /// A4 in points (210 x 297 mm at 72 dpi).
+    static let paperSize = CGSize(width: 595.28, height: 841.89)
+    /// Half an inch of paper margin on every side, the printed-score convention.
+    static let margin: CGFloat = 36
+    /// Gap between two sheets in the deck.
+    static let pageGap: CGFloat = 24
+    /// Breathing room between the deck and the scroll view's edges.
+    static let deckPadding: CGFloat = 24
+
+    /// The printable area inside one sheet: what the score is engraved into and what pagination measures against.
+    static var contentSize: CGSize {
+        CGSize(width: paperSize.width - margin * 2, height: paperSize.height - margin * 2)
+    }
+
+    /// The drawn sheet size for a document of the given engraved width. Honoring the engraver's authored breaks can
+    /// leave `doc.size.width` wider than the width it was engraved for; widening the sheet rather than clipping keeps
+    /// every notehead on the paper.
+    static func pageSize(forDocumentWidth width: CGFloat) -> CGSize {
+        CGSize(width: max(paperSize.width, width + margin * 2), height: paperSize.height)
+    }
+
+    /// Origin of page `index` in the deck's own (unmagnified) coordinate space — the space a scroll-to-visible
+    /// rectangle has to be expressed in.
+    static func pageOrigin(index: Int, pageSize: CGSize) -> CGPoint {
+        CGPoint(x: deckPadding + CGFloat(index) * (pageSize.width + pageGap), y: deckPadding)
+    }
+
+    /// Magnification that fits one whole sheet in the window, clamped to what the scroll view allows and never
+    /// enlarging past 1.0 — a small score should open at actual size, not blown up to fill the window.
+    static func fitMagnification(pageSize: CGSize, viewport: CGSize) -> CGFloat {
+        let availableWidth = viewport.width - deckPadding * 2
+        let availableHeight = viewport.height - deckPadding * 2
+        guard pageSize.width > 0, pageSize.height > 0, availableWidth > 0, availableHeight > 0 else { return 1 }
+        let fit = min(availableWidth / pageSize.width, availableHeight / pageSize.height, 1.0)
+        return min(max(fit, MacScoreMagnification.minimum), MacScoreMagnification.maximum)
+    }
+}
+
+/// The playback cursor, held in an observable the deck's leaves read.
+///
+/// The deck lives inside one `NSHostingView` whose `rootView` is only reassigned when the engraving changes (see
+/// `MagnifyingScoreScrollView.contentGeneration`). Passing the cursor down as a value would therefore either strand it
+/// — the deck would keep the cursor it was built with — or force a full rootView rebuild on every playback tick.
+/// Routing it through observation instead invalidates only the leaves that read it, which is the same boundary
+/// `MacScoreContentView` draws one level up: the root never sees a cursor tick at all.
+@MainActor
+@Observable
+final class MacPageDeckCursorState {
+    var cursor: ScoreCursor?
+}
+
+/// The Mac's page-mode score viewport, and the Mac reader's default: the engraved score cut into sheets of paper and
+/// laid out as one horizontal deck inside an `NSScrollView` that magnifies it.
+///
+/// **Horizontal by default** because that is what MuseScore does and what swift-sheet-music's own deck does — a
+/// left-to-right run of pages reads as a score laid out on a desk, where a vertical run reads as a scrolling document
+/// and is what Vertical mode already is.
+///
+/// **The zoom is the scroll view's, not the content's.** See `MagnifyingScoreScrollView`: AppKit re-rasterizes the
+/// layer tree at the current magnification, so the engraving is redrawn sharp at 4x rather than a 1x raster being
+/// stretched. Nothing here may apply a `scaleEffect` for zoom.
+struct MacPagedScoreContainer: View {
+    let score: Score
+    let staffSize: CGFloat
+    let honorLayoutBreaks: Bool
+    let collapseMultiMeasureRests: Bool
+    let showInvisibleElements: Bool
+    let showAllMeasureNumbers: Bool
+    /// The highlight cursor. Mirrored into `cursorState` and handed to the leaves from there; this view never reads it
+    /// off the view model.
+    let playbackCursor: ScoreCursor?
+    /// Lookahead anchor used to bring the next page into view early during playback. `nil` when not playing, in which
+    /// case page-follow falls back to `playbackCursor`.
+    let pageAnchorCursor: ScoreCursor?
+    /// User opt-out: when false, continuous playback no longer scrolls the deck.
+    let autoFollowEnabled: Bool
+    /// Transpose offset in semitones. Only used to invalidate the layout cache via `MacPagedLayoutKey` — the score
+    /// passed in is already transposed.
+    let transposeSemitones: Int
+    let viewModel: ReaderViewModel
+
+    /// Layout output — observable, not `@State`; see `ScoreLayoutState`.
+    @State private var layoutState = ScoreLayoutState()
+    /// Off-main engraver holding this surface's incremental `LayoutCache`; see `ScoreRelayoutEngine`.
+    @State private var relayoutEngine = ScoreRelayoutEngine()
+    @State private var cursorState = MacPageDeckCursorState()
+    @State private var magnification: CGFloat = 1.0
+    /// Fit-to-window is applied once, when the first engraving lands. A later window resize deliberately does not
+    /// refit: a document viewer that re-zooms itself while the user drags the window edge is fighting them.
+    @State private var hasSeededMagnification = false
+    /// Bumped on every installed engraving; the only thing that makes the host rebuild the deck. See
+    /// `MagnifyingScoreScrollView.contentGeneration`.
+    @State private var layoutGeneration = 0
+    @State private var scrollRequest: MacDeckScrollRequest?
+    @State private var scrollToken = 0
+
+    var body: some View {
+        GeometryReader { proxy in
+            deck(viewport: proxy.size)
+        }
+    }
+
+    private func deck(viewport: CGSize) -> some View {
+        let sheet = pageSize ?? MacPageDeckMetrics.paperSize
+        return MagnifyingScoreScrollView(
+            magnification: $magnification,
+            contentGeneration: layoutGeneration,
+            scrollRequest: scrollRequest,
+        ) {
+            MacPageDeck(
+                viewModel: viewModel,
+                cursorState: cursorState,
+                document: layoutState.document,
+                pages: layoutState.pages,
+                score: score,
+                scoreOptions: scoreOptions,
+                pageSize: sheet,
+            )
+        }
+        .task(id: layoutKey) {
+            await rebuildLayout()
+        }
+        .onChange(of: playbackCursor, initial: true) { _, newValue in
+            cursorState.cursor = newValue
+        }
+        .onChange(of: MacDeckFitKey(viewport: viewport, pageSize: pageSize), initial: true) { _, key in
+            seedMagnification(key)
+        }
+        .onChange(of: [playbackCursor, pageAnchorCursor]) { old, new in
+            guard readerShouldFollowPlayback(
+                autoFollowEnabled: autoFollowEnabled,
+                isPlaybackDriven: pageAnchorCursor != nil,
+                cursorMoved: old[0] != new[0],
+                followSuspended: viewModel.playbackSession.isPlaybackFollowSuspended,
+            ) else { return }
+            scrollToPage(containing: pageAnchorCursor ?? playbackCursor)
+        }
+    }
+
+    /// The drawn sheet size, or `nil` until the first engraving lands.
+    private var pageSize: CGSize? {
+        guard let doc = layoutState.document, !layoutState.pages.isEmpty else { return nil }
+        return MacPageDeckMetrics.pageSize(forDocumentWidth: doc.size.width)
+    }
+
+    private func seedMagnification(_ key: MacDeckFitKey) {
+        guard !hasSeededMagnification, let sheet = key.pageSize,
+              key.viewport.width > 0, key.viewport.height > 0
+        else { return }
+        hasSeededMagnification = true
+        magnification = MacPageDeckMetrics.fitMagnification(pageSize: sheet, viewport: key.viewport)
+    }
+
+    private var scoreOptions: ScoreViewOptions {
+        ScoreViewOptions(
+            staffSize: staffSize, systemGap: staffSize * 1.25,
+            wrapToViewWidth: true, includeTitleFrame: true,
+            breakPolicy: honorLayoutBreaks ? .honor : .ignoreAll,
+            breakIndicatorVisibility: .none,
+            multiMeasureRest: collapseMultiMeasureRests
+                ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
+                : .disabled,
+            showsInvisibleElements: showInvisibleElements,
+            measureNumbers: showAllMeasureNumbers ? .everyMeasure : .systemStart,
+        )
+    }
+
+    private var layoutKey: MacPagedLayoutKey {
+        MacPagedLayoutKey(
+            score: score,
+            size: staffSize,
+            honorLayoutBreaks: honorLayoutBreaks,
+            collapseMultiMeasureRests: collapseMultiMeasureRests,
+            showInvisibleElements: showInvisibleElements,
+            showAllMeasureNumbers: showAllMeasureNumbers,
+            transposeSemitones: transposeSemitones,
+        )
+    }
+
+    /// Engrave into the sheet's printable width, then cut the systems into sheets by its printable height. Neither
+    /// depends on the window, so resizing never re-paginates.
+    private func rebuildLayout() async {
+        let content = MacPageDeckMetrics.contentSize
+        let policy: LayoutBreakPolicy = honorLayoutBreaks ? .honor : .ignoreAll
+        let newDoc = await relayoutEngine.layout(
+            score: score, options: scoreOptions, availableWidth: content.width,
+        )
+        guard !Task.isCancelled else { return }
+        let newPages = LayoutPaginator.paginate(
+            systems: newDoc.systems, pageHeight: content.height, policy: policy,
+        )
+        layoutState.document = newDoc
+        layoutState.pages = newPages
+        layoutGeneration += 1
+    }
+
+    /// Bring the sheet holding `cursor` into view. The Mac's answer to the iOS container's page turn: there is one
+    /// deck rather than one visible page, so "turning to a page" is scrolling it into the window.
+    private func scrollToPage(containing cursor: ScoreCursor?) {
+        guard let cursor, let doc = layoutState.document, let sheet = pageSize else { return }
+        let measure = measureIndex(of: cursor)
+        guard let system = doc.systems.firstIndex(where: { layoutSystem in
+            layoutSystem.measures.contains { $0.measureIndex == measure }
+        }) else { return }
+        guard let target = layoutState.pages.firstIndex(where: { $0.contains(system) }) else { return }
+        scrollToken += 1
+        scrollRequest = MacDeckScrollRequest(
+            token: scrollToken,
+            rect: CGRect(
+                origin: MacPageDeckMetrics.pageOrigin(index: target, pageSize: sheet),
+                size: sheet,
+            ),
+        )
+    }
+}
+
+/// Identity for the fit-to-window seed: it needs both the window and the sheet, and the sheet is `nil` until the
+/// first engraving lands, which is exactly the moment the seed becomes possible.
+private struct MacDeckFitKey: Equatable {
+    let viewport: CGSize
+    let pageSize: CGSize?
+}
+
+/// Identity for the `.task(id:)` that re-engraves the score. The window is deliberately absent: the sheet is a fixed
+/// size, so a resize changes the magnification the user sees and nothing about the pagination.
+private struct MacPagedLayoutKey: Hashable {
+    let scoreSignature: Int
+    let size: CGFloat
+    let honorLayoutBreaks: Bool
+    let collapseMultiMeasureRests: Bool
+    let showInvisibleElements: Bool
+    let showAllMeasureNumbers: Bool
+    let transposeSemitones: Int
+
+    init(
+        score: Score,
+        size: CGFloat,
+        honorLayoutBreaks: Bool,
+        collapseMultiMeasureRests: Bool,
+        showInvisibleElements: Bool,
+        showAllMeasureNumbers: Bool,
+        transposeSemitones: Int,
+    ) {
+        // `Score` is Equatable but not Hashable. Same cheap identity proxy the other containers use: structural shape
+        // plus opening clefs, which is what makes a clef override re-trigger the task.
+        scoreSignature = score.parts.count
+            ^ (score.totalStaffCount << 8)
+            ^ (score.division << 16)
+            ^ score.openingClefSignature
+            ^ (transposeSemitones << 24)
+        self.size = size
+        self.honorLayoutBreaks = honorLayoutBreaks
+        self.collapseMultiMeasureRests = collapseMultiMeasureRests
+        self.showInvisibleElements = showInvisibleElements
+        self.showAllMeasureNumbers = showAllMeasureNumbers
+        self.transposeSemitones = transposeSemitones
+    }
+}
+#endif

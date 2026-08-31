@@ -1,6 +1,7 @@
-// PARITY(macos): the Mac reading surface's chrome — this screen renders the score and lets it scroll, and nothing
-//   else. The transport, the inspectors, the share / annotate / edit controls, Page and Horizontal layout modes, and
-//   the original-PDF renditions are all still iOS-only; see `ReaderRootScreen` for the surface being caught up to.
+// PARITY(macos): the Mac reading surface's chrome — this screen renders the score in Page or Vertical mode and lets
+//   it scroll, and nothing else. The transport, the inspectors, the share / annotate / edit controls, Horizontal
+//   layout mode, and the original-PDF renditions are all still iOS-only; see `ReaderRootScreen` for the surface being
+//   caught up to.
 
 #if os(macOS)
 import Domain
@@ -22,6 +23,11 @@ import UtilityCore
 @MainActor
 public struct MacReaderRootScreen: View {
     @State private var viewModel: ReaderViewModel
+
+    /// The same preference the iOS reader writes (`View ▸ Display Mode` on the Mac, the visual inspector's segmented
+    /// control on iOS), so a score agrees with itself about what mode it is in wherever it is opened.
+    @AppStorage(ReaderGlobalSettingsKey.layoutMode)
+    private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
 
     @AppStorage(ReaderGlobalSettingsKey.metronomeEnabled)
     private var isMetronomeEnabled = false
@@ -79,6 +85,16 @@ public struct MacReaderRootScreen: View {
         )
     }
 
+    /// The mode this screen can actually draw. Page and Vertical come across verbatim; `horizontal` — which only the
+    /// iOS reader offers, and which the Mac's View menu therefore does not list — reads as Page, the Mac's default.
+    ///
+    /// Deliberately a read, not a write-back: clamping the stored value would silently retire the horizontal mode a
+    /// user chose on their iPad, and the preference is shared.
+    private var layoutMode: ReaderLayoutMode {
+        let stored = ReaderLayoutMode(rawValue: layoutModeRaw) ?? .page
+        return stored == .vertical ? .vertical : .page
+    }
+
     public var body: some View {
         // `frame` + `background` below paint the reading surface as one sheet of paper. `ScoreView` paints itself
         // opaque white, and iOS pins the whole Reader to a light appearance (`hostingAppearance(.light)`) so the
@@ -96,6 +112,7 @@ public struct MacReaderRootScreen: View {
         // would be a white disc the size of a `ProgressView` on an otherwise dark column.
         MacScoreContentView(
             viewModel: viewModel,
+            layoutMode: layoutMode,
             collapseMultiMeasureRests: collapseMultiMeasureRests,
             showInvisibleElements: showInvisibleElements,
             showAllMeasureNumbers: showAllMeasureNumbers,
@@ -105,10 +122,11 @@ public struct MacReaderRootScreen: View {
         .background(Color.white)
         .navigationTitle(viewModel.scoreItem.title)
         .task {
-            // Vertical is the only mode the Mac can draw today, so the view model is told that rather than being
-            // handed the shared `readerLayoutMode` preference — `playback_started` would otherwise report a mode
-            // that is not on screen. Page is the Mac's intended default and lands in the next task.
-            viewModel.currentLayoutMode = .vertical
+            // What the view model is told is the mode this screen actually DRAWS, not the raw preference — that is
+            // what the vertical pin protected, and it still has to hold now that the pin is a real branch:
+            // `playback_started` must never report a mode that is not on screen. `layoutMode` folds the one mode the
+            // Mac cannot draw (horizontal) into the one it substitutes, so the two can no longer disagree.
+            viewModel.currentLayoutMode = layoutMode
             viewModel.playbackSession.startObservingCursor()
             viewModel.playbackSession.startObservingSoundfontDownload()
             await viewModel.load()
@@ -133,6 +151,11 @@ public struct MacReaderRootScreen: View {
         .onChange(of: isMetronomeEnabled) { _, newValue in
             Task { await viewModel.tempoModel.setMetronomeEnabled(newValue) }
         }
+        // The View menu can change the mode while the reader is open; the analytics mode has to follow it there too,
+        // not only at the `task` above.
+        .onChange(of: layoutMode) { _, newValue in
+            viewModel.currentLayoutMode = newValue
+        }
     }
 }
 
@@ -144,6 +167,8 @@ public struct MacReaderRootScreen: View {
 /// yet, but getting the boundary right now costs one struct and getting it wrong later costs a rewrite.
 struct MacScoreContentView: View {
     let viewModel: ReaderViewModel
+    /// Already normalized to a mode the Mac can draw — see `MacReaderRootScreen.layoutMode`.
+    let layoutMode: ReaderLayoutMode
     let collapseMultiMeasureRests: Bool
     let showInvisibleElements: Bool
     let showAllMeasureNumbers: Bool
@@ -155,19 +180,7 @@ struct MacScoreContentView: View {
             ProgressView().controlSize(.large)
         case .loaded:
             if let score = viewModel.visibleScore {
-                MacVerticalScoreContainer(
-                    score: score,
-                    staffSize: viewModel.layoutModel.effectiveStaffSize,
-                    honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
-                    collapseMultiMeasureRests: collapseMultiMeasureRests,
-                    showInvisibleElements: showInvisibleElements,
-                    showAllMeasureNumbers: showAllMeasureNumbers,
-                    playbackCursor: viewModel.playbackSession.displayCursor,
-                    scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
-                    autoFollowEnabled: autoFollowEnabled,
-                    transposeSemitones: viewModel.transposeModel.effectiveSemitones,
-                    viewModel: viewModel,
-                )
+                scoreContainer(score: score)
             } else {
                 ProgressView().controlSize(.large)
             }
@@ -192,6 +205,45 @@ struct MacScoreContentView: View {
                 }
                 .buttonStyle(.borderedProminent)
             }
+        }
+    }
+
+    /// The mode branch. Both containers take the cursors as VALUES, read here — one level below the root — so a
+    /// per-tick cursor change re-renders the container and the leaves beneath it and never `MacReaderRootScreen`.
+    ///
+    /// `.horizontal` cannot arrive (the root folds it into `.page`), but the switch spells it out rather than
+    /// defaulting: if the Mac ever grows a horizontal container, this is the line that has to change.
+    @ViewBuilder
+    private func scoreContainer(score: Score) -> some View {
+        switch layoutMode {
+        case .page, .horizontal:
+            MacPagedScoreContainer(
+                score: score,
+                staffSize: viewModel.layoutModel.effectiveStaffSize,
+                honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
+                collapseMultiMeasureRests: collapseMultiMeasureRests,
+                showInvisibleElements: showInvisibleElements,
+                showAllMeasureNumbers: showAllMeasureNumbers,
+                playbackCursor: viewModel.playbackSession.displayCursor,
+                pageAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
+                autoFollowEnabled: autoFollowEnabled,
+                transposeSemitones: viewModel.transposeModel.effectiveSemitones,
+                viewModel: viewModel,
+            )
+        case .vertical:
+            MacVerticalScoreContainer(
+                score: score,
+                staffSize: viewModel.layoutModel.effectiveStaffSize,
+                honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
+                collapseMultiMeasureRests: collapseMultiMeasureRests,
+                showInvisibleElements: showInvisibleElements,
+                showAllMeasureNumbers: showAllMeasureNumbers,
+                playbackCursor: viewModel.playbackSession.displayCursor,
+                scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
+                autoFollowEnabled: autoFollowEnabled,
+                transposeSemitones: viewModel.transposeModel.effectiveSemitones,
+                viewModel: viewModel,
+            )
         }
     }
 
