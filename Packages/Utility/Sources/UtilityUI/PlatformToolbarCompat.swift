@@ -89,4 +89,29 @@ extension View {
         self
         #endif
     }
+
+    /// A trailing "Done" toolbar button that calls `action`, on iOS; a no-op on macOS. Content built to be
+    /// presented as an iOS sheet draws its own Done button to dismiss that sheet; the same content hosted directly
+    /// in a macOS `Settings` scene has nothing analogous to dismiss — the window closes via its own titlebar
+    /// controls — so this drops the button entirely rather than wiring it to an action with no effect.
+    ///
+    /// A helper rather than an inline `#if` for the same reason as `activeEditModeCompat()`: this sits inside a
+    /// modifier chain, and SwiftFormat's `--ifdef no-indent` de-indents the whole chain when a `#if` interrupts one
+    /// of its links.
+    ///
+    /// PARITY(macos): SettingsSheet dismiss chrome — iOS's Done button assumes the screen is always presented as a
+    ///   dismissible sheet; a macOS `Settings` scene hosts the same content directly, with no presentation to
+    ///   dismiss, so this drops the button rather than adapting it.
+    @ViewBuilder
+    public func doneToolbarCompat(action: @escaping () -> Void) -> some View {
+        #if os(iOS)
+        toolbar {
+            ToolbarItem(placement: .topBarTrailingCompat) {
+                Button(action: action) { L10n.Common.done }
+            }
+        }
+        #else
+        self
+        #endif
+    }
 }

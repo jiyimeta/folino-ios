@@ -1,5 +1,8 @@
 import Domain
+import LicenseList
+import Settings
 import SwiftUI
+import UtilityCore
 
 /// The Mac app's entry point. Drives the real `AppBootstrap` and reports its state — a spinner while it runs, then
 /// the window model or the failure. One `WindowGroup(for:)` scene supplies every reading window (and macOS's
@@ -33,9 +36,15 @@ struct FolinoMacApp: App {
         .commands { MacCommands(columnVisibility: $columnVisibility) }
 
         Settings {
-            // Task 6 replaces this with SettingsSheet's content.
-            Text(verbatim: "settings")
-                .frame(width: 480, height: 320)
+            SettingsSheet(
+                provider: bootstrap.museScoreGeneralProvider,
+                onVersionHistoryViewed: {},
+                crashReporter: bootstrap.crashReporter ?? NoopCrashReporter(),
+                analytics: bootstrap.analytics ?? NoopAnalytics(),
+            ) {
+                LicenseListView()
+            }
+            .frame(minWidth: 480, idealWidth: 560, minHeight: 420, idealHeight: 560)
         }
     }
 }

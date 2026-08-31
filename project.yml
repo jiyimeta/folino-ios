@@ -195,12 +195,15 @@ targets:
       - package: Domain
       - package: Infrastructure
         products: [Persistence, CloudSync, Soundfonts, Audio, ScoreFiles, CrashReporting, Analytics]
+      - package: Library
       - package: Reader
       - package: ImportExport
         products: [ImportExport, ImportExportAppGroup]
       - package: Settings
       - package: swift-sheet-music
         product: SheetMusicLayoutApple
+      - package: LicenseList
+        product: LicenseList
   FolinoShareExtension:
     type: app-extension
     platform: iOS
