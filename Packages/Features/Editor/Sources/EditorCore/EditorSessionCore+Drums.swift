@@ -103,9 +103,12 @@ extension EditorSessionCore {
         members.append(contentsOf: writeMembers(for: key, at: target, tickWithinSlot: tickWithinSlot, in: score))
         guard !members.isEmpty else { return }
 
+        // Both read BEFORE the apply: `apply` re-derives the selection, and re-derivation moves the caret onto
+        // whatever the intent touched. What the caret has to go back to is where the finger left it.
+        let caretVoice = Self.slot(of: caretItem)?.voiceIndex ?? key.voiceIndex
         let revisionBeforePress = revision
         guard apply(members.count == 1 ? members[0] : .composite(members)) != nil else { return }
-        landOnDrumWrite(at: target, unlessStillAt: revisionBeforePress)
+        landOnDrumWrite(key, at: target, caretAt: column, inVoice: caretVoice, unlessStillAt: revisionBeforePress)
     }
 
     /// The intents that put `key`'s instrument into (or take it out of) the slot at `target`.
@@ -159,13 +162,51 @@ extension EditorSessionCore {
     }
 
     /// Leaves the selection on the note just toggled on, so the callout still covers duration and ties for it, and
-    /// leaves the CARET where it was: the column does not advance on a drum staff.
-    private func landOnDrumWrite(at target: VoiceElementID, unlessStillAt previousRevision: Int) {
+    /// puts the CARET back on `column`: the column does not advance on a drum staff.
+    ///
+    /// `column` and `voiceIndex` are the caller's pre-apply reading, and both have to be. `apply` ends in
+    /// `rederiveSelection`, which places both markers on the slot the intent touched — so by the time this runs,
+    /// `caretColumn` is already the written note's column and `caretItem` already its slot. Restoring from them
+    /// restores nothing.
+    ///
+    /// The caret is re-derived rather than kept, by the same rule ← / → use, because the write may have moved the
+    /// slot it was drawn on: entering a note at beat 2 of a bar-long rest splits that rest, and the split's head
+    /// occupies the index the rest had while starting a beat earlier. Keeping the old slot drew the caret back on
+    /// beat 1 with the note correctly written on beat 2.
+    private func landOnDrumWrite(
+        _ key: DrumPadKey,
+        at target: VoiceElementID,
+        caretAt column: ScoreColumn,
+        inVoice voiceIndex: Int,
+        unlessStillAt previousRevision: Int,
+    ) {
         guard revision != previousRevision, let score else { return }
         let written = SelectionRederivation.item(at: target, in: score, preferringNoteIndex: nil)
-        let column = caretColumn
-        place(selection: written, caret: caretItem)
+        let caret = coveringSlot(at: column, preferring: voiceIndex, in: score)
+            .map { SelectionRederivation.item(at: $0, in: score, preferringNoteIndex: nil) }
+        place(selection: written, caret: caret ?? caretItem)
         caretColumn = column
+        auditionDrumWrite(key, at: target)
+    }
+
+    /// Sounds what the press just wrote, the way inputting a pitched note sounds it.
+    ///
+    /// Not `auditionSelectedNote`: what a press lands the selection on is the whole chord's slot, and on a drum
+    /// staff that chord usually holds other instruments already — sounding the selection would play whichever note
+    /// happened to be first, not the one the finger asked for. The note is named directly instead.
+    ///
+    /// Only an ADDED instrument sounds. A key toggles, so the same press that puts a hi-hat in takes it out again
+    /// next time, and a removal has no resulting pitch worth previewing — the same rule the pitched ops follow.
+    /// Which of the two just happened is read back off the score rather than predicted, because the branch that
+    /// decided it ran against the pre-apply score: present after the write means added, absent means removed.
+    private func auditionDrumWrite(_ key: DrumPadKey, at target: VoiceElementID) {
+        guard let score, case let .chord(chord)? = score[target],
+              let noteIndex = chord.notes.firstIndex(where: { $0.pitch == key.pitch })
+        else { return }
+        audition(NoteID(
+            staff: target.staff, measureIndex: target.measureIndex, voiceIndex: target.voiceIndex,
+            elementIndex: target.elementIndex, noteIndexInChord: noteIndex,
+        ))
     }
 
     // MARK: - Reading the staff

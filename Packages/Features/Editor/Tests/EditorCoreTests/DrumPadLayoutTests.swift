@@ -1,4 +1,5 @@
 @testable import EditorCore
+import Foundation
 import SheetMusicCore
 import Testing
 
@@ -7,14 +8,29 @@ struct DrumPadLayoutTests {
     private static let staff = EditorCoreFixtures.staff0
 
     @Test
-    func `the default layout is a realistic kit, cymbals first`() {
+    func `the default layout is a realistic kit, cymbals above drums`() {
         let layout = DrumPadLayout.default
-        #expect(layout.keys.map(\.pitch) == [42, 46, 51, 49, 38, 37, 50, 48, 47, 45, 43, 41, 36, 44, 56])
+        #expect(layout.keys.map(\.pitch) == [42, 46, 44, 49, 57, 51, 56, 38, 37, 50, 47, 45, 43, 36])
         #expect(layout.rowCount == 2)
+        // Seven and seven: each row of the pad closes with a key of its own (the rest above, the ⋯ menu below),
+        // so an even split is what makes the two rows the same width.
+        #expect(layout.keys.count.isMultiple(of: layout.rowCount))
         // Every pitch is one the GM table names, so no key can render as "Drum 63".
         for key in layout.keys {
             #expect(GMDrumset.entries[key.pitch] != nil)
         }
+    }
+
+    /// Four toms, not GM's six: the two that go are the ones a chart is least likely to use, and a file that does
+    /// use them reaches them through the pad's ⋯ menu instead.
+    @Test
+    func `the default layout leaves the hi-mid and low floor toms off`() {
+        let pitches = Set(DrumPadLayout.default.keys.map(\.pitch))
+        #expect(!pitches.contains(48))
+        #expect(!pitches.contains(41))
+        #expect(pitches.isSuperset(of: [50, 47, 45, 43]))
+        // Both crashes, because the pair is what the mirrored tilt in their icons is for.
+        #expect(pitches.isSuperset(of: [49, 57]))
     }
 
     @Test
@@ -26,10 +42,43 @@ struct DrumPadLayoutTests {
     }
 
     @Test
-    func `the row count clamps to one through three`() {
+    func `splitting a flat list clamps the row count to one through three`() {
         #expect(DrumPadLayout(keys: [], rowCount: 0).rowCount == 1)
-        #expect(DrumPadLayout(keys: [], rowCount: 4).rowCount == 3)
-        #expect(DrumPadLayout(keys: [], rowCount: 2).rowCount == 2)
+        #expect(DrumPadLayout(keys: [], rowCount: 4).rowCount == 1)
+        let six = [36, 38, 42, 45, 49, 51].compactMap { DrumPadKey(gmPitch: $0) }
+        #expect(DrumPadLayout(keys: six, rowCount: 2).rows.map(\.count) == [3, 3])
+        #expect(DrumPadLayout(keys: six, rowCount: 4).rows.map(\.count) == [2, 2, 2])
+    }
+
+    /// Rows may differ in length now, so the pad draws what the layout says instead of chopping a flat list in
+    /// half. Nothing caps a row: an iPad has room a phone does not.
+    @Test
+    func `rows are kept as written, uneven or long`() {
+        let layout = DrumPadLayout(rows: [
+            [42, 46].compactMap { DrumPadKey(gmPitch: $0) },
+            [36, 38, 40, 41, 43, 45, 47, 48, 50].compactMap { DrumPadKey(gmPitch: $0) },
+        ])
+        #expect(layout.rows.map(\.count) == [2, 9])
+        #expect(layout.rowCount == 2)
+        #expect(layout.keys.map(\.pitch) == [42, 46, 36, 38, 40, 41, 43, 45, 47, 48, 50])
+    }
+
+    /// A pad arranged by hand before rows were stored is a flat list plus a count. Falling back to the default kit
+    /// would throw that arrangement away.
+    @Test
+    func `a layout stored in the old flat shape still decodes`() throws {
+        let stored = Data(#"""
+        {"keys":[{"pitch":42,"name":"Closed Hi-Hat","headType":"cross","line":-1,"voiceIndex":0},
+        {"pitch":38,"name":"Acoustic Snare","headType":"normal","line":2,"voiceIndex":0},
+        {"pitch":36,"name":"Bass Drum 1","headType":"normal","line":6,"voiceIndex":1},
+        {"pitch":51,"name":"Ride Cymbal 1","headType":"cross","line":0,"voiceIndex":0}],"rowCount":2}
+        """#.utf8)
+        let decoded = try JSONDecoder().decode(DrumPadLayout.self, from: stored)
+        #expect(decoded.rows.map { $0.map(\.pitch) } == [[42, 38], [36, 51]])
+
+        // And it re-encodes in the new shape, so the migration happens once.
+        let round = try JSONDecoder().decode(DrumPadLayout.self, from: JSONEncoder().encode(decoded))
+        #expect(round == decoded)
     }
 
     /// A chart that puts the ride somewhere of its own must keep that line — the pad is for correcting the file in
@@ -56,11 +105,19 @@ struct DrumPadLayoutTests {
         #expect(applied.keys.allSatisfy { $0.voiceIndex == 0 })
     }
 
+    /// MuseScore puts the two bass drums and the pedal hi-hat in the feet, and nothing else — the low floor tom
+    /// is played by hand, and a stems-down floor tom was this table's own invention until 2.3.1. The default
+    /// layout carries only one bass drum, so the rule itself is checked against a layout holding the rest.
     @Test
-    func `hands and feet is the GM split: bass drum, pedal hi-hat, low floor tom`() {
+    func `hands and feet is the GM split: the bass drums and the pedal hi-hat`() {
         let applied = DrumVoicePreset.handsAndFeet.applied(to: .default)
         let feet = applied.keys.filter { $0.voiceIndex == 1 }.map(\.pitch).sorted()
-        #expect(feet == [36, 41, 44])
+        #expect(feet == [36, 44])
+
+        let wider = DrumVoicePreset.handsAndFeet.applied(
+            to: DrumPadLayout(rows: [[35, 36, 41, 44, 42].compactMap { DrumPadKey(gmPitch: $0) }]),
+        )
+        #expect(wider.keys.filter { $0.voiceIndex == 1 }.map(\.pitch).sorted() == [35, 36, 44])
     }
 
     @Test

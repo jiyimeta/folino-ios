@@ -1,8 +1,15 @@
 import EditorCore
 import SwiftUI
+import UtilityUI
 
-/// Editing the drum pad's key layout: which instruments, in what order, on how many rows, in which voice
+/// Editing the drum pad's key layout: which instruments, in what order, on which row, in which voice
 /// (drum note entry's §5.6).
+///
+/// One section per pad row, because that is what the user is arranging — the pad is rows of keys, and a single flat
+/// list that the pad then chopped in half meant moving one instrument silently pushed another onto the next row.
+/// Rows are added and removed whole; instruments are added and removed inside a row. Nothing caps a row's length:
+/// a phone will squeeze what it must, an iPad has room for more, and a row too crowded to read is one the user can
+/// thin out themselves.
 ///
 /// Driven from LOCAL state and persisted separately — never through `@AppStorage` into the layout, which routes
 /// the change through `UserDefaults` and lands it outside `withAnimation` (see `DrumPadLayoutStore`).
@@ -13,8 +20,29 @@ struct EditorDrumLayoutSheet: View {
     let apply: (DrumPadLayout) -> Void
 
     @State private var layout: DrumPadLayout
-    @State private var pickingKeyID: Int?
+    @State private var picking: Picking?
+    @State private var isDiscardConfirmationPresented = false
     @Environment(\.dismiss) private var dismiss
+
+    /// Arranging fourteen keys across rows is not something to lose to a stray tap on ✕, or to a swipe down.
+    private var hasChanges: Bool {
+        layout != initial
+    }
+
+    /// What the instrument list, when it is open, is being opened for.
+    private enum Picking: Identifiable {
+        /// Re-instrument the key at this pitch, keeping its place and its voice.
+        case replace(pitch: Int)
+        /// Append an instrument to this row.
+        case append(row: Int)
+
+        var id: String {
+            switch self {
+            case let .replace(pitch): "replace-\(pitch)"
+            case let .append(row): "append-\(row)"
+            }
+        }
+    }
 
     init(initial: DrumPadLayout, apply: @escaping (DrumPadLayout) -> Void) {
         self.initial = initial
@@ -29,9 +57,21 @@ struct EditorDrumLayoutSheet: View {
                 .navigationTitle(Text("editor.drum.layout.title", bundle: .module))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbarContent }
-                .sheet(item: pickingKey) { key in
-                    EditorDrumInstrumentPicker(current: key.pitch) { pitch in
-                        replace(key, withPitch: pitch)
+                .interactiveDismissDisabled(hasChanges)
+                .alert(
+                    Text("editor.discardAlert.title", bundle: .module),
+                    isPresented: $isDiscardConfirmationPresented,
+                ) {
+                    Button(role: .cancel) {} label: {
+                        Text("editor.discardAlert.keepEditing", bundle: .module)
+                    }
+                    Button(role: .destructive) { dismiss() } label: {
+                        Text("editor.discardAlert.discard", bundle: .module)
+                    }
+                }
+                .sheet(item: $picking) { picking in
+                    EditorDrumInstrumentPicker(current: currentPitch(for: picking), taken: takenPitches) { pitch in
+                        pick(pitch, for: picking)
                     }
                 }
         }
@@ -40,12 +80,6 @@ struct EditorDrumLayoutSheet: View {
     private var form: some View {
         Form {
             Section {
-                Stepper(value: rowCount, in: 1 ... 3) {
-                    LabeledContent(
-                        String(localized: "editor.drum.layout.rows", bundle: .module),
-                        value: "\(layout.rowCount)",
-                    )
-                }
                 Picker(String(localized: "editor.drum.layout.preset", bundle: .module), selection: preset) {
                     Text("editor.drum.layout.preset.singleVoice", bundle: .module)
                         .tag(DrumVoicePreset.singleVoice)
@@ -54,14 +88,59 @@ struct EditorDrumLayoutSheet: View {
                 }
             }
 
-            Section {
-                // Drag to reorder, tap a row to re-instrument it, tap its voice badge to flip 1 ↔ 2. Deleting a key
-                // is a swipe, which is the gesture a `List` row already promises.
-                ForEach(layout.keys) { key in
-                    row(for: key)
+            ForEach(layout.rows.indices, id: \.self) { index in
+                rowSection(index)
+            }
+
+            if layout.rowCount < DrumPadLayout.maxRowCount {
+                Section {
+                    Button {
+                        layout.rows.append([])
+                    } label: {
+                        Label {
+                            Text("editor.drum.layout.addRow", bundle: .module)
+                        } icon: {
+                            Image(systemName: "plus")
+                        }
+                    }
                 }
-                .onMove { layout.keys.move(fromOffsets: $0, toOffset: $1) }
-                .onDelete { layout.keys.remove(atOffsets: $0) }
+            }
+        }
+    }
+
+    /// One pad row. Drag to reorder within it, tap an instrument to swap it, tap its voice badge to flip 1 ↔ 2,
+    /// swipe to remove it. Dragging between rows is not offered — a `List` cannot move a row across sections — so
+    /// the way to move an instrument up a row is to delete it and add it there.
+    private func rowSection(_ index: Int) -> some View {
+        Section {
+            ForEach(layout.rows[index]) { key in
+                row(for: key)
+            }
+            .onMove { layout.rows[index].move(fromOffsets: $0, toOffset: $1) }
+            .onDelete { layout.rows[index].remove(atOffsets: $0) }
+
+            Button {
+                picking = .append(row: index)
+            } label: {
+                Label {
+                    Text("editor.drum.layout.addInstrument", bundle: .module)
+                } icon: {
+                    Image(systemName: "plus")
+                }
+            }
+        } header: {
+            HStack {
+                Text("editor.drum.layout.row \(index + 1)", bundle: .module)
+                Spacer()
+                // Only offered while there is more than one row: a pad with no instrument rows is not a pad.
+                if layout.rowCount > 1 {
+                    Button(role: .destructive) {
+                        layout.rows.remove(at: index)
+                    } label: {
+                        Text("editor.drum.layout.removeRow", bundle: .module)
+                    }
+                    .textCase(nil)
+                }
             }
         }
     }
@@ -69,50 +148,56 @@ struct EditorDrumLayoutSheet: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button(role: .cancel) { dismiss() } label: {
-                Text("editor.drum.layout.cancel", bundle: .module)
+            Button(role: .cancel) {
+                if hasChanges {
+                    isDiscardConfirmationPresented = true
+                } else {
+                    dismiss()
+                }
+            } label: {
+                SheetActionLabel(.close, title: Text("editor.drum.layout.cancel", bundle: .module))
             }
         }
         ToolbarItem(placement: .confirmationAction) {
-            Button {
+            SheetConfirmButton(title: Text("editor.drum.layout.done", bundle: .module)) {
                 apply(layout)
                 dismiss()
-            } label: {
-                Text("editor.drum.layout.done", bundle: .module)
             }
         }
     }
 
     private func row(for key: DrumPadKey) -> some View {
         HStack {
-            EditorDrumNoteheadGlyph(headType: key.headType)
-                .frame(width: 20)
+            EditorDrumKeyIcon(pitch: key.pitch, label: shellLabels[key.pitch])
             Button {
-                pickingKeyID = key.pitch
+                picking = .replace(pitch: key.pitch)
             } label: {
                 Text(DrumKeyLabel.name(for: key))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
-            Button {
-                toggleVoice(of: key)
+            // A menu, not a toggle. The badge used to flip 1 ↔ 2 on tap, which reads as a label rather than a
+            // control and gives no hint that two is all there is — a menu shows both voices and which one is on.
+            Menu {
+                Picker(selection: voice(of: key)) {
+                    ForEach(0 ..< 2) { index in
+                        Text("editor.drum.layout.voiceBadge \(index + 1)", bundle: .module).tag(index)
+                    }
+                } label: {
+                    Text("editor.drum.layout.preset", bundle: .module)
+                }
+                .pickerStyle(.inline)
             } label: {
                 Text("editor.drum.layout.voiceBadge \(key.voiceIndex + 1)", bundle: .module)
                     .font(.footnote)
                     .monospacedDigit()
             }
+            .menuStyle(.button)
             .buttonStyle(.bordered)
         }
     }
 
     // MARK: - Editing
-
-    private var rowCount: Binding<Int> {
-        Binding(
-            get: { layout.rowCount },
-            set: { layout = DrumPadLayout(keys: layout.keys, rowCount: $0) },
-        )
-    }
 
     /// The preset the current voices already spell, and applying a different one. Reading it back rather than
     /// storing a selection keeps the picker honest after a per-key flip: change one voice and the picker stops
@@ -127,34 +212,87 @@ struct EditorDrumLayoutSheet: View {
         )
     }
 
-    private var pickingKey: Binding<DrumPadKey?> {
+    /// The same letters the pad puts on a drum's shell, so a row here and the key it becomes read alike.
+    private var shellLabels: [Int: String] {
+        DrumKeyLabel.shellLabels(for: layout.keys.map(\.pitch))
+    }
+
+    private var takenPitches: Set<Int> {
+        Set(layout.keys.map(\.pitch))
+    }
+
+    private func currentPitch(for picking: Picking) -> Int? {
+        switch picking {
+        case let .replace(pitch): pitch
+        case .append: nil
+        }
+    }
+
+    private func voice(of key: DrumPadKey) -> Binding<Int> {
         Binding(
-            get: { layout.keys.first { $0.pitch == pickingKeyID } },
-            set: { pickingKeyID = $0?.pitch },
+            get: { key.voiceIndex },
+            set: { voiceIndex in
+                guard let position = position(of: key.pitch) else { return }
+                layout.rows[position.row][position.index].voiceIndex = voiceIndex
+            },
         )
     }
 
-    private func toggleVoice(of key: DrumPadKey) {
-        guard let index = layout.keys.firstIndex(where: { $0.pitch == key.pitch }) else { return }
-        layout.keys[index].voiceIndex = key.voiceIndex == 0 ? 1 : 0
+    /// A pitch the layout already holds is refused rather than duplicated: two keys writing the same drum would
+    /// toggle each other.
+    private func pick(_ pitch: Int, for picking: Picking) {
+        self.picking = nil
+        switch picking {
+        case let .replace(current):
+            guard let position = position(of: current),
+                  !takenPitches.contains(pitch) || pitch == current
+            else { return }
+            let voiceIndex = layout.rows[position.row][position.index].voiceIndex
+            guard let replacement = DrumPadKey(gmPitch: pitch, voiceIndex: voiceIndex) else { return }
+            layout.rows[position.row][position.index] = replacement
+        case let .append(row):
+            guard layout.rows.indices.contains(row),
+                  !takenPitches.contains(pitch),
+                  let key = DrumPadKey(gmPitch: pitch)
+            else { return }
+            layout.rows[row].append(key)
+        }
     }
 
-    /// Swaps a key's instrument in place, keeping its position and its voice — the row is a slot on the pad, and
-    /// re-instrumenting it should not move it. A pitch the layout already holds is refused rather than duplicated:
-    /// two keys writing the same drum would toggle each other.
-    private func replace(_ key: DrumPadKey, withPitch pitch: Int) {
-        pickingKeyID = nil
-        guard let index = layout.keys.firstIndex(where: { $0.pitch == key.pitch }),
-              !layout.keys.contains(where: { $0.pitch == pitch }),
-              let replacement = DrumPadKey(gmPitch: pitch, voiceIndex: key.voiceIndex)
-        else { return }
-        layout.keys[index] = replacement
+    private func position(of pitch: Int) -> (row: Int, index: Int)? {
+        for (row, keys) in layout.rows.enumerated() {
+            if let index = keys.firstIndex(where: { $0.pitch == pitch }) {
+                return (row, index)
+            }
+        }
+        return nil
     }
 }
 
-/// The instrument list a key's row opens: every drum `GMDrumset` names, by pitch.
+/// The drum's pad icon at list size, or nothing for a drum no icon is drawn for.
+///
+/// Blank rather than a stand-in: the list already names the instrument, and a placeholder glyph repeated down a
+/// dozen rows would read as "these are all the same drum".
+struct EditorDrumKeyIcon: View {
+    let pitch: Int
+    var label: String?
+
+    var body: some View {
+        Group {
+            if let icon = DrumInstrumentIcon.forPitch(pitch) {
+                DrumInstrumentIconView(icon: icon, label: label)
+            }
+        }
+        .frame(width: 28, height: 28)
+    }
+}
+
+/// The instrument list a row opens: every drum `GMDrumset` names, by pitch. A pitch already on the pad is shown
+/// but not selectable — the pad cannot hold the same drum twice, and hiding it would make the list jump around
+/// depending on what you had already chosen.
 struct EditorDrumInstrumentPicker: View {
-    let current: Int
+    let current: Int?
+    let taken: Set<Int>
     let pick: (Int) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -167,9 +305,8 @@ struct EditorDrumInstrumentPicker: View {
                     dismiss()
                 } label: {
                     HStack {
+                        EditorDrumKeyIcon(pitch: pitch)
                         if let key = DrumPadKey(gmPitch: pitch) {
-                            EditorDrumNoteheadGlyph(headType: key.headType)
-                                .frame(width: 20)
                             Text(DrumKeyLabel.name(for: key))
                         }
                         Spacer()
@@ -180,6 +317,7 @@ struct EditorDrumInstrumentPicker: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .disabled(pitch != current && taken.contains(pitch))
             }
             .navigationTitle(Text("editor.drum.layout.instrument", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
