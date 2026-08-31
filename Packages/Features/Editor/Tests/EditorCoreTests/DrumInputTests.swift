@@ -29,6 +29,26 @@ struct DrumInputTests {
         return Score(division: 480, parts: [part])
     }
 
+    /// One 4/4 bar on a percussion staff whose only voice holds a single bar-long rest — a bar nothing has been
+    /// written into yet, which is what `Score.blank` hands a new drum score.
+    private static func barRestDrumScore() -> Score {
+        let barRest: [VoiceElement] = [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .rest(duration: .measure),
+        ]
+        let staffValue = Staff(
+            staffType: GMPercussion.staffTypeName,
+            group: GMPercussion.staffGroup,
+            measures: [Measure(voices: [Voice(elements: barRest)])],
+        )
+        let part = Part(
+            id: "1",
+            instrument: Instrument(id: "drumset", useDrumset: true, drumLineMap: GMPercussion.drumLineMap),
+            staves: [staffValue],
+        )
+        return Score(division: 480, parts: [part])
+    }
+
     private static func pitchedScore() -> Score {
         EditorCoreFixtures.fourQuarterRests()
     }
@@ -284,5 +304,72 @@ struct DrumInputTests {
         #expect(core.caretColumn?.tick == 240)
         // And the caret is DRAWN on something that actually starts there, not on the bass drum it is inside.
         #expect(EditorSessionCore.slot(of: core.caretItem) == Self.slot(voice: 0, element: 2))
+    }
+
+    /// Feet first, then hands, in a bar nothing has been written into yet. The kick goes into its own voice, so
+    /// the hands' voice is still one bar-long rest when the caret steps to beat 2 — and writing there has to split
+    /// that rest. The caret used to come back on beat 1: the split's HEAD covers the same slot index the rest did,
+    /// and re-deriving the caret off a slot lands it wherever that slot starts.
+    @Test
+    func `writing into a bar-long rest at beat 2 leaves the caret on beat 2`() {
+        let core = EditorCoreFixtures.makeCore()
+        core.beginSession(score: Self.barRestDrumScore())
+        core.select(Self.rest(voice: 0, element: 1))
+        core.setDuration(.quarter)
+
+        core.pressDrumKey(Self.key(36, voice: 1))
+        core.selectNextElement()
+        #expect(core.caretColumn?.tick == 480)
+
+        core.pressDrumKey(Self.key(42, voice: 0))
+
+        #expect(core.caretColumn?.tick == 480)
+        #expect(core.litDrumPitches == [42])
+    }
+
+    // MARK: - Auditioning
+
+    /// A press previews what it wrote, the way inputting a pitched note does. It shipped silent: the drum path
+    /// never marked anything to sound, so the whole pad wrote notes nobody could hear.
+    @Test
+    func `a press previews the instrument it just wrote`() {
+        let core = Self.armedCore(Self.drumScore())
+
+        core.pressDrumKey(Self.key(42))
+
+        let pending = core.takePendingAudition()
+        #expect(pending == NoteID(
+            staff: Self.staff, measureIndex: 0, voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0,
+        ))
+    }
+
+    /// The note named is the one the finger asked for, not whichever happens to be first in the chord — a drum
+    /// column normally holds several instruments at once.
+    @Test
+    func `stacking a second instrument previews that one, not the chord's first`() {
+        let core = Self.armedCore(Self.drumScore())
+
+        core.pressDrumKey(Self.key(42))
+        _ = core.takePendingAudition()
+        core.pressDrumKey(Self.key(38))
+
+        let pending = core.takePendingAudition()
+        #expect(pending?.noteIndexInChord == 1)
+        #expect(core.litDrumPitches == [42, 38])
+    }
+
+    /// Taking an instrument back out has no resulting pitch worth sounding — the same rule the pitched ops follow
+    /// for a delete.
+    @Test
+    func `toggling an instrument off previews nothing`() {
+        let core = Self.armedCore(Self.drumScore())
+
+        core.pressDrumKey(Self.key(42))
+        core.pressDrumKey(Self.key(38))
+        _ = core.takePendingAudition()
+        core.pressDrumKey(Self.key(38))
+
+        #expect(core.takePendingAudition() == nil)
+        #expect(core.litDrumPitches == [42])
     }
 }
