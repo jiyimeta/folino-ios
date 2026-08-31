@@ -121,7 +121,7 @@ struct AnnotatedPDFComposerTests {
 
     @Test
     @MainActor
-    func `an annotated page gains one ink annotation per placement and an unannotated one gains none`() throws {
+    func `an annotated page gains exactly one annotation whatever its stroke count; other pages gain none`() throws {
         let base = try Self.baseDocument(pages: 2)
         let drawings = [
             Self.drawing(kind: .page(PageAnchor(pageIndex: 0))),
@@ -135,8 +135,16 @@ struct AnnotatedPDFComposerTests {
         let document = try #require(PDFDocument(data: out))
         let firstPage = try #require(document.page(at: 0))
         let secondPage = try #require(document.page(at: 1))
-        #expect(firstPage.annotations.filter { $0.type == "Ink" }.count == 2)
+        // Two placements, one page, ONE annotation: Books writes a single stamp per page, so folino does too.
+        #expect(firstPage.annotations.filter { $0.type == "Stamp" }.count == 1)
         #expect(secondPage.annotations.isEmpty)
+
+        // …and the single annotation's payload carries BOTH strokes, which is the point of consolidating.
+        let exported = try #require(try Self.exportedAnnotations(out).first)
+        let extras = try #require(exported.extras)
+        let base64 = try Self.text(#require(extras["PPK"]))
+        let drawing = try PKDrawing(data: #require(Data(base64Encoded: base64)))
+        #expect(drawing.strokes.count == 2)
     }
 
     /// Two identical-width strokes in one page-local UIKit-space (top-left origin, y-down) drawing, placed 200 points
@@ -286,27 +294,200 @@ struct AnnotatedPDFComposerTests {
         )
     }
 
-    /// The `/PPK` blob's whole point is that a PencilKit-aware reader can hand it back to PencilKit, so what has to
-    /// survive the PDF round-trip is a decodable `PKDrawing` carrying the PLACED geometry — the stroke as it sits on
-    /// the exported page, not the normalized geometry that was stored. (The blob is not byte-identical to Apple
-    /// Books', whose own container decodes to bytes beginning `crdt`; `PKDrawing.dataRepresentation()` emits a
-    /// different, `wrd`-prefixed container for a drawing built from control points. `PKDrawing(data:)` reads both,
-    /// and folino cannot synthesize Apple's private variant, so the magic is not something to assert.)
-    @Test
+    // MARK: - The Apple Books annotation shape
+
+    /// One exported annotation, read back through CoreGraphics rather than PDFKit. Going through `CGPDFDictionary`
+    /// is the point: it reports what actually landed in the FILE, including whether `/AAPL:AKExtras` is a real
+    /// dictionary object or was flattened into something else on the way out — which PDFKit's own
+    /// `value(forAnnotationKey:)` would happily paper over by handing back whatever it still holds in memory.
+    struct ExportedAnnotation {
+        var subtype: String?
+        var flags: Int?
+        var author: String?
+        /// `nil` when `/AAPL:AKExtras` is absent OR is not a dictionary. Values are the PDF strings' raw bytes.
+        var extras: [String: Data]?
+        var rect: CGRect?
+        /// `/C`, the annotation's single color, as the PDF's own component array.
+        var color: [CGFloat]?
+        var hasBorder = false
+        var hasDefaultAppearance = false
+        var hasModificationDate = false
+        var hasInkList = false
+        var hasStagingKey = false
+        /// The `/AP` → `/N` form XObject's decoded content stream, which is what every non-Apple viewer draws.
+        var appearanceContent: String?
+    }
+
+    /// A PDF string's raw bytes as text. Everything read here (base64, `/T`) is ASCII, so anything that fails to
+    /// decode is a real failure rather than something to paper over with replacement characters.
+    private static func text(_ data: Data) throws -> String {
+        try #require(String(bytes: data, encoding: .utf8))
+    }
+
+    private static func pdfName(_ dict: CGPDFDictionaryRef, _ key: String) -> String? {
+        var value: UnsafePointer<CChar>?
+        guard CGPDFDictionaryGetName(dict, key, &value), let value else { return nil }
+        return String(cString: value)
+    }
+
+    private static func pdfStringBytes(_ dict: CGPDFDictionaryRef, _ key: String) -> Data? {
+        var value: CGPDFStringRef?
+        guard CGPDFDictionaryGetString(dict, key, &value), let value,
+              let bytes = CGPDFStringGetBytePtr(value) else { return nil }
+        return Data(bytes: bytes, count: CGPDFStringGetLength(value))
+    }
+
+    private static func pdfInteger(_ dict: CGPDFDictionaryRef, _ key: String) -> Int? {
+        var value: CGPDFInteger = 0
+        guard CGPDFDictionaryGetInteger(dict, key, &value) else { return nil }
+        return value
+    }
+
+    private static func has(_ dict: CGPDFDictionaryRef, _ key: String) -> Bool {
+        var value: CGPDFObjectRef?
+        return CGPDFDictionaryGetObject(dict, key, &value)
+    }
+
+    /// `/Rect`, which the spec writes as `[x0 y0 x1 y1]` — two corners, not an origin and a size.
+    private static func pdfRect(_ dict: CGPDFDictionaryRef, _ key: String) -> CGRect? {
+        var array: CGPDFArrayRef?
+        guard CGPDFDictionaryGetArray(dict, key, &array), let array, CGPDFArrayGetCount(array) == 4 else { return nil }
+        var values: [CGFloat] = []
+        for index in 0 ..< 4 {
+            var real: CGPDFReal = 0
+            guard CGPDFArrayGetNumber(array, index, &real) else { return nil }
+            values.append(real)
+        }
+        return CGRect(
+            x: min(values[0], values[2]), y: min(values[1], values[3]),
+            width: abs(values[2] - values[0]), height: abs(values[3] - values[1]),
+        )
+    }
+
+    /// Every annotation on `page` of the composed `data`, read straight out of the file.
+    static func exportedAnnotations(_ data: Data, page pageNumber: Int = 1) throws -> [ExportedAnnotation] {
+        let provider = try #require(CGDataProvider(data: data as CFData))
+        let document = try #require(CGPDFDocument(provider))
+        let page = try #require(document.page(at: pageNumber))
+        let pageDictionary = try #require(page.dictionary)
+        var annotations: CGPDFArrayRef?
+        guard CGPDFDictionaryGetArray(pageDictionary, "Annots", &annotations), let annotations else { return [] }
+
+        var result: [ExportedAnnotation] = []
+        for index in 0 ..< CGPDFArrayGetCount(annotations) {
+            var dictionary: CGPDFDictionaryRef?
+            guard CGPDFArrayGetDictionary(annotations, index, &dictionary), let dictionary else { continue }
+            var exported = ExportedAnnotation()
+            exported.subtype = pdfName(dictionary, "Subtype")
+            exported.flags = pdfInteger(dictionary, "F")
+            exported.author = pdfStringBytes(dictionary, "T").flatMap { String(bytes: $0, encoding: .utf8) }
+            exported.rect = pdfRect(dictionary, "Rect")
+            var colorArray: CGPDFArrayRef?
+            if CGPDFDictionaryGetArray(dictionary, "C", &colorArray), let colorArray {
+                var components: [CGFloat] = []
+                for index in 0 ..< CGPDFArrayGetCount(colorArray) {
+                    var real: CGPDFReal = 0
+                    if CGPDFArrayGetNumber(colorArray, index, &real) {
+                        components.append(real)
+                    }
+                }
+                exported.color = components
+            }
+            exported.hasBorder = has(dictionary, "Border")
+            exported.hasDefaultAppearance = has(dictionary, "DA")
+            exported.hasModificationDate = has(dictionary, "M")
+            exported.hasInkList = has(dictionary, "InkList")
+            exported.hasStagingKey = has(dictionary, "FolinoExportPPK")
+
+            var extras: CGPDFDictionaryRef?
+            if CGPDFDictionaryGetDictionary(dictionary, "AAPL:AKExtras", &extras), let extras {
+                var entries: [String: Data] = [:]
+                for key in ["PPK", "PPKType"] {
+                    if let bytes = pdfStringBytes(extras, key) {
+                        entries[key] = bytes
+                    }
+                }
+                exported.extras = entries
+            }
+
+            var appearance: CGPDFDictionaryRef?
+            var normal: CGPDFStreamRef?
+            if CGPDFDictionaryGetDictionary(dictionary, "AP", &appearance), let appearance,
+               CGPDFDictionaryGetStream(appearance, "N", &normal), let normal
+            {
+                var format: CGPDFDataFormat = .raw
+                if let stream = CGPDFStreamCopyData(normal, &format) as Data? {
+                    exported.appearanceContent = String(bytes: stream, encoding: .utf8)
+                }
+            }
+            result.append(exported)
+        }
+        // Every `CGPDFDictionaryRef` above is owned by `document` (through `page`), and ARC is free to release a
+        // local after its last mention — which here is well before the loop ends. Pin both until the reads are done.
+        withExtendedLifetime(page) {}
+        withExtendedLifetime(document) {}
+        return result
+    }
+
+    /// A one-page export carrying exactly one placed stroke, used by every Books-shape test below.
     @MainActor
-    func `the PPK value round-trips and decodes back to the placed PencilKit drawing`() throws {
+    private static func composedWithOneStroke() throws -> Data {
         let base = try Self.baseDocument(pages: 1)
         let drawings = [Self.drawing(kind: .page(PageAnchor(pageIndex: 0)))]
         let placements = [
             InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 400, px: 20, py: 30)),
         ]
-        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements)
-        let document = try #require(PDFDocument(data: out))
-        let annotation = try #require(document.page(at: 0)?.annotations.first)
+        return try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements)
+    }
 
-        let base64 = try #require(
-            annotation.value(forAnnotationKey: AnnotatedPDFComposer.pencilKitBlobAnnotationKey) as? String,
-        )
+    @Test
+    @MainActor
+    func `the exported annotation carries the subtype, flags and author Apple Books writes`() throws {
+        let exported = try #require(try Self.exportedAnnotations(Self.composedWithOneStroke()).first)
+        // `/Stamp`, not `/Ink`: Books uses Stamp for Pencil ink and reserves `/Square` for shape markup.
+        #expect(exported.subtype == "Stamp")
+        // Print (4) + Locked (128) + LockedContents (512).
+        #expect(exported.flags == 644)
+        #expect(exported.author == "Mobile User")
+        // The common entries Books' own annotations carry, and which PDFKit fills in for us.
+        #expect(exported.rect != nil)
+        #expect(exported.hasBorder)
+        #expect(exported.hasDefaultAppearance)
+        #expect(exported.hasModificationDate)
+        // Books' stamps have no `/InkList`, and the private staging key must never reach a written file.
+        #expect(!exported.hasInkList)
+        #expect(!exported.hasStagingKey)
+    }
+
+    @Test
+    @MainActor
+    func `AAPL AKExtras lands in the file as a dictionary holding both PPK and PPKType`() throws {
+        let exported = try #require(try Self.exportedAnnotations(Self.composedWithOneStroke()).first)
+        // `extras` is non-nil only when `CGPDFDictionaryGetDictionary` succeeded, so this is the assertion that
+        // PDFKit really serialized a NESTED DICTIONARY under a custom annotation key rather than flattening it.
+        let extras = try #require(exported.extras, "expected /AAPL:AKExtras to be a dictionary object in the file")
+        #expect(extras["PPK"] != nil)
+        #expect(extras["PPKType"] != nil)
+    }
+
+    @Test
+    @MainActor
+    func `PPKType decodes to the three constant bytes Books stores`() throws {
+        let exported = try #require(try Self.exportedAnnotations(Self.composedWithOneStroke()).first)
+        let extras = try #require(exported.extras)
+        let base64 = try Self.text(#require(extras["PPKType"]))
+        #expect(try #require(Data(base64Encoded: base64)) == Data([0x76, 0xB6, 0xB0]))
+    }
+
+    /// The `/PPK` blob's whole point is that a PencilKit-aware reader can hand it back to PencilKit, so what has to
+    /// survive the PDF round-trip is a decodable `PKDrawing` carrying the PLACED geometry — the stroke as it sits on
+    /// the exported page, not the normalized geometry that was stored.
+    @Test
+    @MainActor
+    func `PPK decodes back to the placed PencilKit drawing`() throws {
+        let exported = try #require(try Self.exportedAnnotations(Self.composedWithOneStroke()).first)
+        let extras = try #require(exported.extras)
+        let base64 = try Self.text(#require(extras["PPK"]))
         let decoded = try #require(Data(base64Encoded: base64))
         let drawing = try PKDrawing(data: decoded)
         let points = try Array(#require(drawing.strokes.first).path)
@@ -317,6 +498,141 @@ struct AnnotatedPDFComposerTests {
         // the stored blob rather than the stored geometry being copied through untouched.
         #expect(abs(points[1].location.x - 60) < 0.5)
         #expect(abs(points[1].location.y - 70) < 0.5)
+    }
+
+    /// The one Books field folino cannot reproduce, pinned so the gap is a measured fact rather than a claim.
+    /// Books' `/PPK` decodes to a container beginning `crdt`; `PKDrawing.dataRepresentation()` — through every
+    /// construction route there is — emits `wrd` instead. If a future SDK starts emitting `crdt`, this test fails,
+    /// and that failure is the good news: the payload would then be byte-shaped like Apple's own.
+    @Test
+    @MainActor
+    func `the PPK container is the one PencilKit's public API emits, which is not Books' crdt`() throws {
+        let exported = try #require(try Self.exportedAnnotations(Self.composedWithOneStroke()).first)
+        let extras = try #require(exported.extras)
+        let base64 = try Self.text(#require(extras["PPK"]))
+        let decoded = try #require(Data(base64Encoded: base64))
+        let magic = String(bytes: decoded.prefix(3), encoding: .utf8) ?? "?"
+        #expect(magic == "wrd", "PencilKit now emits \"\(magic)\" — check whether it reaches Books' \"crdt\"")
+    }
+
+    /// Books' own appearance is a raster image XObject (`Do`, no path operators). folino's is deliberately vector,
+    /// because the appearance is what every non-Apple viewer draws and vector is the better picture — so this pins
+    /// that the two-pass subtype rewrite did NOT cost us the vector appearance PDFKit built in pass one.
+    @Test
+    @MainActor
+    func `the exported annotation's appearance stream is still vector, not a raster image`() throws {
+        let exported = try #require(try Self.exportedAnnotations(Self.composedWithOneStroke()).first)
+        let content = try #require(exported.appearanceContent, "expected an /AP /N appearance stream")
+        #expect(content.contains(" m\n") || content.contains(" m "), "expected a moveto operator")
+        #expect(content.contains(" l\n") || content.contains(" l "), "expected lineto operators")
+        #expect(content.contains("S"), "expected the path to be stroked")
+        #expect(!content.contains(" Do"), "expected no image XObject — the appearance must stay vector")
+    }
+
+    /// `asymmetricFixture` puts one stroke near the top of the page and one far below it and off to the side, so a
+    /// `/Rect` that only covered one of them — or that covered the wrong one — is impossible to miss.
+    @Test
+    @MainActor
+    func `the page's single annotation covers the union of every stroke placed on it`() throws {
+        let base = try Self.baseDocument(pages: 1)
+        let out = try AnnotatedPDFComposer.compose(
+            basePDF: base, drawings: Self.asymmetricFixture(), placements: Self.asymmetricPlacements(),
+        )
+        let exported = try Self.exportedAnnotations(out)
+        #expect(exported.count == 1)
+        let rect = try #require(exported.first?.rect)
+
+        // Each stroke composed on its own gives the box that stroke alone would have claimed; the one-annotation
+        // page must cover both of them, and no more than their union plus PencilKit's own bounds padding.
+        let topAlone = try Self.soleAnnotationBounds(drawing: Self.asymmetricFixture()[0])
+        let bottomAlone = try Self.soleAnnotationBounds(drawing: Self.asymmetricFixture()[1])
+        let union = topAlone.union(bottomAlone)
+        #expect(rect.contains(union.insetBy(dx: 0.5, dy: 0.5)), "expected /Rect to cover both strokes")
+        // …and no more than their union: a /Rect that had quietly grown to the whole page would still "cover" them.
+        #expect(abs(rect.minX - union.minX) < 1.5, "expected /Rect to be the union, not the whole page")
+        #expect(abs(rect.maxX - union.maxX) < 1.5)
+        #expect(abs(rect.minY - union.minY) < 1.5)
+        #expect(abs(rect.maxY - union.maxY) < 1.5)
+    }
+
+    /// The price of one annotation per page: `PDFAnnotation` carries a single `/C`, so a page whose strokes are
+    /// different colors has to settle on one for the appearance stream. The dominant color — most sampled points —
+    /// wins. The per-stroke colors are untouched inside `/PPK`, which is where a PencilKit-aware reader looks.
+    @Test
+    @MainActor
+    func `a page mixing colors draws its appearance in the color covering the most points`() throws {
+        func stroke(color: UInt32, points: Int, y: Float) -> DrawingAnchor {
+            let xs = (0 ..< points).map { Float($0) * 2 + 20 }
+            let ink = InkStroke(
+                tool: .pen, colorRGBA: color, baseWidthSp: 4, opacity: 1,
+                x: xs, y: xs.map { _ in y }, width: xs.map { _ in 4 },
+                force: [], azimuth: [], altitude: [], timeMillis: [],
+            )
+            return DrawingAnchor(kind: .page(PageAnchor(pageIndex: 0)), encodedDrawing: InkStrokeCodec.encode(ink))
+        }
+        // Blue over three points, red over twenty: red covers more of the page's ink, so red must win.
+        let drawings = [stroke(color: 0x0000_FFFF, points: 3, y: 100), stroke(color: 0xFF00_00FF, points: 20, y: 200)]
+        let placements = (0 ..< 2).map {
+            InkPlacement(pageIndex: 0, drawingIndex: $0, transform: StrokeTransform(sp: 1, px: 0, py: 0))
+        }
+        let out = try AnnotatedPDFComposer.compose(
+            basePDF: Self.baseDocument(pages: 1), drawings: drawings, placements: placements,
+        )
+        let exported = try #require(try Self.exportedAnnotations(out).first)
+        let color = try #require(exported.color)
+        #expect(color.count == 3)
+        #expect(color[0] > 0.9, "expected the dominant red, not the three-point blue")
+        #expect(color[2] < 0.1)
+    }
+
+    @Test
+    @MainActor
+    func `each annotated page gets its own annotation and its own strokes`() throws {
+        let base = try Self.baseDocument(pages: 3)
+        // Two strokes on page 0, one on page 2, nothing on page 1.
+        let drawings = (0 ..< 3).map { _ in Self.drawing(kind: .page(PageAnchor(pageIndex: 0))) }
+        let placements = [
+            InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 400, px: 0, py: 0)),
+            InkPlacement(pageIndex: 2, drawingIndex: 1, transform: StrokeTransform(sp: 400, px: 0, py: 0)),
+            InkPlacement(pageIndex: 0, drawingIndex: 2, transform: StrokeTransform(sp: 400, px: 60, py: 60)),
+        ]
+        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements)
+
+        let strokeCount = { (pageNumber: Int) throws -> Int in
+            let annotations = try Self.exportedAnnotations(out, page: pageNumber)
+            #expect(annotations.count == 1)
+            let extras = try #require(annotations.first?.extras)
+            let base64 = try Self.text(#require(extras["PPK"]))
+            return try PKDrawing(data: #require(Data(base64Encoded: base64))).strokes.count
+        }
+        #expect(try strokeCount(1) == 2, "page 1 carries two placements, so its one annotation holds two strokes")
+        #expect(try Self.exportedAnnotations(out, page: 2).isEmpty, "page 2 has no ink and must gain no annotation")
+        #expect(try strokeCount(3) == 1)
+    }
+
+    @Test
+    @MainActor
+    func `an annotation the base document already carried is left in its own shape`() throws {
+        // A pre-existing annotation must not be swept into the Books rewrite: only the ones this composer added
+        // carry the staging key, and only those are reshaped.
+        let plain = try Self.baseDocument(pages: 1)
+        let document = try #require(PDFDocument(data: plain))
+        let page = try #require(document.page(at: 0))
+        page.addAnnotation(PDFAnnotation(
+            bounds: CGRect(x: 10, y: 10, width: 20, height: 20), forType: .text, withProperties: nil,
+        ))
+        let base = try #require(document.dataRepresentation())
+
+        let placement = InkPlacement(
+            pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 400, px: 0, py: 0),
+        )
+        let out = try AnnotatedPDFComposer.compose(
+            basePDF: base, drawings: [Self.drawing(kind: .page(PageAnchor(pageIndex: 0)))],
+            placements: [placement],
+        )
+        let exported = try Self.exportedAnnotations(out)
+        #expect(exported.contains { $0.subtype == "Text" && $0.extras == nil && $0.flags != 644 })
+        #expect(exported.contains { $0.subtype == "Stamp" && $0.extras != nil })
     }
 
     @Test
@@ -369,7 +685,7 @@ struct AnnotatedPDFComposerTests {
         let firstPage = try #require(composed.page(at: 0))
         #expect(firstPage.annotations.contains { $0.type == "Text" })
         let secondPage = try #require(composed.page(at: 1))
-        #expect(secondPage.annotations.contains { $0.type == "Ink" })
+        #expect(secondPage.annotations.contains { $0.type == "Stamp" })
     }
 
     @Test
@@ -385,7 +701,7 @@ struct AnnotatedPDFComposerTests {
         let document = try #require(PDFDocument(data: out))
         let page = try #require(document.page(at: 0))
         #expect(page.rotation == 90, "the composer never touches the page, so /Rotate must pass through untouched")
-        #expect(page.annotations.contains { $0.type == "Ink" })
+        #expect(page.annotations.contains { $0.type == "Stamp" })
     }
 
     @Test

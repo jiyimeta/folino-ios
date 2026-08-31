@@ -37,12 +37,13 @@ struct ReaderAnnotatedPDFEndToEndTests {
         LayoutEngine.layout(score: score, options: ScoreViewOptions(), availableWidth: 800)
     }
 
-    /// Whether any page of `document` carries at least one `.ink` annotation — the shape ink now takes in the
-    /// exported PDF (a `PDFAnnotation`, not an image XObject in the content stream).
+    /// Whether any page of `document` carries at least one `Stamp` annotation — the shape ink now takes in the
+    /// exported PDF (a `PDFAnnotation` shaped like Apple Books' Pencil markup, not an image XObject in the content
+    /// stream). See `AnnotatedPDFComposer` for why the subtype is `Stamp` rather than `Ink`.
     private static func gainedInk(_ document: PDFDocument) -> Bool {
         for index in 0 ..< document.pageCount {
             guard let page = document.page(at: index) else { continue }
-            if page.annotations.contains(where: { $0.type == "Ink" }) {
+            if page.annotations.contains(where: { $0.type == "Stamp" }) {
                 return true
             }
         }
