@@ -24,11 +24,11 @@ enum ReaderDeviceDefaults {
         isTablet
     }
 
-    // PARITY(macos): device-idiom detection has no macOS analogue. Ⅳ's Mac reading surface needs its own untouched-
-    //   preference default — there is no "tablet" on macOS, so the choice (iPad-like generous defaults are the
-    //   natural fit for a large screen) is deferred to that work; `isTablet` and the properties below it are
-    //   unavailable here until then. `staffSize(isTablet:)` / `honorLayoutBreaks(isTablet:)` above stay portable so a
-    //   macOS caller can already invoke them with its own idiom decision.
+    // PARITY(macos): untouched-preference device default — there is no "tablet" idiom on macOS, so Ⅳ's Mac reading
+    //   surface needs its own choice here (iPad-like generous defaults are the natural fit for a large screen);
+    //   `isTablet` and the properties below it are unavailable until then. `staffSize(isTablet:)` /
+    //   `honorLayoutBreaks(isTablet:)` above stay portable so a macOS caller can already invoke them with its own
+    //   idiom decision.
     #if os(iOS)
     private static var isTablet: Bool {
         UIDevice.current.userInterfaceIdiom == .pad

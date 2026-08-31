@@ -1,7 +1,7 @@
-// PARITY(macos): not in the original file census — added because it exclusively selects between the wholesale-gated
-//   score/PDF containers (`VerticalScoreContainer`, `HorizontalScoreContainer`, `PagedScoreContainer`,
-//   `PagedPDFContainer`, `VerticalPDFContainer`) and its only caller, `ReaderRootScreen`, is itself gated. See the
-//   marker on `ReaderRootScreen.swift` for what Ⅳ's Mac reading surface needs.
+// PARITY(macos): score/PDF container selection — exclusively picks between the iOS-only score/PDF containers
+//   (`VerticalScoreContainer`, `HorizontalScoreContainer`, `PagedScoreContainer`, `PagedPDFContainer`,
+//   `VerticalPDFContainer`) and is itself only called from the gated `ReaderRootScreen`. See the marker on that
+//   file for what Ⅳ's Mac reading surface needs.
 
 #if os(iOS)
 import Domain

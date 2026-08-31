@@ -1,5 +1,5 @@
-// PARITY(macos): not narrow-gated as the census expected — its only caller, the display `ReaderHintBubble` struct,
-//   is itself iOS-only (see the marker on `ReaderHintBubble.swift`), so this whole file is orphaned on macOS too.
+// PARITY(macos): per-hint copy — only consumed by the iOS-only `ReaderHintBubble` display struct (see the marker
+//   on that file). Ⅳ's Mac reading surface will need this copy again once it builds its own hint presentation.
 
 #if os(iOS)
 import ReaderInteractionCore

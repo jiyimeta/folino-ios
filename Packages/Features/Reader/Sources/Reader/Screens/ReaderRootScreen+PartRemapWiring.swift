@@ -1,4 +1,7 @@
-// PARITY(macos): extends `ReaderRootScreen` — see the marker on that file for what Ⅳ's Mac reading surface needs.
+// PARITY(macos): part-remap hold/drain/release wiring — the orchestration inside (`setPartMigrationPendingProvider`
+//   / `prepareForPartMigration` / `requestReloadAfterPartRemap`) is platform-neutral logic, not UI; it lives in this
+//   `ReaderRootScreen` extension only because iOS wires it from that screen's `.task`. Ⅳ's Mac reading surface
+//   should lift this wiring, not re-author it, into its own equivalent wiring point.
 
 #if os(iOS)
 import Domain

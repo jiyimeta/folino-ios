@@ -12,7 +12,7 @@
 #
 # Reader compiles for macOS (sub-project IIIa) but adds no Mac reading UI yet — its UIKit scroll
 # host, PencilKit canvas, and layout-mode screens are gated behind `#if os(iOS)`. A native macOS
-# reading surface is sub-project IIIb.
+# reading surface is sub-project Ⅳ.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

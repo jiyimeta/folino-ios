@@ -19,11 +19,11 @@ import UIKit
 
 // MARK: - Anchor plumbing
 
-// PARITY(macos): the anchored feature-hint bubble UI below (window-level tap-through dismiss via
-//   `UITapGestureRecognizer`, a `UIViewRepresentable`-hosted overlay) is iOS-only. Ⅳ's Mac reading surface needs its
-//   own coach-mark presentation; until then `readerHintAnchor` / `readerHintOverlay` are no-ops on macOS, so the
-//   widely shared `ReaderTopBarControls` / `ReaderTransportControl` / `ReaderDisplayInspectorButton` /
-//   `ReaderHintWiring` call sites keep compiling unchanged and simply never show a hint.
+// PARITY(macos): anchored feature-hint bubble UI — the window-level tap-through dismiss (`UITapGestureRecognizer`)
+//   and the `UIViewRepresentable`-hosted overlay below are iOS-only. Ⅳ's Mac reading surface needs its own
+//   coach-mark presentation; until then `readerHintAnchor` / `readerHintOverlay` are no-ops on macOS, so the widely
+//   shared `ReaderTopBarControls` / `ReaderTransportControl` / `ReaderDisplayInspectorButton` / `ReaderHintWiring`
+//   call sites keep compiling unchanged and simply never show a hint.
 
 #if os(iOS)
 extension View {

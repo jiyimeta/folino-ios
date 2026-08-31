@@ -126,7 +126,9 @@ struct VerticalScoreContainer: View {
     /// Horizontal inset applied to the score on iPad (0 on iPhone) so Vertical mode matches Page mode's score width
     /// and keeps comfortable margins off the bezel. See `ReaderScoreLayout`.
     private func scoreInset(viewportWidth: CGFloat) -> CGFloat {
-        ReaderScoreLayout.scoreHorizontalInset(viewportWidth: viewportWidth, phoneDefault: 0)
+        ReaderScoreLayout.scoreHorizontalInset(
+            viewportWidth: viewportWidth, phoneDefault: 0, isPad: ReaderScoreLayout.isPad,
+        )
     }
 
     var body: some View {

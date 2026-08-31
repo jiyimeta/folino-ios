@@ -1,5 +1,6 @@
-// PARITY(macos): the `UIViewRepresentable` scroll host (`UIScrollView` + `UIHostingController`) every reader mode
-//   is built on. Ⅳ's Mac reading surface needs an `NSScrollView`-based host of its own instead of a port of this.
+// PARITY(macos): UIKit scroll host — the `UIViewRepresentable` wrapper (`UIScrollView` + `UIHostingController`)
+//   every reader mode is built on. Ⅳ's Mac reading surface needs an `NSScrollView`-based host of its own instead
+//   of a port of this.
 
 #if os(iOS)
 import SwiftUI
@@ -196,7 +197,9 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
             // function to derive the residual it eases, so the host and the commit can never disagree on the edge.
             let size = expectedContentSize()
             let clampedPoint = ReaderPinchCommit.clampScrollTarget(
-                command.point, contentSize: size, bounds: uiView.bounds.size, inset: uiView.contentInset,
+                command.point, contentSize: size, bounds: uiView.bounds.size,
+                insetLeft: uiView.contentInset.left, insetRight: uiView.contentInset.right,
+                insetTop: uiView.contentInset.top, insetBottom: uiView.contentInset.bottom,
             ).clamped
             // Apply offset synchronously so the new offset paints in the same frame as the new `viewportZoom`. The flag
             // suppresses the resulting `scrollViewDidScroll` from mutating `parent.contentOffset` mid-update (which

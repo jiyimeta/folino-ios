@@ -48,9 +48,9 @@ struct RepeatModePicker: View {
         }
     }
 
-    // PARITY(macos): `repeatAB` is an iOS-only asset-catalog member (no SF Symbol matches it either), so this falls
-    //   back to a stand-in system symbol on macOS. Ⅳ's Mac reading surface should add a macOS-enabled asset when it
-    //   builds this control for real.
+    // PARITY(macos): `repeatAB` A–B icon asset — iOS-only in the catalog (no SF Symbol matches it either), so this
+    //   falls back to a stand-in system symbol on macOS. Ⅳ's Mac reading surface should add a macOS-enabled asset
+    //   when it builds this control for real.
     private var abLoopIcon: Image {
         #if os(iOS)
         let rasterized = PlatformImage(resource: .repeatAB).resized(to: CGSize(width: 16, height: 16))

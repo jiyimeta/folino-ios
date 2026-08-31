@@ -133,6 +133,9 @@ public enum InkStrokePencilKitBridge {
         case .fountainPen: .fountainPen
         case .watercolor: .watercolor
         case .crayon: .crayon
+        // `.reed` has no counterpart in the neutral `InkStroke.Tool` set; falls back to `.pen`, same as
+        // `@unknown default` below for any case newer than this switch.
+        case .reed: .pen
         @unknown default: .pen
         }
     }
@@ -184,10 +187,10 @@ public enum InkStrokePencilKitBridge {
         var resolved: NSColor?
         if let aqua = NSAppearance(named: .aqua) {
             aqua.performAsCurrentDrawingAppearance {
-                resolved = color.usingColorSpace(.deviceRGB)
+                resolved = color.usingColorSpace(.sRGB)
             }
         } else {
-            resolved = color.usingColorSpace(.deviceRGB)
+            resolved = color.usingColorSpace(.sRGB)
         }
         if let resolved {
             resolved.getRed(&r, green: &g, blue: &b, alpha: &a)

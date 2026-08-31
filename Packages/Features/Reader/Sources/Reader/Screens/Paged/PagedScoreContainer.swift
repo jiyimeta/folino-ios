@@ -123,7 +123,7 @@ struct PagedScoreContainer: View {
     /// Per-viewport horizontal gutter: `phoneContentPadding` on iPhone, a tap-zone-clearing margin on iPad.
     static func horizontalContentPadding(viewportWidth: CGFloat) -> CGFloat {
         ReaderScoreLayout.scoreHorizontalInset(
-            viewportWidth: viewportWidth, phoneDefault: phoneContentPadding,
+            viewportWidth: viewportWidth, phoneDefault: phoneContentPadding, isPad: ReaderScoreLayout.isPad,
         )
     }
 
@@ -314,7 +314,8 @@ struct PagedScoreContainer: View {
         )
         let contentSize = CGSize(width: paddedBounds.width * r.targetZoom, height: paddedBounds.height * r.targetZoom)
         let (clamped, residual) = ReaderPinchCommit.clampScrollTarget(
-            r.rawScrollTarget, contentSize: contentSize, bounds: paddedBounds, inset: .zero,
+            r.rawScrollTarget, contentSize: contentSize, bounds: paddedBounds,
+            insetLeft: 0, insetRight: 0, insetTop: 0, insetBottom: 0,
         )
 
         if r.isBounceBack {

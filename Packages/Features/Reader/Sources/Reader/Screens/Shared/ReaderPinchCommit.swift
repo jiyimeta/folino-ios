@@ -1,9 +1,4 @@
-// PARITY(macos): pinch-commit math for `UIScrollView`-hosted containers — see the marker on `PinchState.swift` for
-//   what Ⅳ's Mac reading surface needs instead.
-
-#if os(iOS)
 import CoreGraphics
-import UIKit
 
 struct PinchCommitInput {
     let baseZoom: CGFloat
@@ -49,10 +44,12 @@ enum ReaderPinchCommit {
         )
     }
 
-    /// Clamp a requested scroll offset into `UIScrollView`'s valid `contentOffset` range and report the residual the
-    /// clamp removed. Mirrors the range `UIScrollView` itself enforces — `[-inset.left, contentSize - bounds +
-    /// inset.right]` per axis (`max`-guarded so a content-fits-viewport axis collapses to a single point) — so this is
-    /// the single source of truth for both `ScoreScrollHost`'s pre-clamp and the pinch-commit re-anchor.
+    /// Clamp a requested scroll offset into the scroll host's valid content-offset range and report the residual the
+    /// clamp removed. Mirrors the range `UIScrollView` itself enforces — `[-insetLeft, contentSize - bounds +
+    /// insetRight]` per axis (`max`-guarded so a content-fits-viewport axis collapses to a single point) — so this is
+    /// the single source of truth for both `ScoreScrollHost`'s pre-clamp and the pinch-commit re-anchor. Takes plain
+    /// `CGFloat` insets rather than `UIEdgeInsets` so this stays portable arithmetic; the iOS callers pass
+    /// `UIScrollView.contentInset`'s four components (or `0` where there is none).
     ///
     /// `residual = clamped - raw`. It is `.zero` exactly when `raw` was already in range (the seamless-commit fast
     /// path). When non-zero — the user overscrolled past a content edge during the pinch — it is the screen-space
@@ -63,12 +60,15 @@ enum ReaderPinchCommit {
         _ raw: CGPoint,
         contentSize: CGSize,
         bounds: CGSize,
-        inset: UIEdgeInsets,
+        insetLeft: CGFloat,
+        insetRight: CGFloat,
+        insetTop: CGFloat,
+        insetBottom: CGFloat,
     ) -> (clamped: CGPoint, residual: CGPoint) {
-        let minX = -inset.left
-        let maxX = max(minX, contentSize.width + inset.right - bounds.width)
-        let minY = -inset.top
-        let maxY = max(minY, contentSize.height + inset.bottom - bounds.height)
+        let minX = -insetLeft
+        let maxX = max(minX, contentSize.width + insetRight - bounds.width)
+        let minY = -insetTop
+        let maxY = max(minY, contentSize.height + insetBottom - bounds.height)
         let clamped = CGPoint(
             x: max(minX, min(maxX, raw.x)),
             y: max(minY, min(maxY, raw.y)),
@@ -77,4 +77,3 @@ enum ReaderPinchCommit {
         return (clamped, residual)
     }
 }
-#endif

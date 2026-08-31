@@ -324,7 +324,8 @@ struct PagedPDFContainer: View {
         )
         let contentSize = CGSize(width: paddedBounds.width * r.targetZoom, height: paddedBounds.height * r.targetZoom)
         let (clamped, residual) = ReaderPinchCommit.clampScrollTarget(
-            r.rawScrollTarget, contentSize: contentSize, bounds: paddedBounds, inset: .zero,
+            r.rawScrollTarget, contentSize: contentSize, bounds: paddedBounds,
+            insetLeft: 0, insetRight: 0, insetTop: 0, insetBottom: 0,
         )
 
         if r.isBounceBack {
