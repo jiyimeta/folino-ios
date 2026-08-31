@@ -1,3 +1,7 @@
+// PARITY(macos): output-route disconnect watcher — macOS needs CoreAudio default-device-change observation in
+//   place of `AVAudioSession.routeChangeNotification`.
+
+#if os(iOS)
 @preconcurrency import AVFoundation
 import Foundation
 
@@ -46,3 +50,4 @@ final class OutputRouteDisconnectWatcher {
         }
     }
 }
+#endif

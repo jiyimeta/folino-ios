@@ -1,5 +1,8 @@
 import SwiftUI
+
+#if os(iOS)
 import UIKit
+#endif
 
 extension EnvironmentValues {
     /// Pins what `onWindowTopSafeAreaChange` reports, instead of reading the window's own inset. `nil` — the default,
@@ -27,11 +30,24 @@ extension View {
     /// can add, and a screen embedded in a smaller container still reads the truth rather than its container's
     /// leftovers. The one case where that is the wrong answer — a container standing in for a whole device — pins the
     /// value with `\.windowTopSafeAreaInsetOverride` instead.
+    ///
+    /// On macOS this is not implemented yet — it is a no-op there, not a statement that macOS windows lack a top
+    /// safe-area inset (`NSWindow`/`NSView` have exposed one since macOS 11, and a full-screen window on a notched
+    /// display reports a real value).
+    @ViewBuilder
     public func onWindowTopSafeAreaChange(_ action: @escaping (CGFloat) -> Void) -> some View {
+        #if os(iOS)
         modifier(WindowTopSafeAreaChange(action: action))
+        #else
+        self
+        #endif
     }
 }
 
+// PARITY(macos): window top safe-area probe — macOS needs an NSView/NSWindow-backed equivalent that reads
+//   `NSWindow.contentView?.safeAreaInsets.top` before any Mac screen can report it.
+
+#if os(iOS)
 /// Reports the window's top inset, unless `\.windowTopSafeAreaInsetOverride` pins one. A modifier rather than a bare
 /// `background` so the override can be read from the environment at all.
 private struct WindowTopSafeAreaChange: ViewModifier {
@@ -113,3 +129,4 @@ private final class WindowSafeAreaProbeView: UIView {
         onChange(top)
     }
 }
+#endif

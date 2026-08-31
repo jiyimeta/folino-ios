@@ -41,7 +41,7 @@ struct EditorAddMeasuresSheet: View {
                 }
             }
             .navigationTitle(Text("editor.measure.addMany.title", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar { toolbarContent }
         }
         .presentationDetents([.medium])
@@ -53,7 +53,7 @@ struct EditorAddMeasuresSheet: View {
                 Text("editor.measure.addMany.count", bundle: .module)
             }
             .labelsHidden()
-            .keyboardType(.numberPad)
+            .numberPadKeyboardCompat()
             .multilineTextAlignment(.trailing)
             .focused($isEditingCount)
         } label: {

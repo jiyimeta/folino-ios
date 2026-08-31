@@ -44,7 +44,7 @@ public struct EditScoreInfoSheet: View {
                 }
             }
             .navigationTitle(Text("scoreUI.editInfo.title", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar { toolbarContent }
             .task { await loadOnce() }
             .interactiveDismissDisabled(hasChanges)

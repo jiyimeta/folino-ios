@@ -49,6 +49,7 @@ If you have unrelated edits in the same file, use `git stash`, edit again, and c
 | Run app + UI tests | `xcodebuild -project Folino.xcodeproj -scheme Folino -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation test` |
 | Test one Swift package in isolation | `xcodebuild test -scheme <Pkg\|Pkg-Package> -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' -skipPackagePluginValidation` (run from the package dir) |
 | Run a single Swift Testing suite/test | append `-only-testing:<Scheme>/<SuiteName>` to the command above |
+| Verify every macOS-enabled package still builds | `Scripts/build-macos-packages.sh` |
 
 `swift test` does **not** work in this repo: the SwiftLint build-tool plugin (applied to every package target) requires a macOS host context that the SwiftPM CLI can't satisfy, so package tests must go through `xcodebuild test` on an iOS Simulator destination. Use **iPhone 17 Pro Max** as the destination — it is the 6.9" device App Store Connect requires for screenshots, so standardizing on it keeps build/test and screenshot runs on one booted simulator (iPhone 16 is not installed). For feature-isolated iteration (SwiftUI previews, fast unit-test loop), open the relevant `Packages/.../Package.swift` directly in Xcode rather than the app project.
 
@@ -175,7 +176,8 @@ Folino is becoming cross-platform (iOS/iPadOS native; Android via `swift-wirelet
 ### Recording a deliberate one-platform-first gap
 
 When a feature lands on one platform and the other half is deliberately deferred, leave a marker at the point of
-divergence — `// PARITY(android): <title> — <what Android still needs>` (or `PARITY(ios)`). `Scripts/parity-report.py`
+divergence — `// PARITY(android): <title> — <what Android still needs>` (or `PARITY(ios)`, or `PARITY(macos)`).
+`Scripts/parity-report.py`
 collects them into `docs/engineering/ios-android-parity.md`, and the `parity-ledger` pre-commit hook fails if that file
 drifted, so the ledger cannot rot. Implementing the other half deletes the marker, which deletes the row. Details and
 the format are in the ledger itself. Reserve it for real, intended gaps — it is not a TODO list.

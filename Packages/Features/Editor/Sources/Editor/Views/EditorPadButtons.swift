@@ -1,6 +1,13 @@
 import Domain
 import SwiftUI
+
+#if os(iOS)
 import UIKit
+#endif
+
+// PARITY(macos): dotted-duration menu glyph — iOS rasterizes because a UIKit `Menu` row will not draw a custom
+//   View or apply a custom font. AppKit menus have no such restriction, so the Mac pad should draw the glyph as a
+//   View rather than port the rasterizer.
 
 /// Shared press feedback for every key on `EditorPadView`'s bottom pad: a brief scale-up + dim on touch-down, mirrored
 /// from the Reader transport's `TransportButtonStyle` (scale `1.12`, dim to `0.7`, `.snappy(duration: 0.27)`) so the
@@ -133,13 +140,19 @@ struct PadDotKey: View {
                 Button {
                     setDots(choice.count)
                 } label: {
-                    // `Image(uiImage:)`, not the `Circle`s the key itself draws: a menu row renders text and an
-                    // image, and hands anything else back as nothing at all. Rasterising the dots keeps the row's
-                    // icon the same mark as the key's.
                     Label {
                         Text(choice.label, bundle: .module)
                     } icon: {
+                        #if os(iOS)
+                        // `Image(uiImage:)`, not the `Circle`s the key itself draws: a menu row renders text and an
+                        // image, and hands anything else back as nothing at all. Rasterising the dots keeps the
+                        // row's icon the same mark as the key's.
                         Image(uiImage: PadDotKey.dotsImage(count: choice.count))
+                        #else
+                        // AppKit `Menu` rows draw a custom `View` icon without restriction, so the Mac path skips
+                        // the rasterizer and reuses the same font-drawn dots the key itself shows.
+                        PadKeyGlyph.dots(choice.count)
+                        #endif
                     }
                 }
             }
@@ -152,10 +165,13 @@ struct PadDotKey: View {
         .accessibilityLabel(Text("editor.ops.dot", bundle: .module))
     }
 
+    #if os(iOS)
     /// `count` filled dots in a row, as a template image the menu can tint. Cached because a menu rebuilds its rows
     /// on every open and there are only ever three of these.
     private static func dotsImage(count: Int) -> UIImage {
-        if let cached = imageCache[count] { return cached }
+        if let cached = imageCache[count] {
+            return cached
+        }
         let diameter: CGFloat = 4
         let gap: CGFloat = 3
         let width = CGFloat(count) * diameter + CGFloat(count - 1) * gap
@@ -172,6 +188,7 @@ struct PadDotKey: View {
     }
 
     @MainActor private static var imageCache: [Int: UIImage] = [:]
+    #endif
 }
 
 /// Glyph builders shared by the pad's keys, kept in one place so every key group's font/weight stays in sync.

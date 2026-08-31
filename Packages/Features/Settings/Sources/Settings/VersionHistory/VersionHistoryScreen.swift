@@ -2,6 +2,10 @@ import Domain
 import SettingsLogic
 import SwiftUI
 
+#if os(macOS)
+import AppKit
+#endif
+
 /// Typed accessors for Settings-module localized strings that need to be resolved from outside the module (e.g. App
 /// composition root). Routing through `LocalizedStringResource` with an explicit bundle URL ensures the lookup hits
 /// Settings's resource bundle rather than the caller's `.module`.
@@ -90,9 +94,18 @@ public struct VersionHistoryScreen: View {
         .background(rowBackground(for: entry.version), in: RoundedRectangle(cornerRadius: 10))
     }
 
+    // PARITY(macos): version-history row background — iOS uses the grouped-list "secondary system background" gray,
+    //   a raised card on top of the grouped-list base. macOS substitutes `.underPageBackgroundColor`, a provisional
+    //   pick until Reader's own port settles what a Mac grouped surface should read as.
     private func rowBackground(for version: AppVersion) -> Color {
         let isMajorRelease = version.minor == 0 && version.patch == 0
-        guard isMajorRelease else { return Color(.secondarySystemBackground) }
+        guard isMajorRelease else {
+            #if os(iOS)
+            return Color(.secondarySystemBackground)
+            #else
+            return Color(nsColor: .underPageBackgroundColor)
+            #endif
+        }
         return colorScheme == .dark
             ? Color.yellow.opacity(0.18)
             : Color.blue.opacity(0.12)

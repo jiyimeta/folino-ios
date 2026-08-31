@@ -1,5 +1,8 @@
 import SwiftUI
+
+#if os(iOS)
 import UIKit
+#endif
 
 extension View {
     /// Reports this view's frame in the host WINDOW's coordinate space, whenever it changes.
@@ -16,11 +19,23 @@ extension View {
     /// so it is safe to write SwiftUI state from.
     ///
     /// Nothing is reported while the view has no window (it is not on screen, so it has no position to speak of).
+    ///
+    /// On macOS this is a no-op. The AppKit port is mechanical — an `NSView` probe using `convert(bounds, to: nil)` and
+    /// `viewDidMoveToWindow` — but nothing on macOS calls this yet.
+    @ViewBuilder
     public func onWindowFrameChange(_ action: @escaping @MainActor (CGRect) -> Void) -> some View {
+        #if os(iOS)
         modifier(WindowFrameChangeModifier(action: action))
+        #else
+        self
+        #endif
     }
 }
 
+// PARITY(macos): window-coordinate frame probe — macOS needs the NSView equivalent before any Mac code can measure
+//   across view trees.
+
+#if os(iOS)
 private struct WindowFrameChangeModifier: ViewModifier {
     let action: @MainActor (CGRect) -> Void
 
@@ -105,3 +120,4 @@ private final class WindowFrameProbeView: UIView {
         onChange?(frame)
     }
 }
+#endif

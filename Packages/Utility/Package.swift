@@ -12,7 +12,7 @@ let package = Package(
     // Android JNI dependency graph (shared analytics catalog), and that graph's tests build for the macOS host.
     // Without a floor at or above SwiftLintBuildToolPlugin's own (macOS 12) the manifest fails to resolve there.
     // Mirrors Domain, which is in the same graph for the same reason.
-    platforms: [.iOS(.v18), .macOS(.v14)],
+    platforms: [.iOS(.v18), .macOS(.v15)],
     products: [
         .library(name: "UtilityCore", targets: ["UtilityCore"]),
         .library(name: "UtilityUI", targets: ["UtilityUI"]),

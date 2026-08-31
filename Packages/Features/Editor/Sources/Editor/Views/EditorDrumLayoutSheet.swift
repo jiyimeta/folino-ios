@@ -53,9 +53,9 @@ struct EditorDrumLayoutSheet: View {
     var body: some View {
         NavigationStack {
             form
-                .environment(\.editMode, .constant(.active))
+                .activeEditModeCompat()
                 .navigationTitle(Text("editor.drum.layout.title", bundle: .module))
-                .navigationBarTitleDisplayMode(.inline)
+                .inlineNavigationTitleCompat()
                 .toolbar { toolbarContent }
                 .interactiveDismissDisabled(hasChanges)
                 .alert(
@@ -320,7 +320,7 @@ struct EditorDrumInstrumentPicker: View {
                 .disabled(pitch != current && taken.contains(pitch))
             }
             .navigationTitle(Text("editor.drum.layout.instrument", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
         }
     }
 }

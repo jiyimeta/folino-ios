@@ -71,7 +71,7 @@ struct EditorRehearsalMarkSheet: View {
                 }
             }
             .navigationTitle(Text("editor.rehearsalMark.title", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar { toolbarContent }
             .interactiveDismissDisabled(hasChanges)
             .alert(

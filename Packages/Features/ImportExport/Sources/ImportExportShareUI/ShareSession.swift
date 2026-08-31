@@ -2,7 +2,6 @@ import Domain
 import Foundation
 import ImportExportAppGroup
 import os
-import UIKit
 import UniformTypeIdentifiers
 import UtilityCore
 
@@ -122,7 +121,11 @@ public final class ShareSession {
                     try FileManager.default.createDirectory(at: dirURL, withIntermediateDirectories: true)
                     let dst = dirURL.appending(path: url.lastPathComponent, directoryHint: .notDirectory)
                     let accessing = url.startAccessingSecurityScopedResource()
-                    defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                    defer {
+                        if accessing {
+                            url.stopAccessingSecurityScopedResource()
+                        }
+                    }
                     try FileManager.default.copyItem(at: url, to: dst)
                     cont.resume(returning: dst)
                 } catch {

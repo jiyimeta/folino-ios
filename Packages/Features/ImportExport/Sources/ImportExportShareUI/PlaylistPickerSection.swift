@@ -1,6 +1,7 @@
 import Domain
 import ImportExportAppGroup
 import SwiftUI
+import UtilityUI
 
 struct PlaylistPickerSection: View {
     let entries: [PlaylistsIndex.Entry]
@@ -45,7 +46,7 @@ struct PlaylistPickerSection: View {
                     text: $newName,
                     prompt: Text("share_extension.picker.new_playlist_placeholder", bundle: .module),
                 )
-                .textInputAutocapitalization(.words)
+                .wordCapitalizationCompat()
                 .submitLabel(.done)
                 .onChange(of: newName) { _, value in
                     if value.trimmingCharacters(in: .whitespaces).isEmpty {

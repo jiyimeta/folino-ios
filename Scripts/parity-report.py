@@ -9,7 +9,7 @@ and deleting it is the natural last step of implementing the other half.
     // PARITY(android): measure-number policy — add the interval to
     //   LayoutOptionsWire and a Compose toggle
 
-Format: `PARITY(<platform>): <title> — <what the other platform still needs>`.
+Format: `PARITY(<android|ios|macos>): <title> — <what the other platform still needs>`.
 The separator is an em dash; ` -- ` works too. A continuation line repeats the
 comment marker and indents (`//   …` / `///   …`), and is joined onto the
 previous one. `<platform>` is the platform the work is still OWED to, so an
@@ -42,9 +42,10 @@ EXCLUDED_DIRS = {
     "generated", "java-generated", "xcuserdata",
 }
 
-PLATFORMS = ("android", "ios")
+PLATFORMS = ("android", "ios", "macos")
+PLATFORM_LABEL = {"android": "Android", "ios": "iOS", "macos": "macOS"}
 
-MARKER = re.compile(r"PARITY\((?P<platform>android|ios)\):\s*(?P<body>.*?)\s*$")
+MARKER = re.compile(r"PARITY\((?P<platform>android|ios|macos)\):\s*(?P<body>.*?)\s*$")
 # A continuation is a comment line with no marker of its own, indented past the
 # comment token: `//   …`. Anything else ends the entry.
 CONTINUATION = re.compile(r"^\s*(?://+|///|\*)\s{2,}(?P<body>\S.*?)\s*$")
@@ -116,7 +117,7 @@ def escape(text: str) -> str:
 
 def table(entries: list[Entry], platform: str) -> list[str]:
     rows = sorted((e for e in entries if e.platform == platform), key=lambda e: e.sort_key)
-    other = "iOS" if platform == "ios" else "Android"
+    other = PLATFORM_LABEL[platform]
     if not rows:
         return [f"Nothing is currently owed to {other}.", ""]
     out = [
@@ -133,7 +134,7 @@ def table(entries: list[Entry], platform: str) -> list[str]:
 def block(entries: list[Entry]) -> str:
     out = [BEGIN, ""]
     for platform in PLATFORMS:
-        out.append(f"### Owed to {'Android' if platform == 'android' else 'iOS'}")
+        out.append(f"### Owed to {PLATFORM_LABEL[platform]}")
         out.append("")
         out.extend(table(entries, platform))
     out.append(END)

@@ -73,7 +73,7 @@ public struct SheetConfirmButton: View {
 #Preview("sheet actions") {
     NavigationStack {
         Text(verbatim: "Sheet body")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {} label: { SheetActionLabel(.close, title: Text(verbatim: "Cancel")) }

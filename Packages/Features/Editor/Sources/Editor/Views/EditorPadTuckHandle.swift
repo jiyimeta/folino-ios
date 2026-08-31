@@ -2,6 +2,10 @@ import EditorCore
 import SwiftUI
 import UtilityUI
 
+#if os(macOS)
+import AppKit
+#endif
+
 /// The pull tab a tucked pad leaves at the screen edge — iOS PiP's chevron tab, with a keyboard glyph added so the
 /// tab says what it will bring back, not just that something is there. Drawn square against the screen edge and
 /// rounded on the inner side, the same tab-against-the-edge shape the Reader's page-turn highlight uses.
@@ -58,6 +62,15 @@ struct EditorPadTuckHandle: View {
     }
 }
 
+// PARITY(macos): pad-tuck-handle preview background — `.systemGroupedBackground` has no macOS analogue, so the
+//   preview stands in with `.windowBackgroundColor`, a provisional pick until Reader's own port settles what a Mac
+//   grouped surface should read as.
+#if os(iOS)
+private let previewBackground = Color(uiColor: .systemGroupedBackground)
+#else
+private let previewBackground = Color(nsColor: .windowBackgroundColor)
+#endif
+
 #Preview("Handle · both sides") {
     HStack {
         EditorPadTuckHandle(side: .leading, onTap: {})
@@ -65,5 +78,5 @@ struct EditorPadTuckHandle: View {
         EditorPadTuckHandle(side: .trailing, onTap: {})
     }
     .padding(.vertical, 200)
-    .background(Color(uiColor: .systemGroupedBackground))
+    .background(previewBackground)
 }

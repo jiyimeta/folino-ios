@@ -1,3 +1,6 @@
+// PARITY(macos): soundfont-reload rebuild — depends on the gated LivePlaybackController; ports once that type does.
+
+#if os(iOS)
 import Domain
 import Foundation
 import SheetMusicAudio
@@ -42,3 +45,4 @@ extension LivePlaybackController {
         logger.notice("reloadSoundfont: complete (metronomeEnabled=\(metronomeOn, privacy: .public))")
     }
 }
+#endif

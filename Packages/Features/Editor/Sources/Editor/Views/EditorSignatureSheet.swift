@@ -58,7 +58,7 @@ struct EditorSignatureSheet<Picker: View>: View {
                 }
             }
             .navigationTitle(Text(title, bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar { toolbarContent }
         }
         // Half height, and only half: this sheet asks one short question about one bar, and the score it is asking

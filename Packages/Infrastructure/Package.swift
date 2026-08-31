@@ -141,7 +141,7 @@ if isAndroid {
 
 let package = Package(
     name: "Infrastructure",
-    platforms: [.iOS(.v18)],
+    platforms: [.iOS(.v18), .macOS(.v15)],
     products: products,
     dependencies: packageDependencies,
     targets: targets,
