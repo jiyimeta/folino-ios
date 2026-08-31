@@ -23,21 +23,19 @@ import UIKit
 /// around it. The visible cost is pressure taper and marker blending, which a single-width vector stroke
 /// approximates rather than reproduces; monoline (a constant-width tool) is exact.
 ///
-/// Each annotation also carries the placed stroke's `PKDrawing.dataRepresentation()` under a private `/PPK` key —
-/// the same key Apple Books writes when Pencil markup is exported from a PDF, base64-encoded the same way Apple
-/// stores it. Apple's own apps may then offer true PencilKit editing of folino's ink; this is undocumented and
-/// unsupported, so a reader that ignores the key loses nothing — the annotation still deletes as a normal PDF object
-/// either way. Note the bytes are not byte-for-byte the flavor Books writes: Books' blob decodes to a container
-/// beginning `crdt`, while `PKDrawing.dataRepresentation()` of a drawing folino builds from stored control points
-/// emits the `wrd`-prefixed container instead. `PKDrawing(data:)` reads both, so a PencilKit-aware reader is
-/// unaffected; nothing here can (or should) synthesize Apple's private variant.
+/// Nothing private is written alongside. An earlier revision carried the placed stroke's
+/// `PKDrawing.dataRepresentation()` under Apple's own `/PPK` key, in the hope that Apple's markup tools would
+/// adopt folino's ink as an editable PencilKit drawing. They do not: swapping only the `/PPK` container inside
+/// one of Apple's own annotated PDFs showed its markup needs a private `crdt` container that no public PencilKit
+/// route emits — `dataRepresentation()` produces a `wrd`-prefixed one — and imitating every other field Books
+/// writes changed nothing. So the blob was inert here and cost roughly 21 KB per page, and it is gone. The
+/// decoding of that container is a separate investigation; see `docs/engineering/crdt-ink-format/`.
+///
+/// The annotations are deliberately NOT locked (`/F` keeps PDFKit's default rather than Books' Print + Locked +
+/// LockedContents). folino wants other editors to be able to select and delete these marks; Books locks its own
+/// because the editable truth lives in the private payload, which is exactly the arrangement folino does not have.
 @MainActor
 enum AnnotatedPDFComposer {
-    /// The private annotation key Apple Books uses for its own PencilKit blob (base64-encoded
-    /// `PKDrawing.dataRepresentation()`). Setting it is a courtesy to other PencilKit-aware apps, not a contract —
-    /// a reader that doesn't recognize `/PPK` simply ignores it.
-    static let pencilKitBlobAnnotationKey = PDFAnnotationKey(rawValue: "PPK")
-
     /// - Parameters:
     ///   - basePDF: the document to stamp. Its pages, sizes, vector content and existing annotations are preserved
     ///     unchanged; only new ink annotations are added.
@@ -140,9 +138,6 @@ enum AnnotatedPDFComposer {
         let border = PDFBorder()
         border.lineWidth = lineWidth
         annotation.border = border
-        annotation.setValue(
-            placed.dataRepresentation().base64EncodedString(), forAnnotationKey: pencilKitBlobAnnotationKey,
-        )
         return annotation
     }
 

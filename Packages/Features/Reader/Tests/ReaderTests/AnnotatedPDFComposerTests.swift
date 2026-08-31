@@ -2,7 +2,6 @@ import CoreGraphics
 import Domain
 import Foundation
 import PDFKit
-import PencilKit
 @testable import Reader
 @testable import ReaderAnnotationCore
 import SheetMusicCore
@@ -286,15 +285,14 @@ struct AnnotatedPDFComposerTests {
         )
     }
 
-    /// The `/PPK` blob's whole point is that a PencilKit-aware reader can hand it back to PencilKit, so what has to
-    /// survive the PDF round-trip is a decodable `PKDrawing` carrying the PLACED geometry — the stroke as it sits on
-    /// the exported page, not the normalized geometry that was stored. (The blob is not byte-identical to Apple
-    /// Books', whose own container decodes to bytes beginning `crdt`; `PKDrawing.dataRepresentation()` emits a
-    /// different, `wrd`-prefixed container for a drawing built from control points. `PKDrawing(data:)` reads both,
-    /// and folino cannot synthesize Apple's private variant, so the magic is not something to assert.)
+    /// What the export writes is a plain, unlocked `/Ink` annotation and nothing else. Apple's private keys were
+    /// tried and measured not to buy anything — Apple's markup needs a `crdt` container no public PencilKit API
+    /// emits (see `docs/engineering/crdt-ink-format/`) — so `/PPK` and `/PPKType` cost bytes for no behavior, and
+    /// Books' `/F` locking is the opposite of what folino wants: these marks are meant to be selectable and
+    /// deletable in Preview and other PDF editors.
     @Test
     @MainActor
-    func `the PPK value round-trips and decodes back to the placed PencilKit drawing`() throws {
+    func `the exported annotation is a plain unlocked Ink annotation with no private PencilKit keys`() throws {
         let base = try Self.baseDocument(pages: 1)
         let drawings = [Self.drawing(kind: .page(PageAnchor(pageIndex: 0)))]
         let placements = [
@@ -304,19 +302,16 @@ struct AnnotatedPDFComposerTests {
         let document = try #require(PDFDocument(data: out))
         let annotation = try #require(document.page(at: 0)?.annotations.first)
 
-        let base64 = try #require(
-            annotation.value(forAnnotationKey: AnnotatedPDFComposer.pencilKitBlobAnnotationKey) as? String,
-        )
-        let decoded = try #require(Data(base64Encoded: base64))
-        let drawing = try PKDrawing(data: decoded)
-        let points = try Array(#require(drawing.strokes.first).path)
-        #expect(drawing.strokes.count == 1)
-        #expect(points.count == 3)
-        // The fixture's normalized xy are (0, 0), (0.1, 0.1), (0.2, 0.2); the placement scales by 400 and translates
-        // by (20, 30), so the middle control point must have landed at (60, 70) — i.e. the transform was baked into
-        // the stored blob rather than the stored geometry being copied through untouched.
-        #expect(abs(points[1].location.x - 60) < 0.5)
-        #expect(abs(points[1].location.y - 70) < 0.5)
+        #expect(annotation.type == "Ink")
+        #expect(annotation.value(forAnnotationKey: PDFAnnotationKey(rawValue: "PPK")) == nil)
+        #expect(annotation.value(forAnnotationKey: PDFAnnotationKey(rawValue: "PPKType")) == nil)
+        #expect(annotation.value(forAnnotationKey: PDFAnnotationKey(rawValue: "AAPL:AKExtras")) == nil)
+        // Books writes /F = 644 (Print + Locked + LockedContents). Anything with bit 8 (Locked, 128) or bit 10
+        // (LockedContents, 512) set would stop a generic editor from deleting the mark.
+        let flags = (annotation.value(forAnnotationKey: .flags) as? NSNumber)?.intValue ?? 0
+        #expect(flags & 128 == 0)
+        #expect(flags & 512 == 0)
+        #expect(!annotation.isReadOnly)
     }
 
     @Test
