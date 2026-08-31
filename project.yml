@@ -68,15 +68,8 @@ targets:
     type: application
     platform: iOS
     sources:
-      - path: App
-        excludes:
-          - Info.plist
-          - Folino.entitlements
-          - Resources/Soundfonts
-          - Resources/Clicks
-          - Resources/Fonts
-          - Resources/folino.icon
-          - ShareExtension
+      - path: App/Shared
+      - path: App/iOS
       - path: App/Resources/folino.icon
         type: file
         buildPhase: resources
@@ -180,16 +173,10 @@ targets:
     type: application
     platform: iOS
     sources:
-      - path: App
+      - path: App/Shared
+      - path: App/iOS
         excludes:
           - FolinoApp.swift
-          - Info.plist
-          - Folino.entitlements
-          - Resources/Soundfonts
-          - Resources/Clicks
-          - Resources/Fonts
-          - Resources/folino.icon
-          - ShareExtension
       - path: App/Resources/folino.icon
         type: file
         buildPhase: resources

@@ -103,7 +103,9 @@ extension AppBootstrap {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
         let window = scene?.windows.first(where: \.isKeyWindow) ?? scene?.windows.first
-        if let window { return window.bounds.width }
+        if let window {
+            return window.bounds.width
+        }
         return Double(scene?.screen.bounds.width ?? 0)
     }
 }

@@ -54,7 +54,9 @@ final class VersionHistoryPresenter {
             markCurrentVersionAsSeen()
             return
         }
-        if stored >= current { return }
+        if stored >= current {
+            return
+        }
 
         let entries: [VersionHistoryEntry]
         do {
