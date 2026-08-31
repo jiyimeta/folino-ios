@@ -1,5 +1,6 @@
 import ScreenshotKit
 import SwiftUI
+import UtilityUI
 
 enum FolinoScreenshotLayout {
     /// folino.icon canvas gradient: white -> light blue, vertical (y 0 -> 0.7).
@@ -70,20 +71,43 @@ extension View {
     /// picks the shadow back up instead. The iPad's 28pt band is far enough from its pills that nothing bleeds into
     /// it — it stays flat white, which `shadowEdge: 1` gives for free.
     ///
+    /// **The band is the scene's top safe area, not a sibling above it.** A phone reserves that strip and the Reader
+    /// puts controls in it — ✕ and 完了 flank the Dynamic Island while an edit session runs
+    /// (`ReaderTopBarLayout.hasCutoutTier`). Stacking the band above the app UI left the app with no top inset, so
+    /// those two folded down into the control strip and the shot showed a row the app never draws. The same pixels
+    /// end up in the same place either way — the strip and the score still start at the band's lower edge — but as
+    /// safe area the band is something the Reader can reach back up into with `ignoresSafeArea`.
+    ///
+    /// Two placements matter and neither is obvious:
+    ///
+    /// * **`safeAreaPadding`, with the band drawn as a `background`, not `safeAreaInset`.** Inset content is layered
+    ///   OVER the view, so an opaque band painted that way hides exactly what it was opened up for: the strip lost
+    ///   its ✕ and ✓ to the tier, and the tier was then covered by the band.
+    /// * **Apply this INSIDE the scene's `NavigationStack`, never around it.** The stack is UIKit-hosted, and a safe
+    ///   area added outside it does not reach the content: the Reader kept laying its strip out at the frame's top
+    ///   edge, where the band covered it, and the shot came back with no strip at all.
+    ///
+    /// `\.windowTopSafeAreaInsetOverride` is pinned to the band's own height for the same reason the band exists: the
+    /// Reader reads the WINDOW's inset (a geometry proxy inside it diverges — see `ReaderRootScreen`), and the window
+    /// here is the harness's, not the mock device's. The scene's truth is the band it draws. `ScreenshotScene.view`
+    /// pins 0 for scenes that draw no band; this is nearer the leaf, so it wins for the ones that do.
+    ///
     /// - Parameter shadowEdge: white level the app paints at its own top edge, sampled from a capture.
     func readerStatusBarBand(
         for idiom: ScreenshotIdiom,
         shadowEdge: Double = 0.982,
     ) -> some View {
         let edge = Color(white: idiom.pick(iPhone: shadowEdge, iPad: 1))
-        return VStack(spacing: 0) {
-            LinearGradient(colors: [.white, edge], startPoint: .top, endPoint: .bottom)
-                .frame(height: FolinoScreenshotLayout.statusBarHeight(for: idiom))
-            self
-        }
-        // The band's height lands on a fractional pixel once the thumbnail is scaled, and the seam row between the
-        // two children then shows the marketing gradient through as a blue hairline. Back the stack with the band's
-        // own edge colour so that row blends into the join instead.
-        .background(edge)
+        let height = FolinoScreenshotLayout.statusBarHeight(for: idiom)
+        return safeAreaPadding(.top, height)
+            .background(alignment: .top) {
+                LinearGradient(colors: [.white, edge], startPoint: .top, endPoint: .bottom)
+                    .frame(height: height)
+            }
+            .environment(\.windowTopSafeAreaInsetOverride, height)
+            // The band's height lands on a fractional pixel once the thumbnail is scaled, and the seam row between
+            // the band and the app UI then shows the marketing gradient through as a blue hairline. Back the whole
+            // thing with the band's own edge colour so that row blends into the join instead.
+            .background(edge)
     }
 }

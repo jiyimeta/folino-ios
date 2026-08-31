@@ -138,8 +138,9 @@ struct NoteEditingScene: View {
                         editingCutoutTier: cutoutTier,
                     )
                 }
+                // Inside the stack — see `ReaderScene` for why.
+                .readerStatusBarBand(for: idiom)
             }
-            .readerStatusBarBand(for: idiom)
         } overlay: {
             EmptyView()
         }
