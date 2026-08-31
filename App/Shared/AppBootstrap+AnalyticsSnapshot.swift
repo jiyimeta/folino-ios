@@ -1,7 +1,6 @@
 import Domain
 import Foundation
 import Persistence
-import UIKit
 import UtilityCore
 
 /// The once-per-launch analytics snapshot, split out of `AppBootstrap.swift` to keep that file under the SwiftLint
@@ -54,7 +53,7 @@ extension AppBootstrap {
         // One event per changed score (spec 2026-08-05), last so the two aggregate snapshots are already in flight.
         for event in await Self.scorePrefsEvents(
             repository: repository,
-            screenWidthPt: Self.effectiveWindowWidthPt(),
+            screenWidthPt: EffectiveWindowWidthProbe.pt(),
             crashReporter: crashReporter ?? NoopCrashReporter(),
         ) {
             analytics.log(event)
@@ -89,23 +88,5 @@ extension AppBootstrap {
             liveScoreItemIDs: Set(repository.scoreItems.map(\.id)),
             screenWidthPt: screenWidthPt,
         )
-    }
-
-    /// Effective app-window width in points at emission time — Split View / Stage Manager narrow it below the screen
-    /// width, which is exactly the layout-relevant fact. Falls back to the screen bounds before a key window exists;
-    /// a width of 0 buckets to the smallest breakpoint, an acceptable degenerate case for a headless launch.
-    ///
-    /// The foreground scene is chosen deliberately: `connectedScenes` is a `Set`, so with two folino windows open its
-    /// iteration order is arbitrary and unstable across launches — taking any scene could measure the background
-    /// window. `screen_width_pt` is the axis every other `score_prefs` param is read against, so a wrong bucket here
-    /// silently mis-reads the whole row.
-    private static func effectiveWindowWidthPt() -> Double {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
-        let window = scene?.windows.first(where: \.isKeyWindow) ?? scene?.windows.first
-        if let window {
-            return window.bounds.width
-        }
-        return Double(scene?.screen.bounds.width ?? 0)
     }
 }

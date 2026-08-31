@@ -156,6 +156,7 @@ targets:
     platform: macOS
     deploymentTarget: "15.0"
     sources:
+      - path: App/Shared
       - path: App/Mac
       - path: App/Resources/Assets.xcassets
         type: file
@@ -188,6 +189,18 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: folino
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         MACOSX_DEPLOYMENT_TARGET: "15.0"
+    dependencies:
+      - package: Utility
+        products: [UtilityCore, UtilityUI, Navigation]
+      - package: Domain
+      - package: Infrastructure
+        products: [Persistence, CloudSync, Soundfonts, Audio, ScoreFiles, CrashReporting, Analytics]
+      - package: Reader
+      - package: ImportExport
+        products: [ImportExport, ImportExportAppGroup]
+      - package: Settings
+      - package: swift-sheet-music
+        product: SheetMusicLayoutApple
   FolinoShareExtension:
     type: app-extension
     platform: iOS

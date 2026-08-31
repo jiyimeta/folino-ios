@@ -18,6 +18,21 @@ private enum AnnotationMigrationKey {
     static let neutralFormatMigrated = "annotation.neutralFormatMigrated.v1"
 }
 
+/// What the platform's audio and sharing adapters amount to, handed back by the per-platform `AudioStackFactory`.
+///
+/// `playbackController` is typed through the `Domain.PlaybackController` protocol rather than the concrete
+/// `LivePlaybackController` — that type is `#if os(iOS)`-gated inside `Audio` and does not exist as a nominal type on
+/// macOS at all, so a macOS-visible struct cannot name it even to store `nil`. Every consumer already takes the
+/// protocol (`EditableReaderScreen.init(playbackController:)`), so this is a pure widening, not a behavior change.
+/// `nil` on macOS because there is no Mac playback engine yet, until sub-project Ⅲb's audio milestone lands.
+struct AudioStack {
+    let museScoreGeneralProvider: LiveMuseScoreGeneralProvider
+    let soundfontResolver: GMSoundfontResolver
+    let shareService: LiveScoreShareService
+    let metadataReader: LiveScoreMetadataReader
+    let playbackController: (any PlaybackController)?
+}
+
 @MainActor
 @Observable
 final class AppBootstrap {
@@ -42,7 +57,9 @@ final class AppBootstrap {
     private(set) var gateway: LiveScoreFileGateway?
     private(set) var originalStore: LiveScoreOriginalStore?
     private(set) var importer: LiveScoreFileImporter?
-    private(set) var playbackController: LivePlaybackController?
+    /// Typed through `Domain.PlaybackController`, not the concrete `LivePlaybackController` — see `AudioStack`'s
+    /// doc comment for why.
+    private(set) var playbackController: (any PlaybackController)?
     /// Stateless PDF → playable-score parser (ssm OMR). Always available on Apple, no async setup, so
     /// it's a plain constant rather than a slot filled during `start()`.
     let pdfPlaybackParser = LivePDFPlaybackParser()
@@ -85,8 +102,17 @@ final class AppBootstrap {
         didStart = true
         let crashEnabled = UserDefaults.standard
             .object(forKey: PrivacySettingsKey.crashReportingEnabled) as? Bool ?? true
+        // PARITY(macos): Firebase registration — FirebaseAnalytics ships a macOS slice and Crashlytics is a source
+        //   target, so neither is a platform blocker. What is missing is a console registration for a Mac app
+        //   sharing com.KeyNumber.Folino, its own GoogleService-Info.plist, and a decision on attaching the
+        //   upload-symbols post-build script (project.yml:110). Until then the Mac composes the no-ops.
+        #if os(iOS)
         crashReporter = FirebaseCrashReporter.configure(collectionEnabled: crashEnabled)
         configureAnalytics()
+        #else
+        crashReporter = NoopCrashReporter()
+        analytics = NoopAnalytics()
+        #endif
         // Before any Reader / Settings view reads the key, so the first launch after the update already sees PiP on.
         PictureInPictureOptOutMigration.apply(to: .standard)
         do {
@@ -94,10 +120,7 @@ final class AppBootstrap {
             cleanupLegacySoundfontCacheIfNeeded()
             reconcileSoundfontToSharedContainerIfNeeded()
             stampSharedCapabilities()
-            let appGroupContainer = AppGroupPaths.container()
-            let writer: PlaylistsIndexWriter? = appGroupContainer.map {
-                PlaylistsIndexWriter(appGroupContainer: $0)
-            }
+            let writer = SharedContainerTasks.playlistsIndexWriter()
             let database = try AppDatabase(databaseURL: AppPaths.databaseURL)
             let annotationStore = LiveAnnotationStore(database: database)
             let repository = LiveScoreLibraryRepository(
@@ -115,17 +138,13 @@ final class AppBootstrap {
                 scoresDirectory: AppPaths.scoresDirectory,
                 pdfConversion: pdfScoreConversion,
             )
-            let shareCoordinator: IncomingShareCoordinator? = appGroupContainer.map { container in
-                IncomingShareCoordinator(
-                    importer: importer,
-                    repository: repository,
-                    appGroupContainer: container,
-                    clock: SystemClock(),
-                    duplicateResolver: shareDuplicateResolver,
-                    analytics: analytics ?? NoopAnalytics(),
-                    crashReporter: crashReporter ?? NoopCrashReporter(),
-                )
-            }
+            let shareCoordinator = SharedContainerTasks.makeIncomingShareCoordinator(
+                importer: importer,
+                repository: repository,
+                duplicateResolver: shareDuplicateResolver,
+                analytics: analytics ?? NoopAnalytics(),
+                crashReporter: crashReporter ?? NoopCrashReporter(),
+            )
 
             incomingScoreCoordinator = makeIncomingScoreCoordinator(importer: importer)
 
@@ -178,46 +197,17 @@ final class AppBootstrap {
     }
 
     private func installAudioStack(gateway: LiveScoreFileGateway) {
-        let reclaimer = SharedSoundfontReclaimer(
-            soundfontsDirectory: AppPaths.soundfontsDirectory,
-            soundfontFileName: SoundfontPreset.highQuality.fileName,
-            minimumValidByteSize: Self.soundfontMinimumValidByteSize,
-            ownBundleId: Bundle.main.bundleIdentifier ?? "com.KeyNumber.Folino",
-            ownDisplayName: (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
-                ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String) ?? "folino",
-            siblings: Self.soundfontSiblings,
-            installedChecker: UIKitInstalledAppChecker(),
-        )
-        let provider = LiveMuseScoreGeneralProvider(
-            targetDirectory: AppPaths.soundfontsDirectory, reclaimer: reclaimer,
-        )
-        museScoreGeneralProvider = provider
-        let resolver = GMSoundfontResolver(provider: provider)
-        soundfontResolver = resolver
-        let clickProvider = BundledMetronomeClickProvider()
-        let audioExporter = LiveScoreAudioExporter(
-            soundfontResolver: resolver,
-            metronomeClickProvider: clickProvider,
-            metronomeEnabled: {
-                UserDefaults.standard.bool(forKey: ReaderGlobalSettingsKey.metronomeEnabled)
-            },
-        )
-        shareService = LiveScoreShareService(
+        let stack = AudioStackFactory.make(
+            gateway: gateway,
             scoresDirectory: AppPaths.scoresDirectory,
             shareTempDirectory: AppPaths.shareTempDirectory,
-            gateway: gateway,
-            audioExporter: audioExporter,
-            pdfRenderer: CoreGraphicsPDFRenderer(),
         )
-        metadataReader = LiveScoreMetadataReader(
-            gateway: gateway,
-            scoresDirectory: AppPaths.scoresDirectory,
-        )
-        playbackController = LivePlaybackController(
-            soundfontResolver: resolver,
-            metronomeClickProvider: clickProvider,
-        )
-        provider.reconcileSharedSoundfontMarkersAtLaunch()
+        museScoreGeneralProvider = stack.museScoreGeneralProvider
+        soundfontResolver = stack.soundfontResolver
+        shareService = stack.shareService
+        metadataReader = stack.metadataReader
+        playbackController = stack.playbackController
+        stack.museScoreGeneralProvider.reconcileSharedSoundfontMarkersAtLaunch()
     }
 
     /// One-shot cleanup of the pre-GM per-patch SF2 cache. Old versions stored split-bank soundfonts at
