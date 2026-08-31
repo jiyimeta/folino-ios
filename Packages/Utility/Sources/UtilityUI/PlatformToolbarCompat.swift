@@ -90,6 +90,22 @@ extension View {
         #endif
     }
 
+    /// Binds `action` to the ⌫ key, on macOS only; a no-op on iOS, which has no hardware delete key to bind (and
+    /// keeps reaching bulk delete through the bar's trash button). `action` is responsible for its own emptiness
+    /// guard — this fires on every ⌫ press regardless of whether anything is selected.
+    ///
+    /// A helper rather than an inline `#if` for the same reason as `activeEditModeCompat()`: this sits inside a
+    /// modifier chain, and SwiftFormat's `--ifdef no-indent` de-indents the whole chain when a `#if` interrupts one
+    /// of its links.
+    @ViewBuilder
+    public func deleteCommandCompat(perform action: @escaping () -> Void) -> some View {
+        #if os(macOS)
+        onDeleteCommand(perform: action)
+        #else
+        self
+        #endif
+    }
+
     /// A trailing "Done" toolbar button that calls `action`, on iOS; a no-op on macOS. Content built to be
     /// presented as an iOS sheet draws its own Done button to dismiss that sheet; the same content hosted directly
     /// in a macOS `Settings` scene has nothing analogous to dismiss — the window closes via its own titlebar

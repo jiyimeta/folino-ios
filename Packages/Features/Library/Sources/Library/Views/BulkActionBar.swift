@@ -78,9 +78,10 @@ struct BulkActionBar: View {
     }
 }
 
+/// Shared with `ScoreListView`'s macOS-only bulk context menu, which offers the same share formats.
 @MainActor
 @ViewBuilder
-private func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
+func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
     switch format {
     case .museScoreV4:
         Label { Text("library.format.musescore4", bundle: .module) } icon: { Image(systemName: "doc.zipper") }

@@ -70,8 +70,8 @@ struct RecentlyDeletedScreen: View {
         ))
         // PARITY(macos): bulk-selection chrome — iOS needs an explicit Select mode because a touch list cannot
         //   distinguish a tap-to-open from a tap-to-select. AppKit's List multi-selects natively with ⌘/⇧-click, so
-        //   the Mac has no mode and reaches the same bulk actions from the selection's context menu (and, in
-        //   sub-project Ⅳ, the menu bar).
+        //   the Mac has no mode and reaches the same bulk actions from a context menu on the selection and ⌫
+        //   (Task 14, in `RecentlyDeletedView`) — only the menu bar (sub-project Ⅳ) is still open.
         .toolbar {
             #if os(iOS)
             ToolbarItem(placement: .topBarTrailing) {

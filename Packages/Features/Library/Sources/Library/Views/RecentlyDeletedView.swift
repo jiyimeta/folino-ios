@@ -5,8 +5,10 @@ import UtilityUI
 /// Renders the Recently Deleted list. Rows expose:
 /// * leading full-swipe → restore
 /// * trailing partial-swipe → permanent-delete (with popover confirm)
-/// * context menu → restore / permanent-delete (only those two)
+/// * context menu → restore / permanent-delete (only those two) — on macOS, right-clicking inside a ⌘/⇧-click
+///   selection of more than one row applies both to the whole selection instead of just that row
 /// * tap → open in Reader
+/// * ⌫ (macOS only) → permanent-delete the selection, with the same popover confirm
 struct RecentlyDeletedView: View {
     let items: [ScoreItem]
     let onTap: (ScoreItem) -> Void
@@ -22,7 +24,8 @@ struct RecentlyDeletedView: View {
 
     // PARITY(macos): bulk-selection chrome — iOS needs an explicit Select mode because a touch list cannot distinguish
     //   a tap-to-open from a tap-to-select. AppKit's List multi-selects natively with ⌘/⇧-click, so the Mac has no mode
-    //   and reaches the same bulk actions from the selection's context menu (and, in sub-project Ⅳ, the menu bar).
+    //   and reaches the same bulk actions from a context menu on the selection and ⌫ (Task 14) — only the menu bar
+    //   (sub-project Ⅳ) is still open.
     var body: some View {
         List(selection: $selectedIDs) {
             ForEach(items) { item in
@@ -31,6 +34,13 @@ struct RecentlyDeletedView: View {
             }
         }
         .bulkSelectionEditModeCompat(isSelecting: isSelecting)
+        .popoverCompat(isPresented: $isShowingBulkPermanentDeletePopover) {
+            bulkPermanentDeletePopoverContent
+        }
+        .deleteCommandCompat {
+            guard !selectedIDs.isEmpty else { return }
+            isShowingBulkPermanentDeletePopover = true
+        }
         .safeAreaInset(edge: .bottom) {
             #if os(iOS)
             if isSelecting {
@@ -71,7 +81,7 @@ struct RecentlyDeletedView: View {
         .swipeActionsCompat(edge: .trailing, allowsFullSwipe: false) {
             permanentDeleteSwipeButton(for: item)
         }
-        .contextMenu { rowContextMenu(for: item) }
+        .contextMenu { effectiveRowContextMenu(for: item) }
         // Anchor the popover so its arrow points UP at the row — on iPhone the row spans the full width, so a
         // leading/trailing anchor would push the popover off-screen. `.top` floats it below the row, centered
         // horizontally, which fits in compact widths.
@@ -109,6 +119,48 @@ struct RecentlyDeletedView: View {
         }
         .tint(.red)
     }
+
+    /// The row's own restore/permanent-delete pair, unless this row is part of a multi-item selection — right-clicking
+    /// anywhere inside a ⌘/⇧-click selection then offers the bulk actions instead, mirroring how AppKit list views
+    /// resolve a selection-vs-single-item context menu. A single selected row keeps the row's own menu, which is
+    /// already the same two actions.
+    @ViewBuilder
+    private func effectiveRowContextMenu(for item: ScoreItem) -> some View {
+        #if os(macOS)
+        if selectedIDs.contains(item.id), selectedIDs.count > 1 {
+            bulkRowContextMenuContent
+        } else {
+            rowContextMenu(for: item)
+        }
+        #else
+        rowContextMenu(for: item)
+        #endif
+    }
+
+    #if os(macOS)
+    /// The same two actions `RecentlyDeletedBulkActionBar` offers on iOS, applied to the whole selection.
+    @ViewBuilder
+    private var bulkRowContextMenuContent: some View {
+        Button {
+            onBulkRestore()
+        } label: {
+            Label {
+                Text("library.recentlyDeleted.restore.action", bundle: .module)
+            } icon: {
+                Image(systemName: "arrow.uturn.backward")
+            }
+        }
+        Button(role: .destructive) {
+            isShowingBulkPermanentDeletePopover = true
+        } label: {
+            Label {
+                Text("library.recentlyDeleted.delete.action", bundle: .module)
+            } icon: {
+                Image(systemName: "trash.fill")
+            }
+        }
+    }
+    #endif
 
     @ViewBuilder
     private func rowContextMenu(for item: ScoreItem) -> some View {
@@ -150,6 +202,27 @@ struct RecentlyDeletedView: View {
         .presentationCompactAdaptation(.popover)
     }
 
+    /// Mirrors `RecentlyDeletedBulkActionBar.bulkPopoverContent` for the macOS-only `.popoverCompat` confirmation,
+    /// reusing the same xcstrings keys — declared unconditionally (not `#if os(macOS)`) because the modifier chain
+    /// in `body` references it unconditionally; `popoverCompat` is what makes the reference inert on iOS.
+    private var bulkPermanentDeletePopoverContent: some View {
+        PermanentDeletePopover(
+            title: Text(String(
+                localized: "library.recentlyDeleted.deleteBulk.confirm.title",
+                defaultValue: "Permanently delete \(selectedIDs.count) scores?",
+                bundle: .module,
+            )),
+            message: Text("library.recentlyDeleted.deleteBulk.confirm.message", bundle: .module),
+            confirmLabel: Text("library.recentlyDeleted.delete.action", bundle: .module),
+            onConfirm: {
+                isShowingBulkPermanentDeletePopover = false
+                onBulkPermanentDelete()
+            },
+            onCancel: { isShowingBulkPermanentDeletePopover = false },
+        )
+        .presentationCompactAdaptation(.popover)
+    }
+
     private func handleRowTap(_ item: ScoreItem) {
         if isSelecting {
             toggleSelection(item.id)
@@ -178,117 +251,6 @@ struct RecentlyDeletedView: View {
     }
 }
 
-/// Shared popover layout for both the row and the bulk button.
-struct PermanentDeletePopover: View {
-    let title: Text
-    let message: Text
-    let confirmLabel: Text
-    let onConfirm: () -> Void
-    let onCancel: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            title
-                .font(.headline)
-                .fixedSize(horizontal: false, vertical: true)
-            message
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 12) {
-                Button(role: .cancel) {
-                    onCancel()
-                } label: {
-                    L10n.Common.cancel
-                        .frame(maxWidth: .infinity)
-                }
-                Button(role: .destructive) {
-                    onConfirm()
-                } label: {
-                    confirmLabel.frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-            }
-        }
-        .padding(20)
-        // 260 fits inside a compact-width iPhone (≈ 390pt – screen margins), while idealWidth gives Mac / iPad popovers
-        // a comfortable layout.
-        .frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
-    }
-}
-
-/// Bottom bar shown in edit mode of the Recently Deleted screen. Only two actions: Restore and Permanently Delete; the
-/// latter anchors a popover confirmation to itself.
-private struct RecentlyDeletedBulkActionBar: View {
-    let selectionCount: Int
-    let onRestore: () -> Void
-    @Binding var isShowingPermanentDeletePopover: Bool
-    let onConfirmPermanentDelete: () -> Void
-
-    var body: some View {
-        HStack(spacing: 24) {
-            restoreButton
-            Spacer()
-            deleteButton
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(.bar)
-    }
-
-    private var restoreButton: some View {
-        Button {
-            onRestore()
-        } label: {
-            Label {
-                Text("library.recentlyDeleted.restore.action", bundle: .module)
-            } icon: {
-                Image(systemName: "arrow.uturn.backward")
-            }
-        }
-        .disabled(selectionCount == 0)
-    }
-
-    private var deleteButton: some View {
-        Button(role: .destructive) {
-            isShowingPermanentDeletePopover = true
-        } label: {
-            Label {
-                Text("library.recentlyDeleted.delete.action", bundle: .module)
-            } icon: {
-                Image(systemName: "trash.fill")
-            }
-        }
-        .disabled(selectionCount == 0)
-        .popover(
-            isPresented: $isShowingPermanentDeletePopover,
-            attachmentAnchor: .rect(.bounds),
-            arrowEdge: .bottom,
-        ) {
-            bulkPopoverContent
-        }
-    }
-
-    private var bulkPopoverContent: some View {
-        PermanentDeletePopover(
-            title: Text(String(
-                localized: "library.recentlyDeleted.deleteBulk.confirm.title",
-                defaultValue: "Permanently delete \(selectionCount) scores?",
-                bundle: .module,
-            )),
-            message: Text("library.recentlyDeleted.deleteBulk.confirm.message", bundle: .module),
-            confirmLabel: Text("library.recentlyDeleted.delete.action", bundle: .module),
-            onConfirm: {
-                isShowingPermanentDeletePopover = false
-                onConfirmPermanentDelete()
-            },
-            onCancel: { isShowingPermanentDeletePopover = false },
-        )
-        .presentationCompactAdaptation(.popover)
-    }
-}
-
 extension View {
     /// `.swipeActions` on iOS; a no-op on macOS, which has no touch-swipe gesture and so no meaning for these — the
     /// restore / permanent-delete pair is always reachable from the row's context menu too, so nothing is lost.
@@ -308,26 +270,25 @@ extension View {
         self
         #endif
     }
-}
 
-#if DEBUG
-#Preview("Popover (long ja title)") {
-    PermanentDeletePopover(
-        title: Text("「Now_is_the_time」を完全に削除しますか？"),
-        message: Text("このスコアとファイルがこの端末から削除されます。"),
-        confirmLabel: Text("完全に削除"),
-        onConfirm: {},
-        onCancel: {},
-    )
+    /// Presents `content` as a popover, macOS only, anchored to whichever view this is attached to — the macOS-only
+    /// bulk permanent-delete confirmation. A no-op on iOS, which drives the same confirmation from
+    /// `RecentlyDeletedBulkActionBar`'s own popover instead.
+    ///
+    /// A helper rather than an inline `#if` for the same reason as `swipeActionsCompat` above: this sits inside a
+    /// modifier chain, and SwiftFormat's `--ifdef no-indent` de-indents the whole chain when a `#if` interrupts one
+    /// of its links.
+    @ViewBuilder
+    func popoverCompat<Content: View>(
+        isPresented: Binding<Bool>,
+        @ViewBuilder content: @escaping () -> Content,
+    ) -> some View {
+        #if os(macOS)
+        popover(isPresented: isPresented) {
+            content()
+        }
+        #else
+        self
+        #endif
+    }
 }
-
-#Preview("Popover (en)") {
-    PermanentDeletePopover(
-        title: Text("Permanently delete \"Now is the time\"?"),
-        message: Text("This score and its file will be removed from this device."),
-        confirmLabel: Text("Permanently Delete"),
-        onConfirm: {},
-        onCancel: {},
-    )
-}
-#endif

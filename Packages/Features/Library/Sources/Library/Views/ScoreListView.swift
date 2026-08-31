@@ -60,12 +60,17 @@ struct ScoreListView<RowMenu: View>: View {
 
     // PARITY(macos): bulk-selection chrome — iOS needs an explicit Select mode because a touch list cannot distinguish
     //   a tap-to-open from a tap-to-select. AppKit's List multi-selects natively with ⌘/⇧-click, so the Mac has no mode
-    //   and reaches the same bulk actions from the selection's context menu (and, in sub-project Ⅳ, the menu bar).
+    //   and reaches the same bulk actions from a context menu on the selection and ⌫ (Task 14) — only the menu bar
+    //   (sub-project Ⅳ) is still open.
     private var listWithChrome: some View {
         list
             .searchable(text: $searchText)
             .toolbar { trailingToolbarItems }
             .bulkSelectionEditModeCompat(isSelecting: isSelecting)
+            .deleteCommandCompat {
+                guard !selectedIDs.isEmpty else { return }
+                onBulkDelete()
+            }
             .safeAreaInset(edge: .bottom) {
                 #if os(iOS)
                 if isSelecting {
@@ -94,12 +99,79 @@ struct ScoreListView<RowMenu: View>: View {
                     onToggleSelection: { toggleSelection(item.id) },
                     onToggleFavorite: onToggleFavorite,
                     onConfirmDelete: onConfirmDelete,
-                    rowMenu: rowMenu,
+                    rowMenu: { rowItem in effectiveRowMenu(for: rowItem) },
                 )
                 .tag(item.id)
             }
         }
     }
+
+    /// The row's own menu, unless this row is part of a multi-item selection — right-clicking anywhere inside a
+    /// ⌘/⇧-click selection then offers the bulk actions instead, mirroring how AppKit list views resolve a
+    /// selection-vs-single-item context menu. A single selected row keeps the row menu, which already offers
+    /// everything the bulk menu does (plus Open / Edit Info), so nothing is lost there.
+    @ViewBuilder
+    private func effectiveRowMenu(for item: ScoreItem) -> some View {
+        #if os(macOS)
+        if selectedIDs.contains(item.id), selectedIDs.count > 1 {
+            bulkActionsMenuContent
+        } else {
+            rowMenu(item)
+        }
+        #else
+        rowMenu(item)
+        #endif
+    }
+
+    #if os(macOS)
+    /// The same actions iOS's `BulkActionBar` offers, reusing its xcstrings keys and share-format labels — plus
+    /// Delete, which the bar draws as a separate trash button rather than a menu item.
+    @ViewBuilder
+    private var bulkActionsMenuContent: some View {
+        if !availableShareFormats.isEmpty {
+            ForEach(availableShareFormats, id: \.self) { format in
+                Button {
+                    onBulkShare(format)
+                } label: {
+                    bulkShareFormatLabel(format)
+                }
+            }
+            Divider()
+        }
+        Button(action: onBulkAddToPlaylist) {
+            Label {
+                Text("library.playlist.add.actionEllipsis", bundle: .module)
+            } icon: {
+                Image(systemName: "music.note.list")
+            }
+        }
+        Button(action: onBulkEditTags) {
+            Label {
+                Text("library.tags.add.action", bundle: .module)
+            } icon: {
+                Image(systemName: "tag")
+            }
+        }
+        Button(action: onBulkFavorite) {
+            Label {
+                let key: LocalizedStringKey = allSelectedFavorited
+                    ? "library.score.unfavorite.action"
+                    : "library.score.favorite.action"
+                Text(key, bundle: .module)
+            } icon: {
+                Image(systemName: allSelectedFavorited ? "star.slash" : "star")
+            }
+        }
+        Divider()
+        Button(role: .destructive, action: onBulkDelete) {
+            Label {
+                L10n.Common.delete
+            } icon: {
+                Image(systemName: "trash")
+            }
+        }
+    }
+    #endif
 
     private var isShowingSelectionCount: Bool {
         isSelecting && !selectedIDs.isEmpty
