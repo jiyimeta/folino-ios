@@ -9,28 +9,45 @@ struct NewScoreForm: Equatable {
     /// One row of the wizard's instrumentation list — either a catalog pick or a part cloned from an existing
     /// score (which may name an instrument this build's catalog does not know).
     ///
-    /// `baseName` is the un-numbered name the row was created with; `displayName` is that name with the
-    /// duplicate suffix the enclosing list decides on ("Violin 1" / "Violin 2"). `plan` carries the same
-    /// numbering into the built score, so what the wizard lists and what the parts are called agree.
+    /// `name` and `instrumentName` are deliberately two things. A part called "なおき" is still a piano, and a
+    /// score written that way clones as five differently-named piano parts — the list has to be able to say what
+    /// each row *is* as well as what it is called.
     struct PartDraft: Equatable, Identifiable {
         /// List identity for `ForEach` / `onMove`. Deliberately not derived from the instrument id — a string
         /// quartet holds two rows with the same instrument, and dragging them apart needs them distinguishable.
         let id: UUID
-        /// The name before duplicate numbering. The localized catalog name for a catalog pick, the part's own
-        /// name for a cloned part.
-        var baseName: String
-        /// The short (staff-label) name before numbering — `ScoreInstrument.englishAbbreviation` for a catalog
-        /// pick, the source part's own `shortName` for a cloned one.
+        /// The part's name, as the user has it: the localized catalog name for a catalog pick, the part's own
+        /// name for a cloned one, and whatever they type over it afterwards. Empty means "named after its
+        /// instrument" — see `resolvedName`.
+        var name: String
+        /// The short (staff-label) name — `ScoreInstrument.englishAbbreviation` for a catalog pick, the source
+        /// part's own `shortName` for a cloned one.
         ///
         /// Only `nil` when cloning a part that carries no abbreviation. It is worth setting wherever we can:
         /// the layout engine labels systems 2+ with `shortName ?? ""`, so a part without one engraves an
         /// unlabeled staff on every system after the first.
-        var baseShortName: String?
-        /// `baseName` plus the numbering suffix, when the list holds more than one row with this base name.
-        /// Maintained by `NewScoreForm.renumber()`; never assigned from outside.
-        var displayName: String
-        /// The part this row builds. `longName` / `shortName` are kept in step with `displayName`.
+        var shortName: String?
+        /// What this row *is*, named in the reader's language. `nil` only for a cloned part whose instrument id
+        /// this build's catalog does not know and whose source score carried no track name to fall back on.
+        let instrumentName: String?
+        /// The part this row builds. Its `longName` / `shortName` are seeded here but are not authoritative —
+        /// `resolvedPlan()` writes the row's current names in, so an edited name cannot fall out of step.
         var plan: BlankScoreTemplate.PartPlan
+
+        /// The name this row builds under: what the user typed, or the instrument's own name when they left the
+        /// field empty. Only ever the raw instrument id in the one case that has neither.
+        var resolvedName: String {
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? (instrumentName ?? plan.instrumentID) : trimmed
+        }
+
+        /// The plan to build, with this row's current names written in.
+        func resolvedPlan() -> BlankScoreTemplate.PartPlan {
+            var plan = plan
+            plan.longName = resolvedName
+            plan.shortName = shortName
+            return plan
+        }
 
         /// A catalog instrument as a new row, named in the reader's language.
         static func fromCatalog(_ instrument: ScoreInstrument) -> PartDraft {
@@ -44,8 +61,8 @@ struct NewScoreForm: Equatable {
             plan.longName = name
             plan.shortName = abbreviation
             return PartDraft(
-                id: UUID(), baseName: name, baseShortName: abbreviation,
-                displayName: name, plan: plan,
+                id: UUID(), name: name, shortName: abbreviation,
+                instrumentName: name, plan: plan,
             )
         }
 
@@ -59,6 +76,13 @@ struct NewScoreForm: Equatable {
         ///
         /// The instrument need not be in the catalog: a score imported from another program keeps whatever
         /// instrument id and name it arrived with.
+        ///
+        /// The part's *name* and its *instrument* are read from different places, because in a renamed score they
+        /// are different things. MuseScore engraves `Instrument.longName` at the staff — that is where a part
+        /// called "なおき" lives — while the instrument it plays is `Instrument.id` ("piano"), which the ScoreUI
+        /// catalog turns back into a name in the reader's language. `Part.trackName` is the fallback for an id
+        /// the catalog does not know: MuseScore stores the instrument's own name there ("ピアノ"), untouched by
+        /// the rename.
         static func fromExistingPart(_ part: Part, at partIndex: Int, in score: Score) -> PartDraft {
             let instrument = part.instrument
             let staves = part.staves.indices.map { staffIndex in
@@ -82,8 +106,8 @@ struct NewScoreForm: Equatable {
                 isDrums: instrument.useDrumset,
             )
             return PartDraft(
-                id: UUID(), baseName: name, baseShortName: instrument.shortName,
-                displayName: name, plan: plan,
+                id: UUID(), name: name, shortName: instrument.shortName,
+                instrumentName: instrumentDisplayName(of: part), plan: plan,
             )
         }
     }
@@ -100,31 +124,19 @@ struct NewScoreForm: Equatable {
     var title = ""
     var composer = ""
 
-    /// Backing storage for `instrumentation`. Written directly (never through the computed property) by
-    /// `renumber()`, which is what keeps the renumbering pass from re-entering itself.
-    private var parts: [PartDraft] = NewScoreForm.seedInstrumentation()
-
-    /// The parts to create, in score order. Every write — a wholesale assignment, an `append`, an `onMove` —
-    /// renumbers duplicates and drops `bracketGroups`, so no caller can edit the list and forget to invalidate
-    /// the grouping. `applyTemplate` is the one flow that keeps a grouping, and it assigns `bracketGroups`
-    /// *after* the list for exactly that reason.
+    /// The parts to create, in score order. Every structural write — a wholesale assignment, an `append`, an
+    /// `onMove` — drops `bracketGroups` and demotes the provenance stamp, so no caller can edit the list and
+    /// forget to invalidate the grouping. `applyTemplate` is the one flow that keeps a grouping, and it assigns
+    /// `bracketGroups` *after* the list for exactly that reason.
     ///
-    /// The clearing is gated on the list's structure actually changing — the drafts' ids in order. Renumbering
-    /// rewrites `displayName`/`plan` in place, and a rewrite alone must not count as an edit.
-    ///
-    /// Computed over `parts` rather than stored with a `didSet`: a `didSet` that calls a mutating method
-    /// which writes back into the same property DOES re-enter the observer (only a direct assignment in the
-    /// observer's own body is exempt), and the renumbering pass recursed until the stack ran out.
-    var instrumentation: [PartDraft] {
-        get { parts }
-        set {
-            let structureChanged = newValue.map(\.id) != parts.map(\.id)
-            parts = newValue
-            renumber()
-            if structureChanged {
-                bracketGroups = []
-                instrumentationSource = Self.customSource
-            }
+    /// Gated on the list's *structure* actually changing — the drafts' ids in order. Renaming a part is a write
+    /// to this array too (the list's fields bind through it), and a rename changes neither which instruments the
+    /// ensemble holds nor how they are bracketed.
+    var instrumentation: [PartDraft] = NewScoreForm.seedInstrumentation() {
+        didSet {
+            guard instrumentation.map(\.id) != oldValue.map(\.id) else { return }
+            bracketGroups = []
+            instrumentationSource = Self.customSource
         }
     }
 
@@ -151,7 +163,7 @@ struct NewScoreForm: Equatable {
     private var chosenPickup: Fraction?
 
     /// The opening bar's own length when the score starts on an anacrusis, `nil` (the default) when it does not.
-    /// Always one of `pickupChoices(numerator:denominator:)` for the current meter, or `nil`.
+    /// Always a fraction `isPickupAvailable` accepts for the current meter, or `nil`.
     ///
     /// The invariant is enforced on READ rather than by clearing the stored value when the meter changes, and
     /// the distinction is load-bearing: the two meter fields are written one at a time, so any check that ran
@@ -273,7 +285,7 @@ struct NewScoreForm: Equatable {
         return BlankScoreTemplate(
             title: trimmedTitle,
             composer: trimmedComposer.isEmpty ? nil : trimmedComposer,
-            parts: instrumentation.map(\.plan),
+            parts: instrumentation.map { $0.resolvedPlan() },
             bracketGroups: bracketGroups,
             concertKey: concertKey,
             timeNumerator: timeNumerator,
@@ -286,32 +298,48 @@ struct NewScoreForm: Equatable {
 
     // MARK: - Pickup
 
-    /// The anacrusis lengths offered for a meter: every multiple of the beat unit that is strictly shorter than
-    /// a full bar.
+    /// The note values a pickup can be written over in a meter, coarsest first — the denominator half of the
+    /// pickup row's two menus.
     ///
-    /// The unit is an eighth note, or the meter's own denominator when that is finer — 3/16 can start on a
-    /// sixteenth, while 3/4 offers eighths rather than the sixteenths nobody starts a piece on. Strictly
-    /// shorter, because a first bar as long as the meter is simply a full bar.
-    ///
-    /// `isPickupAvailable(_:numerator:denominator:)` decides the same question one value at a time; the two are
-    /// held in step by `pickup availability agrees with the offered choices` in `NewScoreTests`.
-    static func pickupChoices(numerator: Int, denominator: Int) -> [Fraction] {
-        guard numerator > 0, denominator > 0 else { return [] }
-        let unit = max(8, denominator)
-        var choices: [Fraction] = []
-        for count in 1 ... (numerator * unit) {
-            let candidate = Fraction(numerator: count, denominator: unit)
-            // candidate < numerator/denominator, cross-multiplied so the comparison stays in integers.
-            guard candidate.numerator * denominator < numerator * candidate.denominator else { break }
-            choices.append(candidate)
+    /// A note value survives only if *some* pickup fits under a full bar in it: 4/4 has no whole-note pickup,
+    /// because an opening bar as long as the meter is simply a full bar. Which values are admissible at all is
+    /// `isPickupAvailable`'s rule — an eighth note, or the meter's own denominator when that is finer, so 3/16
+    /// can start on a sixteenth while 3/4 offers eighths rather than the sixteenths nobody starts a piece on.
+    static func pickupDenominators(numerator: Int, denominator: Int) -> [Int] {
+        FractionMenuRow.noteValues.filter { candidate in
+            isPickupAvailable(
+                Fraction(numerator: 1, denominator: candidate),
+                numerator: numerator, denominator: denominator,
+            )
         }
-        return choices
     }
 
-    /// Whether a meter offers `pickup` — that is, whether `pickupChoices(numerator:denominator:)` would contain
-    /// it. Answered arithmetically rather than by building and searching that list, because the `pickup`
-    /// property asks on every read: a fraction is a multiple of the beat unit exactly when its (reduced)
-    /// denominator divides the unit, and it is a pickup only while it is shorter than a full bar.
+    /// The beat counts a pickup can take over `pickupDenominator` in a meter — the numerator half of the row's
+    /// two menus, and empty for a note value the meter does not admit at all.
+    ///
+    /// `isPickupAvailable(_:numerator:denominator:)` decides the same question one value at a time; the two are
+    /// held in step by `pickup availability agrees with the offered menus` in `NewScoreTests`.
+    static func pickupNumerators(over pickupDenominator: Int, numerator: Int, denominator: Int) -> [Int] {
+        guard numerator > 0, denominator > 0, pickupDenominator > 0 else { return [] }
+        var counts: [Int] = []
+        for count in 1 ... (numerator * pickupDenominator) {
+            // count/pickupDenominator < numerator/denominator, cross-multiplied to stay in integers.
+            guard count * denominator < numerator * pickupDenominator else { break }
+            counts.append(count)
+        }
+        // A count is only offerable if the reduced fraction it makes is one the meter admits: 1/3 of a bar
+        // reduces to something whose denominator does not divide the beat unit.
+        return counts.filter { count in
+            isPickupAvailable(
+                Fraction(numerator: count, denominator: pickupDenominator),
+                numerator: numerator, denominator: denominator,
+            )
+        }
+    }
+
+    /// Whether a meter offers `pickup` — the single rule the two menu vocabularies above are built out of, and
+    /// the one the `pickup` property asks on every read: a fraction is a multiple of the beat unit exactly when
+    /// its (reduced) denominator divides the unit, and it is a pickup only while it is shorter than a full bar.
     ///
     /// Membership, not just a length comparison: a meter change can coarsen the unit as well as shorten the bar,
     /// and 3/16's sixteenth-note pickup has no place in 3/4 either.
@@ -321,43 +349,6 @@ struct NewScoreForm: Equatable {
         guard unit % pickup.denominator == 0 else { return false }
         // pickup < numerator/denominator, cross-multiplied so the comparison stays in integers.
         return pickup.numerator * denominator < numerator * pickup.denominator
-    }
-
-    // MARK: - Duplicate numbering
-
-    /// Numbers rows that share a base name ("Violin 1" / "Violin 2") and un-numbers those that no longer do.
-    ///
-    /// Grouping is by base NAME, not by instrument id: two violins picked from the catalog share a name and want
-    /// numbering, while two parts cloned from a score that already called them "Violin 1" and "Violin 2" do not —
-    /// numbering by id would make those "Violin 1 1" and "Violin 2 1".
-    ///
-    /// The number rides into the built score as well, on `longName` and (when the row has one) `shortName`, so the
-    /// part labels a user reads on the page match the wizard's list.
-    ///
-    /// Runs from `instrumentation`'s setter, which covers the mutating helpers above and a wholesale assignment
-    /// alike. It writes to the `parts` storage rather than back through `instrumentation`, so it cannot re-enter
-    /// the setter that called it.
-    private mutating func renumber() {
-        var counts: [String: Int] = [:]
-        for draft in parts {
-            counts[draft.baseName, default: 0] += 1
-        }
-        var seen: [String: Int] = [:]
-        for index in parts.indices {
-            let base = parts[index].baseName
-            guard let total = counts[base], total > 1 else {
-                parts[index].displayName = base
-                parts[index].plan.longName = base
-                parts[index].plan.shortName = parts[index].baseShortName
-                continue
-            }
-            let ordinal = (seen[base] ?? 0) + 1
-            seen[base] = ordinal
-            let numbered = "\(base) \(ordinal)"
-            parts[index].displayName = numbered
-            parts[index].plan.longName = numbered
-            parts[index].plan.shortName = parts[index].baseShortName.map { "\($0) \(ordinal)" }
-        }
     }
 
     /// The list a fresh form opens on. A static function rather than a stored default so it is evaluated per

@@ -1,4 +1,5 @@
 import Domain
+import ReaderInteractionCore
 import SheetMusicCore
 import SwiftUI
 import UtilityUI
@@ -50,7 +51,9 @@ struct ReaderTransportControl: View {
     static let expandedContentHeight: CGFloat = 110
 
     private var loadedScore: Score? {
-        if case let .loaded(score) = viewModel.loadState { return score }
+        if case let .loaded(score) = viewModel.loadState {
+            return score
+        }
         return nil
     }
 
@@ -59,7 +62,9 @@ struct ReaderTransportControl: View {
     /// stays collapsed (and the expanded seek card is withheld) until then. Internal so `rendersSeekBar` can gate on
     /// it from `ReaderTransportControl+ModeSwipe.swift`.
     var transportScore: Score? {
-        if let loadedScore { return loadedScore }
+        if let loadedScore {
+            return loadedScore
+        }
         return viewModel.isPDFPlaybackReady ? viewModel.playbackScore : nil
     }
 
@@ -83,7 +88,9 @@ struct ReaderTransportControl: View {
         // toggle), and dropping the hold on one of those would visibly flip the card to a mode nobody just asked
         // for.
         .onChange(of: showSeekBar) { _, newValue in
-            if previewSeekBar == newValue { previewSeekBar = nil }
+            if previewSeekBar == newValue {
+                previewSeekBar = nil
+            }
         }
         // The swipe coach mark has no button to press, so tapping it asks the transport to perform the gesture itself.
         .onChange(of: ReaderHintCoordinator.shared.transportModeSwitchRequests) { _, _ in
@@ -145,7 +152,9 @@ struct ReaderTransportControl: View {
     /// so the transport stays away entirely. Zoom and page-navigation gestures live in the reader containers and
     /// remain available regardless.
     private var showsTransportCard: Bool {
-        if viewModel.capabilities.canPlay, case .loaded = viewModel.loadState { return true }
+        if viewModel.capabilities.canPlay, case .loaded = viewModel.loadState {
+            return true
+        }
         return viewModel.isPDFPlaybackReady
     }
 

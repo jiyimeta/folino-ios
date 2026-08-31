@@ -129,7 +129,9 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
                 Label {
                     Text("library.newScore.title", bundle: .module)
                 } icon: {
-                    Image(systemName: "music.note")
+                    // The compose glyph, in the place iOS uses it: making a new document. It was on the Reader's
+                    // note-editing button, where it read as "new score" on a screen that already had one open.
+                    Image(systemName: "square.and.pencil")
                 }
             }
             Button {

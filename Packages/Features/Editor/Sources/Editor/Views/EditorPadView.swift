@@ -123,7 +123,8 @@ public struct EditorPadView: View {
     }
 
     /// The kit in place of the letters. Row 1 above is untouched — a drum staff arms lengths, tuplets, ties and dots
-    /// exactly as a pitched one does — and the rest key keeps its pitched meaning at the end of the last row.
+    /// exactly as a pitched one does — and the rest key keeps its pitched meaning, now closing the kit's first row
+    /// with the `⋯` menu closing its last.
     ///
     /// There is no manual drum-mode switch: the score already says which kind of staff the caret is on, and a toggle
     /// would be a second source of truth the user has to keep in sync.
@@ -134,6 +135,15 @@ public struct EditorPadView: View {
             isFlexible: isFlexible,
             press: { viewModel.pressDrumKey($0) },
             restKey: AnyView(deleteKey(isFlexible: isFlexible)),
+            moreKey: AnyView(
+                EditorDrumMoreMenu(
+                    layout: viewModel.drumPadLayout,
+                    litPitches: viewModel.litDrumPitches,
+                    isFlexible: isFlexible,
+                    press: { viewModel.pressDrumKey($0) },
+                    editLayout: { viewModel.isDrumLayoutSheetPresented = true },
+                ),
+            ),
         )
     }
 

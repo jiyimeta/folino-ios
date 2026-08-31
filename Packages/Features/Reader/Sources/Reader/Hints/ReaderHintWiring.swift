@@ -1,3 +1,4 @@
+import ReaderInteractionCore
 import SwiftUI
 
 /// Everything the Reader's coach marks need attached to its root, folded into one modifier: the bubble overlay, what

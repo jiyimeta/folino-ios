@@ -293,27 +293,6 @@ fun EditingUnavailableDialog(reason: EditAvailability, onDismiss: () -> Unit) {
     )
 }
 
-/**
- * The refusal for the one case that is neither an [EditAvailability] nor a reason to hide the action: the reader is
- * in page or horizontal layout, where the score surface has no hit-test, caret or tint wiring of its own (see the
- * `PARITY(android)` marker at `ReaderScreen`'s `HorizontalScore` call site).
- *
- * A dialog rather than a hidden action, unlike the PDF case: "page" is the default layout preference, so hiding the
- * action there would leave most users with no evidence the feature exists at all. And a dialog rather than an inert
- * tap, because the user can act on this — the message names the layout that works, which is one row away in display
- * settings. Separate from [EditingUnavailableDialog] because this is the Reader's own precondition, not something
- * the session reported: no `begin()` call is made, so there is no `EditAvailability` to carry it.
- */
-@Composable
-fun EditingLayoutModeDialog(onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        text = { Text(stringResource(R.string.reader_editing_unavailable_layout_mode)) },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.ok)) }
-        },
-    )
-}
 
 @Preview(name = "Editing top-bar actions", showBackground = true)
 @Composable
@@ -360,10 +339,4 @@ private fun EditingUnavailableVersionPreview() {
 @Composable
 private fun EditingUnavailableDivergedPreview() {
     EditingUnavailableDialog(reason = EditAvailability.UNAVAILABLE_DIVERGED, onDismiss = {})
-}
-
-@Preview(name = "Editing unavailable — layout mode", showBackground = true)
-@Composable
-private fun EditingLayoutModePreview() {
-    EditingLayoutModeDialog(onDismiss = {})
 }

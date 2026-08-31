@@ -42,15 +42,23 @@ public struct EditorTopBarView: View {
         case folded
     }
 
+    /// A control the host wants inside this row rather than beside it — the Reader's display inspector, which stays
+    /// reachable mid-edit. It has to come in through here because the row's own trailing group is what it belongs
+    /// in: appended outside, it lands to the RIGHT of 完了, and the session-end control has to be the last thing on
+    /// the strip. The Editor package cannot name the Reader's view, so it arrives type-erased.
+    private let trailingAccessory: AnyView?
+
     public init(
         viewModel: EditorViewModel,
         hasMusicalAnnotations: Bool,
         hasCutoutTier: Bool,
+        trailingAccessory: AnyView? = nil,
         onDone: @escaping () -> Void,
     ) {
         self.viewModel = viewModel
         self.hasMusicalAnnotations = hasMusicalAnnotations
         self.hasCutoutTier = hasCutoutTier
+        self.trailingAccessory = trailingAccessory
         self.onDone = onDone
     }
 
@@ -66,22 +74,23 @@ public struct EditorTopBarView: View {
     @ViewBuilder
     private var controlTierRow: some View {
         if hasCutoutTier {
-            // ✕ and the session-end control live in the cutout tier; the five controls left here (undo, redo,
-            // voice, the instruments sheet, and the measure-actions menu) still sit under this row's width on the
-            // narrowest device that HAS a cutout tier — so no fold is needed here.
+            // ✕ and the session-end control live in the cutout tier; the four controls left here (undo, redo,
+            // voice, and the measure-actions menu — the instruments sheet is a row inside that menu now) still sit
+            // under this row's width on the narrowest device that HAS a cutout tier, so no fold is needed here.
             //
             // That device is a 375pt notched phone (12/13 mini, 11 Pro, XS), NOT the 393pt modern class:
             // `ReaderTopBarLayout.hasCutoutTier` keys off the top safe-area inset, which those reach. The budget is
-            // 5×44 + 4×12 = 268pt of controls against 375 − 32 (the strip's own horizontal padding) = 343pt, which
+            // 4×44 + 3×12 = 212pt of controls against 375 − 32 (the strip's own horizontal padding) = 343pt, which
             // leaves room for whatever `glassEffect` adds around each pill. A device narrower than that has no
             // cutout tier and takes the folding branch below.
             HStack(spacing: 12) {
                 undoRedoGroup
                 Spacer(minLength: 0)
                 voiceButton
-                instrumentsButton
                 measureMenu
                     .interactiveGlassCompat()
+                // Last here, because on a cutout device 完了 is not in this row at all — it is in the band.
+                trailingAccessory
             }
         } else {
             // `Spacer(minLength: 0)` inside `row(collapse:)` is what lets `ViewThatFits` fold at all — a greedy
@@ -108,17 +117,22 @@ public struct EditorTopBarView: View {
             undoRedoGroup
             Spacer(minLength: 0)
             voiceButton
+            // The accessory sits INSIDE the trailing group, ahead of the session-end control: 完了 ends the session,
+            // so nothing should come after it.
             switch collapse {
             case .expanded:
                 HStack(spacing: 12) {
-                    instrumentsButton
                     measureMenu
                         .interactiveGlassCompat()
+                    trailingAccessory
                     endGroup
                 }
             case .folded:
-                overflowMenu
-                    .interactiveGlassCompat()
+                HStack(spacing: 12) {
+                    trailingAccessory
+                    overflowMenu
+                        .interactiveGlassCompat()
+                }
             }
         }
     }
@@ -178,6 +192,7 @@ public struct EditorTopBarView: View {
     /// spoken for.
     private var measureMenu: some View {
         Menu {
+            instrumentsMenuRow
             measureActionRows
         } label: {
             topBarIcon("ellipsis")
@@ -186,43 +201,65 @@ public struct EditorTopBarView: View {
         .accessibilityLabel(L10n.Common.more)
     }
 
-    /// Add / insert-before / delete a measure, plus the bar-scoped rows from `measureMenuRows` (the two signature
-    /// changes and the rehearsal mark) — shared by `overflowMenu` and `measureMenu`, which each host these rows
+    /// The bar-scoped entries of the `⋯` menu — shared by `overflowMenu` and `measureMenu`, which each host them
     /// alongside different neighbours.
+    ///
+    /// Two levels, on purpose. Adding, inserting and deleting change how many bars there ARE, and they nest under
+    /// one "Measure" submenu — which also lets each of them be named for what it does to a bar ("Insert Before")
+    /// rather than repeating the noun in every row. The signature and rehearsal-mark rows stay at the top level:
+    /// they change what is true OF a bar, not how many there are.
     @ViewBuilder
     private var measureActionRows: some View {
-        Button {
-            viewModel.appendMeasure()
+        Menu {
+            Button {
+                viewModel.appendMeasure()
+            } label: {
+                Label {
+                    Text("editor.measure.append", bundle: .module)
+                } icon: {
+                    Image(systemName: "plus.rectangle")
+                }
+            }
+            Button {
+                viewModel.insertMeasureBeforeTarget()
+            } label: {
+                Label {
+                    Text("editor.measure.insertBefore", bundle: .module)
+                } icon: {
+                    Image(systemName: "plus.rectangle.on.rectangle")
+                }
+            }
+            .disabled(viewModel.targetMeasureIndex == nil)
+            Button {
+                viewModel.isAddMeasuresSheetPresented = true
+            } label: {
+                Label {
+                    Text("editor.measure.addMany", bundle: .module)
+                } icon: {
+                    Image(systemName: "rectangle.stack.badge.plus")
+                }
+            }
+            // Set apart rather than merely last: inside a submenu this small, a divider is what stops the
+            // destructive row reading as a third way to add one.
+            Divider()
+            Button(role: .destructive) {
+                viewModel.deleteTargetMeasure()
+            } label: {
+                Label {
+                    Text("editor.measure.delete", bundle: .module)
+                } icon: {
+                    Image(systemName: "minus.rectangle")
+                }
+            }
+            .disabled(viewModel.targetMeasureIndex == nil || viewModel.measureCount <= 1)
         } label: {
             Label {
-                Text("editor.measure.append", bundle: .module)
+                Text("editor.measure.menu", bundle: .module)
             } icon: {
-                Image(systemName: "plus.rectangle")
+                Image(systemName: "rectangle")
             }
         }
-        Button {
-            viewModel.insertMeasureBeforeTarget()
-        } label: {
-            Label {
-                Text("editor.measure.insertBefore", bundle: .module)
-            } icon: {
-                Image(systemName: "plus.rectangle.on.rectangle")
-            }
-        }
-        .disabled(viewModel.targetMeasureIndex == nil)
-        // Ahead of the destructive row, not after it: a `Menu` puts its destructive item last everywhere else in
-        // this app, and appending these two below Delete Measure would break that reading.
         measureMenuRows
-        Button(role: .destructive) {
-            viewModel.deleteTargetMeasure()
-        } label: {
-            Label {
-                Text("editor.measure.delete", bundle: .module)
-            } icon: {
-                Image(systemName: "minus.rectangle")
-            }
-        }
-        .disabled(viewModel.targetMeasureIndex == nil || viewModel.measureCount <= 1)
     }
 
     // MARK: - Voice

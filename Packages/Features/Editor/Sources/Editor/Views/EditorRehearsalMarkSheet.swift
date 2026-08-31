@@ -17,12 +17,22 @@ struct EditorRehearsalMarkSheet: View {
     /// The typed text, seeded once from the target bar. `@State` rather than a computed binding on the view model:
     /// typing must not write the score — Apply is what writes it.
     @State private var text: String
+    /// What the field was seeded with, so ✕ can tell "typed something and changed their mind" from "opened it and
+    /// backed out" and only interrupt for the first.
+    @State private var seed: String
+    @State private var isDiscardConfirmationPresented = false
 
     @Environment(\.dismiss) private var dismiss
 
     init(viewModel: EditorViewModel) {
         self.viewModel = viewModel
-        _text = State(initialValue: viewModel.suggestedRehearsalMarkText)
+        let suggestion = viewModel.suggestedRehearsalMarkText
+        _text = State(initialValue: suggestion)
+        _seed = State(initialValue: suggestion)
+    }
+
+    private var hasChanges: Bool {
+        text != seed
     }
 
     /// Whitespace alone is not a mark, and the engine refuses it. Gating Apply here is what keeps that refusal
@@ -63,7 +73,21 @@ struct EditorRehearsalMarkSheet: View {
             .navigationTitle(Text("editor.rehearsalMark.title", bundle: .module))
             .inlineNavigationTitleCompat()
             .toolbar { toolbarContent }
+            .interactiveDismissDisabled(hasChanges)
+            .alert(
+                Text("editor.discardAlert.title", bundle: .module),
+                isPresented: $isDiscardConfirmationPresented,
+            ) {
+                Button(role: .cancel) {} label: {
+                    Text("editor.discardAlert.keepEditing", bundle: .module)
+                }
+                Button(role: .destructive) { dismiss() } label: {
+                    Text("editor.discardAlert.discard", bundle: .module)
+                }
+            }
         }
+        // Same as the signature sheets: one short question about one bar, asked over the score it is about.
+        .presentationDetents([.medium])
     }
 
     /// The bar being named. An unnumbered bar (a pickup) is named "this measure": the score draws no number there,
@@ -78,13 +102,19 @@ struct EditorRehearsalMarkSheet: View {
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button { dismiss() } label: { L10n.Common.cancel }
+            Button {
+                if hasChanges {
+                    isDiscardConfirmationPresented = true
+                } else {
+                    dismiss()
+                }
+            } label: {
+                SheetActionLabel(.close, title: L10n.Common.cancel)
+            }
         }
         ToolbarItem(placement: .confirmationAction) {
-            Button(action: apply) {
-                Text("editor.rehearsalMark.apply", bundle: .module)
-            }
-            .disabled(trimmed.isEmpty)
+            SheetConfirmButton(title: Text("editor.rehearsalMark.apply", bundle: .module), action: apply)
+                .disabled(trimmed.isEmpty)
         }
     }
 

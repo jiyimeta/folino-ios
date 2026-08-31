@@ -54,24 +54,88 @@ public struct DrumPadKey: Sendable, Equatable, Codable, Identifiable {
 /// per file defeats that. What IS per-score is the engraving each key describes — `resolved(against:)` — and the
 /// voice preset, which is pre-selected from what the open file actually does.
 public struct DrumPadLayout: Sendable, Equatable, Codable {
-    public var keys: [DrumPadKey]
-    /// 1…3. Row 1 of the pad is always the durations, so this counts the INSTRUMENT rows below it.
-    public var rowCount: Int
+    /// The keys, already split into the rows the pad draws them on.
+    ///
+    /// Rows are stored rather than derived from a count because they no longer have to be the same length: the
+    /// layout editor adds and removes instruments a row at a time, and an iPad has room for a row a phone does not.
+    /// Nothing caps how many keys a row may hold — a row too crowded to read is one the user can thin out
+    /// themselves, and guessing a limit for every screen size would be worse.
+    public var rows: [[DrumPadKey]]
 
-    public init(keys: [DrumPadKey], rowCount: Int) {
-        self.keys = keys
-        self.rowCount = min(max(rowCount, 1), 3)
+    /// Every key, in pad order — the flat view the pad's lit state and the ⋯ menu work in.
+    public var keys: [DrumPadKey] {
+        rows.flatMap(\.self)
     }
 
-    /// Fifteen instruments over two rows: a realistic kit with room to spare, cymbals and snare first because that
-    /// is where a correcting pass spends its time.
+    /// Row 1 of the pad is always the durations, so this counts the INSTRUMENT rows below it.
+    public var rowCount: Int {
+        rows.count
+    }
+
+    /// How many instrument rows the pad will draw. The card has to stay a card; past this it stops being a pad and
+    /// starts being a keyboard.
+    public static let maxRowCount = 3
+
+    public init(rows: [[DrumPadKey]]) {
+        self.rows = rows.isEmpty ? [[]] : rows
+    }
+
+    /// One flat list spread over `rowCount` rows, the earlier rows taking the extra key when the split is uneven.
+    /// Kept for the stored layouts written before rows were explicit, and for callers that only have a list.
+    public init(keys: [DrumPadKey], rowCount: Int) {
+        let count = min(max(rowCount, 1), Self.maxRowCount)
+        guard count > 1, !keys.isEmpty else {
+            self.init(rows: [keys])
+            return
+        }
+        let perRow = Int(ceil(Double(keys.count) / Double(count)))
+        self.init(rows: stride(from: 0, to: keys.count, by: perRow).map {
+            Array(keys[$0 ..< min($0 + perRow, keys.count)])
+        })
+    }
+
+    // MARK: - Codable
+
+    /// Written as `rows`; read as either. A layout stored by an earlier build is a flat `keys` list plus a count,
+    /// and silently falling back to the default kit would throw away a pad the user had arranged by hand.
+    private enum CodingKeys: String, CodingKey {
+        case rows, keys, rowCount
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let rows = try container.decodeIfPresent([[DrumPadKey]].self, forKey: .rows) {
+            self.init(rows: rows)
+        } else {
+            try self.init(
+                keys: container.decode([DrumPadKey].self, forKey: .keys),
+                rowCount: container.decodeIfPresent(Int.self, forKey: .rowCount) ?? 1,
+            )
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(rows, forKey: .rows)
+    }
+
+    /// Fourteen instruments over two rows, laid out the way the kit is: cymbals above, drums below, each row
+    /// running left to right across the player's setup.
+    ///
+    /// Seven and seven, because the pad's two rows each close with a key of their own — the rest above, the menu of
+    /// drums the pad does not show below — so an even split is what makes both rows the same width.
+    ///
+    /// Four toms, not GM's six. A kit with six toms is rare, and the two that go (hi-mid 48 and low floor 41) are
+    /// the two a chart is least likely to use; a file that does use them still plays and still engraves, it just
+    /// reaches them through the menu instead of a key. Both crashes are here because the pair is what the tilt in
+    /// their icons is for.
     ///
     /// Every pitch is one `GMDrumset` names, so no key can render as an unnamed drum, and the voices are GM's own
     /// split — which is `DrumVoicePreset.handsAndFeet`, the preset most drum charts imply.
-    public static let `default` = DrumPadLayout(
-        keys: [42, 46, 51, 49, 38, 37, 50, 48, 47, 45, 43, 41, 36, 44, 56].compactMap { DrumPadKey(gmPitch: $0) },
-        rowCount: 2,
-    )
+    public static let `default` = DrumPadLayout(rows: [
+        [42, 46, 44, 49, 57, 51, 56].compactMap { DrumPadKey(gmPitch: $0) },
+        [38, 37, 50, 47, 45, 43, 36].compactMap { DrumPadKey(gmPitch: $0) },
+    ])
 
     /// This layout with each key's engraving taken from `instrument`'s own kit where it defines one.
     ///
@@ -80,17 +144,16 @@ public struct DrumPadLayout: Sendable, Equatable, Codable {
     /// does. Pitches the file says nothing about keep the GM answer — including the voice, which is the layout's
     /// own and never the file's.
     public func resolved(against instrument: Instrument) -> DrumPadLayout {
-        DrumPadLayout(
-            keys: keys.map { key in
+        DrumPadLayout(rows: rows.map { row in
+            row.map { key in
                 guard let entry = instrument.drumset[key.pitch] else { return key }
                 var resolved = key
                 resolved.name = entry.name
                 resolved.headType = entry.head
                 resolved.line = entry.line
                 return resolved
-            },
-            rowCount: rowCount,
-        )
+            }
+        })
     }
 }
 
@@ -98,22 +161,22 @@ public struct DrumPadLayout: Sendable, Equatable, Codable {
 public enum DrumVoicePreset: String, Sendable, CaseIterable, Codable {
     /// Every key in voice 1. What a chart written on one voice wants.
     case singleVoice
-    /// Bass drum, pedal hi-hat and low floor tom in voice 2, everything else in voice 1 — GM's own split, which is
-    /// MuseScore's, and the convention a drum part is normally engraved with.
+    /// The bass drums and the pedal hi-hat in voice 2, everything else in voice 1 — MuseScore's own split, and
+    /// the convention a drum part is normally engraved with. The low floor tom stays in the hands, where it is
+    /// played from.
     case handsAndFeet
 
     public func applied(to layout: DrumPadLayout) -> DrumPadLayout {
-        DrumPadLayout(
-            keys: layout.keys.map { key in
+        DrumPadLayout(rows: layout.rows.map { row in
+            row.map { key in
                 var applied = key
                 applied.voiceIndex = switch self {
                 case .singleVoice: 0
                 case .handsAndFeet: GMDrumset.entries[key.pitch]?.voiceIndex ?? 0
                 }
                 return applied
-            },
-            rowCount: layout.rowCount,
-        )
+            }
+        })
     }
 
     /// The preset `staff` is already written in: hands-and-feet the moment ANY of its bars uses a second voice,

@@ -19,7 +19,11 @@
          from iOS's "reader.pdf.settingsNote" (Reader/Resources/Localizable.xcstrings). -->
     <string name="reader_pdf_settings_note">Display adjustments like staff size and hiding staves aren\'t available for PDF scores. Playback settings are.</string>
     <string name="reader_display_settings">Display settings</string>
+    <string name="reader_playback_settings">Playback settings</string>
     <string name="reader_share">Share</string>
+    <string name="reader_back">Back</string>
+    <string name="reader_annotate_start">Annotate</string>
+    <string name="reader_annotate_stop">Stop annotating</string>
     <string name="reader_staff_hide">Hide staff</string>
     <string name="reader_staff_show">Show staff</string>
     <string name="reader_clef_choose">Choose clef</string>
@@ -87,7 +91,6 @@
     <string name="reader_editing_voice">Voice %1$d</string>
     <string name="reader_editing_unavailable_version">Editing is unavailable: this score is being rendered by a different engine build.</string>
     <string name="reader_editing_unavailable_diverged">Editing is unavailable for this score right now.</string>
-    <string name="reader_editing_unavailable_layout_mode">Notes can be edited in the Vertical layout. Switch the layout in display settings to edit this score.</string>
     <string name="reader_editing_duration_whole">Whole note</string>
     <string name="reader_editing_duration_half">Half note</string>
     <string name="reader_editing_duration_quarter">Quarter note</string>
@@ -116,4 +119,25 @@
     <string name="reader_editing_more">More</string>
     <string name="reader_editing_revert">Revert to original score</string>
     <string name="reader_editing_saved_as_mscz">Edits are saved as a MuseScore (.mscz) copy next to the original file.</string>
+    <!-- Reader coach marks. Copy is the same feature's copy on iOS
+         (Reader/Resources/Localizable.xcstrings, reader.hint.*) — the one deliberate change is the
+         annotation message, which names a stylus rather than Apple Pencil. Which of these is offered,
+         when, and when it retires is decided by the shared ReaderHintEngine, not here. -->
+    <string name="reader_hint_transport_collapse_title">Swipe right to shrink it</string>
+    <string name="reader_hint_transport_collapse_message">Swipe the bottom of the playback controls to the right to switch to the compact view.</string>
+    <string name="reader_hint_transport_expand_title">Swipe left to enlarge it</string>
+    <string name="reader_hint_transport_expand_message">Swipe the playback controls to the left to switch back to the larger view.</string>
+    <string name="reader_hint_note_editing_title">Edit the notes</string>
+    <string name="reader_hint_note_editing_message">Rewrite the notes in the score itself. Select a note to change its pitch, duration or accidental — and enter new notes too.</string>
+    <string name="reader_hint_annotation_title">Write on the score</string>
+    <string name="reader_hint_annotation_message_tablet">Write notes straight onto the score with a stylus or your finger.</string>
+    <string name="reader_hint_annotation_message_phone">Write notes straight onto the score with your finger.</string>
+    <string name="reader_hint_staff_visibility_title">Hide parts</string>
+    <string name="reader_hint_staff_visibility_message">From display settings, hide the parts you are not playing so your own shows larger.</string>
+    <string name="reader_hint_metronome_title">Metronome</string>
+    <string name="reader_hint_metronome_message">Turn the metronome on and off from playback settings.</string>
+    <string name="reader_hint_repeat_playback_title">Repeat and A–B loop</string>
+    <string name="reader_hint_repeat_playback_message">From playback settings, repeat the whole piece or loop just the passage you want to practice.</string>
+    <string name="reader_hint_mixer_title">Per-part volume</string>
+    <string name="reader_hint_mixer_message">From playback settings, balance each part\'s volume, or mute and solo to hear just the ones you want.</string>
 </resources>

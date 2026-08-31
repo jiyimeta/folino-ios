@@ -379,6 +379,176 @@
         }
       }
     },
+    "editor.discardAlert.discard": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard Changes"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変更を破棄"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "변경 사항 폐기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "放弃更改"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "捨棄變更"
+          }
+        }
+      }
+    },
+    "editor.discardAlert.keepEditing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep Editing"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "編集を続ける"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "계속 편집"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续编辑"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "繼續編輯"
+          }
+        }
+      }
+    },
+    "editor.discardAlert.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard changes?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変更を破棄しますか？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "변경 사항을 폐기하시겠습니까?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "放弃更改？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要捨棄變更嗎？"
+          }
+        }
+      }
+    },
+    "editor.drum.layout.addInstrument": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Instrument"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "楽器を追加"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "악기 추가"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加乐器"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加入樂器"
+          }
+        }
+      }
+    },
+    "editor.drum.layout.addRow": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Row"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "行を追加"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "줄 추가"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加行"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加入列"
+          }
+        }
+      }
+    },
     "editor.drum.layout.cancel": {
       "localizations": {
         "en": {
@@ -617,36 +787,70 @@
         }
       }
     },
-    "editor.drum.layout.rows": {
+    "editor.drum.layout.removeRow": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rows"
+            "value": "Remove Row"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "行数"
+            "value": "行を削除"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "행 수"
+            "value": "줄 삭제"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "行数"
+            "value": "删除行"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "行數"
+            "value": "刪除列"
+          }
+        }
+      }
+    },
+    "editor.drum.layout.row %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Row %lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 行目"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld번째 줄"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %lld 行"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %lld 列"
           }
         }
       }
@@ -685,7 +889,7 @@
         }
       }
     },
-    "editor.drum.layout.voiceBadge": {
+    "editor.drum.layout.voiceBadge %lld": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -724,31 +928,65 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bass Drum"
+            "value": "Bass Drum 1"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "バスドラム"
+            "value": "バスドラム1"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "베이스 드럼"
+            "value": "베이스 드럼 1"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "低音大鼓"
+            "value": "低音大鼓 1"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "大鼓"
+            "value": "大鼓 1"
+          }
+        }
+      }
+    },
+    "editor.drum.name.bassDrumAcoustic": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acoustic Bass Drum"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アコースティックバスドラム"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "어쿠스틱 베이스 드럼"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原声低音大鼓"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原聲大鼓"
           }
         }
       }
@@ -798,7 +1036,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ロウボンゴ"
+            "value": "ローボンゴ"
           }
         },
         "ko": {
@@ -894,31 +1132,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crash Cymbal"
+            "value": "Crash Cymbal 1"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "クラッシュシンバル"
+            "value": "クラッシュシンバル1"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "크래시 심벌"
+            "value": "크래시 심벌 1"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "强音钹"
+            "value": "强音钹 1"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "強音鈸"
+            "value": "強音鈸 1"
           }
         }
       }
@@ -934,7 +1172,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "クラッシュシンバル 2"
+            "value": "クラッシュシンバル2"
           }
         },
         "ko": {
@@ -1002,7 +1240,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ロウフロアタム"
+            "value": "ローフロアタム"
           }
         },
         "ko": {
@@ -1166,31 +1404,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ride Cymbal"
+            "value": "Ride Cymbal 1"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ライドシンバル"
+            "value": "ライドシンバル1"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "라이드 심벌"
+            "value": "라이드 심벌 1"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "叮叮钹"
+            "value": "叮叮钹 1"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "叮叮鈸"
+            "value": "叮叮鈸 1"
           }
         }
       }
@@ -1206,7 +1444,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ライドシンバル 2"
+            "value": "ライドシンバル2"
           }
         },
         "ko": {
@@ -1302,31 +1540,65 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Snare Drum"
+            "value": "Acoustic Snare"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "スネアドラム"
+            "value": "アコースティックスネア"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "스네어 드럼"
+            "value": "어쿠스틱 스네어 드럼"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "军鼓"
+            "value": "原声军鼓"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "小鼓"
+            "value": "原聲小鼓"
+          }
+        }
+      }
+    },
+    "editor.drum.name.snareElectric": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Electric Snare"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エレクトリックスネア"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "일렉트릭 스네어 드럼"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电子军鼓"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "電子小鼓"
           }
         }
       }
@@ -1478,7 +1750,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ロウタム"
+            "value": "ロータム"
           }
         },
         "ko": {
@@ -1512,7 +1784,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ロウミッドタム"
+            "value": "ローミッドタム"
           }
         },
         "ko": {
@@ -2762,6 +3034,108 @@
         }
       }
     },
+    "editor.instruments.partName": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Part Name"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パート名"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "파트 이름"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "声部名称"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聲部名稱"
+          }
+        }
+      }
+    },
+    "editor.instruments.shortName": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abbreviation"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "略称"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "약칭"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "简称"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "簡稱"
+          }
+        }
+      }
+    },
+    "editor.instruments.shortName.message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Engraved at the left of every system after the first. Leave it empty for no label."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 段目以降の譜表の左に表示されます。空にするとラベルなしになります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "둘째 단부터 보표 왼쪽에 표시됩니다. 비워 두면 라벨이 표시되지 않습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示在第二行起每行谱表的左侧。留空则不显示标签。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顯示在第二行起每行譜表的左側。留空則不顯示標籤。"
+          }
+        }
+      }
+    },
     "editor.instruments.showStaff %lld": {
       "comment": "Per-staff visibility switch on a multi-staff part (a piano's two staves). %lld is 1-based.",
       "localizations": {
@@ -2797,142 +3171,444 @@
         }
       }
     },
-    "editor.instruments.title": {
-      "comment": "Title of the sheet listing the score's parts, and the label of the control that opens it.",
+    "editor.instruments.staffVisibility": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Instruments"
+            "value": "Show Staff"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "楽器"
+            "value": "譜表を表示"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "악기"
+            "value": "보표 표시"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "乐器"
+            "value": "显示谱表"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "樂器"
+            "value": "顯示譜表"
+          }
+        }
+      }
+    },
+    "editor.instruments.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parts"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パート"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "파트"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "声部"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聲部"
+          }
+        }
+      }
+    },
+    "editor.measure.addMany": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Multiple…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まとめて追加…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "여러 개 추가…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批量添加…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批次新增…"
+          }
+        }
+      }
+    },
+    "editor.measure.addMany.apply": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "追加"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "추가"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增"
+          }
+        }
+      }
+    },
+    "editor.measure.addMany.atEnd": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "At End"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最後に"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "끝에"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在末尾"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在結尾"
+          }
+        }
+      }
+    },
+    "editor.measure.addMany.beforeTarget": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Before This Measure"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この小節の前に"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 마디 앞에"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在此小节之前"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在此小節之前"
+          }
+        }
+      }
+    },
+    "editor.measure.addMany.count": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Measures"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小節数"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마디 수"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小节数"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小節數"
+          }
+        }
+      }
+    },
+    "editor.measure.addMany.noTarget": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a measure to insert before it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小節を選ぶと、その前に挿入できます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마디를 선택하면 그 앞에 삽입할 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择一个小节即可在其之前插入。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇一個小節即可在其之前插入。"
+          }
+        }
+      }
+    },
+    "editor.measure.addMany.placement": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Position"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位置"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "위치"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位置"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位置"
+          }
+        }
+      }
+    },
+    "editor.measure.addMany.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Measures"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小節をまとめて追加"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마디 여러 개 추가"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批量添加小节"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批次新增小節"
           }
         }
       }
     },
     "editor.measure.append": {
-      "comment": "Menu row that appends one blank measure to the end of the score.",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add Measure at End"
+            "value": "Add at End"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "最後に小節を追加"
+            "value": "最後に追加"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "끝에 마디 추가"
+            "value": "끝에 추가"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在末尾添加小节"
+            "value": "在末尾添加"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "在結尾新增小節"
+            "value": "在結尾新增"
           }
         }
       }
     },
     "editor.measure.delete": {
-      "comment": "Destructive menu row that deletes the selected/caret bar.",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Delete Measure"
+            "value": "Delete"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "小節を削除"
+            "value": "削除"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "마디 삭제"
+            "value": "삭제"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "删除小节"
+            "value": "删除"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "刪除小節"
+            "value": "刪除"
           }
         }
       }
     },
     "editor.measure.insertBefore": {
-      "comment": "Menu row that inserts one blank measure immediately before the selected/caret bar.",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Insert Measure Before"
+            "value": "Insert Before"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "前に小節を挿入"
+            "value": "前に挿入"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "앞에 마디 삽입"
+            "value": "앞에 삽입"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在前面插入小节"
+            "value": "在前面插入"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "在前面插入小節"
+            "value": "在前面插入"
           }
         }
       }
@@ -2968,6 +3644,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "調號…"
+          }
+        }
+      }
+    },
+    "editor.measure.menu": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Measure"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小節"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마디"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小节"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小節"
           }
         }
       }
@@ -3344,6 +4054,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "刪除"
+          }
+        }
+      }
+    },
+    "editor.pad.drum.more": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other drums"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "その他の楽器"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기타 악기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其他鼓件"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其他鼓件"
           }
         }
       }

@@ -29,10 +29,12 @@ enum ScreenshotScene: CaseIterable {
     ///
     /// **The inset is pinned for the same reason the idiom is installed here** — a scene is drawn into a mock device
     /// frame, not into the window. A screen that puts controls inside the top safe area (the Reader's cutout tier:
-    /// ✕ and 完了 while editing) would place them in the window's 62pt band, which inside the frame is exactly where
-    /// the screen's own control strip sits — the two came out overlapping. The frames draw no status-bar band
-    /// (`innerStatusBarHeight: 0`, deliberate: the strip and the white score page read as one surface), so 0 is the
-    /// truth here, and the controls fold into the strip the way they do on a phone with no cutout.
+    /// ✕ and 完了 while editing) would otherwise place them in the window's 62pt band, which inside the frame is
+    /// exactly where the screen's own control strip sits — the two came out overlapping.
+    ///
+    /// 0 is the truth for a scene that draws no band of its own. A Reader-backed scene draws one — see
+    /// `readerStatusBarBand(for:)`, which pins this to the band's height instead, nearer the leaf, so the cutout tier
+    /// lands in the band the way it lands in a phone's reserved strip.
     ///
     /// The idiom is applied HERE, in app code, and not by the capture test: `ScreenshotKit` is statically linked into
     /// both the app and the test bundle, so each binary has its own `ScreenshotIdiomKey` metadata. An

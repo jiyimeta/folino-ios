@@ -33,8 +33,8 @@ fun tapToDocumentMmOrNull(tap: Offset, contentOffsetPx: Offset, pxPerMM: Float, 
  * cached — which, since ssm 1.14.x, is what a relayout overtaken by an edit deliberately leaves behind. Treat it
  * the same way: the tap does nothing and the recompute already in flight will make the next one work.
  *
- * **Call this only through the Reader's layout guard** (`ReaderViewModel.withVerticalLayout` /
- * `tryWithVerticalLayout`), never directly from Compose. `nativeEditingHitTest` resolves the tap against whatever
+ * **Call this only through the Reader's layout guard** (`ReaderViewModel.withReaderLayout` /
+ * `tryWithReaderLayout`), never directly from Compose. `nativeEditingHitTest` resolves the tap against whatever
  * document the engine has cached for this handle, and the Reader has writers — the Picture-in-Picture pass above
  * all — that can leave a HORIZONTAL layout there while an edit session is open on the vertical surface. The answer
  * is then a real `ScoreItemID` naming a different element, which becomes the target of the next pad key: a wrong

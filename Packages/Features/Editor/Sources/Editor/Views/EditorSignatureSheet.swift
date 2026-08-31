@@ -61,6 +61,9 @@ struct EditorSignatureSheet<Picker: View>: View {
             .inlineNavigationTitleCompat()
             .toolbar { toolbarContent }
         }
+        // Half height, and only half: this sheet asks one short question about one bar, and the score it is asking
+        // about stays visible behind it — which is most of the point, since the change lands on what you can see.
+        .presentationDetents([.medium])
         // Both presentations hang off the sheet's ROOT rather than off the Section or row that raises them — a
         // modifier attached inside the form is torn down when the form rebuilds, and the removal Section is exactly
         // the thing that disappears once the removal lands (repo gotcha, same as the instruments sheet's).
@@ -100,11 +103,16 @@ struct EditorSignatureSheet<Picker: View>: View {
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button { dismiss() } label: { L10n.Common.cancel }
+            Button { dismiss() } label: {
+                SheetActionLabel(.close, title: L10n.Common.cancel)
+            }
         }
         ToolbarItem(placement: .confirmationAction) {
-            Button { finish(apply()) } label: {
-                Text("editor.signature.apply", bundle: .module)
+            // No discard confirmation here, unlike the drum layout and rehearsal mark sheets. What this one holds
+            // is a picker's position — two taps to re-make — and an alert guarding that is friction with nothing
+            // behind it.
+            SheetConfirmButton(title: Text("editor.signature.apply", bundle: .module)) {
+                finish(apply())
             }
         }
     }

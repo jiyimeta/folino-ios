@@ -128,20 +128,18 @@ public struct EditScoreInfoSheet: View {
                 } else {
                     dismiss()
                 }
-            } label: { L10n.Common.cancel }
+            } label: {
+                SheetActionLabel(.close, title: L10n.Common.cancel)
+            }
         }
         ToolbarItem(placement: .confirmationAction) {
-            Button {
+            SheetConfirmButton(title: L10n.Common.save) {
                 let snapshot = fields
                 Task {
                     await model.saveMetadata(item, fields: snapshot)
                     dismiss()
                 }
-            } label: {
-                Label { L10n.Common.save } icon: { Image(systemName: "checkmark") }
-                    .labelStyle(.iconOnly)
             }
-            .buttonStyle(.borderedProminent)
             .disabled(trimmedTitle.isEmpty)
         }
     }

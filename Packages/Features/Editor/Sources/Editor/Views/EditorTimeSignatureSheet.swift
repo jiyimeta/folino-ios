@@ -3,13 +3,13 @@ import ScoreUI
 import SwiftUI
 
 /// The meter in force at the target bar, editable. The counterpart to `EditorKeySignatureSheet` — same scaffold, the
-/// beats/beat-unit picker instead of the circle of fifths.
+/// meter's two menus instead of the circle of fifths.
 @MainActor
 struct EditorTimeSignatureSheet: View {
     let viewModel: EditorViewModel
     /// The picked meter, seeded once from what is in force at the target bar; 4/4 without a target, which the
     /// disabled menu row keeps unreachable. Two `@State`s rather than one pair, because `TimeSignaturePicker` binds
-    /// the halves separately (see its own note on the transient state a chip tap passes through).
+    /// the halves separately (see `FractionMenuRow`'s note on the transient a caller is briefly asked about).
     @State private var numerator: Int
     @State private var denominator: Int
 

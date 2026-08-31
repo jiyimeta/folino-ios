@@ -5,10 +5,10 @@ package com.keynumber.folino.reader
  * (Settings → Layout). The pref stores the iOS-parity raw strings
  * `"vertical" | "horizontal" | "page"`; [fromPref] maps them to this enum.
  *
- * Only [VERTICAL] has a rendering path today. [HORIZONTAL] and [PAGE] are wired
- * through `ReaderScreen` but currently fall back to the vertical-scroll surface;
- * their dedicated surfaces are implemented in follow-up work. Keep this enum the
- * single branch point so those surfaces slot in without touching the wiring.
+ * All three have their own surface now (`ReadyScore`, `HorizontalScore`,
+ * `PagedScore`), and all three read, play, annotate and edit. Keep this enum the
+ * single branch point: `ReaderScreen`'s `when (layoutMode)` is the only place
+ * that chooses between them.
  */
 enum class ReaderLayoutMode {
     VERTICAL,

@@ -147,4 +147,23 @@ private func previewViewModel() -> LibraryViewModel {
     form.addInstrument(ScoreInstrument.instrument(id: "piano") ?? ScoreInstrument.all[0])
     return NewScoreSheet(viewModel: previewViewModel(), form: form)
 }
+
+// An ensemble cloned off a score whose parts were renamed — five pianos called by their players' names. The rows
+// have to show both what each part is called and what it is, which is what the trailing instrument name is for.
+#Preview("Renamed parts") {
+    let source = Score.blank(BlankScoreTemplate(
+        title: "星屑の街",
+        parts: ["なおき", "つかさ", "けいすけ", "たくや", "すぐる"].map { name in
+            BlankScoreTemplate.PartPlan(
+                instrumentID: "piano", longName: name, shortName: String(name.prefix(1)),
+                staves: [.init(clefType: "G")],
+            )
+        },
+        measureCount: 1,
+    ))
+    var form = NewScoreForm()
+    form.title = "星屑の街"
+    form.applyInstrumentation(of: source)
+    return NewScoreSheet(viewModel: previewViewModel(), form: form)
+}
 #endif

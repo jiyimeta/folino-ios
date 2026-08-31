@@ -1,3 +1,4 @@
+import ScoreUI
 import SwiftUI
 
 struct TransposeRow: View {
@@ -18,7 +19,9 @@ struct TransposeRow: View {
         Stepper(value: binding, in: -7 ... 7) {
             HStack(spacing: 8) {
                 if showsIcon {
-                    Image("sharp.flat", bundle: .module)
+                    // ScoreUI's, not this module's: the editing strip's key-signature entry draws the same glyph,
+                    // and a Feature cannot reach another Feature's bundle.
+                    ScoreSymbol.sharpFlat
                         .foregroundStyle(Color.accentColor)
                 }
                 Text("reader.inspector.transpose", bundle: .module)
