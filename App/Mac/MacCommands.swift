@@ -1,5 +1,6 @@
 import AppKit
 import Domain
+import Library
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -27,7 +28,11 @@ struct MacCommands: Commands {
             .keyboardShortcut("i", modifiers: [.command, .shift])
             Button {
                 if let currentScoreID {
-                    openWindow(value: currentScoreID)
+                    // A fresh `tabInstance` every time: `WindowGroup(for:)` reuses (refocuses) a window whose
+                    // presented value already equals the one passed to `openWindow(value:)`, so a bare
+                    // `ScoreItem.ID` here would just refocus the window this score is already showing in whenever
+                    // that happens to be the frontmost one. See `MacWindowScore`'s doc comment.
+                    openWindow(value: MacWindowScore(scoreID: currentScoreID))
                 }
             } label: {
                 Text("mac.menu.openInNewTab")
@@ -51,8 +56,13 @@ struct MacCommands: Commands {
     /// and hands each picked URL to the focused window's `LibraryViewModel.startImport(from:)`, exactly as
     /// `LibraryRootScreen`'s own importer does.
     private func presentImportPanel() {
+        // Snapshotted before the panel opens, not read from `libraryImportAction` inside `panel.begin`'s completion
+        // handler: `@FocusedValue` tracks *scene* focus, and once `NSOpenPanel` becomes key window that tracking is
+        // no longer guaranteed to still resolve to this scene. Reading it now, while `MacShellView`'s window is
+        // still key, removes that ambiguity outright instead of leaving File ▸ Import to silently import nothing.
+        let action = libraryImportAction
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = ScoreImportContentTypes.allowed
+        panel.allowedContentTypes = ScoreFileTypes.allowed
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
@@ -61,7 +71,7 @@ struct MacCommands: Commands {
             let urls = panel.urls
             Task { @MainActor in
                 for url in urls {
-                    await libraryImportAction?(url)
+                    await action?(url)
                 }
             }
         }
@@ -88,19 +98,13 @@ extension FocusedValues {
     }
 }
 
-/// The same score-file UTTypes `App/Info.plist`'s `CFBundleDocumentTypes` / `UTImportedTypeDeclarations` register
-/// for iOS, computed the same way Library's own (module-internal, so not reachable from here) `ScoreFileTypes`
-/// does — kept in one place so `MacCommands`'s import panel and `MacShellView`'s sidebar drop target agree on what
-/// counts as a score file.
+/// Filters a drag-and-drop payload against Library's own `ScoreFileTypes.allowed` — the same list `MacCommands`'s
+/// import panel uses above, and the same one `LibraryRootScreen`'s `.fileImporter` uses on iOS. One shared list
+/// (lifted from Library, not copied) so a format Library ever adds is picked up here automatically instead of
+/// silently going unaccepted.
 enum ScoreImportContentTypes {
-    static let allowed: [UTType] = {
-        let specific = ["mscx", "mscz", "musicxml", "mxl"]
-            .compactMap { UTType(filenameExtension: $0) }
-        return specific + [.xml, .zip, .midi, .pdf]
-    }()
-
     static func isImportable(_ url: URL) -> Bool {
         guard let type = UTType(filenameExtension: url.pathExtension) else { return false }
-        return allowed.contains { type.conforms(to: $0) }
+        return ScoreFileTypes.allowed.contains { type.conforms(to: $0) }
     }
 }

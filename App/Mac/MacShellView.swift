@@ -1,4 +1,5 @@
 import Domain
+import Foundation
 import Library
 import LicenseList
 import ScoreFiles
@@ -10,19 +11,38 @@ import UtilityCore
 /// free — see the design spec §3.3 for why a separate library `Window` would forfeit that.
 struct MacShellView: View {
     let bootstrap: AppBootstrap
-    @Binding var scoreID: ScoreItem.ID?
+    /// The window's own identity value, as `WindowGroup(for: MacWindowScore.self)` presents it. `scoreID` below is
+    /// the view over this that every other call site reads/writes — see its doc comment for why it isn't just
+    /// `@Binding var scoreID: ScoreItem.ID?` directly.
+    @Binding var window: MacWindowScore?
     @Binding var columnVisibility: NavigationSplitViewVisibility
 
     @State private var libraryVM: LibraryViewModel
     @State private var sidebarPath = NavigationPath()
 
+    /// The score this window is showing. Reads/writes go through `window` rather than being the window's identity
+    /// value directly, because that identity value also carries a `tabInstance` — see `MacWindowScore`'s doc
+    /// comment. Writing here preserves this window's own `tabInstance` (it is not opening a new window, just
+    /// changing what the existing one shows), while `MacCommands`'s "Open in New Tab" mints a fresh one via
+    /// `openWindow(value:)` so it always creates a new window instead of refocusing this one.
+    private var scoreID: ScoreItem.ID? {
+        get { window?.scoreID }
+        nonmutating set {
+            if let newValue {
+                window = MacWindowScore(scoreID: newValue, tabInstance: window?.tabInstance ?? UUID())
+            } else {
+                window = nil
+            }
+        }
+    }
+
     init(
         bootstrap: AppBootstrap,
-        scoreID: Binding<ScoreItem.ID?>,
+        window: Binding<MacWindowScore?>,
         columnVisibility: Binding<NavigationSplitViewVisibility>,
     ) {
         self.bootstrap = bootstrap
-        _scoreID = scoreID
+        _window = window
         _columnVisibility = columnVisibility
         // Every adapter read below is guaranteed non-nil here: `FolinoMacApp` only builds `MacShellView` once
         // `bootstrap.isReady` is true, and `AppBootstrap.start()` populates all of them synchronously before it
