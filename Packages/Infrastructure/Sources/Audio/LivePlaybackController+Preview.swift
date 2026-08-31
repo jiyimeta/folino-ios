@@ -1,6 +1,3 @@
-// PARITY(macos): note preview forwarding — depends on the gated LivePlaybackController; ports once that type does.
-
-#if os(iOS)
 import Domain
 import Foundation
 import SheetMusicAudio
@@ -21,4 +18,3 @@ extension LivePlaybackController {
         engine.playPreview(noteID: noteID, in: score, duration: duration)
     }
 }
-#endif

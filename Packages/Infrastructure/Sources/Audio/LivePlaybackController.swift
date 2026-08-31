@@ -1,7 +1,3 @@
-// PARITY(macos): live playback controller — macOS needs the AVAudioSession-free equivalent (no session category,
-//   NSImage-backed now-playing artwork, and CoreAudio default-device observation in place of route notifications).
-
-#if os(iOS)
 // swiftlint:disable file_length
 import AVFoundation
 import Domain
@@ -12,7 +8,11 @@ import os
 import SheetMusicAudio
 import SheetMusicAudioSwiftySynth
 import SheetMusicCore
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Bridges folino's `Domain.PlaybackController` onto `SheetMusicAudio.PlaybackEngine`. The engine is `@MainActor` so
 /// this adapter is too — the protocol's `async` methods become hops onto the main actor.
@@ -110,12 +110,14 @@ public final class LivePlaybackController: Domain.PlaybackController {
     /// work item) ever collapses visible chord onsets, the handler signature is small enough to swap to a synchronous
     /// observation primitive without changing the `PlaybackController` protocol contract.
     ///
-    /// `Observations` itself is iOS 26+; on iOS 18 we fall back to `withObservationTracking(_:onChange:)` (the
-    /// pre-`Observations` primitive, available since iOS 17), re-arming it after every fired change so it keeps
-    /// observing indefinitely — the recursive-reregistration pattern Apple's own Observation docs use for this case.
+    /// `Observations` itself is iOS 26 / macOS 26+; below that we fall back to `withObservationTracking(_:onChange:)`
+    /// (the pre-`Observations` primitive, available since iOS 17 / macOS 14), re-arming it after every fired change so
+    /// it keeps observing indefinitely — the recursive-reregistration pattern Apple's own Observation docs use for
+    /// this case. Both floors have to be named: `#available(iOS 26, *)` alone is trivially satisfied on macOS 15,
+    /// where `Observations` does not exist.
     private func startObservingEngine() {
         let engine = engine
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             cursorObservationTask = Task { @MainActor [weak self] in
                 let stream = Observations { engine.currentCursor }
                 for await cursor in stream {
@@ -254,9 +256,15 @@ public final class LivePlaybackController: Domain.PlaybackController {
         pendingCursor = nil
         snapshotStrips = []
         lastObservedEngineTime = 0
+        // PARITY(macos): playback-session demote on release — nothing, deliberately. macOS has no process-wide
+        //   `AVAudioSession`, so there is no category to demote and no idle-timer inhibition to lift: `teardown()`
+        //   above stops the `AVAudioEngine` and that is the whole of what release means here. Do not "fix" the
+        //   absence by reaching for an AppKit equivalent — there isn't one, and there is nothing left to undo.
+        #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         try? session.setActive(false, options: .notifyOthersOnDeactivation)
         try? session.setCategory(.ambient, mode: .default, options: [])
+        #endif
     }
 
     public var currentTimeSeconds: TimeInterval {
@@ -468,10 +476,14 @@ public final class LivePlaybackController: Domain.PlaybackController {
         publishNowPlayingInfo()
     }
 
-    /// App icon as `MPMediaItemArtwork`, used as the lock-screen / Control Center artwork. Looked up once via the
-    /// canonical `CFBundleIcons` → `CFBundlePrimaryIcon` → `CFBundleIconFiles` path; `UIImage(named: "AppIcon")`
-    /// doesn't resolve the processed icon at runtime. `nil` on platforms / hosts that don't ship one.
+    /// App icon as `MPMediaItemArtwork`, used as the lock-screen / Control Center artwork (Now Playing on macOS).
+    /// `nil` on platforms / hosts that don't ship one.
+    ///
+    /// On iOS this is looked up once via the canonical `CFBundleIcons` → `CFBundlePrimaryIcon` → `CFBundleIconFiles`
+    /// path; `UIImage(named: "AppIcon")` doesn't resolve the processed icon at runtime. macOS ships the icon as a
+    /// single `.icns` the app bundle already vends, so `NSApplication` hands it over directly.
     private static let appIconArtwork: MPMediaItemArtwork? = {
+        #if os(iOS)
         guard
             let icons = Bundle.main.infoDictionary?["CFBundleIcons"]
             as? [String: Any],
@@ -481,6 +493,11 @@ public final class LivePlaybackController: Domain.PlaybackController {
             let image = UIImage(named: name)
         else { return nil }
         return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+        #else
+        let image = NSApplication.shared.applicationIconImage
+        guard let image else { return nil }
+        return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+        #endif
     }()
 
     /// Rebuild `nowPlayingInfo` from cached metadata + the engine's current state, and set the canonical
@@ -519,4 +536,3 @@ extension String {
         isEmpty ? nil : self
     }
 }
-#endif
