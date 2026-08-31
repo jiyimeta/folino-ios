@@ -56,6 +56,7 @@ var targets: [Target] = [
             .product(name: "SheetMusicAudio", package: "swift-sheet-music"),
             .product(name: "SheetMusicLayoutApple", package: "swift-sheet-music"),
             .product(name: "SheetMusicMSCX", package: "swift-sheet-music"),
+            .product(name: "SheetMusicPDF", package: "swift-sheet-music"),
             .product(name: "SheetMusicUI", package: "swift-sheet-music"),
         ],
         resources: [.process("Resources")],

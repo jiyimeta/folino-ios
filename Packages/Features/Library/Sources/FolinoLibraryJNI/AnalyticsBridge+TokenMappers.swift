@@ -36,6 +36,8 @@ extension AnalyticsBridge {
         case "pdf": .pdf
         case "midi": .midi
         case "audioM4A": .audioM4A
+        case "pdf_annotated": .annotatedPDF
+        case "pdf_original_annotated": .annotatedOriginalPDF
         default: .museScoreV4
         }
     }

@@ -92,6 +92,10 @@ private func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
         Label { Text("library.format.midi", bundle: .module) } icon: { Image(systemName: "pianokeys") }
     case .audioM4A:
         Label { Text("library.format.m4a", bundle: .module) } icon: { Image(systemName: "waveform") }
+    case .annotatedPDF, .annotatedOriginalPDF:
+        // Unreachable: `bulkAvailableShareFormats` is a fixed list that never includes an annotated format, because
+        // a multi-item selection does not agree about what ink its items carry.
+        Label { Text("library.format.pdf", bundle: .module) } icon: { Image(systemName: "doc.richtext") }
     }
 }
 
