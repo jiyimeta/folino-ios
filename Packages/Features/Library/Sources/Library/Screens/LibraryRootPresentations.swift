@@ -184,9 +184,11 @@ private struct SharePreparation: ViewModifier {
                 }
             }
             .sheet(item: $viewModel.shareTarget) { target in
-                // See the PARITY(macos) marker on `ActivityViewControllerRepresentable` — until that
-                // `NSSharingServicePicker` equivalent lands, sharing from macOS presents an empty sheet rather than
-                // failing to compile.
+                // See the PARITY(macos) marker on `ActivityViewControllerRepresentable`. Task 15 removed every
+                // macOS way to reach this — the row menu's Share submenu and the bulk menu's format rows are both
+                // iOS-only now — so `shareTarget` can no longer be set from the Mac's UI and this branch is
+                // unreachable there. It stays as the compile-time other half of the `#if`, and as the landing spot
+                // for the `NSSharingServicePicker` equivalent when it arrives.
                 #if os(iOS)
                 ActivityViewControllerRepresentable(items: target.urls)
                 #else

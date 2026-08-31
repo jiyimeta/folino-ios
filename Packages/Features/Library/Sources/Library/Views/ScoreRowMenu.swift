@@ -55,10 +55,18 @@ func scoreRowMenu(
         }
     }
 
+    // PARITY(macos): score-row Share and Open in VocalTuner — both end in `ScoreShareTarget`, which only
+    //   `ActivityViewControllerRepresentable` knows how to present, and that is iOS-only (see its own marker); the
+    //   Mac has no VocalTuner to hand off to either, so its `VocalTunerHandoff` is the no-op one and the row would
+    //   do nothing at all. The whole submenu is omitted on macOS rather than left opening an empty sheet. What
+    //   macOS needs is an `NSSharingServicePicker` behind `ScoreShareTarget`; the companion row comes back with it
+    //   only if VocalTuner ships a Mac app.
+    #if os(iOS)
     Divider()
     ShareSubmenu(
         loadFormats: loadShareFormats, onShare: onShare, companionAction: onOpenInVocalTuner,
     )
+    #endif
 
     if let onRequestDelete {
         Divider()

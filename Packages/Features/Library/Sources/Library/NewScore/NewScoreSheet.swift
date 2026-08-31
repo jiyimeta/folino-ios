@@ -66,6 +66,10 @@ struct NewScoreSheet: View {
             // environment, not from each row's, so a section-scoped write renders no affordances at all
             // (verified in the preview). Nothing else in this form declares `onMove` / `onDelete`, so nothing
             // else gains an affordance from it.
+            //
+            // macOS gets neither affordance from this — it has no edit mode — but reordering still works there,
+            // because `.onMove` alone makes a row draggable on a macOS `List` (measured, Task 15). Deleting an
+            // instrument is what the Mac is left without; that gap carries the marker on this helper.
             .activeEditModeCompat()
             .navigationTitle(Text("library.newScore.title", bundle: .module))
             .inlineNavigationTitleCompat()

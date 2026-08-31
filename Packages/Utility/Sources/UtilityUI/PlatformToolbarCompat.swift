@@ -62,9 +62,12 @@ extension View {
     /// A helper rather than an inline `#if` because SwiftFormat's `--ifdef no-indent` de-indents an entire
     /// modifier chain that a `#if` interrupts, and then fights the next commit over it.
     ///
-    /// PARITY(macos): list reordering and deletion — the sheets that call this show no reorder handle and no
-    ///   delete minus on macOS. AppKit reorders by drag with no edit mode at all, so the fix is an affordance,
-    ///   not a port.
+    /// PARITY(macos): list row deletion without a swipe — the sheets that call this show no delete minus on macOS,
+    ///   and their `.onDelete` has no other way in: ⌫ reaches SwiftUI's `deleteBackward:` only when something calls
+    ///   `interpretKeyEvents` directly, which the ordinary `keyDown` path does not (measured, Task 15). What macOS
+    ///   needs is an explicit per-row Remove affordance — a context-menu item — on each list that declares
+    ///   `.onDelete`. Reordering is NOT part of this gap: `.onMove` alone already makes a macOS row draggable with
+    ///   no edit mode (also measured, Task 15).
     @ViewBuilder
     public func activeEditModeCompat() -> some View {
         #if os(iOS)
@@ -101,6 +104,39 @@ extension View {
     public func deleteCommandCompat(perform action: @escaping () -> Void) -> some View {
         #if os(macOS)
         onDeleteCommand(perform: action)
+        #else
+        self
+        #endif
+    }
+
+    /// Floors a macOS sheet's size; a no-op on iOS, where a sheet is sized by its detent, not its content.
+    ///
+    /// A macOS sheet sizes itself to its content's ideal size, and a `List` has no ideal height to offer — so a
+    /// `NavigationStack { List { … } }` presented as a sheet collapses to AppKit's minimum, **80 points tall**,
+    /// with the whole list crammed into a scroller barely one row high. Measured on the Mac's tag and playlist
+    /// sheets (Task 15): 470x80, unchanged 6.5 seconds after presentation, and byte-for-byte the same size as a
+    /// sheet presenting `EmptyView`. Content-sized sheets built on `Form` (the new-score wizard, Edit Info) are
+    /// unaffected — they report a real height — so this belongs on the list-shaped sheets only.
+    @ViewBuilder
+    public func listSheetSizeCompat() -> some View {
+        #if os(macOS)
+        frame(minWidth: 420, minHeight: 460)
+        #else
+        self
+        #endif
+    }
+
+    /// A right-click context menu, on macOS only; a no-op on iOS. For rows whose iOS affordance is a swipe, which
+    /// macOS has no gesture for: the Mac reaches the same actions from the row's context menu, and iOS keeps the
+    /// swipe it already has rather than gaining a long-press menu it never had.
+    ///
+    /// A helper rather than an inline `#if` for the same reason as `activeEditModeCompat()`: this sits inside a
+    /// modifier chain, and SwiftFormat's `--ifdef no-indent` de-indents the whole chain when a `#if` interrupts one
+    /// of its links.
+    @ViewBuilder
+    public func macContextMenuCompat(@ViewBuilder content: @escaping () -> some View) -> some View {
+        #if os(macOS)
+        contextMenu(menuItems: content)
         #else
         self
         #endif

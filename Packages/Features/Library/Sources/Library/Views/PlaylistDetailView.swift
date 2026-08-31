@@ -48,26 +48,26 @@ struct PlaylistDetailView: View {
                             .tag(item.id)
                             // No `role: .destructive` — see `LibraryRootScreen.sectionRow`.
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button {
-                                    onRemoveFromPlaylist(item)
-                                } label: {
-                                    Label {
-                                        Text("library.playlist.removeScore.action", bundle: .module)
-                                    } icon: {
-                                        Image(systemName: "minus.circle")
-                                    }
-                                }
-                                .tint(.red)
+                                removeFromPlaylistButton(for: item)
                             }
+                            .macContextMenuCompat { effectiveRowContextMenu(for: item) }
                     }
+                    // Drag-reorder, and on macOS too: `.onMove` alone makes a row draggable there — no edit mode,
+                    // no handle. Measured in Task 15 (a `List` row vends a `com.apple.SwiftUI.listReorder`
+                    // pasteboard writer carrying `{"indexes":[…]}` only when the `ForEach` declares `.onMove`),
+                    // which is why this screen ships no Mac-specific reorder affordance.
                     .onMove(perform: onMove)
+                }
+                .deleteCommandCompat {
+                    guard !selectedIDs.isEmpty else { return }
+                    onBulkDelete()
                 }
             }
         }
         // PARITY(macos): bulk-selection chrome — iOS needs an explicit Select mode because a touch list cannot
         //   distinguish a tap-to-open from a tap-to-select. AppKit's List multi-selects natively with ⌘/⇧-click, so
-        //   the Mac has no mode and reaches the same bulk actions from the selection's context menu (and, in
-        //   sub-project Ⅳ, the menu bar).
+        //   the Mac has no mode and reaches the same bulk actions from a context menu on the selection and ⌫
+        //   (Task 15) — only the menu bar (sub-project Ⅳ) is still open.
         .safeAreaInset(edge: .bottom) {
             #if os(iOS)
             if isSelecting {
@@ -116,6 +116,45 @@ struct PlaylistDetailView: View {
             onRename: onRename,
             onDelete: onDelete,
         )
+    }
+
+    /// The row's one action, in both the shapes this screen offers it: iOS's trailing swipe and (macOS) the row's
+    /// context menu. One builder so the two cannot drift.
+    private func removeFromPlaylistButton(for item: ScoreItem) -> some View {
+        Button {
+            onRemoveFromPlaylist(item)
+        } label: {
+            Label {
+                Text("library.playlist.removeScore.action", bundle: .module)
+            } icon: {
+                Image(systemName: "minus.circle")
+            }
+        }
+        .tint(.red)
+    }
+
+    /// The row's own Remove action, unless this row is part of a multi-item selection — right-clicking anywhere
+    /// inside a ⌘/⇧-click selection then offers the bulk actions instead, exactly as `ScoreListView` does. Built on
+    /// every platform because `macContextMenuCompat`'s builder is still type-checked on iOS; only macOS renders it.
+    @ViewBuilder
+    private func effectiveRowContextMenu(for item: ScoreItem) -> some View {
+        #if os(macOS)
+        if selectedIDs.contains(item.id), selectedIDs.count > 1 {
+            bulkActionsContextMenuItems(
+                availableShareFormats: availableShareFormats,
+                onShare: onBulkShare,
+                onAddToPlaylist: onBulkAddToPlaylist,
+                onEditTags: onBulkEditTags,
+                allFavorited: allBulkFavorited,
+                onFavorite: onBulkFavorite,
+                onDelete: onBulkDelete,
+            )
+        } else {
+            removeFromPlaylistButton(for: item)
+        }
+        #else
+        removeFromPlaylistButton(for: item)
+        #endif
     }
 
     private func toggleSelection(_ id: ScoreItemID) {

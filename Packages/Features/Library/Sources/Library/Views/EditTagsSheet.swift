@@ -49,6 +49,7 @@ struct EditTagsSheet: View {
             .inlineNavigationTitleCompat()
             .toolbar { doneToolbar }
         }
+        .listSheetSizeCompat()
     }
 
     @ToolbarContentBuilder

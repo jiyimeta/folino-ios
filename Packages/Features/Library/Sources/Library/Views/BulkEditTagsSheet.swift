@@ -26,6 +26,7 @@ struct BulkEditTagsSheet: View {
             .inlineNavigationTitleCompat()
             .toolbar { toolbarItems }
         }
+        .listSheetSizeCompat()
     }
 
     private var tagsSection: some View {

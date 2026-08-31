@@ -19,6 +19,7 @@ struct AddToPlaylistSheet: View {
                 .inlineNavigationTitleCompat()
                 .toolbar { doneToolbar }
         }
+        .listSheetSizeCompat()
     }
 
     private var navigationTitleText: String {

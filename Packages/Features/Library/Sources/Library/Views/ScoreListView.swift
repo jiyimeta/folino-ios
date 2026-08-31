@@ -124,27 +124,18 @@ struct ScoreListView<RowMenu: View>: View {
     }
 
     #if os(macOS)
-    /// The same actions iOS's `BulkActionBar` offers — `bulkActionMenuItems` is the single source of truth both
-    /// share, so a change to the action list there reaches this menu automatically — plus Delete, which the bar
-    /// draws as a separate trash button rather than a menu item.
-    @ViewBuilder
+    /// The same actions iOS's `BulkActionBar` offers. `bulkActionsContextMenuItems` is the single source of truth
+    /// this shares with `PlaylistDetailView`'s identical menu, so a change to the action list reaches both.
     private var bulkActionsMenuContent: some View {
-        bulkActionMenuItems(
+        bulkActionsContextMenuItems(
             availableShareFormats: availableShareFormats,
             onShare: onBulkShare,
             onAddToPlaylist: onBulkAddToPlaylist,
             onEditTags: onBulkEditTags,
             allFavorited: allSelectedFavorited,
             onFavorite: onBulkFavorite,
+            onDelete: onBulkDelete,
         )
-        Divider()
-        Button(role: .destructive, action: onBulkDelete) {
-            Label {
-                L10n.Common.delete
-            } icon: {
-                Image(systemName: "trash")
-            }
-        }
     }
     #endif
 

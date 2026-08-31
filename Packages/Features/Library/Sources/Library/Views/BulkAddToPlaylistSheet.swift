@@ -26,6 +26,7 @@ struct BulkAddToPlaylistSheet: View {
             .inlineNavigationTitleCompat()
             .toolbar { cancelToolbarItem }
         }
+        .listSheetSizeCompat()
     }
 
     private var playlistsSection: some View {
