@@ -237,48 +237,126 @@ mirroring rather than guarding it harder, i.e. adding a `plan()` entry point to
 swift-sheet-music that returns the layout and pagination the exporter is about to
 use, which the existing "follow-up" note already proposes.
 
-## Rendering the ink
+## Rendering the ink: a PDF annotation, drawn as vector
 
-`PKDrawing.image(from:scale:)`, cropped to the ink's bounds, drawn into the PDF
-page. This is the same renderer the Reader already uses for static ink
-(`StaticInkLayer`), so the export looks like the screen — pressure taper, marker
-blending, pencil texture and all — with no second ink renderer to keep in sync.
+**Revised 2026-08-31, after device QA.** The original design flattened a
+PencilKit raster into the page body. Two findings replaced it.
 
-The ink is raster; **the notation is not**. `PDFExporter` draws the SwiftUI
-score straight into a `CGPDFContext` (`ImageRenderer.render { _, drawInto in
-drawInto(pdfContext) }`), and `PDFPageView`'s own comment says so: *"the PDF
-uses the exact same glyph / staff / spanner pipeline as the on-screen
-`ScoreView` — vector output"*. Stamping an image on top adds one image XObject
-per annotated page and leaves the page's existing content stream alone.
+### What Apple actually does
 
-Scale is 4×, i.e. ~288 dpi against the PDF's 72 dpi user space — enough for
-print, and cheap because only the ink's bounding box is rasterized, not the
-page. A page with a single circled bar costs a few kilobytes.
+A PDF exported from Apple Books, with Pencil markup on it, was taken apart. Per
+page it carries exactly one annotation, and the ink is **not** in the page body
+— rendering the page's content stream and rendering it through PDFKit differ by
+tens of thousands of pixels. The annotations are:
+
+- `/Stamp`, whose Apple-private `/PPK` value is base64 beginning `crdt` — the
+  magic of `PKDrawing.dataRepresentation()`. The editable PencilKit drawing is
+  stored verbatim.
+- `/Square`, carrying `/AAPL:AKAnnotationV2`, an `NSKeyedArchiver` plist, for
+  shape markup.
+
+Both have an `/AP` appearance stream, and every one of those streams contains
+**zero vector path operators** — just `Do` against an image XObject.
+
+So Apple keeps the ink twice: a raster in `/AP` for anyone to look at, and the
+PencilKit blob in a private key so its own apps can hand it back to PencilKit
+and edit it. That is why ink drawn in Books can be erased from Files on another
+device — the eraser is PencilKit, not a PDF operation, and it works because the
+strokes travelled alongside the picture of them.
+
+Two things follow. Raster ink was never the wrong call — Apple rasterizes too.
+And erasability comes from the ink being an **annotation object** rather than
+part of the page, which is an independent decision from how it is drawn.
+
+What does *not* follow is that folino can join in. The `crdt` container is
+private and unreproducible from public API; imitating the rest of Books' shape
+was tried and measured not to help. See "No PencilKit blob rides along" below.
+
+### What folino does
+
+**The ink is an annotation, one per stroke.** That is the property this feature
+was asked for: a reader can select a mark and delete it in Preview, or in any
+standard PDF editor, because removing an annotation is a first-class PDF
+operation and the page body is untouched.
+
+Be precise about the limit. This is *not* the Files/Books experience of erasing
+a stroke with the Pencil — that is PencilKit editing a drawing Apple stored
+privately, and folino cannot produce that container (below). What ships is
+selection and deletion of whole strokes as PDF objects.
+
+One annotation **per stroke**, not per page, and that is load-bearing:
+`PDFAnnotation` carries a single `/C` and a single border width, so a page
+consolidated into one annotation would render all of its marks in one colour and
+one width for every viewer. Per-stroke annotations keep each mark's own colour
+and width, which is the visible difference a user notices on a page marked up in
+red and yellow.
+
+**Its appearance is drawn as vector**, not as a raster. Here folino departs from
+Apple deliberately. `PKDrawing.image(from:scale:)` proved unusable: on a real
+iPad it returned a fully transparent raster for the user's own strokes while
+rendering correctly on the simulator, and twelve hypotheses — invocation style,
+tool, colour, storage format, stroke mask, point count, timestamp collisions —
+were each falsified on device without finding the cause. The only oracle
+available for that call disagrees with the hardware, so no test over it can be
+trusted. Vector drawing from `InkStroke`'s own per-point geometry is
+deterministic, identical on every destination, and testable.
+
+The visible cost is pressure taper and marker blending, which a single-width
+vector stroke approximates rather than reproduces. Monoline — a constant-width
+tool — is exact.
+
+**No PencilKit blob rides along, and nothing is locked.** An earlier revision
+wrote `PKDrawing.dataRepresentation()` under Apple's `/PPK` key (plus `/PPKType`
+and Books' `/F = 644` locking, with the whole page consolidated into one
+`/Stamp`), betting that Apple's markup would then adopt folino's ink as an
+editable drawing. The bet was settled by experiment rather than left open: taking
+one of Apple's own annotated PDFs and swapping **only** the `/PPK` container for
+one folino can produce left the markup unrecognized, while imitating every other
+field changed nothing. Apple's format requires a private `crdt` container that no
+public PencilKit API emits — `dataRepresentation()` produces a `wrd`-prefixed one
+— so the blob was inert here and cost roughly 21 KB per page. It is gone, and so
+is the locking: `/F` locking exists to keep generic editors away from markup whose
+editable truth lives in a private payload, and folino has no such payload. Being
+deletable in other editors is the point, not something to defend against.
+
+Decoding the `crdt` container is a separate investigation with its own branch and
+its own notes — **see `docs/engineering/crdt-ink-format/`** before spending any
+time re-deriving this. If it ever yields a writable format, it slots in as an
+extra key on the same annotations; nothing in this design forecloses it.
 
 ## Composition
 
-One code path for both bases:
+Both bases take the same shape, and neither rewrites the page body:
 
 1. Obtain the base PDF bytes — engraved: the existing `ScorePDFRenderer`;
    original: read `item.originalPDFFileName` from the scores directory.
-2. Open it as a `CGPDFDocument`.
-3. Into a fresh `CGPDFContext`, for each page: `beginPDFPage` with the source
-   page's media box, `drawPDFPage(sourcePage)`, then draw the ink image for that
-   page, then `endPDFPage`.
+2. Open it as a `PDFDocument`.
+3. For each placement, add one `/Ink` `PDFAnnotation` to its page: bounds from
+   the stroke's extent, colour and border width from the stroke itself, and the
+   appearance drawn as vector paths from the placed `InkStroke`. No private
+   keys, no flags beyond PDFKit's defaults.
+4. `dataRepresentation()`.
 
-`drawPDFPage` replays the source page's content stream into the destination, so
-vector stays vector and embedded fonts stay embedded. It is the standard
-watermarking shape.
+The original-PDF base gains the most from this. The previous design replayed
+every page's content stream into a fresh context, which forced it to reproduce
+`/Rotate` by hand and risked the hairline inflation `PDFPageRasterizer`
+documents. Adding annotations leaves the original bytes alone, so a rotated
+page, an unusual media box, and the file's own existing annotations all keep
+working with no code of ours involved.
 
-For the original-PDF base the page frames come from each page's crop box, and
-`PageAnchor.pageIndex` indexes the same document the Reader displayed, so the
-mapping is exact rather than reconstructed.
+Page frames still come from each page's media box, and `PageAnchor.pageIndex`
+indexes the same document the Reader displayed, so the mapping stays exact.
+
+Annotation coordinates are page space with a bottom-left origin, while
+placements are page-local and y-down; the conversion is the one the composer
+already performed on a rect, now applied per point.
 
 ## Module placement
 
-Projecting musical ink needs swift-sheet-music's `LayoutDocument`, and
-rasterizing it needs PencilKit. Both live in the Reader target today, together
-with `LayoutDocumentAnchorResolver` and `InkStrokePencilKitBridge`, and
+Projecting musical ink needs swift-sheet-music's `LayoutDocument`, and decoding
+and placing the stored strokes needs PencilKit. Both live in the Reader target
+today, together with `LayoutDocumentAnchorResolver` and
+`InkStrokePencilKitBridge`, and
 `Infrastructure → Feature` is forbidden. So:
 
 - **The renderer lives in the `Reader` target**, under
@@ -379,7 +457,10 @@ Consequences worth naming:
   full-page image. This also runs against the *un*annotated export, so it fails
   if swift-sheet-music ever starts rasterizing — the premise this whole design
   rests on.
-- An annotated page gains an image XObject; a page with no ink does not.
+- An annotated page gains one `/Ink` annotation per stroke, carrying that
+  stroke's own colour and width; a page with no ink gains none. The annotations
+  carry no `/PPK`, no `/PPKType`, no `/AAPL:AKExtras`, and no lock flags, so a
+  generic editor can still delete them.
 - The mismatch guard: feed a plan whose page count disagrees with the base PDF
   and assert the base bytes come back unstamped.
 
@@ -399,6 +480,13 @@ PencilKit ink does not appear in simulator screenshots):
 3. A converted PDF item annotated on *both* display sources: two rows appear,
    each carries its own ink and only its own.
 4. A score with no ink: no annotated row.
+5. A page marked in two different colours and widths: both survive as drawn —
+   this is what one annotation per stroke buys.
+6. A mark drawn in the headroom *above* the top staff of page 1: it exports,
+   rather than being silently dropped.
+7. The exported file opened in Preview on a Mac: a mark can be selected and
+   deleted. It cannot be Pencil-erased in Files — see "No PencilKit blob rides
+   along".
 
 ## Forward compatibility
 
@@ -411,9 +499,13 @@ PencilKit ink does not appear in simulator screenshots):
 - **Text boxes** become a third input to the planner returning a text placement
   alongside `InkPlacement`; the composition step draws them with CoreText. No
   signature this design pins forecloses that.
-- **A vector ink path**, if the raster ever proves insufficient, replaces only
-  the rendering step: the planner already hands over per-point geometry and
-  widths, which is all a variable-width outline needs. `AnnotatedPDFRendering`
-  is the seam that isolates it.
+- **A variable-width outline**, if the single-width vector stroke's flat taper
+  ever proves insufficient, replaces only the rendering step: the planner already
+  hands over per-point geometry and widths, which is all such an outline needs.
+  `AnnotatedPDFRendering` is the seam that isolates it.
+- **An Apple-compatible PencilKit payload**, if `docs/engineering/crdt-ink-format/`
+  ever produces a writable container, is an extra key on the annotations this
+  design already writes — no change to the planner, the composer's geometry, or
+  any type here.
 - **An ssm `plan()` API** collapses the mirrored five lines and retires the
   runtime guard. It does not change any type this design introduces.
