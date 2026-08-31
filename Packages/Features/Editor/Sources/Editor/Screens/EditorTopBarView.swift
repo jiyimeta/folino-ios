@@ -42,15 +42,23 @@ public struct EditorTopBarView: View {
         case folded
     }
 
+    /// A control the host wants inside this row rather than beside it — the Reader's display inspector, which stays
+    /// reachable mid-edit. It has to come in through here because the row's own trailing group is what it belongs
+    /// in: appended outside, it lands to the RIGHT of 完了, and the session-end control has to be the last thing on
+    /// the strip. The Editor package cannot name the Reader's view, so it arrives type-erased.
+    private let trailingAccessory: AnyView?
+
     public init(
         viewModel: EditorViewModel,
         hasMusicalAnnotations: Bool,
         hasCutoutTier: Bool,
+        trailingAccessory: AnyView? = nil,
         onDone: @escaping () -> Void,
     ) {
         self.viewModel = viewModel
         self.hasMusicalAnnotations = hasMusicalAnnotations
         self.hasCutoutTier = hasCutoutTier
+        self.trailingAccessory = trailingAccessory
         self.onDone = onDone
     }
 
@@ -81,6 +89,8 @@ public struct EditorTopBarView: View {
                 voiceButton
                 measureMenu
                     .interactiveGlassCompat()
+                // Last here, because on a cutout device 完了 is not in this row at all — it is in the band.
+                trailingAccessory
             }
         } else {
             // `Spacer(minLength: 0)` inside `row(collapse:)` is what lets `ViewThatFits` fold at all — a greedy
@@ -107,16 +117,22 @@ public struct EditorTopBarView: View {
             undoRedoGroup
             Spacer(minLength: 0)
             voiceButton
+            // The accessory sits INSIDE the trailing group, ahead of the session-end control: 完了 ends the session,
+            // so nothing should come after it.
             switch collapse {
             case .expanded:
                 HStack(spacing: 12) {
                     measureMenu
                         .interactiveGlassCompat()
+                    trailingAccessory
                     endGroup
                 }
             case .folded:
-                overflowMenu
-                    .interactiveGlassCompat()
+                HStack(spacing: 12) {
+                    trailingAccessory
+                    overflowMenu
+                        .interactiveGlassCompat()
+                }
             }
         }
     }

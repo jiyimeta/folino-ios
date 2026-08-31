@@ -538,20 +538,10 @@ public struct ReaderRootScreen: View {
             ReaderTopBar(topSafeAreaInset: topSafeAreaInset, isEditing: isEditing) {
                 if isEditing {
                     if let editingTopBar {
-                        HStack(spacing: 12) {
-                            editingTopBar(topBarEditingContext)
-                            // The display inspector stays reachable mid-edit, at the row's trailing end — hiding a
-                            // staff or switching a clef is part of getting the score into a writable shape, and both
-                            // transforms are edit-compatible. It carries its own glass + shadow because the editor's
-                            // row controls each carry theirs; the pairing has to match to read as one strip.
-                            ReaderDisplayInspectorButton(
-                                viewModel: viewModel,
-                                anchorsInspectorPopovers: anchorsInspectorPopovers,
-                                onConfirmReReadPDF: { isReReadConfirmPresented = true },
-                            )
-                            .interactiveGlassCompat()
-                            .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
-                        }
+                        // The inspector goes IN the editing row (`trailingAccessory`), not beside it. Appended
+                        // here it sat to the right of 完了, because the editor's row only pushes its own trailing
+                        // group to its own edge — and 完了 ends the session, so nothing may come after it.
+                        editingTopBar(topBarEditingContext)
                     }
                 } else {
                     ReaderTopBarControls(
@@ -574,6 +564,19 @@ public struct ReaderRootScreen: View {
         ReaderEditingChromeContext(
             bottomTransportClearance: bottomControlContentHeight,
             hasCutoutTier: ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: topSafeAreaInset),
+            // The display inspector stays reachable mid-edit — hiding a staff or switching a clef is part of
+            // getting the score into a writable shape, and both transforms are edit-compatible. It carries its own
+            // glass + shadow because the editor's row controls each carry theirs; the pairing has to match to read
+            // as one strip.
+            trailingAccessory: AnyView(
+                ReaderDisplayInspectorButton(
+                    viewModel: viewModel,
+                    anchorsInspectorPopovers: anchorsInspectorPopovers,
+                    onConfirmReReadPDF: { isReReadConfirmPresented = true },
+                )
+                .interactiveGlassCompat()
+                .shadow(color: .gray.opacity(0.3), radius: 10, y: 5),
+            ),
         )
     }
 

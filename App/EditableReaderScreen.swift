@@ -101,6 +101,7 @@ struct EditableReaderScreen: View {
                 viewModel: editorViewModel,
                 hasMusicalAnnotations: editingHost.hasMusicalAnnotationsProvider(),
                 hasCutoutTier: context.hasCutoutTier,
+                trailingAccessory: context.trailingAccessory,
                 onDone: { editingHost.requestExit() },
             ))
         }, { [editingHost] _ in

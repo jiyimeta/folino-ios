@@ -308,9 +308,23 @@ public struct ReaderEditingChromeContext {
     /// supply it.
     public let hasCutoutTier: Bool
 
-    public init(bottomTransportClearance: CGFloat, hasCutoutTier: Bool = false) {
+    /// A Reader control the editing strip has to draw INSIDE its own row — today just the display inspector, which
+    /// stays reachable mid-edit.
+    ///
+    /// Handed over rather than appended beside `editingTopBar` because the editing row ends with 完了, and 完了 has
+    /// to be the last thing on the strip: a control appended outside the row lands to its right, since the row's
+    /// own `Spacer` only pushes to the row's edge. Type-erased because the Editor package cannot name a Reader view
+    /// — Feature must not import Feature. `nil` for the pad-overlay builder, which has no row to put it in.
+    public let trailingAccessory: AnyView?
+
+    public init(
+        bottomTransportClearance: CGFloat,
+        hasCutoutTier: Bool = false,
+        trailingAccessory: AnyView? = nil,
+    ) {
         self.bottomTransportClearance = bottomTransportClearance
         self.hasCutoutTier = hasCutoutTier
+        self.trailingAccessory = trailingAccessory
     }
 }
 
