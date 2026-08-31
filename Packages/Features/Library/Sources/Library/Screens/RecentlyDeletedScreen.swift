@@ -9,7 +9,7 @@ struct RecentlyDeletedScreen: View {
     let onOpen: (ScoreItem) -> Void
 
     @State private var viewModel: RecentlyDeletedViewModel
-    @State private var editMode: EditMode = .inactive
+    @State private var isSelecting = false
     @State private var selectedIDs: Set<ScoreItemID> = []
     @State private var pendingPermanentDelete: ScoreItem?
     @State private var isShowingBulkPermanentDeletePopover = false
@@ -43,7 +43,7 @@ struct RecentlyDeletedScreen: View {
                     onConfirmPermanentDelete: { item in
                         Task { await library.permanentlyDelete(item) }
                     },
-                    editMode: $editMode,
+                    isSelecting: $isSelecting,
                     selectedIDs: $selectedIDs,
                     onBulkRestore: {
                         let ids = selectedIDs
@@ -65,33 +65,39 @@ struct RecentlyDeletedScreen: View {
         }
         .navigationTitle(Text("library.recentlyDeleted.title", bundle: .module))
         .modifier(SelectionTitleModifierForTrash(
-            isShowingSelectionCount: editMode.isEditing && !selectedIDs.isEmpty,
+            isShowingSelectionCount: isSelecting && !selectedIDs.isEmpty,
             selectionCount: selectedIDs.count,
         ))
+        // PARITY(macos): bulk-selection chrome — iOS needs an explicit Select mode because a touch list cannot
+        //   distinguish a tap-to-open from a tap-to-select. AppKit's List multi-selects natively with ⌘/⇧-click, so
+        //   the Mac has no mode and reaches the same bulk actions from the selection's context menu (and, in
+        //   sub-project Ⅳ, the menu bar).
         .toolbar {
+            #if os(iOS)
             ToolbarItem(placement: .topBarTrailing) {
                 if !viewModel.displayedItems.isEmpty {
                     Button {
                         withAnimation {
-                            if editMode.isEditing {
+                            if isSelecting {
                                 exitSelectionMode()
                             } else {
-                                editMode = .active
+                                isSelecting = true
                             }
                         }
                     } label: {
-                        (editMode.isEditing ? L10n.Common.cancel : L10n.Common.select)
+                        (isSelecting ? L10n.Common.cancel : L10n.Common.select)
                             .contentTransition(.identity)
                     }
                 }
             }
+            #endif
         }
         .onAppear { library.analytics.logScreen(.recentlyDeleted) }
     }
 
     private func exitSelectionMode() {
         selectedIDs = []
-        editMode = .inactive
+        isSelecting = false
         isShowingBulkPermanentDeletePopover = false
     }
 }

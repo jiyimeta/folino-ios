@@ -46,14 +46,14 @@ struct EditTagsSheet: View {
                 defaultValue: "Tags for \"\(scoreTitle)\"",
                 bundle: .module,
             )))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar { doneToolbar }
         }
     }
 
     @ToolbarContentBuilder
     private var doneToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(placement: .topBarTrailingCompat) {
             Button { dismiss() } label: { L10n.Common.done }
         }
     }
@@ -80,7 +80,11 @@ struct EditTagsSheet: View {
                 assignedTagIDs: assigned,
                 allTags: tags,
                 onToggle: { tag in
-                    if assigned.contains(tag.id) { assigned.remove(tag.id) } else { assigned.insert(tag.id) }
+                    if assigned.contains(tag.id) {
+                        assigned.remove(tag.id)
+                    } else {
+                        assigned.insert(tag.id)
+                    }
                 },
                 onCreate: { _ in },
             )

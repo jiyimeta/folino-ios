@@ -38,7 +38,7 @@ struct ScoreListView<RowMenu: View>: View {
     let onConfirmDelete: (ScoreItem) -> Void
     let onSelectSort: (ScoreItemSort) -> Void
     let onSelectManualOrder: () -> Void
-    @Binding var editMode: EditMode
+    @Binding var isSelecting: Bool
     @Binding var selectedIDs: Set<ScoreItemID>
     let bulkContext: BulkContext
     let availableShareFormats: [ScoreShareFormat]
@@ -58,13 +58,17 @@ struct ScoreListView<RowMenu: View>: View {
             ))
     }
 
+    // PARITY(macos): bulk-selection chrome — iOS needs an explicit Select mode because a touch list cannot distinguish
+    //   a tap-to-open from a tap-to-select. AppKit's List multi-selects natively with ⌘/⇧-click, so the Mac has no mode
+    //   and reaches the same bulk actions from the selection's context menu (and, in sub-project Ⅳ, the menu bar).
     private var listWithChrome: some View {
         list
             .searchable(text: $searchText)
             .toolbar { trailingToolbarItems }
-            .environment(\.editMode, $editMode)
+            .bulkSelectionEditModeCompat(isSelecting: isSelecting)
             .safeAreaInset(edge: .bottom) {
-                if isEditing {
+                #if os(iOS)
+                if isSelecting {
                     BulkActionBar(
                         selectionCount: selectedIDs.count,
                         availableShareFormats: availableShareFormats,
@@ -76,6 +80,7 @@ struct ScoreListView<RowMenu: View>: View {
                         onDelete: onBulkDelete,
                     )
                 }
+                #endif
             }
     }
 
@@ -84,7 +89,7 @@ struct ScoreListView<RowMenu: View>: View {
             ForEach(items) { item in
                 ScoreListRow(
                     item: item,
-                    isEditing: isEditing,
+                    isSelecting: isSelecting,
                     onTap: onTap,
                     onToggleSelection: { toggleSelection(item.id) },
                     onToggleFavorite: onToggleFavorite,
@@ -96,17 +101,13 @@ struct ScoreListView<RowMenu: View>: View {
         }
     }
 
-    private var isEditing: Bool {
-        editMode.isEditing
-    }
-
     private var isShowingSelectionCount: Bool {
-        isEditing && !selectedIDs.isEmpty
+        isSelecting && !selectedIDs.isEmpty
     }
 
     @ToolbarContentBuilder
     private var trailingToolbarItems: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(placement: .topBarTrailingCompat) {
             ScoreSortMenu(
                 isManualOrderActive: isManualOrderActive,
                 sort: sort,
@@ -115,24 +116,26 @@ struct ScoreListView<RowMenu: View>: View {
                 onSelectManualOrder: onSelectManualOrder,
             )
         }
-        if #available(iOS 26, *) {
-            ToolbarSpacer(.fixed, placement: .topBarTrailing)
+        if #available(iOS 26, macOS 26, *) {
+            ToolbarSpacer(.fixed, placement: .topBarTrailingCompat)
         }
+        #if os(iOS)
         ToolbarItem(placement: .topBarTrailing) {
             Button {
                 withAnimation {
-                    if editMode.isEditing {
-                        editMode = .inactive
+                    if isSelecting {
+                        isSelecting = false
                         selectedIDs = []
                     } else {
-                        editMode = .active
+                        isSelecting = true
                     }
                 }
             } label: {
-                (editMode.isEditing ? L10n.Common.cancel : L10n.Common.select)
+                (isSelecting ? L10n.Common.cancel : L10n.Common.select)
                     .contentTransition(.identity)
             }
         }
+        #endif
     }
 
     private func toggleSelection(_ id: ScoreItemID) {
@@ -181,7 +184,7 @@ private struct ScoreListViewPreviewHost: View {
     @State private var searchText = ""
     @State private var sort: ScoreItemSort = .dateAddedDesc
     @State private var isManualOrderActive = false
-    @State private var editMode: EditMode = .inactive
+    @State private var isSelecting = false
     @State private var selectedIDs: Set<ScoreItemID> = []
 
     let items: [ScoreItem]
@@ -200,7 +203,7 @@ private struct ScoreListViewPreviewHost: View {
                 onConfirmDelete: { _ in },
                 onSelectSort: { sort = $0; isManualOrderActive = false },
                 onSelectManualOrder: { isManualOrderActive = true },
-                editMode: $editMode,
+                isSelecting: $isSelecting,
                 selectedIDs: $selectedIDs,
                 bulkContext: .scores,
                 availableShareFormats: [],
@@ -229,5 +232,38 @@ private struct ScoreListViewPreviewHost: View {
 
 #Preview("Playlist") {
     ScoreListViewPreviewHost(items: ScoreListViewPreview.sample, showsManualOrderOption: true)
+}
+
+// Proves the iOS bulk-selection chrome (Select/Cancel button, row checkmarks, `BulkActionBar`) is unaffected by the
+// `EditMode` → `isSelecting` rename — two rows pre-selected, `isSelecting` pinned on.
+#Preview("Selecting") {
+    NavigationStack {
+        ScoreListView(
+            items: ScoreListViewPreview.sample,
+            searchText: .constant(""),
+            sort: .dateAddedDesc,
+            isManualOrderActive: false,
+            showsManualOrderOption: false,
+            onTap: { _ in },
+            onToggleFavorite: { _ in },
+            onConfirmDelete: { _ in },
+            onSelectSort: { _ in },
+            onSelectManualOrder: {},
+            isSelecting: .constant(true),
+            selectedIDs: .constant(Set(ScoreListViewPreview.sample.prefix(2).map(\.id))),
+            bulkContext: .scores,
+            availableShareFormats: [.museScoreV4, .museScoreV3, .pdf, .midi],
+            onBulkShare: { _ in },
+            onBulkAddToPlaylist: {},
+            onBulkEditTags: {},
+            onBulkFavorite: {},
+            allSelectedFavorited: false,
+            onBulkDelete: {},
+        ) { _ in
+            Button {} label: { L10n.Common.open }
+            Button(role: .destructive) {} label: { L10n.Common.delete }
+        }
+        .navigationTitle(Text("library.allScores", bundle: .module))
+    }
 }
 #endif

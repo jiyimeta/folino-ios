@@ -7,7 +7,7 @@ import UtilityUI
 /// section/row factoring in `LibraryRootBrowseSection` and friends.
 struct ScoreListRow<RowMenu: View>: View {
     let item: ScoreItem
-    let isEditing: Bool
+    let isSelecting: Bool
     let onTap: (ScoreItem) -> Void
     let onToggleSelection: () -> Void
     let onToggleFavorite: (ScoreItem) -> Void
@@ -21,13 +21,13 @@ struct ScoreListRow<RowMenu: View>: View {
             ScoreRow(scoreItem: item)
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    if isEditing {
+                    if isSelecting {
                         onToggleSelection()
                     } else {
                         onTap(item)
                     }
                 }
-            if !isEditing {
+            if !isSelecting {
                 Menu {
                     rowMenu(item)
                 } label: {

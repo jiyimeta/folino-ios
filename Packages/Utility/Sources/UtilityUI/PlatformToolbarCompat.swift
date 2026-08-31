@@ -73,4 +73,20 @@ extension View {
         self
         #endif
     }
+
+    /// Mirrors a bulk-selection `isSelecting` flag into `\.editMode` on iOS, which drives a `List`'s row checkmarks
+    /// and reorder/delete affordances; a no-op on macOS, which has no `EditMode` at all (the type itself is
+    /// unavailable there) — `List(selection:)` already multi-selects natively with ⌘/⇧-click.
+    ///
+    /// A helper rather than an inline `#if` for the same reason as `activeEditModeCompat()`: this sits in the middle
+    /// of a modifier chain, and SwiftFormat's `--ifdef no-indent` de-indents the whole chain when a `#if` interrupts
+    /// one of its links.
+    @ViewBuilder
+    public func bulkSelectionEditModeCompat(isSelecting: Bool) -> some View {
+        #if os(iOS)
+        environment(\.editMode, .constant(isSelecting ? .active : .inactive))
+        #else
+        self
+        #endif
+    }
 }

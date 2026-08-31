@@ -23,7 +23,7 @@ struct BulkEditTagsSheet: View {
                 defaultValue: "Tags for \(selectionCount) scores",
                 bundle: .module,
             )))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar { toolbarItems }
         }
     }
@@ -32,7 +32,11 @@ struct BulkEditTagsSheet: View {
         Section {
             ForEach(allTags) { tag in
                 Button {
-                    if checked.contains(tag.id) { checked.remove(tag.id) } else { checked.insert(tag.id) }
+                    if checked.contains(tag.id) {
+                        checked.remove(tag.id)
+                    } else {
+                        checked.insert(tag.id)
+                    }
                 } label: {
                     HStack {
                         Image(systemName: checked.contains(tag.id) ? "checkmark.circle.fill" : "circle")
@@ -58,10 +62,10 @@ struct BulkEditTagsSheet: View {
 
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
+        ToolbarItem(placement: .topBarLeadingCompat) {
             Button { dismiss() } label: { L10n.Common.cancel }
         }
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(placement: .topBarTrailingCompat) {
             Button { onCommit(checked) } label: { L10n.Common.done }
                 .disabled(checked.isEmpty)
         }

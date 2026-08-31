@@ -14,12 +14,15 @@ struct RecentlyDeletedView: View {
     let onRequestPermanentDelete: (ScoreItem) -> Void
     @Binding var pendingPermanentDelete: ScoreItem?
     let onConfirmPermanentDelete: (ScoreItem) -> Void
-    @Binding var editMode: EditMode
+    @Binding var isSelecting: Bool
     @Binding var selectedIDs: Set<ScoreItemID>
     let onBulkRestore: () -> Void
     let onBulkPermanentDelete: () -> Void
     @Binding var isShowingBulkPermanentDeletePopover: Bool
 
+    // PARITY(macos): bulk-selection chrome — iOS needs an explicit Select mode because a touch list cannot distinguish
+    //   a tap-to-open from a tap-to-select. AppKit's List multi-selects natively with ⌘/⇧-click, so the Mac has no mode
+    //   and reaches the same bulk actions from the selection's context menu (and, in sub-project Ⅳ, the menu bar).
     var body: some View {
         List(selection: $selectedIDs) {
             ForEach(items) { item in
@@ -27,9 +30,10 @@ struct RecentlyDeletedView: View {
                     .tag(item.id)
             }
         }
-        .environment(\.editMode, $editMode)
+        .bulkSelectionEditModeCompat(isSelecting: isSelecting)
         .safeAreaInset(edge: .bottom) {
-            if editMode.isEditing {
+            #if os(iOS)
+            if isSelecting {
                 RecentlyDeletedBulkActionBar(
                     selectionCount: selectedIDs.count,
                     onRestore: onBulkRestore,
@@ -37,6 +41,7 @@ struct RecentlyDeletedView: View {
                     onConfirmPermanentDelete: onBulkPermanentDelete,
                 )
             }
+            #endif
         }
     }
 
@@ -45,7 +50,7 @@ struct RecentlyDeletedView: View {
             ScoreRow(scoreItem: item)
                 .contentShape(Rectangle())
                 .onTapGesture { handleRowTap(item) }
-            if !editMode.isEditing {
+            if !isSelecting {
                 Menu {
                     rowContextMenu(for: item)
                 } label: {
@@ -60,10 +65,10 @@ struct RecentlyDeletedView: View {
                 .accessibilityLabel(L10n.Common.more)
             }
         }
-        .swipeActions(edge: .leading, allowsFullSwipe: true) { restoreSwipeButton(for: item) }
+        .swipeActionsCompat(edge: .leading, allowsFullSwipe: true) { restoreSwipeButton(for: item) }
         // Full swipe disabled — accidental hard-deletes here are unrecoverable, so require a deliberate tap that
         // triggers the popover confirm.
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+        .swipeActionsCompat(edge: .trailing, allowsFullSwipe: false) {
             permanentDeleteSwipeButton(for: item)
         }
         .contextMenu { rowContextMenu(for: item) }
@@ -146,7 +151,7 @@ struct RecentlyDeletedView: View {
     }
 
     private func handleRowTap(_ item: ScoreItem) {
-        if editMode.isEditing {
+        if isSelecting {
             toggleSelection(item.id)
         } else {
             onTap(item)
@@ -281,6 +286,27 @@ private struct RecentlyDeletedBulkActionBar: View {
             onCancel: { isShowingPermanentDeletePopover = false },
         )
         .presentationCompactAdaptation(.popover)
+    }
+}
+
+extension View {
+    /// `.swipeActions` on iOS; a no-op on macOS, which has no touch-swipe gesture and so no meaning for these — the
+    /// restore / permanent-delete pair is always reachable from the row's context menu too, so nothing is lost.
+    ///
+    /// A helper rather than an inline `#if` because these calls sit inside a modifier chain (`.swipeActionsCompat(...)
+    /// .swipeActionsCompat(...).contextMenu(...).popover(...)`), and SwiftFormat's `--ifdef no-indent` de-indents the
+    /// whole chain when a `#if` interrupts one of its links.
+    @ViewBuilder
+    func swipeActionsCompat<Content: View>(
+        edge: HorizontalEdge,
+        allowsFullSwipe: Bool,
+        @ViewBuilder content: () -> Content,
+    ) -> some View {
+        #if os(iOS)
+        swipeActions(edge: edge, allowsFullSwipe: allowsFullSwipe, content: content)
+        #else
+        self
+        #endif
     }
 }
 

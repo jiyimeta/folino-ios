@@ -11,7 +11,7 @@ struct ScoreListScreen: View {
     let onAddToPlaylist: (ScoreItem) -> Void
 
     @State private var editInfoTarget: ScoreItem?
-    @State private var editMode: EditMode = .inactive
+    @State private var isSelecting = false
     @State private var selectedIDs: Set<ScoreItemID> = []
     @State private var bulkSheet: BulkSheet?
 
@@ -66,7 +66,7 @@ struct ScoreListScreen: View {
             onConfirmDelete: { item in Task { await library.delete(item) } },
             onSelectSort: { viewModel.selectSort($0) },
             onSelectManualOrder: { viewModel.selectManualOrder() },
-            editMode: $editMode,
+            isSelecting: $isSelecting,
             selectedIDs: $selectedIDs,
             bulkContext: bulkContext,
             availableShareFormats: bulkAvailableShareFormats,
@@ -110,7 +110,9 @@ struct ScoreListScreen: View {
     }
 
     private var openSource: AnalyticsSource {
-        if !viewModel.searchQuery.isEmpty { return .searchResult }
+        if !viewModel.searchQuery.isEmpty {
+            return .searchResult
+        }
         switch viewModel.source {
         case .all: return .libraryAll
         case .favorites: return .favorites
@@ -120,7 +122,9 @@ struct ScoreListScreen: View {
     }
 
     private var isPlaylistSource: Bool {
-        if case .playlist = viewModel.source { return true }
+        if case .playlist = viewModel.source {
+            return true
+        }
         return false
     }
 
@@ -157,6 +161,6 @@ struct ScoreListScreen: View {
 
     private func exitSelectionMode() {
         selectedIDs = []
-        editMode = .inactive
+        isSelecting = false
     }
 }

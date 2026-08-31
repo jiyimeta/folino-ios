@@ -54,7 +54,7 @@ private struct CreateEntityToolbarModifier: ViewModifier {
 
     @ToolbarContentBuilder
     private var createToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) { createButton }
+        ToolbarItem(placement: .topBarTrailingCompat) { createButton }
     }
 
     private var createButton: some View {

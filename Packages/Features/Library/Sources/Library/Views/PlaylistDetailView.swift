@@ -19,7 +19,7 @@ struct PlaylistDetailView: View {
     let allBulkFavorited: Bool
     let onBulkDelete: () -> Void
 
-    @State private var editMode: EditMode = .inactive
+    @State private var isSelecting = false
 
     var body: some View {
         Group {
@@ -39,7 +39,7 @@ struct PlaylistDetailView: View {
                         ScoreRow(scoreItem: item)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                if isEditing {
+                                if isSelecting {
                                     toggleSelection(item.id)
                                 } else {
                                     onOpen(item)
@@ -64,8 +64,13 @@ struct PlaylistDetailView: View {
                 }
             }
         }
+        // PARITY(macos): bulk-selection chrome — iOS needs an explicit Select mode because a touch list cannot
+        //   distinguish a tap-to-open from a tap-to-select. AppKit's List multi-selects natively with ⌘/⇧-click, so
+        //   the Mac has no mode and reaches the same bulk actions from the selection's context menu (and, in
+        //   sub-project Ⅳ, the menu bar).
         .safeAreaInset(edge: .bottom) {
-            if editMode.isEditing {
+            #if os(iOS)
+            if isSelecting {
                 BulkActionBar(
                     selectionCount: selectedIDs.count,
                     availableShareFormats: availableShareFormats,
@@ -77,22 +82,24 @@ struct PlaylistDetailView: View {
                     onDelete: onBulkDelete,
                 )
             }
+            #endif
         }
         .navigationTitle(playlistName)
-        .environment(\.editMode, $editMode)
+        .bulkSelectionEditModeCompat(isSelecting: isSelecting)
         .toolbar {
+            #if os(iOS)
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     withAnimation {
-                        if editMode.isEditing {
-                            editMode = .inactive
+                        if isSelecting {
+                            isSelecting = false
                             selectedIDs = []
                         } else {
-                            editMode = .active
+                            isSelecting = true
                         }
                     }
                 } label: {
-                    if editMode.isEditing {
+                    if isSelecting {
                         L10n.Common.cancel
                             .transition(.identity)
                     } else {
@@ -101,6 +108,7 @@ struct PlaylistDetailView: View {
                     }
                 }
             }
+            #endif
         }
         .manageEntityToolbar(
             entityName: playlistName,
@@ -108,10 +116,6 @@ struct PlaylistDetailView: View {
             onRename: onRename,
             onDelete: onDelete,
         )
-    }
-
-    private var isEditing: Bool {
-        editMode.isEditing
     }
 
     private func toggleSelection(_ id: ScoreItemID) {

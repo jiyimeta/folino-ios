@@ -16,7 +16,7 @@ struct AddToPlaylistSheet: View {
         NavigationStack {
             content
                 .navigationTitle(Text(navigationTitleText))
-                .navigationBarTitleDisplayMode(.inline)
+                .inlineNavigationTitleCompat()
                 .toolbar { doneToolbar }
         }
     }
@@ -62,7 +62,7 @@ struct AddToPlaylistSheet: View {
 
     @ToolbarContentBuilder
     private var doneToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(placement: .topBarTrailingCompat) {
             Button { dismiss() } label: { L10n.Common.done }
         }
     }

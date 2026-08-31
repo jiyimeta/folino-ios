@@ -113,12 +113,12 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
 
     @ToolbarContentBuilder
     private var importToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) { addMenu }
+        ToolbarItem(placement: .topBarTrailingCompat) { addMenu }
     }
 
     @ToolbarContentBuilder
     private var leadingToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) { leadingToolbarItem() }
+        ToolbarItem(placement: .topBarLeadingCompat) { leadingToolbarItem() }
     }
 
     private var addMenu: some View {

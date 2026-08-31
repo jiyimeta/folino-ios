@@ -184,7 +184,14 @@ private struct SharePreparation: ViewModifier {
                 }
             }
             .sheet(item: $viewModel.shareTarget) { target in
+                // See the PARITY(macos) marker on `ActivityViewControllerRepresentable` — until that
+                // `NSSharingServicePicker` equivalent lands, sharing from macOS presents an empty sheet rather than
+                // failing to compile.
+                #if os(iOS)
                 ActivityViewControllerRepresentable(items: target.urls)
+                #else
+                EmptyView()
+                #endif
             }
     }
 }

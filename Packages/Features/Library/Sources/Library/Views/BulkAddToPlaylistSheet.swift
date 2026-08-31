@@ -23,7 +23,7 @@ struct BulkAddToPlaylistSheet: View {
                 defaultValue: "Add \(selectionCount) scores to playlist",
                 bundle: .module,
             )))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar { cancelToolbarItem }
         }
     }
@@ -62,7 +62,7 @@ struct BulkAddToPlaylistSheet: View {
 
     @ToolbarContentBuilder
     private var cancelToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(placement: .topBarTrailingCompat) {
             Button { dismiss() } label: { L10n.Common.cancel }
         }
     }

@@ -73,7 +73,7 @@ private struct ManageEntityToolbarModifier: ViewModifier {
 
     @ToolbarContentBuilder
     private var manageToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) { manageMenu }
+        ToolbarItem(placement: .topBarLeadingCompat) { manageMenu }
     }
 
     private var manageMenu: some View {

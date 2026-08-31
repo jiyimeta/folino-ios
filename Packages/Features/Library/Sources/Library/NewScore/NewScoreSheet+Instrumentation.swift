@@ -158,7 +158,7 @@ extension NewScoreSheet {
                 replacing ? "library.newScore.chooseInstruments" : "library.newScore.addInstrument",
                 bundle: .module,
             ))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { picker = nil } label: { L10n.Common.cancel }
@@ -190,7 +190,7 @@ extension NewScoreSheet {
                 }
             }
             .navigationTitle(Text("library.newScore.chooseSourceScore", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { picker = nil } label: { L10n.Common.cancel }
