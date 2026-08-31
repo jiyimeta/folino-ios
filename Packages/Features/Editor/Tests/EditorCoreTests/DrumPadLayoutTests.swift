@@ -105,19 +105,19 @@ struct DrumPadLayoutTests {
         #expect(applied.keys.allSatisfy { $0.voiceIndex == 0 })
     }
 
-    /// GM puts the bass drum, the pedal hi-hat and the low floor tom in the feet. The default layout no longer
-    /// carries the low floor tom, so only the first two can turn up here — but the rule is the table's, not the
-    /// layout's, which is what the second half checks.
+    /// MuseScore puts the two bass drums and the pedal hi-hat in the feet, and nothing else — the low floor tom
+    /// is played by hand, and a stems-down floor tom was this table's own invention until 2.3.1. The default
+    /// layout carries only one bass drum, so the rule itself is checked against a layout holding the rest.
     @Test
-    func `hands and feet is the GM split: bass drum, pedal hi-hat, low floor tom`() {
+    func `hands and feet is the GM split: the bass drums and the pedal hi-hat`() {
         let applied = DrumVoicePreset.handsAndFeet.applied(to: .default)
         let feet = applied.keys.filter { $0.voiceIndex == 1 }.map(\.pitch).sorted()
         #expect(feet == [36, 44])
 
-        let withFloorTom = DrumVoicePreset.handsAndFeet.applied(
-            to: DrumPadLayout(rows: [[36, 41, 44, 42].compactMap { DrumPadKey(gmPitch: $0) }]),
+        let wider = DrumVoicePreset.handsAndFeet.applied(
+            to: DrumPadLayout(rows: [[35, 36, 41, 44, 42].compactMap { DrumPadKey(gmPitch: $0) }]),
         )
-        #expect(withFloorTom.keys.filter { $0.voiceIndex == 1 }.map(\.pitch).sorted() == [36, 41, 44])
+        #expect(wider.keys.filter { $0.voiceIndex == 1 }.map(\.pitch).sorted() == [35, 36, 44])
     }
 
     @Test

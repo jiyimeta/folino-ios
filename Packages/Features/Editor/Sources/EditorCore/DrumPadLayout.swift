@@ -161,8 +161,9 @@ public struct DrumPadLayout: Sendable, Equatable, Codable {
 public enum DrumVoicePreset: String, Sendable, CaseIterable, Codable {
     /// Every key in voice 1. What a chart written on one voice wants.
     case singleVoice
-    /// Bass drum, pedal hi-hat and low floor tom in voice 2, everything else in voice 1 — GM's own split, which is
-    /// MuseScore's, and the convention a drum part is normally engraved with.
+    /// The bass drums and the pedal hi-hat in voice 2, everything else in voice 1 — MuseScore's own split, and
+    /// the convention a drum part is normally engraved with. The low floor tom stays in the hands, where it is
+    /// played from.
     case handsAndFeet
 
     public func applied(to layout: DrumPadLayout) -> DrumPadLayout {
