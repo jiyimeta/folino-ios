@@ -56,6 +56,10 @@ struct PlaylistDetailView: View {
                     // no handle. Measured in Task 15 (a `List` row vends a `com.apple.SwiftUI.listReorder`
                     // pasteboard writer carrying `{"indexes":[…]}` only when the `ForEach` declares `.onMove`),
                     // which is why this screen ships no Mac-specific reorder affordance.
+                    //
+                    // The DRAG half is what was measured. SwiftUI gates the DROP on a live `NSDraggingSession`,
+                    // which no in-process harness can construct, so the on-screen drop is still unverified by hand.
+                    // If a Mac row picks up but will not drop, this is where the affordance goes.
                     .onMove(perform: onMove)
                 }
                 .deleteCommandCompat {

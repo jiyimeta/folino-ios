@@ -66,8 +66,11 @@ extension View {
     ///   and their `.onDelete` has no other way in: ⌫ reaches SwiftUI's `deleteBackward:` only when something calls
     ///   `interpretKeyEvents` directly, which the ordinary `keyDown` path does not (measured, Task 15). What macOS
     ///   needs is an explicit per-row Remove affordance — a context-menu item — on each list that declares
-    ///   `.onDelete`. Reordering is NOT part of this gap: `.onMove` alone already makes a macOS row draggable with
-    ///   no edit mode (also measured, Task 15).
+    ///   `.onDelete`. Reordering is believed NOT to be part of this gap: `.onMove` alone already makes a macOS row
+    ///   draggable with no edit mode (measured, Task 15 — but only the drag SOURCE was measured; SwiftUI gates the
+    ///   drop on a live `NSDraggingSession`, which no in-process harness can construct, so the on-screen drop is
+    ///   still unverified by hand. If a Mac row picks up but will not drop, reordering belongs in this gap after
+    ///   all).
     @ViewBuilder
     public func activeEditModeCompat() -> some View {
         #if os(iOS)
@@ -109,18 +112,30 @@ extension View {
         #endif
     }
 
-    /// Floors a macOS sheet's size; a no-op on iOS, where a sheet is sized by its detent, not its content.
+    /// Floors a macOS sheet's HEIGHT; a no-op on iOS, where a sheet is sized by its detent, not its content.
     ///
     /// A macOS sheet sizes itself to its content's ideal size, and a `List` has no ideal height to offer — so a
     /// `NavigationStack { List { … } }` presented as a sheet collapses to AppKit's minimum, **80 points tall**,
     /// with the whole list crammed into a scroller barely one row high. Measured on the Mac's tag and playlist
     /// sheets (Task 15): 470x80, unchanged 6.5 seconds after presentation, and byte-for-byte the same size as a
-    /// sheet presenting `EmptyView`. Content-sized sheets built on `Form` (the new-score wizard, Edit Info) are
-    /// unaffected — they report a real height — so this belongs on the list-shaped sheets only.
+    /// sheet presenting `EmptyView`. Content-sized sheets built on `Form` (the new-score wizard's own outer sheet,
+    /// Edit Info) are unaffected — they report a real height — so this belongs on the list-shaped sheets only.
+    ///
+    /// **Only height is floored, because only height collapsed.** Width came out at 470 on every sheet measured,
+    /// empty or not, so a width floor below that would never bind and one above it would be inventing a
+    /// requirement no measurement supports.
+    ///
+    /// **460 is a judgement, not a measurement** — roughly a dozen list rows plus the navigation bar, enough to
+    /// browse a tag or playlist list without the sheet dominating the window. What is measured is the 80 it
+    /// replaces, and that any of these sheets left alone is unusable.
+    ///
+    /// Not exhaustive across the app: `EditorInstrumentsSheet` hosts the same `InstrumentCatalogPicker` list in the
+    /// same `NavigationStack { List }` shape and does NOT call this — it is outside the Library, and belongs to
+    /// whoever ports the Editor to the Mac.
     @ViewBuilder
     public func listSheetSizeCompat() -> some View {
         #if os(macOS)
-        frame(minWidth: 420, minHeight: 460)
+        frame(minHeight: 460)
         #else
         self
         #endif

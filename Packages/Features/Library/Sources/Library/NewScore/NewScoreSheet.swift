@@ -67,9 +67,10 @@ struct NewScoreSheet: View {
             // (verified in the preview). Nothing else in this form declares `onMove` / `onDelete`, so nothing
             // else gains an affordance from it.
             //
-            // macOS gets neither affordance from this — it has no edit mode — but reordering still works there,
-            // because `.onMove` alone makes a row draggable on a macOS `List` (measured, Task 15). Deleting an
-            // instrument is what the Mac is left without; that gap carries the marker on this helper.
+            // macOS gets neither affordance from this — it has no edit mode — but reordering is believed to still
+            // work there, because `.onMove` alone makes a row draggable on a macOS `List` (measured, Task 15 — the
+            // drag half; the on-screen drop is not yet hand-verified, see the marker on that helper). Deleting an
+            // instrument is what the Mac is definitely left without; that gap carries the marker on this helper.
             .activeEditModeCompat()
             .navigationTitle(Text("library.newScore.title", bundle: .module))
             .inlineNavigationTitleCompat()
