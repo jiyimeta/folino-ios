@@ -1,3 +1,7 @@
+// PARITY(macos): the live `PKCanvasView` / `PKToolPicker` annotation input surface — Ⅴ (annotation input) needs a
+//   macOS ink-input surface of its own; this iOS `UIViewRepresentable` overlay is not it.
+
+#if os(iOS)
 import PencilKit
 import SwiftUI
 import UIKit
@@ -168,17 +172,25 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
     func sync(scrollOffset: CGPoint) {
         guard let canvas, let state else { return }
         let s = state()
-        if canvas.contentSize != s.documentSize { canvas.contentSize = s.documentSize }
-        if canvas.contentInset != s.contentInset { canvas.contentInset = s.contentInset }
+        if canvas.contentSize != s.documentSize {
+            canvas.contentSize = s.documentSize
+        }
+        if canvas.contentInset != s.contentInset {
+            canvas.contentInset = s.contentInset
+        }
         let z = max(0.01, s.zoomScale)
         let (zc, residual) = zoomSplit(for: z, canvas: canvas)
-        if abs(canvas.zoomScale - zc) > 0.0001 { canvas.zoomScale = zc }
+        if abs(canvas.zoomScale - zc) > 0.0001 {
+            canvas.zoomScale = zc
+        }
         let target = CGPoint(x: scrollOffset.x + s.contentOffsetBias.x, y: scrollOffset.y + s.contentOffsetBias.y)
         // `contentOffset` lives in the un-residual-scaled space; the residual view transform re-multiplies it back.
         let adjusted = residual == 1
             ? target
             : CGPoint(x: target.x / residual, y: target.y / residual)
-        if canvas.contentOffset != adjusted { canvas.contentOffset = adjusted }
+        if canvas.contentOffset != adjusted {
+            canvas.contentOffset = adjusted
+        }
         applyResidualTransform(residual, to: canvas)
     }
 
@@ -211,7 +223,9 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
                 tx: (residual - 1) * size.width / 2,
                 ty: (residual - 1) * size.height / 2,
             )
-        if canvas.transform != transform { canvas.transform = transform }
+        if canvas.transform != transform {
+            canvas.transform = transform
+        }
     }
 
     func teardown() {
@@ -288,3 +302,4 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
         }
     }
 }
+#endif

@@ -1,3 +1,7 @@
+// PARITY(macos): the hosted score subtree for `VerticalScoreContainer` — see the marker on that file for what Ⅳ's
+//   Mac reading surface needs.
+
+#if os(iOS)
 import SheetMusicUI
 import SwiftUI
 
@@ -110,3 +114,4 @@ struct VerticalZoomedSurface: View {
             }
     }
 }
+#endif

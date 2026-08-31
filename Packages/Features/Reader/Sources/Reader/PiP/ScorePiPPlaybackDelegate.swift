@@ -1,3 +1,7 @@
+// PARITY(macos): implements `AVPictureInPictureSampleBufferPlaybackDelegate`, which is iOS/tvOS-only — see the
+//   marker on `ScorePiPCoordinator.swift`.
+
+#if os(iOS)
 import AVFoundation
 import AVKit
 import CoreMedia
@@ -64,3 +68,4 @@ final class ScorePiPPlaybackDelegate: NSObject, AVPictureInPictureSampleBufferPl
         }
     }
 }
+#endif

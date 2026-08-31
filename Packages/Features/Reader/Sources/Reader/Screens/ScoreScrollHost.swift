@@ -1,3 +1,7 @@
+// PARITY(macos): the `UIViewRepresentable` scroll host (`UIScrollView` + `UIHostingController`) every reader mode
+//   is built on. Ⅳ's Mac reading surface needs an `NSScrollView`-based host of its own instead of a port of this.
+
+#if os(iOS)
 import SwiftUI
 import UIKit
 
@@ -15,7 +19,9 @@ enum ScoreScrollCommand: Equatable {
     }
 
     var isAnimated: Bool {
-        if case .animated = self { return true }
+        if case .animated = self {
+            return true
+        }
         return false
     }
 }
@@ -354,3 +360,4 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         }
     }
 }
+#endif

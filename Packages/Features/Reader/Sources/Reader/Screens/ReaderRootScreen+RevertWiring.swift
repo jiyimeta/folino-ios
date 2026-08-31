@@ -1,3 +1,6 @@
+// PARITY(macos): extends `ReaderRootScreen` — see the marker on that file for what Ⅳ's Mac reading surface needs.
+
+#if os(iOS)
 import Domain
 
 extension ReaderRootScreen {
@@ -9,7 +12,11 @@ extension ReaderRootScreen {
         // a revert of the notation never touches.
         host.hasMusicalAnnotationsProvider = { [weak viewModel] in
             viewModel?.annotationDrawings.contains { drawing in
-                if case .musical = drawing.kind { true } else { false }
+                if case .musical = drawing.kind {
+                    true
+                } else {
+                    false
+                }
             } ?? false
         }
         host.requestReloadAfterRevert = { [weak viewModel, weak host] item in
@@ -36,3 +43,4 @@ extension ReaderRootScreen {
         }
     }
 }
+#endif

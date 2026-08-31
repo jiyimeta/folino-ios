@@ -295,8 +295,10 @@ final class ReaderPlaybackSession {
         else { return }
         // Already downloaded at Reader open → the natural controller.load(...) will pick up the
         // high-quality SF2 on its own, no swap needed.
-        if case .downloaded = provider.downloadState { return }
-        if #available(iOS 26, *) {
+        if case .downloaded = provider.downloadState {
+            return
+        }
+        if #available(iOS 26, macOS 26, *) {
             soundfontDownloadTask = Task { @MainActor [weak self] in
                 let stream = Observations { provider.downloadState }
                 for await state in stream {

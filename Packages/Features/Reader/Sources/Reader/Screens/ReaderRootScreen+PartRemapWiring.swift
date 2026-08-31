@@ -1,3 +1,6 @@
+// PARITY(macos): extends `ReaderRootScreen` — see the marker on that file for what Ⅳ's Mac reading surface needs.
+
+#if os(iOS)
 import Domain
 
 extension ReaderRootScreen {
@@ -56,3 +59,4 @@ extension ReaderRootScreen {
         host.releasePartMappingHoldIfSettled()
     }
 }
+#endif

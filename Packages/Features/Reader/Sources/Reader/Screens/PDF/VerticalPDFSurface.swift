@@ -1,3 +1,7 @@
+// PARITY(macos): the hosted PDF page stack for `VerticalPDFContainer` — see the marker on that file for what Ⅳ's
+//   Mac reading surface needs. Also reaches `Color(.secondarySystemBackground)`, an iOS-only dynamic color.
+
+#if os(iOS)
 import Domain
 import PDFKit
 import ReaderAnnotationCore
@@ -129,3 +133,4 @@ struct VerticalPDFSurface: View {
         }
     }
 }
+#endif

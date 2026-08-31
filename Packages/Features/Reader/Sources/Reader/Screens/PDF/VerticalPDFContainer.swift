@@ -1,3 +1,7 @@
+// PARITY(macos): one of the Reader's iOS-only layout-mode screens, built on `VerticalReaderShell` / `PinchState`.
+//   Ⅳ's Mac reading surface needs its own layout, not a port of this one — see the markers on those files.
+
+#if os(iOS)
 import Domain
 import PDFKit
 import PencilKit
@@ -104,14 +108,18 @@ struct VerticalPDFContainer: View {
         .onChange(of: derivedTopContentInset(viewport: viewport, sizes: sizes), initial: true) { _, newValue in
             topContentInset = newValue
             // The page frames just moved, so ink anchored to them has to be re-placed against the new geometry.
-            if !viewModel.isAnnotating { reproject(sizes: sizes) }
+            if !viewModel.isAnnotating {
+                reproject(sizes: sizes)
+            }
         }
         // Reproject from the model on load (annotationDrawings populates async after the PDF appears) — but ONLY
         // when not annotating. While annotating, the canvas is the source of truth; reseeding from the
         // round-tripped model bytes would wipe the in-progress stroke. Page frames are unzoomed (fixed for the
         // document), so — unlike the old raster impl — no zoom-commit reproject is needed.
         .onChange(of: viewModel.annotationDrawings) {
-            if !viewModel.isAnnotating { reproject(sizes: sizes) }
+            if !viewModel.isAnnotating {
+                reproject(sizes: sizes)
+            }
         }
         .onAppear { reproject(sizes: sizes) }
         // Keep the playing cursor on screen, honoring the auto-follow opt-out (mirrors the score vertical reader).
@@ -299,3 +307,4 @@ struct VerticalPDFContainer: View {
         )
     }
 }
+#endif

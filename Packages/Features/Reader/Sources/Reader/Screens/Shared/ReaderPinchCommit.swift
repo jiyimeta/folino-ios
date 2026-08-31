@@ -1,3 +1,7 @@
+// PARITY(macos): pinch-commit math for `UIScrollView`-hosted containers — see the marker on `PinchState.swift` for
+//   what Ⅳ's Mac reading surface needs instead.
+
+#if os(iOS)
 import CoreGraphics
 import UIKit
 
@@ -73,3 +77,4 @@ enum ReaderPinchCommit {
         return (clamped, residual)
     }
 }
+#endif

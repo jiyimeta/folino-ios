@@ -22,7 +22,9 @@ struct PiPLayoutSnapshot {
 final class ReaderPiPSession {
     private(set) var isActive = false
 
+    #if os(iOS)
     @ObservationIgnored private var coordinatorBacking: ScorePiPCoordinator?
+    #endif
     @ObservationIgnored private var isEnabled = false
     @ObservationIgnored private var collapseMultiMeasureRests = false
     @ObservationIgnored private var showInvisibleElements = false
@@ -43,10 +45,19 @@ final class ReaderPiPSession {
     /// `playbackSession.togglePlayback()`.
     var onTogglePlayback: () async -> Void = {}
 
+    // PARITY(macos): `ScorePiPCoordinator` is iOS/tvOS-only AVKit PiP machinery (see the marker on that file). Ⅳ's
+    //   Mac reading surfaces have no PiP host, so `isSupported` always reports `false` here and every method below
+    //   becomes a no-op through the existing `guard Self.isSupported` gates — `ReaderViewModel` keeps calling this
+    //   session unconditionally on both platforms.
     static var isSupported: Bool {
+        #if os(iOS)
         ScorePiPCoordinator.isSupported
+        #else
+        false
+        #endif
     }
 
+    #if os(iOS)
     var coordinator: ScorePiPCoordinator {
         if let c = coordinatorBacking {
             return c
@@ -72,6 +83,7 @@ final class ReaderPiPSession {
         coordinatorBacking = c
         return c
     }
+    #endif
 
     func setEnabled(_ enabled: Bool) {
         guard Self.isSupported else { return }
@@ -85,7 +97,9 @@ final class ReaderPiPSession {
             isDirty = false
             hasArmed = false
             dismissIfActive()
+            #if os(iOS)
             coordinator.disarm()
+            #endif
         }
     }
 
@@ -112,13 +126,17 @@ final class ReaderPiPSession {
     /// the next auto-start).
     func dismissIfActive() {
         guard isActive else { return }
+        #if os(iOS)
         coordinator.dismissIfActive()
+        #endif
     }
 
     /// Owner calls this after `playbackSession.playbackCursor` updates.
     func notifyCursorChanged() {
+        #if os(iOS)
         coordinatorBacking?.updatePlaybackCursor(playbackCursorProvider())
         coordinatorBacking?.updateScrollAnchorCursor(scrollAnchorCursorProvider())
+        #endif
     }
 
     /// Owner calls this after `playbackSession.isPlaying` flips.
@@ -177,6 +195,7 @@ final class ReaderPiPSession {
               let score = scoreProvider(),
               let snapshot = layoutSnapshotProvider()
         else { return }
+        #if os(iOS)
         let visible = Self.armScore(score, snapshot: snapshot)
         do {
             try await coordinator.arm(
@@ -195,10 +214,13 @@ final class ReaderPiPSession {
             // mounted yet). Arming will retry once the view installs the layer and load() finishes —
             // neither ordering is fatal.
         }
+        #endif
     }
 
     private func applyAutoStart() {
         guard Self.isSupported else { return }
+        #if os(iOS)
         coordinator.setAutoStartFromBackground(isEnabled && isPlayingProvider())
+        #endif
     }
 }

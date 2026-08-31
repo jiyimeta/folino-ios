@@ -1,3 +1,7 @@
+// PARITY(macos): shared scroll + pinch shell for the vertical readers, built on `ScoreScrollHost` (`UIKit`-hosted)
+//   and `PinchState` — see the markers on those files for what Ⅳ's Mac reading surface needs instead.
+
+#if os(iOS)
 import SwiftUI
 
 /// Base zoom captured at a vertical pinch's `.began`, so the commit math resolves against the gesture's starting scale.
@@ -128,3 +132,4 @@ struct VerticalReaderShell<Content: View>: View {
         }
     }
 }
+#endif

@@ -1,3 +1,7 @@
+// PARITY(macos): score-specific adapter over `PagedReaderSurface` for `PagedScoreContainer` — see the marker on
+//   that file for what Ⅳ's Mac reading surface needs.
+
+#if os(iOS)
 import Domain
 import SheetMusicCore
 import SheetMusicLayout
@@ -225,3 +229,4 @@ struct PagedZoomedSurface: View {
         PagedPageGeometry.pageStartY(forPage: index, pages: pages, doc: doc)
     }
 }
+#endif

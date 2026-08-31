@@ -1,3 +1,7 @@
+// PARITY(macos): device-idiom (iPhone/iPad) tap-zone sizing consumed only by the Reader's iOS-only paged/vertical
+//   containers — see the marker on `PagedScoreContainer.swift` for what Ⅳ's Mac reading surface needs instead.
+
+#if os(iOS)
 import SwiftUI
 import UIKit
 
@@ -47,3 +51,4 @@ enum ReaderScoreLayout {
     private static let iPadEdgeOverlap: CGFloat = 8
     private static let iPadInsetCap: CGFloat = 0.18
 }
+#endif

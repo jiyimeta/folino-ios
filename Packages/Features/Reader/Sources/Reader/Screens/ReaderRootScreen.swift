@@ -4,6 +4,11 @@
 // chrome/lifecycle seam (`ReaderEditingHost`, spec §9); that breadth keeps it just over the file_length and
 // type_body_length budgets.
 
+// PARITY(macos): the Reader's top-level iOS screen — self-drawn top strip, transport control, PiP host, and the
+//   note-editing chrome all assume a `UIKit`-hosted `ScoreScrollHost` subtree underneath. Ⅳ's Mac reading surface
+//   is a new screen built directly for `NSWindow` / AppKit, not a port of this one.
+
+#if os(iOS)
 import Domain
 import ReaderInteractionCore
 import ScoreUI
@@ -825,4 +830,5 @@ private func previewScore() -> Score {
     // preview.
     Text("Run via xcode preview to see the assembled view")
 }
+#endif
 #endif

@@ -1,4 +1,7 @@
-#if DEBUG
+// PARITY(macos): previews of `PagedScoreContainer` — see the marker on that file for what Ⅳ's Mac reading surface
+//   needs.
+
+#if DEBUG && os(iOS)
 import Domain
 import SheetMusicCore
 import SwiftUI

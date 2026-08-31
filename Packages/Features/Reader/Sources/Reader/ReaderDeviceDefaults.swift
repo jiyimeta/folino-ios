@@ -1,4 +1,6 @@
+#if os(iOS)
 import UIKit
+#endif
 
 /// What an untouched (`nil`) per-score Reader preference resolves to on this device.
 ///
@@ -22,6 +24,12 @@ enum ReaderDeviceDefaults {
         isTablet
     }
 
+    // PARITY(macos): device-idiom detection has no macOS analogue. Ⅳ's Mac reading surface needs its own untouched-
+    //   preference default — there is no "tablet" on macOS, so the choice (iPad-like generous defaults are the
+    //   natural fit for a large screen) is deferred to that work; `isTablet` and the properties below it are
+    //   unavailable here until then. `staffSize(isTablet:)` / `honorLayoutBreaks(isTablet:)` above stay portable so a
+    //   macOS caller can already invoke them with its own idiom decision.
+    #if os(iOS)
     private static var isTablet: Bool {
         UIDevice.current.userInterfaceIdiom == .pad
     }
@@ -33,4 +41,5 @@ enum ReaderDeviceDefaults {
     static var honorLayoutBreaks: Bool {
         honorLayoutBreaks(isTablet: isTablet)
     }
+    #endif
 }

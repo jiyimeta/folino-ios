@@ -1,5 +1,6 @@
 import SheetMusicCore
 import SwiftUI
+import UtilityUI
 
 /// A row of rehearsal-mark "speech bubbles" laid out above the seek bar by each mark's time fraction. Tapping a bubble
 /// seeks to that mark; dragging across the bar discretely seeks to whichever mark is nearest the finger, snapping from
@@ -93,7 +94,9 @@ struct RehearsalMarkBar: View {
 
     /// Frontmost = the mark governing the current position; otherwise later marks sit in front of earlier ones.
     private func stackOrder(for mark: ReaderRehearsalMark, index: Int, currentID: String?) -> Double {
-        if mark.id == currentID { return Double(marks.count + 1) }
+        if mark.id == currentID {
+            return Double(marks.count + 1)
+        }
         return Double(index + 1)
     }
 }
@@ -129,7 +132,7 @@ private struct RehearsalMarkButton: View {
         .buttonStyle(.plain)
         // Solid, shadowless fills (materials still render a faint elevation shadow and read low-contrast over glass).
         // The current section is accent-filled to stand out; the rest are an opaque chip with a hairline border.
-        .background(isCurrent ? Color.accentColor : Color(.systemBackground), in: shape)
+        .background(isCurrent ? Color.accentColor : Color.systemBackgroundCompat, in: shape)
         .overlay(shape.stroke(isCurrent ? Color.clear : Color.primary.opacity(0.18), lineWidth: 0.5))
         // Hug the text: `.position` in the bar proposes the full width, which would otherwise stretch the `maxWidth`
         // frame to its cap on every bubble. `fixedSize` pins the bubble to its ideal width, so `maxWidth` only kicks in

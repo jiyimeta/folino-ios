@@ -1,3 +1,7 @@
+// PARITY(macos): not narrow-gated as the census expected — its only caller, the display `ReaderHintBubble` struct,
+//   is itself iOS-only (see the marker on `ReaderHintBubble.swift`), so this whole file is orphaned on macOS too.
+
+#if os(iOS)
 import ReaderInteractionCore
 import SwiftUI
 import UIKit
@@ -45,3 +49,4 @@ enum ReaderHintCopy {
             : Text("reader.hint.annotation.message.phone", bundle: .module)
     }
 }
+#endif

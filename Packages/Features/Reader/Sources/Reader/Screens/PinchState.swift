@@ -1,3 +1,8 @@
+// PARITY(macos): pinch-gesture-driven zoom state shared by the score/PDF containers, whose `UIScrollView` /
+//   `UIPinchGestureRecognizer` / PencilKit-canvas-overlay world is iOS-only. Ⅳ's Mac reading surface will drive
+//   zoom through trackpad/scroll-wheel gestures against a new (AppKit-based) surface instead of reusing this.
+
+#if os(iOS)
 import CoreGraphics
 import QuartzCore
 import SwiftUI
@@ -91,3 +96,4 @@ final class PinchState {
         }
     }
 }
+#endif

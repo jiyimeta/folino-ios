@@ -1,3 +1,7 @@
+// PARITY(macos): the page-turn tap-zone overlay for `PagedReaderSurface`'s touch-based page turning — see the
+//   marker on `PagedScoreContainer.swift` for what Ⅳ's Mac reading surface needs.
+
+#if os(iOS)
 import SwiftUI
 
 /// Identifies the four page-navigation slices in `TapOverlay` so each one can render the right icon / label combo
@@ -119,7 +123,9 @@ private struct PageTapZone: View {
                     let loc = value.location
                     let inside = loc.x >= bounds.minX && loc.x <= bounds.maxX
                         && loc.y >= bounds.minY && loc.y <= bounds.maxY
-                    if inside { action() }
+                    if inside {
+                        action()
+                    }
                 },
         )
         .onChange(of: isPressed) { _, new in onPressChange(new) }
@@ -297,7 +303,9 @@ struct TapOverlay: View {
     /// to "any zone pressed". A long press or a finger-roll between zones does not refire.
     private func updatePressed(_ kind: PageTapZoneKind, pressed: Bool) {
         if pressed {
-            if pressedKinds.isEmpty { onAnyZoneTouchDown() }
+            if pressedKinds.isEmpty {
+                onAnyZoneTouchDown()
+            }
             pressedKinds.insert(kind)
         } else {
             pressedKinds.remove(kind)
@@ -378,3 +386,4 @@ private struct TapZonePreviewHost: View {
         }
     }
 }
+#endif

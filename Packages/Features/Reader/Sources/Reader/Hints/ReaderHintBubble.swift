@@ -1,7 +1,9 @@
 import ReaderInteractionCore
 import SwiftUI
-import UIKit
 import UtilityUI
+#if os(iOS)
+import UIKit
+#endif
 
 // Anchored feature-hint bubble, ported from synclick's `FeatureHintBubble`. One hint at a time, anchored to a control,
 // with a caret pointing at it. No scrim: an outside tap dismisses the hint AND still activates whatever it hit (a
@@ -17,6 +19,13 @@ import UtilityUI
 
 // MARK: - Anchor plumbing
 
+// PARITY(macos): the anchored feature-hint bubble UI below (window-level tap-through dismiss via
+//   `UITapGestureRecognizer`, a `UIViewRepresentable`-hosted overlay) is iOS-only. Ⅳ's Mac reading surface needs its
+//   own coach-mark presentation; until then `readerHintAnchor` / `readerHintOverlay` are no-ops on macOS, so the
+//   widely shared `ReaderTopBarControls` / `ReaderTransportControl` / `ReaderDisplayInspectorButton` /
+//   `ReaderHintWiring` call sites keep compiling unchanged and simply never show a hint.
+
+#if os(iOS)
 extension View {
     /// Reports this view's window frame as the anchor for `target`, so a hint pointing at it knows where to put its
     /// caret. Safe to attach unconditionally: nothing is drawn, and writes are change-guarded inside the coordinator.
@@ -38,7 +47,22 @@ extension View {
         overlay { ReaderHintOverlay(coordinator: coordinator, onActivate: onActivate) }
     }
 }
+#else
+extension View {
+    func readerHintAnchor(_ target: ReaderHintTarget, isActive: Bool = true) -> some View {
+        self
+    }
 
+    func readerHintOverlay(
+        coordinator: ReaderHintCoordinator,
+        onActivate: @escaping (ReaderFeatureHint) -> Void,
+    ) -> some View {
+        self
+    }
+}
+#endif
+
+#if os(iOS)
 private struct ReaderHintAnchorModifier: ViewModifier {
     let target: ReaderHintTarget
     let isActive: Bool
@@ -306,4 +330,5 @@ private final class WindowTapView: UIView, UIGestureRecognizerDelegate {
     }
     .background(Color(uiColor: .systemGroupedBackground))
 }
+#endif
 #endif

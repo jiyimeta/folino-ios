@@ -1,3 +1,6 @@
+// PARITY(macos): extends `PagedScoreContainer` — see the marker on that file for what Ⅳ's Mac reading surface needs.
+
+#if os(iOS)
 import Domain
 import SheetMusicCore
 import SheetMusicLayout
@@ -221,3 +224,4 @@ extension PagedScoreContainer {
         reseedLiveCanvasForPageTurn(viewport: lastViewport)
     }
 }
+#endif

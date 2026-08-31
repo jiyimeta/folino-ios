@@ -1,3 +1,6 @@
+// PARITY(macos): extends `PagedPDFContainer` — see the marker on that file for what Ⅳ's Mac reading surface needs.
+
+#if os(iOS)
 import SwiftUI
 
 // MARK: - Page-index navigation (taps)
@@ -181,3 +184,4 @@ extension PagedPDFContainer {
         reseedLiveCanvasForPageTurn(viewport: lastViewport)
     }
 }
+#endif

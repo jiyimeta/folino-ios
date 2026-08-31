@@ -1,5 +1,6 @@
 import Domain
 import SwiftUI
+import UtilityUI
 
 struct RepeatModePicker: View {
     @Binding var selection: RepeatMode
@@ -43,17 +44,36 @@ struct RepeatModePicker: View {
         case .loopAll: Image(systemName: "repeat.1")
         // Custom asset (no SF Symbol for A–B). Its large intrinsic size can't be tamed by a SwiftUI `.frame` in a menu
         // label, so pre-rasterize it to symbol scale and keep it a template so it tints like the others.
-        case .abLoop: Image(uiImage: UIImage(resource: .repeatAB).resized(to: CGSize(width: 16, height: 16)))
-            .renderingMode(.template)
+        case .abLoop: abLoopIcon.renderingMode(.template)
         }
+    }
+
+    // PARITY(macos): `repeatAB` is an iOS-only asset-catalog member (no SF Symbol matches it either), so this falls
+    //   back to a stand-in system symbol on macOS. Ⅳ's Mac reading surface should add a macOS-enabled asset when it
+    //   builds this control for real.
+    private var abLoopIcon: Image {
+        #if os(iOS)
+        let rasterized = PlatformImage(resource: .repeatAB).resized(to: CGSize(width: 16, height: 16))
+        return Image(uiImage: rasterized)
+        #else
+        return Image(systemName: "arrow.triangle.2.circlepath")
+        #endif
     }
 }
 
-extension UIImage {
-    func resized(to size: CGSize) -> UIImage {
+extension PlatformImage {
+    func resized(to size: CGSize) -> PlatformImage {
+        #if os(iOS)
         UIGraphicsImageRenderer(size: size).image { _ in
             draw(in: CGRect(origin: .zero, size: size))
         }
+        #else
+        let resized = NSImage(size: size)
+        resized.lockFocus()
+        draw(in: CGRect(origin: .zero, size: size), from: .zero, operation: .copy, fraction: 1)
+        resized.unlockFocus()
+        return resized
+        #endif
     }
 }
 

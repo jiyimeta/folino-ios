@@ -2,6 +2,10 @@
 // PagedPDFContainer mirrors PagedScoreContainer's page-band pagination / pinch / annotation-overlay plumbing for
 // paged PDF viewing; the parallel structure keeps it just over the file_length budget.
 
+// PARITY(macos): one of the Reader's iOS-only layout-mode screens, built on `ScoreScrollHost` / `PinchState`. Ⅳ's
+//   Mac reading surface needs its own layout, not a port of this one — see the markers on those files.
+
+#if os(iOS)
 import Domain
 import PDFKit
 import PencilKit
@@ -184,7 +188,9 @@ struct PagedPDFContainer: View {
         .ignoresSafeArea()
         .onChange(of: pageState.pageIndex) { _, _ in reprojectCurrentPage(viewport: viewport) }
         .onChange(of: viewModel.annotationDrawings) { _, _ in
-            if !viewModel.isAnnotating { reprojectCurrentPage(viewport: viewport) }
+            if !viewModel.isAnnotating {
+                reprojectCurrentPage(viewport: viewport)
+            }
         }
         // Entering/leaving annotation hands the current page off between its static layer and the live canvas.
         .onChange(of: viewModel.isAnnotating) { _, _ in reprojectCurrentPage(viewport: viewport) }
@@ -442,3 +448,4 @@ struct PagedPDFContainer: View {
         }
     }
 }
+#endif

@@ -1,3 +1,7 @@
+// PARITY(macos): content-agnostic page-band surface shared by `PagedScoreContainer` and `PagedPDFContainer` — see
+//   the marker on those files for what Ⅳ's Mac reading surface needs.
+
+#if os(iOS)
 import SwiftUI
 
 /// Reads `pageState.dragTranslationX` in isolation and applies it as a horizontal `.offset` on `content`. This is the
@@ -196,3 +200,4 @@ struct PagedReaderSurface<Page: View>: View {
             }
     }
 }
+#endif

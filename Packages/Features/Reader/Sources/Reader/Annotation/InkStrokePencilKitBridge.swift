@@ -1,6 +1,10 @@
 import Domain
 import PencilKit
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Bridges a single baked `PKStroke` (geometry already in anchor-relative sp) to/from the neutral `InkStroke`, and the
 /// stored-blob helpers the anchoring + migrator use. Geometry is stored as dense on-curve samples (~`sampleSpacingSp`
@@ -96,7 +100,9 @@ public enum InkStrokePencilKitBridge {
         guard let stroke = drawing.strokes.first else { return drawing.dataRepresentation() }
         // A pixel-erased stroke carries a `mask` clip that the neutral format can't represent; keep it as a legacy
         // PKDrawing archive (read-both handles legacy permanently) so the erase is preserved losslessly.
-        if stroke.mask != nil { return drawing.dataRepresentation() }
+        if stroke.mask != nil {
+            return drawing.dataRepresentation()
+        }
         return InkStrokeCodec.encode(inkStroke(from: stroke))
     }
 
@@ -147,6 +153,7 @@ public enum InkStrokePencilKitBridge {
         stroke.path.first?.size.width ?? 1
     }
 
+    #if os(iOS)
     private static func rgba(from color: UIColor) -> UInt32 {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         let resolved = color.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
@@ -169,4 +176,39 @@ public enum InkStrokePencilKitBridge {
             alpha: CGFloat(rgba & 0xFF) / 255,
         )
     }
+    #else
+    /// `NSColor` has no `resolvedColor(with:)` — resolve dynamic (asset-catalog / semantic) colors against a forced
+    /// light appearance instead, matching iOS's `UITraitCollection(userInterfaceStyle: .light)` intent.
+    private static func rgba(from color: NSColor) -> UInt32 {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        var resolved: NSColor?
+        if let aqua = NSAppearance(named: .aqua) {
+            aqua.performAsCurrentDrawingAppearance {
+                resolved = color.usingColorSpace(.deviceRGB)
+            }
+        } else {
+            resolved = color.usingColorSpace(.deviceRGB)
+        }
+        if let resolved {
+            resolved.getRed(&r, green: &g, blue: &b, alpha: &a)
+        } else {
+            // Not RGB-convertible (e.g. a pattern or grayscale-only color) — fall back to opaque
+            // black rather than silently emitting transparent black.
+            r = 0; g = 0; b = 0; a = 1
+        }
+        func c(_ v: CGFloat) -> UInt32 {
+            UInt32((max(0, min(1, v)) * 255).rounded())
+        }
+        return (c(r) << 24) | (c(g) << 16) | (c(b) << 8) | c(a)
+    }
+
+    private static func color(from rgba: UInt32) -> NSColor {
+        NSColor(
+            red: CGFloat((rgba >> 24) & 0xFF) / 255,
+            green: CGFloat((rgba >> 16) & 0xFF) / 255,
+            blue: CGFloat((rgba >> 8) & 0xFF) / 255,
+            alpha: CGFloat(rgba & 0xFF) / 255,
+        )
+    }
+    #endif
 }

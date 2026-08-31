@@ -2,6 +2,10 @@
 // HorizontalScoreContainer hosts the natural-width scroll / pinch / zoom pipeline plus the annotation overlay and
 // auto-scroll plumbing for the horizontal Reader; its breadth keeps it just over the file_length budget.
 
+// PARITY(macos): one of the Reader's iOS-only layout-mode screens, built on `ScoreScrollHost` / `PinchState`. Ⅳ's
+//   Mac reading surface needs its own layout, not a port of this one — see the markers on those files.
+
+#if os(iOS)
 import Domain
 import PencilKit
 import SheetMusicCore
@@ -468,3 +472,4 @@ struct HorizontalScoreContainer: View {
         }
     }
 }
+#endif

@@ -1,3 +1,8 @@
+// PARITY(macos): the `UIViewRepresentable` host for `ScorePiPCoordinator`'s display layer — iOS/tvOS-only AVKit PiP,
+//   see the marker on that file. `ReaderRootScreen` only mounts this when `ReaderPiPSession.isSupported`, which is
+//   `false` on macOS.
+
+#if os(iOS)
 import AVFoundation
 import SwiftUI
 import UIKit
@@ -32,3 +37,4 @@ final class ScorePiPContainerView: UIView {
         fatalError("init(coder:) is not supported")
     }
 }
+#endif
