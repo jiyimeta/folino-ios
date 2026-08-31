@@ -145,13 +145,11 @@ private func shareMenuIconName(for format: ScoreShareFormat) -> String {
     switch format {
     case .museScoreV4, .museScoreV3:
         "doc.zipper"
-    case .pdf:
+    case .pdf, .annotatedPDF, .annotatedOriginalPDF:
         "doc.richtext"
     case .midi:
         "pianokeys"
     case .audioM4A:
         "waveform"
-    case .annotatedPDF, .annotatedOriginalPDF:
-        "square.and.pencil"
     }
 }

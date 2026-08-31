@@ -65,8 +65,9 @@ extension ScoreShareFormat {
 
     /// The formats in display order — the single source for both the iOS menu and the Android sheet. The annotated
     /// formats are deliberately absent: whether they appear depends on the item's ink, so they come from
-    /// `AnnotatedExportAvailability.formats(…)` and are appended after these. Bulk share offers only this list,
-    /// because a selection's items do not agree about what ink they carry.
+    /// `AnnotatedExportAvailability.formats(…)` and are interleaved in by `ScoreShareFormatOption.menu(plain:
+    /// annotated:)`, directly after `.pdf`. Bulk share offers only this list, because a selection's items do not
+    /// agree about what ink they carry.
     public static let allOrdered: [ScoreShareFormat] = [.museScoreV4, .museScoreV3, .pdf, .midi, .audioM4A]
 
     /// The share format that re-emits `source` byte-for-byte, or `nil` for sources we don't expose as a format
@@ -89,6 +90,27 @@ extension ScoreShareFormat {
         case .annotatedPDF, .annotatedOriginalPDF: true
         case .museScoreV4, .museScoreV3, .pdf, .midi, .audioM4A: false
         }
+    }
+}
+
+extension ScoreShareFormatOption {
+    /// Merges `plain` (`ScoreShareFormat.allOrdered`, each already flagged `isOriginal`) with `annotated`
+    /// (`AnnotatedExportAvailability.formats(…)`, never flagged `isOriginal`) into one display-ordered share menu,
+    /// inserting the annotated rows directly after the plain `.pdf` row rather than appending them at the end —
+    /// `MuseScore 4 / MuseScore 3 / PDF / PDF (annotated) / Original PDF (annotated) / MIDI / M4A`. Pure ordering
+    /// decision shared so iOS and Android cannot disagree about where the annotated rows sit; `plain` is returned
+    /// unchanged when `annotated` is empty, and appended at the end (the old behavior) in the defensive case where
+    /// `plain` has no `.pdf` row at all. `ScoreShareFormat.allOrdered` itself is untouched — bulk share and the
+    /// Android sheet both read it as-is.
+    public static func menu(
+        plain: [ScoreShareFormatOption],
+        annotated: [ScoreShareFormatOption],
+    ) -> [ScoreShareFormatOption] {
+        guard !annotated.isEmpty else { return plain }
+        guard let pdfIndex = plain.firstIndex(where: { $0.format == .pdf }) else { return plain + annotated }
+        var merged = plain
+        merged.insert(contentsOf: annotated, at: pdfIndex + 1)
+        return merged
     }
 }
 
