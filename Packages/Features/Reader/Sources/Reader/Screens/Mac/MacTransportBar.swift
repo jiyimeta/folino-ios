@@ -55,6 +55,13 @@ struct MacTransportBar: View {
     /// shortcut works with the sidebar focused, or with no focus at all, so it does not depend on the reader having
     /// been clicked first.
     ///
+    /// The field that actually matters was measured too, in the shape it really has: `LibraryRootScreen`'s
+    /// `.searchable(text:)` in a `NavigationSplitView` sidebar, with this shortcut in the detail column. macOS backs
+    /// it with an `AppKitSearchField` whose field editor is a `SearchTextView`, and with that as first responder the
+    /// space landed in the field (the bound `String` became `" "`) while this action stayed unfired. `.searchable`
+    /// installs its field in the window's TOOLBAR rather than the content view, which is worth knowing before
+    /// re-measuring: a probe that walks only `contentView` finds nothing and reads as a false pass.
+    ///
     /// The shortcut lives on the button, so it exists exactly when the transport does: no score, no space bar.
     private var playPauseButton: some View {
         let isPlaying = viewModel.playbackSession.isPlaying

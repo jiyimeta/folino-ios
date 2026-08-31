@@ -5,9 +5,9 @@ import Reader
 import ScoreFiles
 import Soundfonts
 
-/// Builds the iOS audio and sharing adapter stack for `AppBootstrap`. Mac counterpart in
-/// `App/Mac/AudioStackFactory.swift` builds the same stack minus the two platform-bound pieces
-/// (`UIKitInstalledAppChecker`, `LiveScoreAudioExporter`/`LivePlaybackController`).
+/// Builds the iOS audio and sharing adapter stack for `AppBootstrap`. The Mac counterpart in
+/// `App/Mac/AudioStackFactory.swift` builds the same stack from the same adapters, differing in exactly one:
+/// `UIKitInstalledAppChecker`, which has no Mac sibling app to probe and is replaced there by `NoSiblingAppChecker`.
 ///
 /// `@MainActor` because `LiveMuseScoreGeneralProvider.init` and `LivePlaybackController.init` both are — this method
 /// used to run inline inside `AppBootstrap` (itself `@MainActor`), so the isolation has to travel with the

@@ -157,8 +157,8 @@ public struct MacReaderRootScreen: View {
             viewModel.playbackSession.startObservingSoundfontDownload()
             await viewModel.load()
             await viewModel.playbackSession.prepareForPlayback()
-            // Seed the engine from the persisted preference at view start, exactly as the iOS screen does. A no-op
-            // while `playbackController` is nil.
+            // Seed the engine from the persisted preference at view start, exactly as the iOS screen does — and it
+            // reaches a real engine here now that the Mac builds a `LivePlaybackController`.
             await viewModel.tempoModel.setMetronomeEnabled(isMetronomeEnabled)
         }
         .onAppear { viewModel.analytics.logScreen(.reader) }
@@ -189,8 +189,12 @@ public struct MacReaderRootScreen: View {
 /// playback-cursor reads (`displayCursor` / `scrollAnchorCursor`) stay scoped to THIS view's body.
 ///
 /// The iOS `ScoreContentView` exists for the same reason and its doc comment carries the measurement: read at the
-/// root, those cursors re-rendered the whole screen on every tick during playback. Nothing on the Mac drives a cursor
-/// yet, but getting the boundary right now costs one struct and getting it wrong later costs a rewrite.
+/// root, those cursors re-rendered the whole screen on every tick during playback.
+///
+/// **This boundary is load-bearing, not speculative.** `MacTransportBar` drives a real engine now, so a cursor tick
+/// arrives at the Mac reader on every step of playback — moving either read up into `MacReaderRootScreen.body` would
+/// rebuild the whole screen at the engine's tick rate. The transport's own half of the same boundary is
+/// `MacSeekRegion`, which is where the live position is read.
 struct MacScoreContentView: View {
     let viewModel: ReaderViewModel
     /// Already normalized to a mode the Mac can draw — see `MacReaderRootScreen.layoutMode`.
