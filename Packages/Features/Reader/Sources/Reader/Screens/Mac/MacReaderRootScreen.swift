@@ -109,31 +109,26 @@ public struct MacReaderRootScreen: View {
             autoFollowEnabled: autoFollowEnabled,
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // The Reader is a light-appearance screen whatever the system is set to, for the reason `ReaderRootScreen`
-        // states at length: its CONTENT is light. The paper is `Color.white` (engraved score, PDF page and desk
-        // alike), and ink is resolved against a light trait before it is even stored
-        // (`InkStrokePencilKitBridge.rgba(from:)`) — so everything drawn over that paper has to be light too, or the
-        // reader shows dark chrome on white sheets. On this screen that already means the page numbers under the
-        // deck (`.secondary`, invisible as light grey on a light desk), the load spinner, the failure panel, the
-        // scroll bars, and PDFKit's own furniture.
+        // **This screen pins no appearance at all, and that is a measured decision rather than an omission.**
         //
-        // `preferredColorScheme`, where iOS deliberately uses `hostingAppearance(.light)` instead. The two reasons
-        // iOS rejected it do not transfer, and the reason it needs a trait override does:
+        // `ReaderRootScreen` pins iOS to light because the Reader's CONTENT is light. That reason covers the paper
+        // and what is drawn on it — and on the Mac every one of those things is already a concrete colour, so
+        // nothing is left for a pin to protect:
         //
-        // * On iOS this preference is applied at the WINDOW SCENE, which took the whole app — including the library
-        //   it pops back to, which then slid in white for the length of every transition. A Mac window is one
-        //   reading surface with its library beside it, there is no pop animation, and opening a score collapses
-        //   the sidebar (`MacShellView.onOpenScore`) — so the blast radius iOS could not accept is, here, the
-        //   window that is showing the score.
-        // * What iOS needed from a trait override was reach DOWN into UIKit-hosted content. The Mac needs exactly
-        //   the same reach — the page deck lives in a hand-built `NSHostingView`, the original PDF is a `PDFView`,
-        //   and the scrollers are AppKit's — and on macOS `preferredColorScheme` is the API that gets it: it sets
-        //   the window's `NSAppearance`, which every AppKit view reads. `.environment(\.colorScheme, .light)` would
-        //   stop at the SwiftUI tree and leave the PDF view and the scrollers dark.
+        // * The engraving is `ScoreLayerBuilder.inkColor`, a literal `CGColor(gray: 0, alpha: 1)`; the Canvas
+        //   renderers that still say `.color(.primary)` are wrapped by `ScoreView` in its own
+        //   `.background(Color.white)` + `.environment(\.colorScheme, .light)`. Two independent guarantees.
+        // * Ink is stored as concrete sRGB, resolved against a forced light appearance at capture
+        //   (`InkStrokePencilKitBridge.rgba(from:)`) and rebuilt as a plain `NSColor(red:green:blue:alpha:)`.
+        // * The title frame draws `.foregroundColor(.black)`; the playback cursor and the AB-loop overlays draw
+        //   `.accentColor`, which is one hue in both appearances and legible on white either way.
+        // * A PDF page is the document's own ink.
         //
-        // It replaces a stopgap that painted `Color.white` here. That fixed the ground and nothing else; this fixes
-        // the chrome, and the ground moves to the surfaces that know what they need — see `MacReaderGround`.
-        .preferredColorScheme(.light)
+        // What a pin WOULD have caught — the page numbers under the deck, the load spinner, the failure panel, the
+        // scrollers — are all chrome standing on the ground, not on the paper. They want the system appearance, and
+        // an adaptive desk is what makes them readable (`MacReaderGround`). Pinning them was over-reach: it came
+        // from picking `preferredColorScheme`, which on macOS sets the WINDOW's `NSAppearance`, and so took the
+        // library column in the sidebar with it.
         .navigationTitle(viewModel.scoreItem.title)
         .task {
             // What the view model is told is the mode this screen actually DRAWS, not the raw preference — that is
@@ -276,6 +271,10 @@ struct MacScoreContentView: View {
     /// `pdfDisplayCursorRect` is `nil` until the background OMR parse lands (and forever if it fails), which is
     /// exactly what should happen — no geometry, no cursor — and the click below resolves to nothing for the same
     /// reason, leaving the document a plain reader.
+    ///
+    /// No ground is applied here: `PDFView` paints its own opaque background, and that is the desk (see
+    /// `MacOriginalPDFView.makeNSView`). A SwiftUI `.background` behind it would be dead pixels and a second source
+    /// of truth for the same colour.
     private func originalPDF(document: PDFDocument) -> some View {
         MacOriginalPDFView(
             document: document,
@@ -288,7 +287,6 @@ struct MacScoreContentView: View {
                 viewModel.playbackSession.setManualCursor(cursor)
             },
         )
-        .background(MacReaderGround.desk)
     }
 }
 #endif

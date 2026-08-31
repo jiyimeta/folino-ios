@@ -45,10 +45,11 @@ struct MacOriginalPDFView: NSViewRepresentable {
         view.autoScales = true
         view.displayMode = .singlePageContinuous
         view.displayDirection = .vertical
-        // The desk this document sits on, and the one place it is painted — `MacReaderRootScreen` pins the reader
-        // light but paints no ground of its own, so each surface names the ground its content needs. The same 0.92
-        // the page deck uses, for the same reason: white sheets need something to be sheets against.
-        view.backgroundColor = NSColor(white: MacReaderGround.deskWhite, alpha: 1)
+        // The desk this document sits on, and the ONLY place it is painted: `PDFView` draws an opaque background, so
+        // a SwiftUI `.background` behind it would never be seen. The same appearance-keyed colour the page deck
+        // uses, not a matching constant — see `MacReaderGround` for why one value serves both paint sites, and why
+        // the desk follows the system while the pages do not.
+        view.backgroundColor = MacReaderGround.deskColor
         view.onClick = { [weak coordinator = context.coordinator] point in
             coordinator?.handleClick(at: point)
         }
@@ -60,7 +61,7 @@ struct MacOriginalPDFView: NSViewRepresentable {
         context.coordinator.parent = self
         if view.document !== document {
             view.document = document
-            context.coordinator.didApplyInk = false
+            context.coordinator.forgetInk()
         }
         context.coordinator.applyInkIfNeeded(annotations)
         context.coordinator.applyCursor(cursorRect)
@@ -74,9 +75,9 @@ struct MacOriginalPDFView: NSViewRepresentable {
     final class Coordinator {
         var parent: MacOriginalPDFView
         weak var pdfView: PDFView?
-        /// The ink is flattened once per document + ink revision; `updateNSView` runs on every playback tick and must
-        /// not rasterize a page raster sixty times a second.
-        var didApplyInk = false
+        /// Which ink revision is currently drawn on the pages, or `nil` for none. The one piece of state behind
+        /// `applyInkIfNeeded`: `updateNSView` runs on every playback tick and must not rasterize a page-sized image
+        /// sixty times a second.
         private var appliedInkRevision: Int?
         private var active: (page: PDFPage, annotation: PDFAnnotation)?
         private var inkAnnotations: [(page: PDFPage, annotation: PDFAnnotation)] = []
@@ -113,12 +114,18 @@ struct MacOriginalPDFView: NSViewRepresentable {
             }
         }
 
+        /// Drop the record of what is drawn, so the next `applyInkIfNeeded` rebuilds it. Called when the document is
+        /// swapped, which takes the old pages (and their annotations) with it.
+        func forgetInk() {
+            appliedInkRevision = nil
+            inkAnnotations = []
+        }
+
         /// Flatten each page's committed ink into one image annotation covering that page. Read-only: the Mac has no
         /// annotation input, so this is rebuilt only when the stored layer itself changes.
         func applyInkIfNeeded(_ drawings: [DrawingAnchor]) {
             let revision = drawings.hashValue
-            guard !didApplyInk || appliedInkRevision != revision else { return }
-            didApplyInk = true
+            guard appliedInkRevision != revision else { return }
             appliedInkRevision = revision
             for entry in inkAnnotations {
                 entry.page.removeAnnotation(entry.annotation)
@@ -156,6 +163,11 @@ struct MacOriginalPDFView: NSViewRepresentable {
 /// The top-left ⇄ bottom-left conversion, in one place. The reader's PDF geometry and its page-anchored ink are both
 /// expressed with y growing DOWN from the page's top-left corner; PDFKit's page space grows UP from the bottom-left of
 /// the mediaBox, which may itself sit at a non-zero origin.
+///
+/// **Known limit: `page.rotation` is ignored**, so a scan whose pages carry a 90°/180°/270° rotation entry puts both
+/// the cursor bar and the ink in the unrotated frame — visibly wrong, not subtly. Carried over from the reference
+/// implementation rather than introduced here; `PDFPlaybackGeometry`'s own `pageSizes` are unrotated mediaBox sizes
+/// too, so closing it means rotating on both sides of the seam, not just in here.
 enum MacPDFPageSpace {
     static func mediaBox(of page: PDFPage) -> CGRect {
         page.bounds(for: .mediaBox)
@@ -224,10 +236,15 @@ final class MacPDFInkAnnotation: PDFAnnotation {
 
 /// `PDFView` that reports a left-click as a point in its own coordinate space, bypassing the default text /
 /// annotation selection so a click is a clean seek gesture. Scroll and zoom are unaffected.
+///
+/// Not calling `super.mouseDown` is what suppresses selection — deliberate, a click here means "seek". It also skips
+/// the focus AppKit would normally take on a click, which would leave the arrow and page keys dead after the first
+/// click, so focus is taken explicitly instead.
 final class ClickablePDFView: PDFView {
     var onClick: ((CGPoint) -> Void)?
 
     override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
         let point = convert(event.locationInWindow, from: nil)
         onClick?(point)
     }

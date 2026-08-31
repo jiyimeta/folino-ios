@@ -32,7 +32,24 @@ struct MacScoreInkOverlay: View {
     /// Tallest slice rasterized in one `PKDrawing.image(from:scale:)` call. At a typical engraved width (~530 pt) and
     /// a 2x backing scale one slice is about 8 MB — the size of a screenful, which is the right unit for a surface
     /// that is scrolled.
-    private static let sliceHeight: CGFloat = 1024
+    static let sliceHeight: CGFloat = 1024
+
+    /// The band a *scrolling* surface should ask for: the visible window, grown out to whole `sliceHeight` strips.
+    ///
+    /// **The rounding is the point, not tidiness.** `StaticInkLayer` rasterizes in `body`, so a band that tracked the
+    /// scroll offset continuously would produce a new set of slice rects on every scrolled point and re-rasterize the
+    /// ink sixty times a second. Snapping both edges to the strip grid means the band — and therefore every slice —
+    /// is unchanged until the reader scrolls past a whole strip, so the raster is rebuilt at most once per
+    /// `sliceHeight` of travel. Growing outward rather than clipping is what keeps the strip above and below the
+    /// viewport ready before it is scrolled into view.
+    static func scrollBand(top: CGFloat, height: CGFloat, in documentSize: CGSize) -> CGRect {
+        guard height > 0, documentSize.height > 0 else {
+            return CGRect(origin: .zero, size: documentSize)
+        }
+        let start = max(0, (top / sliceHeight).rounded(.down) * sliceHeight)
+        let end = min(documentSize.height, ((top + height) / sliceHeight).rounded(.up) * sliceHeight)
+        return CGRect(x: 0, y: start, width: documentSize.width, height: max(0, end - start))
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -73,5 +90,23 @@ struct MacScoreInkOverlay: View {
         let rect: CGRect
         let drawing: PKDrawing
     }
+}
+
+/// Where a scrolling Mac container keeps its projected ink.
+///
+/// **It exists so the projection never runs in a body that reads the playback cursor.**
+/// `AnnotationAnchoring.display` decodes and re-places every stored stroke; run from the score surface it would do
+/// that on every cursor tick, and `MacScoreInkOverlay` would re-slice and re-rasterize behind it. The page deck avoids
+/// this by projecting in `MacPageDeck.body`, which its `NSHostingView` re-runs only when the engraving changes; the
+/// vertical container has no such gate, so it projects into this holder from the same off-main task that installs a
+/// layout and passes the result down as a value.
+///
+/// `@Observable` rather than `@State` for the reason `ScoreLayoutState` documents: a value written into `@State` from
+/// an async task does not re-run the body that reads it.
+@MainActor
+@Observable
+final class MacInkProjection {
+    /// Ink in the current layout's document space, or an empty drawing before the first projection.
+    var drawing = PKDrawing()
 }
 #endif

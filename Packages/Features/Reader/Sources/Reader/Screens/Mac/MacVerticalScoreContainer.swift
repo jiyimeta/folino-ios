@@ -5,6 +5,7 @@
 
 #if os(macOS)
 import Domain
+import PencilKit
 import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicUI
@@ -47,6 +48,9 @@ struct MacVerticalScoreContainer: View {
     @State private var layoutState = ScoreLayoutState()
     /// Off-main engraver holding this surface's incremental `LayoutCache`; see `ScoreRelayoutEngine`.
     @State private var relayoutEngine = ScoreRelayoutEngine()
+    /// Committed ink, projected into the current layout's document space once per layout (and once per change to the
+    /// stored layer) rather than per playback tick. See `MacInkProjection`.
+    @State private var inkProjection = MacInkProjection()
     /// Programmatic scroll target for playback follow. `ScrollPosition.scrollTo(y:)` is the macOS 15 equivalent of the
     /// iOS container's `ScoreScrollCommand` — the same content-space offset, without a `UIScrollView` to drive.
     @State private var scrollPosition = ScrollPosition()
@@ -78,11 +82,21 @@ struct MacVerticalScoreContainer: View {
                 verticalPadding: Self.verticalPadding,
                 scoreOptions: scoreOptions,
                 playbackCursor: playbackCursor,
+                ink: inkProjection.drawing,
+                scrollOffsetY: scrollOffsetY,
             )
         }
-        // Vertical mode's ground is the paper: one continuous sheet, edge to edge, the way the iOS reader draws it.
-        // See `MacReaderGround` for why Page mode's is a grey desk instead and why neither is painted at the root.
-        .background(MacReaderGround.paper)
+        // Vertical mode's ground is the paper: one continuous sheet, edge to edge, the way the iOS reader draws it,
+        // and white in either appearance. See `MacReaderGround` for why Page mode gets an adaptive desk instead and
+        // why vertical has no desk to adapt.
+        //
+        // **Only once there is something printed on it.** Before the first layout lands the surface shows a
+        // `ProgressView`, and that spinner is the one thing in this reader that stands on paper and still resolves
+        // against the system appearance — in dark mode it would draw light grey on white and all but vanish. Rather
+        // than pin an appearance for one transient control, the paper waits: until then the spinner sits on the
+        // window's own ground, which is exactly where `MacScoreContentView`'s `.loading` spinner sits a moment
+        // earlier, so the two reads as one wait instead of two.
+        .background(layoutState.document == nil ? Color.clear : MacReaderGround.paper)
         .scrollPosition($scrollPosition)
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
             geometry.contentOffset.y
@@ -91,6 +105,11 @@ struct MacVerticalScoreContainer: View {
         }
         .task(id: layoutKey(width: layoutWidth)) {
             await rebuildLayout(width: layoutWidth)
+        }
+        // The stored layer lands from `loadAnnotations()` a beat after the score, so the projection taken at the end
+        // of the layout above can predate it. Re-projecting here is what makes ink that arrives late appear.
+        .onChange(of: viewModel.annotationDrawings) { _, _ in
+            projectInk(into: layoutState.document)
         }
         .onChange(of: [playbackCursor, scrollAnchorCursor]) { old, new in
             guard readerShouldFollowPlayback(
@@ -143,6 +162,22 @@ struct MacVerticalScoreContainer: View {
         )
         guard !Task.isCancelled else { return }
         layoutState.document = newDoc
+        projectInk(into: newDoc)
+    }
+
+    /// Place the stored ink in `document`'s coordinate space. Called from the relayout task and from the
+    /// annotation-layer watcher — never from a body, and in particular never from `MacVerticalScoreSurface`, whose
+    /// body re-runs on every playback tick. See `MacInkProjection`.
+    private func projectInk(into document: LayoutDocument?) {
+        guard let document else {
+            inkProjection.drawing = PKDrawing()
+            return
+        }
+        inkProjection.drawing = AnnotationAnchoring.display(
+            viewModel.annotationDrawings, in: document,
+            // Stored anchors are in source addressing; `document` is engraved from the staff-filtered score.
+            staffFilter: .current(viewModel: viewModel, editingHost: nil),
+        )
     }
 
     /// Playback follow, in the scroll content's own coordinate space. Identical policy to the iOS container: during
@@ -204,6 +239,11 @@ struct MacVerticalScoreSurface: View {
     let verticalPadding: CGFloat
     let scoreOptions: ScoreViewOptions
     let playbackCursor: ScoreCursor?
+    /// Committed ink, ALREADY projected into document space by the container. A value, never a projection run here —
+    /// this body re-runs on every playback tick.
+    let ink: PKDrawing
+    /// Live scroll offset, used only to pick the band of ink worth rasterizing.
+    let scrollOffsetY: CGFloat
 
     /// The name the tap-seek gesture reads its location in: the un-padded, un-scaled `ScoreView` frame, which is the
     /// `LayoutDocument`'s own coordinate space.
@@ -239,17 +279,17 @@ struct MacVerticalScoreSurface: View {
             )
             .gesture(tapSeekGesture(document: doc))
 
-            // Committed ink, read-only. Projected into this document's own space by the same shared anchoring the iOS
-            // reader uses, so a mark made on an iPad lands on the same note here whatever the Mac re-engraved the
-            // score to. Above `ScoreView` (annotations are drawn over the notation) and below the loop overlays.
+            // Committed ink, read-only. Projected into this document's own space by the container (see
+            // `MacInkProjection`), so a mark made on an iPad lands on the same note here whatever the Mac re-engraved
+            // the score to. Above `ScoreView` (annotations are drawn over the notation) and below the loop overlays.
+            //
+            // Banded to what is on screen rather than to the whole document: on a long, heavily annotated score every
+            // inked strip would otherwise rasterize at once. The band is snapped to the strip grid so scrolling does
+            // not rebuild the raster on every frame — `MacScoreInkOverlay.scrollBand` states why.
             MacScoreInkOverlay(
-                drawing: AnnotationAnchoring.display(
-                    viewModel.annotationDrawings, in: doc,
-                    // Stored anchors are in source addressing; `doc` is engraved from the staff-filtered score.
-                    staffFilter: .current(viewModel: viewModel, editingHost: nil),
-                ),
+                drawing: ink,
                 surfaceSize: doc.size,
-                band: CGRect(origin: .zero, size: doc.size),
+                band: inkBand(document: doc),
             )
 
             if viewModel.repeatModel.mode == .abLoop {
@@ -262,6 +302,23 @@ struct MacVerticalScoreSurface: View {
             }
         }
         .coordinateSpace(name: Self.coordinateSpace)
+    }
+
+    /// The slice of document space the viewport currently shows, in the document's own coordinates.
+    ///
+    /// The surface is padded by `verticalPadding` and then scaled by `zoom`, so a content-space offset `y` sits at
+    /// document `y / zoom - verticalPadding`. Snapping to the strip grid happens in `scrollBand`.
+    private func inkBand(document doc: LayoutDocument) -> CGRect {
+        let zoom = macVerticalZoom(
+            document: doc, viewportWidth: viewport.width,
+            horizontalPadding: horizontalPadding, userZoom: viewModel.viewportZoom,
+        )
+        guard zoom > 0 else { return CGRect(origin: .zero, size: doc.size) }
+        return MacScoreInkOverlay.scrollBand(
+            top: scrollOffsetY / zoom - verticalPadding,
+            height: viewport.height / zoom,
+            in: doc.size,
+        )
     }
 
     /// Click-to-seek. With no playback controller wired on the Mac yet this still moves the displayed cursor —

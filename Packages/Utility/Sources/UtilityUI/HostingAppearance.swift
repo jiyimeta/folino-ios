@@ -35,10 +35,11 @@ extension View {
     /// controller's parent, and trait overrides do not travel upward. Pair this with
     /// `.toolbarColorScheme(_:for: .navigationBar)` on the same screen.
     ///
-    /// On macOS this is a no-op: the Mac shell has no per-screen appearance scoping yet. The Mac reader — the one
-    /// screen that needs a pin today — uses `preferredColorScheme(.light)` instead, which on macOS lands on the
-    /// window's `NSAppearance` and so reaches AppKit-hosted content the way the trait override does on iOS. It is a
-    /// window-wide pin, not a per-screen one, which is why this helper is still owed a Mac implementation.
+    /// On macOS this is a no-op, and no Mac screen currently needs it. The Reader — the screen that forced this
+    /// helper's existence on iOS — turned out to need no pin at all on the Mac: everything on its paper is already a
+    /// concrete colour (see `MacReaderRootScreen`), and everything that is not on the paper is chrome that should
+    /// follow the system. A Mac screen that ever does need a fixed appearance would set `NSAppearance` on its own
+    /// hosting view; `preferredColorScheme` is not that, because on macOS it lands on the whole window.
     @ViewBuilder
     public func hostingAppearance(_ scheme: ColorScheme) -> some View {
         #if os(iOS)
@@ -53,11 +54,11 @@ extension View {
     }
 }
 
-// PARITY(macos): per-screen light/dark scoping — this helper is still a no-op on macOS. The one screen that needed a
-//   pin, the Mac reader, solved it locally with `preferredColorScheme(.light)`, which on macOS sets the WINDOW's
-//   `NSAppearance` and therefore reaches AppKit-hosted content (see `MacReaderRootScreen` for the full argument).
-//   What is still owed is the per-SCREEN scoping this helper's name promises: a Mac screen that wants a fixed
-//   appearance without taking its window's other columns with it needs `NSAppearance` set on its own hosting view.
+// PARITY(macos): per-screen light/dark scoping — this helper is still a no-op on macOS, and nothing on the Mac needs
+//   it yet: the Reader, the one screen a pin was written for, turned out to need none (its paper is concrete colours
+//   end to end and its surround is chrome that follows the system — see `MacReaderRootScreen`). What is owed is the
+//   mechanism, for the first Mac screen that genuinely has a fixed-appearance surface: `NSAppearance` on that
+//   screen's own hosting view, since `preferredColorScheme` lands on the whole window instead.
 
 #if os(iOS)
 private struct HostingAppearanceApplier: UIViewRepresentable {

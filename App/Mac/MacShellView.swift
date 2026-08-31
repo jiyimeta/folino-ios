@@ -110,38 +110,49 @@ struct MacShellView: View {
             guard let newID,
                   let item = libraryVM.pendingScoreToOpen,
                   item.id == newID else { return }
-            libraryVM.pendingScoreToOpen = nil
-            openScore(item)
+            openImportedScore(item)
         }
     }
 
-    /// Show `item` in this window and put the sidebar behind it. The one place all three callers — a click in the
-    /// library, a playlist open, and the post-import watcher above — express "open this score here".
+    /// Show `item` in this window and put the sidebar behind it. What the two user-driven callers — a click in the
+    /// library and a playlist open — mean by "open this score here".
     ///
-    /// **Both writes are guarded on inequality, and that is not only hygiene.** Making both of them inside a single
-    /// SwiftUI update pass asks the split view's navigation observer to update twice in one frame, and SwiftUI logs
-    /// `Update NavigationRequestObserver tried to update multiple times per frame` at FAULT level. Measured on the
-    /// watcher above — the only caller that runs inside an update — one mode per instrumented launch:
-    ///
-    /// * Either write ALONE from the watcher is clean. The two together are not, and so is either one paired with
-    ///   `pendingScoreToOpen = nil` (clearing the value the watcher itself observes re-fires it in the same frame).
-    /// * The identical pair made from a settled async context is clean. That is why the two user-driven callers do
-    ///   not trigger it: a button action runs outside any update, so SwiftUI coalesces the pair into one update.
-    /// * Nothing rearranges out of it. Splitting the two writes across two chained `onChange`s, deferring with
-    ///   `Task { @MainActor }` or `DispatchQueue.main.async`, moving the watcher onto the sidebar column, running the
-    ///   handoff from `.task(id:)`, and making `columnVisibility` per-window `@State` instead of the App's were each
-    ///   built and launched, and each still faulted. SwiftUI runs all of those within the pass the observable change
-    ///   started.
-    ///
-    /// So the guards are the reduction actually available here: every later open in a window whose sidebar is already
-    /// collapsed makes one write, not two. Closing the last case is a decision above this seam — either the Mac stops
-    /// auto-collapsing the sidebar when a score opens (which is the macOS idiom; ⌘0 still collapses it), or the
-    /// post-import handoff waits for the update to settle, at the cost of a visible delay before the score appears.
+    /// Both are button actions, so they run OUTSIDE any SwiftUI update and the two writes coalesce into a single
+    /// update. The post-import watcher does not have that luxury; see `openImportedScore`.
     private func openScore(_ item: ScoreItem) {
-        if scoreID != item.id {
-            scoreID = item.id
-        }
-        if columnVisibility != .detailOnly {
+        scoreID = item.id
+        columnVisibility = .detailOnly
+    }
+
+    /// `openScore` for the post-import watcher, which runs INSIDE a SwiftUI update — and that difference is the whole
+    /// reason this method exists.
+    ///
+    /// **Two state writes made while an update is already running re-enter the split view's navigation observer in the
+    /// same frame**, and SwiftUI logs `Update NavigationRequestObserver tried to update multiple times per frame` at
+    /// FAULT level. Measured on this watcher, one mode per instrumented launch:
+    ///
+    /// * Any ONE write alone from the handler is clean — `scoreID`, `columnVisibility`, or
+    ///   `pendingScoreToOpen = nil` on its own. Any TWO of them together fault, in every pairing. Even a plain
+    ///   `@State` bookkeeping write counts as the second one, and clearing `pendingScoreToOpen` counts because it
+    ///   re-fires the very `onChange` observing it.
+    /// * The same writes made where no update is in flight are clean, which is why `openScore`'s two callers never
+    ///   trigger it: SwiftUI coalesces them into one update instead of re-entering a running one.
+    /// * Rearranging inside the pass does not escape it. Splitting the writes across two chained `onChange`s, running
+    ///   the handoff from `.task(id:)`, moving the watcher onto the sidebar column, and making `columnVisibility`
+    ///   per-window `@State` instead of the App's were each built and launched, and each still faulted.
+    ///
+    /// So exactly one write stays here — the window's score, which is what puts the reader on screen and is the one
+    /// that would visibly lag the import if it waited. The other two go together one main-actor hop later, where
+    /// nothing is updating and they coalesce. Measured clean, twice, with the score opening and the sidebar
+    /// collapsing as before; every arrangement that leaves two writes in this handler faults, including simply
+    /// dropping the sidebar collapse.
+    ///
+    /// The hop is safe for `pendingScoreToOpen` specifically: the only reader is the watcher above, which is keyed on
+    /// the id changing, so a value that stays set for one hop cannot re-trigger anything.
+    private func openImportedScore(_ item: ScoreItem) {
+        scoreID = item.id
+        Task { @MainActor in
+            libraryVM.pendingScoreToOpen = nil
             columnVisibility = .detailOnly
         }
     }
