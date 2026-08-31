@@ -137,11 +137,17 @@ struct MacShellView: View {
     ///   re-fires the very `onChange` observing it.
     /// * The same writes made where no update is in flight are clean, which is why `openScore`'s two callers never
     ///   trigger it: SwiftUI coalesces them into one update instead of re-entering a running one.
-    /// * Rearranging inside the pass does not escape it. Splitting the writes across two chained `onChange`s, running
-    ///   the handoff from `.task(id:)`, moving the watcher onto the sidebar column, and making `columnVisibility`
-    ///   per-window `@State` instead of the App's were each built and launched, and each still faulted.
+    /// * Rearranging does not escape it. Splitting the writes across two chained `onChange`s, running the handoff
+    ///   from `.task(id:)`, moving the watcher onto the sidebar column, making `columnVisibility` per-window
+    ///   `@State` instead of the App's, and — **this one matters, because it is the tidy-up this method invites** —
+    ///   moving ALL THREE writes into one `Task { @MainActor }` were each built and launched, and each still
+    ///   faulted. Hoisting `scoreID` into the hop below does not simplify this method; it breaks it.
     ///
-    /// So exactly one write stays here — the window's score, which is what puts the reader on screen and is the one
+    /// **The causal model is under-determined, and the measurements are what carry this, not the rule.** "At most one
+    /// write in the handler" fits every row, but it does not explain why three writes inside one deferred `Task`
+    /// still fault while the same three split one-and-two do not. Do not extend the rule by reasoning — re-measure.
+    ///
+    /// So exactly one write stays here: the window's score, which is what puts the reader on screen and is the one
     /// that would visibly lag the import if it waited. The other two go together one main-actor hop later, where
     /// nothing is updating and they coalesce. Measured clean, twice, with the score opening and the sidebar
     /// collapsing as before; every arrangement that leaves two writes in this handler faults, including simply

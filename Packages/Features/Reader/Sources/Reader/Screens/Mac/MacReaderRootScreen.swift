@@ -125,10 +125,16 @@ public struct MacReaderRootScreen: View {
         // * A PDF page is the document's own ink.
         //
         // What a pin WOULD have caught — the page numbers under the deck, the load spinner, the failure panel, the
-        // scrollers — are all chrome standing on the ground, not on the paper. They want the system appearance, and
-        // an adaptive desk is what makes them readable (`MacReaderGround`). Pinning them was over-reach: it came
+        // page-mode scrollers — is chrome standing on the ground, not on the paper. It wants the system appearance,
+        // and an adaptive desk is what makes it readable (`MacReaderGround`). Pinning it was over-reach: that came
         // from picking `preferredColorScheme`, which on macOS sets the WINDOW's `NSAppearance`, and so took the
         // library column in the sidebar with it.
+        //
+        // **One exception, and it is a real one.** Vertical mode paints its paper across the whole scroll view, and
+        // AppKit draws the overlay scroller INSIDE that frame — so that one scroller does stand on paper, and in dark
+        // appearance a light knob over edge-to-edge white is invisible. It is pinned where it lives, on its own
+        // `NSScrollView` (`MacScrollViewAppearance`), which is the scoping this screen could not do for itself.
+        // Page mode has no such case: its scroll view shows the desk, not paper.
         .navigationTitle(viewModel.scoreItem.title)
         .task {
             // What the view model is told is the mode this screen actually DRAWS, not the raw preference — that is

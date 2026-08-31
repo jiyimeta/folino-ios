@@ -255,6 +255,12 @@ struct MacVerticalScoreSurface: View {
                 document: doc, viewportWidth: viewport.width,
                 horizontalPadding: horizontalPadding, userZoom: viewModel.viewportZoom,
             )
+            // The scroller knob is the one semantic element that rides on this reader's paper — AppKit draws the
+            // overlay scroller inside the scroll view's frame, which vertical mode paints white edge to edge, so in
+            // dark appearance a light knob would slide over white and vanish. Pinned here rather than at the screen
+            // because it must not escape the scroll view; `MacScrollViewAppearance` states the argument. Inside the
+            // `if let doc` branch on purpose: before the layout lands there is no paper, and the spinner below has to
+            // keep the system appearance.
             scoreSurface(document: doc)
                 .padding(.vertical, verticalPadding)
                 .padding(.horizontal, horizontalPadding)
@@ -263,6 +269,11 @@ struct MacVerticalScoreSurface: View {
                     width: (doc.size.width + horizontalPadding * 2) * zoom,
                     height: (doc.size.height + verticalPadding * 2) * zoom,
                     alignment: .topLeading,
+                )
+                .background(
+                    MacScrollViewAppearance(appearance: .aqua)
+                        .frame(width: 0, height: 0)
+                        .allowsHitTesting(false),
                 )
         } else {
             ProgressView()

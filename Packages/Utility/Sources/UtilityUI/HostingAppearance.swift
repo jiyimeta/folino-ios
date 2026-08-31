@@ -54,11 +54,12 @@ extension View {
     }
 }
 
-// PARITY(macos): per-screen light/dark scoping — this helper is still a no-op on macOS, and nothing on the Mac needs
-//   it yet: the Reader, the one screen a pin was written for, turned out to need none (its paper is concrete colours
-//   end to end and its surround is chrome that follows the system — see `MacReaderRootScreen`). What is owed is the
-//   mechanism, for the first Mac screen that genuinely has a fixed-appearance surface: `NSAppearance` on that
-//   screen's own hosting view, since `preferredColorScheme` lands on the whole window instead.
+// PARITY(macos): per-screen light/dark scoping — this helper is still a no-op on macOS, and no Mac SCREEN needs it
+//   yet: the Reader, the one a pin was written for, turned out to need none (its paper is concrete colours end to end
+//   and its surround is chrome that follows the system — see `MacReaderRootScreen`). One VIEW inside it does, and has
+//   its own narrow answer: `MacScrollViewAppearance` sets `NSAppearance` on the vertical reader's `NSScrollView` so
+//   the overlay scroller stays dark over white paper. Generalizing that probe to a whole screen's hosting view is
+//   what this helper still owes, and it is the right shape — `preferredColorScheme` lands on the whole window.
 
 #if os(iOS)
 private struct HostingAppearanceApplier: UIViewRepresentable {

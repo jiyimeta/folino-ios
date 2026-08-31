@@ -32,7 +32,7 @@ struct MacScoreInkOverlay: View {
     /// Tallest slice rasterized in one `PKDrawing.image(from:scale:)` call. At a typical engraved width (~530 pt) and
     /// a 2x backing scale one slice is about 8 MB — the size of a screenful, which is the right unit for a surface
     /// that is scrolled.
-    static let sliceHeight: CGFloat = 1024
+    private static let sliceHeight: CGFloat = 1024
 
     /// The band a *scrolling* surface should ask for: the visible window, grown out to whole `sliceHeight` strips.
     ///
