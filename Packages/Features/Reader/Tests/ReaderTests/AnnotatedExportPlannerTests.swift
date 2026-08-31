@@ -84,6 +84,20 @@ struct AnnotatedExportPlannerTests {
         ).isEmpty)
     }
 
+    /// Regression for the device QA bug: a mark drawn above the top staff of page 1 resolves to a negative document
+    /// Y (headroom above `startY == 0`), which used to satisfy no page's band and silently produced zero placements.
+    @Test
+    func `an anchor above page 1's band still lands on page 1, not nowhere`() throws {
+        let resolver = StubResolver(pointsByMeasure: [0: CGPoint(x: 100, y: -30)])
+        let placements = AnnotatedExportPlanner.planEngraved(
+            drawings: [Self.musical(measure: 0)], resolver: resolver, pages: Self.twoPages,
+        )
+        let placement = try #require(placements.first)
+        #expect(placement.pageIndex == 0)
+        #expect(placement.transform.px == 150) // 100 + offsetX
+        #expect(placement.transform.py == 30) // -30 + offsetY (60)
+    }
+
     @Test
     func `drawingIndex points back into the input array when some drawings are dropped`() {
         let resolver = StubResolver(pointsByMeasure: [1: CGPoint(x: 10, y: 20)])

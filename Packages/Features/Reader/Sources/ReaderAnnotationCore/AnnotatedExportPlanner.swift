@@ -63,9 +63,7 @@ public enum AnnotatedExportPlanner {
         for (index, drawing) in drawings.enumerated() {
             guard case let .musical(anchor) = drawing.kind,
                   let (point, sp) = AnnotationAnchoringCore.anchorPoint(for: anchor, using: resolver), sp > 0,
-                  let pageIndex = pages.firstIndex(where: {
-                      point.y >= $0.startY && point.y < $0.startY + $0.usableHeight
-                  })
+                  let pageIndex = pageIndex(forY: point.y, in: pages)
             else { continue }
             let page = pages[pageIndex]
             placements.append(InkPlacement(
@@ -75,6 +73,26 @@ public enum AnnotatedExportPlanner {
             ))
         }
         return placements
+    }
+
+    /// The page whose band contains `y`, with page 1's band extended downward without bound. A mark drawn above the
+    /// top staff of page 1 (headroom for a circled note, an arrow, a fermata) can resolve to a point above document
+    /// Y = 0 — `verticalOffsetSp` is negative and page 1's band has nothing above `startY == 0` to catch it — but
+    /// that point is still unambiguously page 1's ink, not nowhere, so page 1's lower bound is widened rather than
+    /// left to drop the placement.
+    ///
+    /// Every other page keeps its strict `[startY, startY + usableHeight)` bounds, INCLUDING the last page's upper
+    /// bound: a point past the last page's band is a sign the anchor resolved somewhere the export layout does not
+    /// actually reach (`an anchor beyond the last page's band is dropped`, below) and dropping it rather than
+    /// guessing "the last page" is the same caution `planEngraved`'s doc comment already applies to an anchor the
+    /// layout can't resolve at all. The only points an interior page's clamp can still miss are the pathological
+    /// spillover gap `EngravedExportLayout` already documents (a single system taller than a page's usable height),
+    /// which is unrelated to this edge case.
+    private static func pageIndex(forY y: CGFloat, in pages: [EngravedPagePlacement]) -> Int? {
+        if let first = pages.first, y < first.startY {
+            return 0
+        }
+        return pages.firstIndex(where: { y >= $0.startY && y < $0.startY + $0.usableHeight })
     }
 
     /// Original-PDF base. `pageFrames` are the destination pages' boxes in points, in page order; pass each page's
