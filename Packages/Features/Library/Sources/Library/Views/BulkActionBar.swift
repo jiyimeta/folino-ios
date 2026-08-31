@@ -39,49 +39,73 @@ struct BulkActionBar: View {
         .disabled(selectionCount == 0)
     }
 
-    @ViewBuilder
     private var actionMenuContent: some View {
-        if !availableShareFormats.isEmpty {
-            ForEach(availableShareFormats, id: \.self) { format in
-                Button {
-                    onShare(format)
-                } label: {
-                    bulkShareFormatLabel(format)
-                }
+        bulkActionMenuItems(
+            availableShareFormats: availableShareFormats,
+            onShare: onShare,
+            onAddToPlaylist: onAddToPlaylist,
+            onEditTags: onEditTags,
+            allFavorited: allFavorited,
+            onFavorite: onFavorite,
+        )
+    }
+}
+
+/// Share (if any formats are available) / Add to Playlist / Edit Tags / Favorite-Unfavorite — the single source
+/// of truth for "what are the bulk actions", shared between this bar's overflow menu (iOS) and `ScoreListView`'s
+/// macOS-only bulk context menu (Task 14). Delete is deliberately NOT here: this bar draws it as its own trash
+/// button outside the menu, while the macOS context menu draws it as a plain menu item — two different shapes for
+/// the same one action, each still calling the same `LibraryViewModel` method, so unifying it would force one of
+/// the two shapes onto the other for no shared benefit.
+@MainActor
+@ViewBuilder
+func bulkActionMenuItems(
+    availableShareFormats: [ScoreShareFormat],
+    onShare: @escaping (ScoreShareFormat) -> Void,
+    onAddToPlaylist: @escaping () -> Void,
+    onEditTags: @escaping () -> Void,
+    allFavorited: Bool,
+    onFavorite: @escaping () -> Void,
+) -> some View {
+    if !availableShareFormats.isEmpty {
+        ForEach(availableShareFormats, id: \.self) { format in
+            Button {
+                onShare(format)
+            } label: {
+                bulkShareFormatLabel(format)
             }
-            Divider()
         }
-        Button(action: onAddToPlaylist) {
-            Label {
-                Text("library.playlist.add.actionEllipsis", bundle: .module)
-            } icon: {
-                Image(systemName: "music.note.list")
-            }
+        Divider()
+    }
+    Button(action: onAddToPlaylist) {
+        Label {
+            Text("library.playlist.add.actionEllipsis", bundle: .module)
+        } icon: {
+            Image(systemName: "music.note.list")
         }
-        Button(action: onEditTags) {
-            Label {
-                Text("library.tags.add.action", bundle: .module)
-            } icon: {
-                Image(systemName: "tag")
-            }
+    }
+    Button(action: onEditTags) {
+        Label {
+            Text("library.tags.add.action", bundle: .module)
+        } icon: {
+            Image(systemName: "tag")
         }
-        Button(action: onFavorite) {
-            Label {
-                let key: LocalizedStringKey = allFavorited
-                    ? "library.score.unfavorite.action"
-                    : "library.score.favorite.action"
-                Text(key, bundle: .module)
-            } icon: {
-                Image(systemName: allFavorited ? "star.slash" : "star")
-            }
+    }
+    Button(action: onFavorite) {
+        Label {
+            let key: LocalizedStringKey = allFavorited
+                ? "library.score.unfavorite.action"
+                : "library.score.favorite.action"
+            Text(key, bundle: .module)
+        } icon: {
+            Image(systemName: allFavorited ? "star.slash" : "star")
         }
     }
 }
 
-/// Shared with `ScoreListView`'s macOS-only bulk context menu, which offers the same share formats.
 @MainActor
 @ViewBuilder
-func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
+private func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
     switch format {
     case .museScoreV4:
         Label { Text("library.format.musescore4", bundle: .module) } icon: { Image(systemName: "doc.zipper") }

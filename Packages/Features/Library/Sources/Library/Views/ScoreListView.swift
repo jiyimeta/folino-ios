@@ -124,44 +124,19 @@ struct ScoreListView<RowMenu: View>: View {
     }
 
     #if os(macOS)
-    /// The same actions iOS's `BulkActionBar` offers, reusing its xcstrings keys and share-format labels — plus
-    /// Delete, which the bar draws as a separate trash button rather than a menu item.
+    /// The same actions iOS's `BulkActionBar` offers — `bulkActionMenuItems` is the single source of truth both
+    /// share, so a change to the action list there reaches this menu automatically — plus Delete, which the bar
+    /// draws as a separate trash button rather than a menu item.
     @ViewBuilder
     private var bulkActionsMenuContent: some View {
-        if !availableShareFormats.isEmpty {
-            ForEach(availableShareFormats, id: \.self) { format in
-                Button {
-                    onBulkShare(format)
-                } label: {
-                    bulkShareFormatLabel(format)
-                }
-            }
-            Divider()
-        }
-        Button(action: onBulkAddToPlaylist) {
-            Label {
-                Text("library.playlist.add.actionEllipsis", bundle: .module)
-            } icon: {
-                Image(systemName: "music.note.list")
-            }
-        }
-        Button(action: onBulkEditTags) {
-            Label {
-                Text("library.tags.add.action", bundle: .module)
-            } icon: {
-                Image(systemName: "tag")
-            }
-        }
-        Button(action: onBulkFavorite) {
-            Label {
-                let key: LocalizedStringKey = allSelectedFavorited
-                    ? "library.score.unfavorite.action"
-                    : "library.score.favorite.action"
-                Text(key, bundle: .module)
-            } icon: {
-                Image(systemName: allSelectedFavorited ? "star.slash" : "star")
-            }
-        }
+        bulkActionMenuItems(
+            availableShareFormats: availableShareFormats,
+            onShare: onBulkShare,
+            onAddToPlaylist: onBulkAddToPlaylist,
+            onEditTags: onBulkEditTags,
+            allFavorited: allSelectedFavorited,
+            onFavorite: onBulkFavorite,
+        )
         Divider()
         Button(role: .destructive, action: onBulkDelete) {
             Label {
