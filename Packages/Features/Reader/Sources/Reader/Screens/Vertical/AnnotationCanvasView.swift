@@ -1,5 +1,7 @@
-// PARITY(macos): the live `PKCanvasView` / `PKToolPicker` annotation input surface — Ⅴ (annotation input) needs a
-//   macOS ink-input surface of its own; this iOS `UIViewRepresentable` overlay is not it.
+// PARITY(macos): live annotation input — macOS ships no `PKCanvasView` and no `PKToolPicker`, so this overlay has
+//   nothing to port onto: Ⅴ owes the Mac an ink surface of its own, plus a tool picker, plus a way to register it
+//   with an `NSScrollView` the way `ScoreScrollHost` registers this one. Committed ink already displays on the Mac
+//   (`MacScoreInkOverlay`); it is only authoring that is missing.
 
 #if os(iOS)
 import PencilKit

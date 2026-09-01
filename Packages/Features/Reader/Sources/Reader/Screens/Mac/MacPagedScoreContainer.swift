@@ -1,7 +1,8 @@
 // PARITY(macos): page-mode reader extras — the Mac deck draws every page with its committed ink and lets the scroll
-//   view magnify them, and nothing else. The iOS `PagedScoreContainer`'s page-turn tap zones, swipe-to-turn, the live
-//   annotation canvas, and the note-editing seam have no Mac equivalent yet; the deck also has no counterpart to the
-//   reader's pinch-zoom commit, because zoom lives on `NSScrollView.magnification` here instead.
+//   view magnify them, and nothing else. Three gaps against the iOS `PagedScoreContainer`: no page-turn affordance
+//   at all (its tap zones and swipe are touch idioms that should not be ported, but no key, menu item or button
+//   stands in for them yet — see `PageTapOverlay`), no live annotation canvas, and no note-editing seam. Zoom is
+//   not a gap: it lives on `NSScrollView.magnification` here, which is why the pinch-commit has no counterpart.
 
 #if os(macOS)
 import Domain

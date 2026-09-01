@@ -1,6 +1,6 @@
 // PARITY(macos): PiP frame renderer — renders video frames for `ScorePiPCoordinator`, which is itself iOS/tvOS-only
-//   AVKit machinery (see the marker on that file). No macOS reading surface (Ⅳ) needs a pixel-buffer frame
-//   renderer.
+//   AVKit machinery (see the marker on that file). `MacReaderRootScreen` needs no pixel-buffer frame renderer
+//   because it arms no PiP host, and nothing else consumes this.
 
 #if os(iOS)
 import CoreGraphics

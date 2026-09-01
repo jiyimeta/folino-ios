@@ -1,7 +1,10 @@
-// PARITY(macos): part-remap hold/drain/release wiring — the orchestration inside (`setPartMigrationPendingProvider`
-//   / `prepareForPartMigration` / `requestReloadAfterPartRemap`) is platform-neutral logic, not UI; it lives in this
-//   `ReaderRootScreen` extension only because iOS wires it from that screen's `.task`. Ⅳ's Mac reading surface
-//   should lift this wiring, not re-author it, into its own equivalent wiring point.
+// PARITY(macos): part-remap hold/drain/release wiring — `MacReaderRootScreen.task` does not install any of it, so
+//   a part add/remove/reorder made while a score is open on the Mac has nothing holding annotation saves across
+//   the remap or asking the reader to reload after it. The orchestration itself
+//   (`setPartMigrationPendingProvider` / `prepareForPartMigration` / `requestReloadAfterPartRemap`) is
+//   platform-neutral and sits in a `ReaderRootScreen` extension only because iOS wires it from that screen's
+//   `.task`; the Mac screen should LIFT it into its own `.task`, not re-author it. Reachable once Ⅳ gives the Mac
+//   an instruments sheet to trigger a remap from.
 
 #if os(iOS)
 import Domain

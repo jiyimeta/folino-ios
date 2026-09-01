@@ -1,7 +1,8 @@
-// PARITY(macos): vertical reader extras — the Mac container renders and scrolls the score and draws committed ink,
-//   and nothing else. Pinch zoom (`PinchState` / `ScoreScrollHost`), the live annotation canvas, and the note-editing
-//   overlay all live in the iOS `VerticalScoreContainer`'s UIKit-hosted subtree and have no Mac equivalent yet —
-//   PencilKit ships no `PKCanvasView` on macOS at all, so annotation input needs a drawing surface of its own.
+// PARITY(macos): vertical reader extras — the Mac container renders and scrolls the score, magnifies it, and draws
+//   committed ink. Two things from the iOS `VerticalScoreContainer`'s UIKit-hosted subtree have no Mac equivalent
+//   yet: the live annotation canvas and the note-editing overlay. PencilKit ships no `PKCanvasView` on macOS at
+//   all, so annotation input needs a drawing surface of its own. Zoom is NOT in that list — it lives on
+//   `NSScrollView.magnification` here, which is why `PinchState` has nothing left to port.
 
 #if os(macOS)
 import Domain

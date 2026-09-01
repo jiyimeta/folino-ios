@@ -1,5 +1,6 @@
-// PARITY(macos): the hosted score subtree for `MacHorizontalScoreContainer` — see the marker on that file for what
-//   the Mac's horizontal mode still lacks against the iOS one.
+// PARITY(macos): horizontal mode's hosted subtree — the strip draws the staves and the committed ink and nothing
+//   over them. This is the layer where the live annotation canvas and the note-editing overlay would mount, as
+//   they do in the iOS `HorizontalZoomedSurface`; see `MacHorizontalScoreContainer`.
 
 #if os(macOS)
 import Domain

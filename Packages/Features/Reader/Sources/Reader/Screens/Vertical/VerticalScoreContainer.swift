@@ -2,8 +2,10 @@
 // VerticalScoreContainer hosts the UIKit-backed scroll / pinch / zoom pipeline plus the layout, fit-to-width, and
 // auto-scroll plumbing for the vertical Reader; its breadth keeps it just over the file_length budget.
 
-// PARITY(macos): one of the Reader's iOS-only layout-mode screens, built on `ScoreScrollHost` / `PinchState`. Ⅳ's
-//   Mac reading surface needs its own layout, not a port of this one — see the markers on those files.
+// PARITY(macos): vertical mode's live overlays — the Mac draws and scrolls vertical mode in its own
+//   `MacVerticalScoreContainer`, so the mode itself is not owed. What this container still has that its Mac sibling
+//   does not: the live PencilKit annotation canvas it hands to the scroll host (Ⅴ — macOS ships no `PKCanvasView`
+//   at all) and the note-editing overlay in its zoomed subtree (Ⅳ). Zoom is settled, not owed; see `PinchState`.
 
 #if os(iOS)
 import Domain

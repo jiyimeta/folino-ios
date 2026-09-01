@@ -1,6 +1,7 @@
 // PARITY(macos): AVKit picture-in-picture — sample-buffer-based PiP (`AVPictureInPictureSampleBufferPlaybackDelegate`)
-//   is an iOS/tvOS mechanism with no macOS equivalent. Ⅳ's reading surfaces have no PiP host to arm; until one
-//   exists (if ever), `ReaderPiPSession.isSupported` reports `false` on macOS and this whole coordinator is unused.
+//   is an iOS/tvOS mechanism with no macOS equivalent. `MacReaderRootScreen` mounts no PiP host and, on a platform
+//   whose windows already float and resize freely, has little reason to grow one; until it does (if ever),
+//   `ReaderPiPSession.isSupported` reports `false` on macOS and this whole coordinator is unused.
 
 #if os(iOS)
 import AVFoundation

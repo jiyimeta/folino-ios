@@ -1,4 +1,7 @@
-// PARITY(macos): extends `PagedScoreContainer` — see the marker on that file for what Ⅳ's Mac reading surface needs.
+// PARITY(macos): explicit page-index navigation — the Mac deck follows the playback cursor already (it shares
+//   `readerShouldFollowPlayback` with this file), but has no `goToPage` / first / last of its own, because a
+//   scrolling deck grew no page control to drive one. That is the affordance owed; the commit ordering here
+//   (settle the pinch, reseed the annotation canvas, then move) is what it should reuse rather than re-author.
 
 #if os(iOS)
 import Domain

@@ -11,9 +11,12 @@
 # FolinoLibraryJNI's Android cross-compile graph, whose host tests build on macOS — do not remove it
 # even though the package now belongs in this gate for its own sake too.
 #
-# Reader compiles for macOS (sub-project IIIa) but adds no Mac reading UI yet — its UIKit scroll
-# host, PencilKit canvas, and layout-mode screens are gated behind `#if os(iOS)`. A native macOS
-# reading surface is sub-project Ⅳ.
+# Reader compiled for macOS as of sub-project IIIa; IIIb built the Mac reading surface on top of it
+# (`Screens/Mac/` — `MacReaderRootScreen`, all three display modes on `MagnifyingScoreScrollView`,
+# imported PDFs, read-only ink, and a transport bar). This gate compiles all of that, so a break in
+# it fails here. The iOS UIKit scroll host, its PencilKit canvas, and the iOS layout-mode screens
+# stay behind `#if os(iOS)`; what is still owed to macOS is tracked by the `PARITY(macos)` markers on
+# those files, not by this comment.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

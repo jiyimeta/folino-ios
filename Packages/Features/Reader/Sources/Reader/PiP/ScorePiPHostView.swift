@@ -1,6 +1,6 @@
-// PARITY(macos): the `UIViewRepresentable` host for `ScorePiPCoordinator`'s display layer — iOS/tvOS-only AVKit PiP,
-//   see the marker on that file. `ReaderRootScreen` only mounts this when `ReaderPiPSession.isSupported`, which is
-//   `false` on macOS.
+// PARITY(macos): PiP display-layer host — nothing, deliberately. It hosts `ScorePiPCoordinator`'s layer, and only
+//   `ReaderRootScreen` mounts it, guarded on `ReaderPiPSession.isSupported`, which is `false` on macOS. See the
+//   marker on `ScorePiPCoordinator.swift` for why PiP as a whole is not owed here.
 
 #if os(iOS)
 import AVFoundation

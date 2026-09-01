@@ -63,8 +63,9 @@ struct EditorPadTuckHandle: View {
 }
 
 // PARITY(macos): pad-tuck-handle preview background — `.systemGroupedBackground` has no macOS analogue, so the
-//   preview stands in with `.windowBackgroundColor`, a provisional pick until Reader's own port settles what a Mac
-//   grouped surface should read as.
+//   preview stands in with `.windowBackgroundColor`. Still provisional: the Reader's Mac port landed and settled a
+//   reading DESK (`MacReaderGround`), which is not a grouped-list surface, so the question of what a Mac grouped
+//   surface should read as is open and falls to whoever builds the first one — the Mac pad itself, in Ⅳ.
 #if os(iOS)
 private let previewBackground = Color(uiColor: .systemGroupedBackground)
 #else

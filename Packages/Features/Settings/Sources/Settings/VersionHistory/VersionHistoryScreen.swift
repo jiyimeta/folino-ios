@@ -95,8 +95,10 @@ public struct VersionHistoryScreen: View {
     }
 
     // PARITY(macos): version-history row background — iOS uses the grouped-list "secondary system background" gray,
-    //   a raised card on top of the grouped-list base. macOS substitutes `.underPageBackgroundColor`, a provisional
-    //   pick until Reader's own port settles what a Mac grouped surface should read as.
+    //   a raised card on top of the grouped-list base. macOS substitutes `.underPageBackgroundColor`. Still
+    //   provisional: the Reader's Mac port landed and settled a reading DESK (`MacReaderGround`), which is not a
+    //   grouped-list surface, so what a Mac grouped surface should read as is still open — and this screen, which
+    //   the Mac's `Settings` scene does present, is the place to settle it against a real window.
     private func rowBackground(for version: AppVersion) -> Color {
         let isMajorRelease = version.minor == 0 && version.patch == 0
         guard isMajorRelease else {

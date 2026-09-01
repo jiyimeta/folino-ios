@@ -1,7 +1,7 @@
-// PARITY(macos): score/PDF container selection — exclusively picks between the iOS-only score/PDF containers
-//   (`VerticalScoreContainer`, `HorizontalScoreContainer`, `PagedScoreContainer`, `PagedPDFContainer`,
-//   `VerticalPDFContainer`) and is itself only called from the gated `ReaderRootScreen`. See the marker on that
-//   file for what Ⅳ's Mac reading surface needs.
+// PARITY(macos): the two PDF branches of the container switch — `MacScoreContentView` is this switch's Mac sibling
+//   and already branches display-source-first, then over all three score modes. Where it stops short is the PDF
+//   side: it has one PDF view for every layout mode, because `PagedPDFContainer` and `VerticalPDFContainer` have
+//   no Mac form. Closing those two closes the difference between the switches.
 
 #if os(iOS)
 import Domain

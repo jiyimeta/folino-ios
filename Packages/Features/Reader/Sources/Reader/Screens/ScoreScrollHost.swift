@@ -1,6 +1,9 @@
-// PARITY(macos): UIKit scroll host — the `UIViewRepresentable` wrapper (`UIScrollView` + `UIHostingController`)
-//   every reader mode is built on. Ⅳ's Mac reading surface needs an `NSScrollView`-based host of its own instead
-//   of a port of this.
+// PARITY(macos): the annotation canvas this host installs — the host itself is settled: the Mac reader is built on
+//   `MagnifyingScoreScrollView` (`NSScrollView` + `NSHostingView`, zoom on `.magnification`), a sibling of this
+//   wrapper rather than a port. What has no Mac counterpart is what this host installs INSIDE its scroll view —
+//   the viewport-sized `PKCanvasView` of `AnnotationOverlaySpec`, whose whole reason for living here is that
+//   UIKit's responder chain then hands the canvas its touches. macOS ships no `PKCanvasView`, so Ⅴ has to answer
+//   both halves at once: an ink surface, and a way to place it in an `NSScrollView` that keeps registering.
 
 #if os(iOS)
 import SwiftUI

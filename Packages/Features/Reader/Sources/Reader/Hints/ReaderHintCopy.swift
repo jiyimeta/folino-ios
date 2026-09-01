@@ -1,5 +1,6 @@
 // PARITY(macos): per-hint copy — only consumed by the iOS-only `ReaderHintBubble` display struct (see the marker
-//   on that file). Ⅳ's Mac reading surface will need this copy again once it builds its own hint presentation.
+//   on that file). The strings themselves are already localized and platform-neutral, so the Mac reader owes
+//   nothing here beyond a presentation to show them in; un-gate this file with that presentation, not before.
 
 #if os(iOS)
 import ReaderInteractionCore

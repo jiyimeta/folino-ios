@@ -46,7 +46,7 @@ final class ReaderPiPSession {
     var onTogglePlayback: () async -> Void = {}
 
     // PARITY(macos): PiP session's coordinator dependency — `ScorePiPCoordinator` is iOS/tvOS-only AVKit PiP
-    //   machinery (see the marker on that file), and Ⅳ's Mac reading surfaces have no PiP host, so `isSupported`
+    //   machinery (see the marker on that file), and `MacReaderRootScreen` arms no PiP host, so `isSupported`
     //   always reports `false` here and every method below becomes a no-op through the existing
     //   `guard Self.isSupported` gates, letting `ReaderViewModel` keep calling this session unconditionally on both
     //   platforms.

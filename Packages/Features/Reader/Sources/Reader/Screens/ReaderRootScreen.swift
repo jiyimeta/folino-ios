@@ -4,9 +4,13 @@
 // chrome/lifecycle seam (`ReaderEditingHost`, spec §9); that breadth keeps it just over the file_length and
 // type_body_length budgets.
 
-// PARITY(macos): the Reader's top-level iOS screen — self-drawn top strip, transport control, PiP host, and the
-//   note-editing chrome all assume a `UIKit`-hosted `ScoreScrollHost` subtree underneath. Ⅳ's Mac reading surface
-//   is a new screen built directly for `NSWindow` / AppKit, not a port of this one.
+// PARITY(macos): the reader chrome around the score — `MacReaderRootScreen` is this screen's Mac sibling, not a
+//   port: it renders all three display modes, an imported PDF, the ink committed on either, and plays them from
+//   `MacTransportBar`. Half of what is here is iOS physics that should never cross (the self-drawn top strip and
+//   its cutout tier, the status-bar handoff, `hostingAppearance(.light)`, the idle timer, the PiP host, pop-gesture
+//   restoration). What macOS is genuinely still owed is the rest of the chrome: the inspectors, the share /
+//   annotate / edit controls, the score ⇄ original-PDF switch, the coach marks (`ReaderHintBubble`), and the two
+//   wirings this screen's `.task` performs (`+PartRemapWiring`, `+RevertWiring`).
 
 #if os(iOS)
 import Domain

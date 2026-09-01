@@ -1,5 +1,6 @@
-// PARITY(macos): shared scroll + pinch shell for the vertical readers, built on `ScoreScrollHost` (`UIKit`-hosted)
-//   and `PinchState` — see the markers on those files for what Ⅳ's Mac reading surface needs instead.
+// PARITY(macos): one vertical shell for score and PDF — the Mac's vertical SCORE reader is built on
+//   `MagnifyingScoreScrollView` and needs nothing from this shell. Its other caller does: an imported PDF has no
+//   vertical mode on the Mac at all, so what this shell shares is half-missing there. See `VerticalPDFContainer`.
 
 #if os(iOS)
 import SwiftUI

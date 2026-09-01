@@ -1,5 +1,7 @@
-// PARITY(macos): content-agnostic page-band surface shared by `PagedScoreContainer` and `PagedPDFContainer` — see
-//   the marker on those files for what Ⅳ's Mac reading surface needs.
+// PARITY(macos): one page band shared by score and PDF — the Mac has a page band for the engraved score
+//   (`MacPageDeck`) and none for a PDF, so the sharing this surface represents is exactly what macOS lacks: an
+//   imported PDF has no paged mode there at all. See `PagedPDFContainer`. The tap zones this surface installs are
+//   a touch idiom and are not what is owed; see `PageTapOverlay`.
 
 #if os(iOS)
 import SwiftUI

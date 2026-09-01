@@ -2,8 +2,10 @@
 // PagedPDFContainer mirrors PagedScoreContainer's page-band pagination / pinch / annotation-overlay plumbing for
 // paged PDF viewing; the parallel structure keeps it just over the file_length budget.
 
-// PARITY(macos): one of the Reader's iOS-only layout-mode screens, built on `ScoreScrollHost` / `PinchState`. Ⅳ's
-//   Mac reading surface needs its own layout, not a port of this one — see the markers on those files.
+// PARITY(macos): paged layout for an imported PDF — `MacOriginalPDFView` shows an imported PDF in one continuous
+//   layout only, with the playback cursor and committed ink over it. There is no paged mode for a PDF on the Mac,
+//   so `ReaderLayoutMode` silently means nothing while an original is on screen there. What macOS needs is a Mac
+//   page deck for PDF pages — `MacPageDeck` is the shape, over `PDFPage` rather than an engraved system.
 
 #if os(iOS)
 import Domain

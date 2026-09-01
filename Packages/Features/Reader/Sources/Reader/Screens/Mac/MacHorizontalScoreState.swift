@@ -1,5 +1,6 @@
-// PARITY(macos): the supporting types for `MacHorizontalScoreContainer` — see the marker on that file for what the
-//   Mac's horizontal mode still lacks against the iOS one.
+// PARITY(macos): horizontal mode's supporting state — these types carry only what the Mac strip needs today
+//   (geometry, the sticky pane's bracket, the fit-magnification seed). The annotation canvas and note-editing seam
+//   that horizontal mode still lacks would each add state here; see `MacHorizontalScoreContainer`.
 
 #if os(macOS)
 import Domain

@@ -1,5 +1,6 @@
-// PARITY(macos): the hosted score subtree for `VerticalScoreContainer` — see the marker on that file for what Ⅳ's
-//   Mac reading surface needs.
+// PARITY(macos): vertical mode's note-editing overlay — this is the subtree `VerticalScoreContainer` hosts, and the
+//   `EditingSelectionOverlay` / tap-routing it carries is the half of that container's debt which lives at this
+//   layer. `MacVerticalScoreContainer` draws the same score without it, and Ⅳ is where it arrives.
 
 #if os(iOS)
 import SheetMusicUI

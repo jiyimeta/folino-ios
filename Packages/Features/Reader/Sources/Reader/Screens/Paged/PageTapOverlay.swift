@@ -1,5 +1,7 @@
-// PARITY(macos): the page-turn tap-zone overlay for `PagedReaderSurface`'s touch-based page turning — see the
-//   marker on `PagedScoreContainer.swift` for what Ⅳ's Mac reading surface needs.
+// PARITY(macos): a page-turn affordance on the Mac — these edge tap zones are a touch idiom and should NOT be
+//   ported: a pointer has no reason to divide the page into thirds. What the Mac deck owes is the capability, in
+//   its own idiom — page keys / a View-menu Next & Previous Page pair driving `goToPage`, which the deck does not
+//   have yet either. See `PagedScoreContainer+PageNavigation`.
 
 #if os(iOS)
 import SwiftUI

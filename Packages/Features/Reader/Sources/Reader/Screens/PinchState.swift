@@ -1,6 +1,8 @@
-// PARITY(macos): pinch-gesture-driven zoom state — shared by the score/PDF containers, whose `UIScrollView` /
-//   `UIPinchGestureRecognizer` / PencilKit-canvas-overlay world is iOS-only. Ⅳ's Mac reading surface will drive
-//   zoom through trackpad/scroll-wheel gestures against a new (AppKit-based) surface instead of reusing this.
+// PARITY(macos): pinch-gesture-driven zoom state — nothing, deliberately. This exists because a `UIScrollView`
+//   pinch has to be tracked, damped and committed by hand; `NSScrollView.magnification` does all of that itself,
+//   trackpad pinch and ⌘-scroll included, so the Mac reader's zoom went in on `MagnifyingScoreScrollView` with no
+//   state of its own. Do not port this — there is nothing left for it to hold. The marker stays only because the
+//   iOS containers below still depend on the type, so the `#if` around it needs explaining.
 
 #if os(iOS)
 import CoreGraphics

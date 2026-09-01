@@ -1,7 +1,9 @@
-// PARITY(macos): revert-reload wiring — the reload ordering inside (`releaseEngine()` → `scoreItem` →
-//   `pdfPlayback = .idle` → `load()`) is platform-neutral logic, not UI; it lives in this `ReaderRootScreen`
-//   extension only because iOS wires it from that screen's `.task`. Ⅳ's Mac reading surface should lift this
-//   wiring, not re-author it, into its own equivalent wiring point.
+// PARITY(macos): revert-reload wiring — `MacReaderRootScreen.task` does not install it, so a revert-to-original
+//   performed while a score is open on the Mac would leave the reader showing the pre-revert engraving over a
+//   still-running engine. The reload ordering (`releaseEngine()` → `scoreItem` → `pdfPlayback = .idle` → `load()`)
+//   is platform-neutral and sits in a `ReaderRootScreen` extension only because iOS wires it from that screen's
+//   `.task`; the Mac screen should LIFT it into its own `.task`, not re-author it. Reachable once Ⅳ gives the Mac
+//   the score-info chrome that offers Revert.
 
 #if os(iOS)
 import Domain

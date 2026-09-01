@@ -1,5 +1,6 @@
-// PARITY(macos): one of the Reader's iOS-only layout-mode screens, built on `VerticalReaderShell` / `PinchState`.
-//   Ⅳ's Mac reading surface needs its own layout, not a port of this one — see the markers on those files.
+// PARITY(macos): vertical layout for an imported PDF — the Mac's `MacOriginalPDFView` is the only PDF surface it
+//   has, and it neither honors `ReaderLayoutMode` nor stacks pages the way this container does. A Mac vertical PDF
+//   mode is owed alongside the paged one; see `PagedPDFContainer`.
 
 #if os(iOS)
 import Domain
