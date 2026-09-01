@@ -85,13 +85,15 @@ WindowGroup(for: ScoreItemID.self) { $scoreID in
 
 ### 3.2 Opening reuses the window; tabs are offered
 
-Selecting a row in the sidebar sets **the current window's** detail (window-local `@State`, seeded from the group's presented value). "Open in New Tab" and ⌘-double-click call `openWindow(value:)`. Because every window comes from one `WindowGroup`, AppKit's automatic tabbing supplies ⌘T, tab drag-out and Merge All Windows for free.
+Selecting a row in the sidebar sets **the current window's** detail (window-local `@State`, seeded from the group's presented value). "Open in New Tab" calls `openWindow(value:)`. Because every window comes from one `WindowGroup`, AppKit's automatic tabbing supplies ⌘T, tab drag-out and Merge All Windows for free.
 
 **Amended after implementation: this said "double-clicking", and double-click is measured unreachable.** A SwiftUI tap gesture on a row and `List(selection:)` cannot coexist on macOS. Measured against a bare `List(selection:)` control in the same run, every gesture form — `.onTapGesture`, `.onTapGesture(count: 2)`, `.simultaneousGesture(TapGesture(count: 2))` and `.highPriorityGesture(TapGesture(count: 2))`, attached to the row content or to the whole row — leaves the selection permanently EMPTY, not merely unable to multi-select. Each of those forms fired its own open action in the same run, so the events do reach SwiftUI; they never reach the `NSTableView` underneath, because the gesture claims the click first.
 
 So the Mac has no row gesture at all. **Selecting exactly one row is what opens it** — the Mail / Notes shape, and the same muscle memory an iPad user brings. Selecting more than one is a bulk selection: the detail shows "N selected" and the bulk actions come from the selection's context menu and ⌫.
 
 **A consequence, not a separate preference: nothing auto-collapses the sidebar.** Opening a score used to set `columnVisibility = .detailOnly`; with selection driving the detail that would hide the list on the first click and make ⌘-clicking a second row impossible, so multi-selection would be structurally unreachable. The sidebar is the user's to collapse (⌘0), and it behaves the same however a score was opened — including after an import, so there is no special case to remember.
+
+**A second consequence, recorded as a known cost rather than a defect: multi-selecting tears down the reader.** When the selection crosses 1→2 the detail swaps `MacReaderRootScreen` for the count view, so SwiftUI unmounts the reader and its `onDisappear` runs — `endAnnotationSessionIfNeeded()`, a flush of pending ink, then `releaseEngine()`. Nothing is lost from the document: the ink is flushed before the engine goes. What is lost is session state — scroll position, magnification, and **playback**, so ⌘-clicking a second row while a score is playing stops the music. Dropping back to one row rebuilds the reader from scratch (the detail is keyed `.id(item.id)`, so a fresh `ReaderViewModel`). The alternative is to keep the reader mounted behind the count view and merely cover it, which costs a live engine and a live annotation session for a selection the user is about to act on; that trade is open.
 
 This is the MuseScore 4 complaint (§5.3) inverted: MuseScore forces a new window; folino defaults to reuse and offers tabs.
 
