@@ -1113,12 +1113,16 @@ In the same file:
 ```swift
 /// Pulls the gzipped drawing back out of a real Apple archive, for tests only.
 enum AKTestSupport {
+    enum SupportError: Error { case noDrawingInArchive }
+
+    // `#require` belongs inside a test; this is a plain throwing helper, so it throws its own error instead.
     static func drawingPayload(inArchiveAt url: URL) throws -> Data {
         let plist = try PropertyListSerialization
             .propertyList(from: try Data(contentsOf: url), format: nil) as? [String: Any]
         let objects = (plist?["$objects"] as? [Any]) ?? []
-        let gzip = try #require(objects.compactMap { $0 as? Data }
-            .first { $0.prefix(3) == Data([0x1F, 0x8B, 0x08]) })
+        guard let gzip = objects.compactMap({ $0 as? Data })
+            .first(where: { $0.prefix(3) == Data([0x1F, 0x8B, 0x08]) })
+        else { throw SupportError.noDrawingInArchive }
         return try gunzip(gzip)
     }
 
@@ -1168,7 +1172,12 @@ git commit -m "test(reader): pin our payload's structure against a real Apple sa
 
 **Interfaces:**
 - Consumes: `AKInkGeometry`, `AKInkPayloadEncoder`, `AKInkArchive`, `AppleDeflater`.
-- Produces: no new public surface; `compose(basePDF:drawings:placements:)` keeps its signature.
+- Produces: `AnnotatedPDFComposer.compose(basePDF:drawings:placements:)` returns
+  `(data: Data, akEncodeFailures: Int)` instead of `Data`. Two call sites in
+  `ReaderAnnotatedPDFRenderer.swift` (around lines 48 and 68) take `.data`; the renderer logs the new event when
+  the count is non-zero. Existing composer tests that use the return value need `.data` added.
+- Also adds `AnalyticsEvent.annotatedExportAKEncodeFailed(count:)` in
+  `Packages/Domain/Sources/Domain/Analytics/AnalyticsEvent+Factories.swift`, beside `annotatedExportDrifted`.
 
 Three changes to `makeAnnotation`:
 
@@ -1211,7 +1220,7 @@ struct AnnotatedPDFComposerAKTests {
             force: [], azimuth: [], altitude: [], timeMillis: [],
         )
         return DrawingAnchor(
-            kind: .page(PageAnchor(pageIndex: 0, x: 0, y: 0)),
+            kind: .page(PageAnchor(pageIndex: 0)),
             encodedDrawing: InkStrokeCodec.encode(stroke),
         )
     }
@@ -1377,14 +1386,38 @@ private static func akPayload(
             uuid: UUID(), deflater: AppleDeflater(),
         )
     } catch {
-        analytics?.track("annotated_export_ak_encode_failed")
         return nil
     }
 }
 ```
 
-Use whatever analytics reference the file already holds; if there is none, drop the `track` call and leave the
-`catch` returning nil, and say so in the commit message.
+The composer is a stateless `enum` with no analytics reference, and the export's existing
+`annotated_export_drifted` is logged by `ReaderAnnotatedPDFRenderer`, which holds one. So the count travels back
+rather than the composer reaching sideways for a dependency:
+
+1. `compose` accumulates `akEncodeFailures` — one per placement where `akPayload` returned nil — and returns
+   `(data: Data, akEncodeFailures: Int)`.
+2. Add the event factory in `Packages/Domain/Sources/Domain/Analytics/AnalyticsEvent+Factories.swift`, directly
+   below `annotatedExportDrifted`, in the same shape:
+
+```swift
+/// Logged when a stroke's Apple ink payload could not be built. The stroke still exports as a plain `/Ink`
+/// annotation, so this is a silent capability loss rather than a failure the user sees.
+public static func annotatedExportAKEncodeFailed(count: Int) -> AnalyticsEvent {
+    AnalyticsEvent(name: "annotated_export_ak_encode_failed", parameters: ["count": .int(count)])
+}
+```
+
+Check the `parameters` value type against its neighbours — if the enum has no `.int` case, use
+`.string(String(count))`.
+
+3. In `ReaderAnnotatedPDFRenderer`, both call sites take `.data`, and after each:
+
+```swift
+if result.akEncodeFailures > 0 {
+    analytics.log(.annotatedExportAKEncodeFailed(count: result.akEncodeFailures))
+}
+```
 
 - [ ] **Step 5: Add the parity marker**
 
@@ -1403,6 +1436,15 @@ xcodebuild test -scheme Reader -destination 'platform=iOS Simulator,name=iPhone 
 ```
 
 Expected: every existing test still passes, plus the three new ones. **Report the counts, not "tests pass".**
+
+`AnnotatedPDFComposerTests` and `ReaderAnnotatedPDFEndToEndTests` already exist and already exercise this
+method. Expect two kinds of break, and fix them in the source of truth rather than by loosening an assertion:
+
+- **The return type changed.** Call sites need `.data`. Mechanical.
+- **An annotation's bounds may have moved.** The box now comes from `InkStroke` geometry rather than
+  `PKDrawing.bounds`, and PencilKit's render bounds include padding of its own. If an existing test pins exact
+  bounds, work out which box is right before changing the number — the three-rectangle rule is the constraint,
+  and a test that was pinning PencilKit's padding was pinning an implementation detail.
 
 - [ ] **Step 7: Regenerate the parity ledger and commit**
 
