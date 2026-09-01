@@ -248,8 +248,15 @@ final class ReaderPlaybackSession {
         } else {
             // Start from whatever the editor has selected, if anything: while editing, the selected note is where the
             // user's attention is, and hearing the passage from there is the point of playing at all mid-edit.
+            //
+            // **Awaited.** `play` consumes the seek as its starting position (`LivePlaybackController.pendingCursor`),
+            // so a seek still in flight means play starts from the OLD position and the seek then restarts it. The
+            // restart runs through the backend's `Synthesizer.reset()`, whose mixer programs are stripped from the
+            // SMF and so do not chase back — the first note came out as GM piano, and whatever the aborted start had
+            // already sounded was left hanging to surface under the next tap preview. Detaching it saved nothing:
+            // both calls are main-actor, so the detached Task could only ever run after `play` had already returned.
             if let start = startCursorProvider() {
-                placeCursor(start)
+                await controller.setCursor(to: placeCursorLocally(start))
             }
             do {
                 try await controller.play(countIn: isPrecountEnabled())
@@ -393,7 +400,12 @@ final class ReaderPlaybackSession {
     }
 
     func setManualCursor(_ cursor: ScoreCursor) {
-        let engineCursor = placeCursor(cursor)
+        let engineCursor = placeCursorLocally(cursor)
+        // Detached here, unlike the play path: nothing follows that the seek has to be in front of, and the tap has
+        // already moved the on-screen cursor synchronously above.
+        if let controller {
+            Task { await controller.setCursor(to: engineCursor) }
+        }
         // Audition the tapped note while stopped / paused only — never overlay a one-shot preview on a continuous
         // playback stream. Use the engine (full-score addressed) cursor so the NoteID resolves against the score the
         // engine prepared; rests fall through silently.
@@ -402,11 +414,13 @@ final class ReaderPlaybackSession {
         }
     }
 
-    /// The cursor move itself, without the tap's audition. Split out because pressing play with an editing selection
-    /// also seeks — and there, a 0.5 s preview of the first note would sound over the top of playback starting on
-    /// that very note. Returns the engine-addressed cursor the caller may want to inspect.
-    @discardableResult
-    private func placeCursor(_ cursor: ScoreCursor) -> ScoreCursor {
+    /// The cursor move as far as this session and the screen are concerned — resolve the tap into engine addressing
+    /// and move both markers. Synchronous, so a tap moves the cursor on the frame it lands. Handing the result to
+    /// the engine is the caller's, because how urgent that is differs: see `togglePlayback`.
+    ///
+    /// Split from the tap's audition as well, because pressing play with an editing selection also seeks — and
+    /// there, a 0.5 s preview of the first note would sound over the top of playback starting on that very note.
+    private func placeCursorLocally(_ cursor: ScoreCursor) -> ScoreCursor {
         // Placing the cursor by hand is an explicit manual set → resume follow (clears any suspension from the user
         // having scrolled away during playback).
         resumePlaybackFollow()
@@ -418,9 +432,6 @@ final class ReaderPlaybackSession {
         rawPlaybackCursor = engineCursor
         playbackCursor = cursor
         onCursorChanged()
-        if let controller {
-            Task { await controller.setCursor(to: engineCursor) }
-        }
         return engineCursor
     }
 

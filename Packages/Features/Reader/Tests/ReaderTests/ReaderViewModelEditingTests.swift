@@ -83,6 +83,24 @@ struct ReaderViewModelEditingTests {
         #expect(controller.loadCount == 1)
     }
 
+    /// Pressing play with an editing selection seeks to it first. That seek used to be fired into a detached
+    /// `Task` while `play()` was awaited straight after, so play consumed a `pendingCursor` that was still nil: the
+    /// engine started at the old position, the seek landed a moment later and restarted it, and the restart came out
+    /// of a `Synthesizer.reset()` with no mixer programs re-applied — the first note in GM piano, and whatever the
+    /// aborted start had sounded left hanging to surface under the next preview.
+    @Test
+    func `the seek reaches the engine before play does`() async {
+        let controller = FakePlaybackController()
+        let vm = makeVM(controller: controller)
+        await vm.load()
+        await vm.playbackSession.prepareForPlayback()
+        vm.playbackSession.startCursorProvider = { .beat(measureIndex: 0, tickInMeasure: 0) }
+
+        await vm.playbackSession.togglePlayback()
+
+        #expect(controller.setCursorCountAtPlay == 1)
+    }
+
     /// Outside an edit session the provider answers nil, and the transport is untouched.
     @Test
     func `pressing play outside an edit session leaves the engine alone`() async {
