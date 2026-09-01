@@ -26,7 +26,7 @@ terminal for Section A and normally (Finder/Dock, or `open`) for the rest.
 
 ---
 
-## Section A — one terminal-launched session (covers items 1–9)
+## Section A — one terminal-launched session (covers items 1–12)
 
 Quit any already-running copy of the app first (so this is a clean launch, and so stderr capture below actually
 belongs to this run). Then, from Terminal:
@@ -37,7 +37,7 @@ belongs to this run). Then, from Terminal:
 
 Use the *binary's* path directly, not `open` — a redirected **stdout is fully buffered**, so `print` output
 would never reach the file and an empty log would look exactly like "nothing happened." The direct-binary launch
-avoids that trap. Leave this running for the rest of Section A; you'll grep `/tmp/folino-qa.log` at the end.
+avoids that trap. Leave this running for the rest of Section A; you'll grep `/tmp/folino-qa.log` at item 11.
 
 ### 1. Launch window shape
 
@@ -75,14 +75,33 @@ alone must never reorder the list under your pointer.
 reported bug in the previous design: opening a score restamps `lastOpenedAt`, which reorders whatever list is
 sorted by it (notably Recently Opened) — but only *opening* should trigger that, never a plain click.
 
-### 4. Double-click opens a score
+### 4. "Open in New Window" and "Import…" are disabled when they should be
+
+**What to do:** Do this now, before any score has been opened (items 1–3 don't open one). With the browser
+window key and no score window open yet, check the File menu: **Open in New Window** should be grayed out —
+no window has a "current score" for it to act on. Then open **Settings (⌘,)** and, with the Settings window
+key, check the File menu again: **Import…** should now also be grayed out, since neither the browser nor a
+score window is key while Settings is. Close Settings afterward.
+
+**Pass:** Both items are visibly disabled in the states described above.
+
+**Fail:** Either item stays enabled and clickable with nothing behind it to act on. This is not cosmetic: both
+rely on `@FocusedValue` reporting `nil` to disable themselves, and this branch already shipped exactly this
+failure once — File ▸ Import was a silent no-op when the library window was key but hadn't published its
+import action yet. An item that looks clickable but silently does nothing is worse than one that's visibly
+grayed out.
+
+(You'll see "Open in New Window" become enabled once you open your first score in item 5 — that's expected and
+not something to re-check here.)
+
+### 5. Double-click opens a score
 
 **What to do:** In **All Scores or Favorites** (the plain score list), double-click a row.
 
 **Pass:** A score window opens for that score.
 
 **Fail:** Nothing happens. This is a real, anticipated possibility, not a bug to panic about —
-`contextMenu(forSelectionType:menu:primaryAction:)` (what `double-click` is wired through) is documented API but
+`contextMenu(forSelectionType:primaryAction:)` (what `double-click` is wired through) is documented API but
 **unmeasured in this repo**: nothing else uses it, and the measurement table in
 `Packages/Features/Library/Sources/Library/Views/RowOpenAffordance.swift` (the comment block above
 `macScoreOpenAffordance`) predates it — every row in that table before it is a measured `NO`.
@@ -91,12 +110,18 @@ If double-click does nothing, **first confirm the fallbacks still work** before 
 
 - Select the row, press **Return** — must open the score.
 - Right-click the row, choose **Open** from the context menu — must open the score.
-- (Where present) the toolbar's Open affordance — must open the score.
 
-If all three fallbacks work, this is the measured failure the file's own doc comment anticipates, not a
-mystery. **Record the result as a new row in `RowOpenAffordance.swift`'s measurement table** — edit the
-`unmeasured` row (`contextMenu(forSelectionType:menu:primaryAction:)`) to `YES`/`NO` for each of its three
-columns, matching what you observed.
+If both fallbacks work, this is the measured failure the file's own doc comment anticipates, not a mystery.
+**Record the result as a new row in `RowOpenAffordance.swift`'s measurement table** — edit the `unmeasured`
+row (`contextMenu(forSelectionType:primaryAction:)`) to `YES`/`NO` for each of its three columns, matching
+what you observed.
+
+**A third fallback — a toolbar Open button — does not exist, and that's a known gap, not something to go
+looking for.** The design spec (§2.2) names four open paths, including a toolbar Open button, but only three
+were actually built: double-click, Return, and the context menu. The button was never implemented. Return and
+the context menu already cover the case where double-click is dead; the missing button only matters if
+double-click *also* turns out dead, in which case note it as a follow-up — whether the button is still wanted
+is a product call, not something this pass decides.
 
 **Now repeat inside a playlist** (open any playlist from the sidebar, double-click a score row inside it).
 **This is not optional and does not follow from the All Scores result above.** `PlaylistDetailView` attaches the
@@ -105,10 +130,10 @@ open affordance at a different point in its view tree than `ScoreListView` does 
 it works in a playlist. Check double-click, Return, and the row's Open / Open in New Window menu items
 separately here, and record the result the same way if it differs from the plain list.
 
-### 5. ⌘-click / ⇧-click multi-select, bulk actions, ⌫
+### 6. ⌘-click / ⇧-click multi-select, bulk actions, ⌫
 
-**What to do:** In any plain score list (not Recently Deleted), ⌘-click two or three rows, then ⇧-click to extend
-a range. Right-click the selection.
+**What to do:** In any plain score list (not Recently Deleted, and not a playlist yet — see below), ⌘-click two
+or three rows, then ⇧-click to extend a range. Right-click the selection.
 
 **Pass:** All selected rows stay highlighted (⌘-click doesn't collapse to one row). The context menu on the
 selection offers bulk actions (e.g. bulk favorite/tag/delete, whatever the row menu shows for a multi-selection).
@@ -120,10 +145,25 @@ nothing / crashes. This exact path was silently unreachable for two whole tasks 
 history (a selection-based open affordance made single-row selection indistinguishable from "open"), so give it
 real attention rather than a glance.
 
-### 6. Opening a second score — tab or standalone
+**Now repeat inside a playlist.** Open any playlist, ⌘-click/⇧-click multiple rows inside it, right-click the
+selection to confirm the bulk-actions menu appears there too, and (on throwaway rows — see below) press ⌫.
+This does not follow from the plain-list result above: `PlaylistDetailView` attaches the open affordance at a
+different point in its view tree than `ScoreListView` does, and that same difference was itself a review
+finding earlier in this branch. The task report that added this affordance said explicitly to check
+multi-select "still working alongside" the open paths inside a playlist, not just in the plain lists — do both
+here, not only the open-paths half you already did in item 5.
+
+**Use throwaway rows for every ⌫ deletion in this item (plain list and playlist), and check enough scores
+remain before moving on.** Section A is one continuous session, and item 7 (opening a second score) needs at
+least two distinct scores still live afterward. Don't delete the last two or three scores in your test library
+— pick rows you don't mind sending to Recently Deleted, or restore what you deleted before continuing if you're
+short on library content.
+
+### 7. Opening a second score — tab or standalone
 
 **What to do:** From the browser, open one score (double-click or Return). Then go back to the browser (⌘O or
-the score window's toolbar button — see item 9) and open a **second, different** score.
+the score window's toolbar button — see item 8) and open a **second, different** score. (If item 6 left you
+without two distinct scores, restore one from Recently Deleted or import another first.)
 
 **Pass condition A — tabs:** The second score joins the first score's window as a tab (one window, a tab bar
 with two tabs).
@@ -140,7 +180,7 @@ preference has been changed. If you see B, **check two more things before callin
 **Fail:** Neither A nor B's fallback checks work — e.g. Merge All Windows does nothing, or a torn-off tab won't
 detach. Record which of A/B you got and, if B, whether both fallback checks passed.
 
-### 7. ⌘O and the toolbar button summon the browser
+### 8. ⌘O and the toolbar button summon the browser
 
 **What to do:** From a score window (one you opened above), press **⌘O**. Separately, click the toolbar button
 in the score window's toolbar (leftmost item, `square.grid.2x2` icon, in the `.navigation` placement).
@@ -150,7 +190,7 @@ in the score window's toolbar (leftmost item, `square.grid.2x2` icon, in the `.n
 **Fail:** Either does nothing, opens something else, or the toolbar button is missing/disabled. Note which of
 the two failed.
 
-### 8. The import seam — all four paths
+### 9. The import seam — all four paths
 
 Do all four, in this session (each needs a file to import — use any valid score file, and a second copy of one
 you've already imported for the duplicate case):
@@ -172,7 +212,7 @@ score. No double windows, no missed opens, no window left showing an empty/blank
 -scene `onChange` ordering for one shared `@Observable` object is an unmeasured claim in this branch. Note
 exactly which path (1–4 above) misbehaved.
 
-### 9. The `+` toolbar menu and the failing-import alert
+### 10. The `+` toolbar menu and the failing-import alert
 
 **What to do:** In the browser toolbar, click the **`+`** menu (leftmost toolbar item). It should offer three
 items: **New score**, **New playlist**, **New tag**. Try each:
@@ -190,9 +230,9 @@ file to look importable, or use a deliberately truncated file) and import it via
 (nothing happens, no error shown). All four of these presentations are newly reachable on macOS in this branch
 and have never been opened before now.
 
-### 10. End of Section A — check the log
+### 11. Check the log
 
-Quit the app (or leave it running if you're continuing into Section D/E immediately — either is fine). Now:
+Quit the app. Now:
 
 ```sh
 grep -n 'NavigationRequestObserver' /tmp/folino-qa.log
@@ -219,6 +259,34 @@ investigating a suspected regression.
 
 Also skim the rest of `/tmp/folino-qa.log` for anything else that looks like a crash, an uncaught exception, or
 a SwiftUI fault-level log — not just the one string above.
+
+**The next item needs a fresh, Japanese-language launch — you've already quit the app for this grep, so there's
+no extra quit-and-relaunch cost to doing it right now.**
+
+### 12. Locale check — Japanese
+
+**What to do:** Relaunch the app forced into Japanese, without touching your Mac's system language for the rest
+of your session:
+
+```sh
+open -a "/path/to/folino.app" --args -AppleLanguages '(ja)'
+```
+
+(Alternatively: add folino to an app-specific language override in System Settings ▸ General ▸ Language &
+Region, or switch the whole system to 日本語 and relaunch — either works, but the `-AppleLanguages` launch
+argument above is the least disruptive to the rest of your Mac.) Open a score window and read the File menu and
+the toolbar button.
+
+**Pass:** The File menu's browser-summon item reads 「開く…」, "Open in New Window" reads
+「新しいウインドウで開く」, and the score window's toolbar button also reads 「開く…」.
+
+**Fail:** English text appears instead of Japanese, or a raw key like `mac.menu.showLibrary` appears instead of
+translated text — that specific shape (the identifier itself, unrendered) is what a missing or broken
+localization entry looks like. Only the compiled string table was checked before this branch shipped; nobody
+has read these three strings rendered in an actual Japanese-language menu.
+
+Quit this Japanese-language instance when done. Sections B–F below don't need Japanese — launch normally
+(your Mac's regular language) again for them.
 
 ---
 
@@ -247,7 +315,7 @@ necessarily knows about it.
 
 ## Section C — Recently Deleted's open affordance
 
-Not covered by item 4 above on purpose — Recently Deleted never had an "Open" action before this branch and its
+Not covered by item 5 above on purpose — Recently Deleted never had an "Open" action before this branch and its
 row menu differs from the plain list's.
 
 **What to do:** Go to Recently Deleted. Try double-click, Return, and the row's context menu on a deleted item.
@@ -309,13 +377,15 @@ preview at 1000pt wide — wider than the real minimum.
 | 1 (launch window shape) | Task 6 report §6, item 1 |
 | 2 (every source renders, Recents count) | Task 4 report (Fix round 1); Task 6 report §6, item 2 |
 | 3 (click only selects, no re-sort) | Task 2 report (design rationale in `RowOpenAffordance.swift`) |
-| 4 (double-click, incl. playlist-separately) | Task 2 report, "What could not be verified" 1–4; `RowOpenAffordance.swift` measurement table |
-| 5 (⌘/⇧-click, bulk actions, ⌫) | Task 2 report design rationale (selection-as-open era defect) |
-| 6 (tab vs. standalone, Merge All Windows, tear-off) | Task 5 report, "What remains unverified"; design doc §2.3/line 88 |
-| 7 (⌘O, toolbar button) | Task 7 report, "What remains unverified" |
-| 8 (import seam, all 4 paths) | Task 6 report, Fix round 1 "New concerns" 1 |
-| 9 (`+` menu, failing-import alert) | Task 6 report, Fix round 2 "What remains for QA" 1–3 |
-| 10 (`NavigationRequestObserver`, positive control) | Task 6 report §6 item 3; Fix round 1 "New concerns" 4 |
+| 4 (disabled state: Open in New Window / Import…) | Task 7 report, "What remains unverified" |
+| 5 (double-click, incl. playlist-separately) | Task 2 report, "What could not be verified" 1–4; `RowOpenAffordance.swift` measurement table |
+| 6 (⌘/⇧-click, bulk actions, ⌫, incl. inside a playlist) | Task 2 report design rationale (selection-as-open era defect); Task 2 report Fix round 2, "QA-sheet addition" |
+| 7 (tab vs. standalone, Merge All Windows, tear-off) | Task 5 report, "What remains unverified"; design doc §2.3/line 88 |
+| 8 (⌘O, toolbar button) | Task 7 report, "What remains unverified" |
+| 9 (import seam, all 4 paths) | Task 6 report, Fix round 1 "New concerns" 1 |
+| 10 (`+` menu, failing-import alert) | Task 6 report, Fix round 2 "What remains for QA" 1–3 |
+| 11 (`NavigationRequestObserver`, positive control) | Task 6 report §6 item 3; Fix round 1 "New concerns" 4 |
+| 12 (locale check, Japanese) | Task 7 report, "What remains unverified" |
 | B (two windows, one plays) | Task 5 report "What remains unverified"; Task 8 report `PARITY(macos)` marker |
 | C (Recently Deleted open affordance) | Task 2 report, Wrinkle 2 |
 | D (playlist reorder) | Task 8 brief / original plan item; never reached by any harness |
