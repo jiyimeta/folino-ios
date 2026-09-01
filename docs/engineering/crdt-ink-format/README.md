@@ -373,3 +373,71 @@ Everything needed is now known and reachable with public API only:
 
 folino creates its own annotations rather than editing Apple's, so it controls all three rectangles from the
 start — the one hard constraint is the easiest one for it to satisfy.
+
+---
+
+# Confirmed end to end (2026-09-01)
+
+Ink moved to a new position, ink synthesized in place, and ink synthesized at a different position on the page
+were **all accepted on device** — each erases and selects in Files exactly like Apple's own markup.
+
+The format is solved. folino can write ink that Apple's own tools edit.
+
+## The complete recipe
+
+```
+PDF annotation, subtype /Square
+  /Rect              = archiveRect grown 1pt on every side
+  /AAPL:AKExtras     = dictionary
+     /AAPL:AKAnnotationV2 = base64 of
+        NSKeyedArchiver archive of AKInkAnnotation2
+           rectangle        = archiveRect            (page space, y up)
+           drawingSize      = the canvas size        (e.g. 792.77 x 1122.06 for A4)
+           UUID, akPlat=2, akVers=2, originalModelBaseScaleFactor, and the other scalars
+           drawing          = gzip of
+              protobuf, no magic header:
+                .2.3.4.1   RGBA, four float32 in 0...1
+                .2.3.4.2   tool id, e.g. "com.apple.ink.pen"
+                .2.3.5.4   point count
+                .2.3.5.5   count x 24-byte records:
+                             [0:4]   float32 time offset, increasing
+                             [4:8]   float32 x   (canvas space)
+                             [8:12]  float32 y   (canvas space)
+                             [12:14] uint16 width      26 = thin pen, 40 = thickest
+                             [14:16] uint16 1000       constant
+                             [16:18] uint16 0          constant
+                             [18:20] uint16 force      per point
+                             [20:22] uint16 0xAAAA     constant
+                             [22:24] uint16 0xFE54     constant
+                .2.3.5.6   bbox: four float32, x y w h, canvas space, WITH the pen's padding
+                .2.3.5.11  fixed64 CFAbsoluteTime
+                .2.3.2 .2.3.9 .2.3.5.13 .2.3.5.14   UUIDs, freshly generated is fine
+                everything else copied verbatim from a real sample
+```
+
+with
+
+```
+sx, sy      = pageW / drawingSize.Width, pageH / drawingSize.Height   (pageW/H = the real MediaBox)
+archiveRect = (bbox.x * sx,  pageH - (bbox.y + bbox.h) * sy,  bbox.w * sx,  bbox.h * sy)
+/Rect       = (archiveRect.x - 1, archiveRect.y - 1, archiveRect.w + 2, archiveRect.h + 2)
+```
+
+The three boxes must agree to well under 0.1pt or the annotation is discarded silently — it neither erases nor
+selects, and only the `/AP` keeps it visible.
+
+## Still unknown, and not blocking
+
+- `.2.1`, `.2.2`, `.2.3.1` (all 10), the `.2.3.3` triples, `.2.3.5.1/.2/.3/.9`, `.2.3.10` — copied verbatim
+  from a sample and never varied. Worth probing before shipping, in case one of them encodes something a
+  multi-stroke or multi-colour drawing needs.
+- `originalModelBaseScaleFactor` (0.7997) is not the canvas-to-page ratio and its role is unexplained.
+- How several strokes with different colours share one annotation: the samples have at most two strokes, both
+  the same colour. Round six's synthesis rewrote every stroke identically.
+- The `/AP` appearance stream still has to be produced by us; Apple's is a raster image XObject.
+
+## Next, for folino
+
+Write an encoder from folino's `InkStroke` to this structure, then place the annotation with the three-box
+rule. folino creates its own annotations rather than editing Apple's, so it controls all three boxes from the
+start. Verify the same way this was verified: on a device, with the eraser.
