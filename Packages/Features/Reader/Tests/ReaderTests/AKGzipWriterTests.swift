@@ -39,6 +39,8 @@ struct AKGzipWriterTests {
         #expect(inflate(Data(body), into: payload.count * 2) == payload)
 
         let trailer = out.suffix(8)
+        let crc = trailer.prefix(4).withUnsafeBytes { UInt32(littleEndian: $0.loadUnaligned(as: UInt32.self)) }
+        #expect(crc == GzipWriter.crc32(payload))
         let isize = trailer.suffix(4).withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
         #expect(UInt32(littleEndian: isize) == UInt32(payload.count))
     }

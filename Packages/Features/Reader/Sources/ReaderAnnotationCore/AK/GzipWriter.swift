@@ -23,7 +23,7 @@ public enum GzipWriter {
     }
 
     /// Bitwise CRC32, no table. The payloads are a few kilobytes, so the table is not worth the storage.
-    public static func crc32(_ data: Data) -> UInt32 {
+    static func crc32(_ data: Data) -> UInt32 {
         var crc: UInt32 = 0xFFFF_FFFF
         for byte in data {
             crc ^= UInt32(byte)
