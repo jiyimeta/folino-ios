@@ -24,6 +24,7 @@ let outPath = args[1]
 
 var replacements: [Int: Data] = [:]
 var rects: [Int: CGRect] = [:]
+var selfRect: Set<Int> = []
 for spec in args.dropFirst(2) {
     let parts = spec.split(separator: ":")
     guard parts.count >= 2, let page = Int(parts[0]),
@@ -34,12 +35,18 @@ for spec in args.dropFirst(2) {
     }
     replacements[page] = data
     if parts.count >= 3 {
-        let n = parts[2].split(separator: ",").compactMap { Double($0) }
-        guard n.count == 4 else {
-            print("bad rect in spec: \(spec)")
-            exit(2)
+        if parts[2] == "self" {
+            // Exercise the setter with the annotation's own current value, so the only variable is the act of
+            // writing /Rect rather than the value written.
+            selfRect.insert(page)
+        } else {
+            let n = parts[2].split(separator: ",").compactMap { Double($0) }
+            guard n.count == 4 else {
+                print("bad rect in spec: \(spec)")
+                exit(2)
+            }
+            rects[page] = CGRect(x: n[0], y: n[1], width: n[2], height: n[3])
         }
-        rects[page] = CGRect(x: n[0], y: n[1], width: n[2], height: n[3])
     }
 }
 
@@ -70,7 +77,11 @@ for (page, archive) in replacements.sorted(by: { $0.key < $1.key }) {
         replacedKey = true
     }
     if replacedKey {
-        if let rect = rects[page] {
+        if selfRect.contains(page) {
+            let current = annotation.bounds
+            annotation.bounds = current
+            print("page \(page): /Rect re-set to its own value \(current)")
+        } else if let rect = rects[page] {
             annotation.bounds = rect
             print("page \(page): /Rect set to \(rect)")
         }

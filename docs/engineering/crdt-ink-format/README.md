@@ -309,3 +309,55 @@ Worth recording, because each one produced a confident wrong reading before it w
 
 The lesson each time was the same: one variable per variant, and verify from the artifact that only that
 variable moved.
+
+---
+
+# Solved (2026-09-01)
+
+## The drawing payload can be synthesized
+
+Round six replaced a 95-point stroke with 40 points of our own geometry, kept the stored bbox byte-identical
+and touched no rectangle anywhere. **Accepted on device** — it erases and selects like Apple's own ink. Every
+field inside the payload has now been changed successfully at least once: points, bbox, timestamp, all four
+UUIDs, and the point count.
+
+Round six also cleared the tooling of suspicion: re-setting `/Rect` to its own current value, and rewriting the
+archive rectangle with its own current values, were both accepted. PDFKit's setter and plist round-tripping are
+not the problem.
+
+## The rectangle must match exactly
+
+So the earlier rejections really were about the rectangle's value — and the reason the "consistent" attempt in
+round five still failed is embarrassing and simple: the formula used **A4's nominal 595.2756 x 841.8898** while
+the sample PDF's MediaBox is exactly **595 x 842**. That is a discrepancy of about 0.1pt, and it is enough for
+the annotation to be discarded.
+
+With the page's real MediaBox the mapping is exact — zero error, to the last decimal, on all eight samples:
+
+```
+sx, sy = pageW / drawingSize.Width, pageH / drawingSize.Height
+X = bbox.x * sx
+Y = pageH - (bbox.y + bbox.h) * sy
+W = bbox.w * sx
+H = bbox.h * sy
+```
+
+Two consequences for any implementation:
+
+- use the page's actual MediaBox, never a nominal paper size
+- do not round the value on its way to `/Rect`; 0.1pt is already too much
+
+## What this means for folino
+
+Everything needed is now known and reachable with public API only:
+
+| piece | how |
+| --- | --- |
+| envelope | `NSKeyedArchiver` of `AKInkAnnotation2`, gzip, header-less protobuf |
+| geometry | 24-byte point records, canvas space |
+| colour, width, tool | decoded fields, per stroke |
+| identity | fresh UUIDs and a current timestamp are accepted |
+| placement | stored bbox = archive rectangle = `/Rect`, by the exact mapping above |
+
+folino creates its own annotations rather than editing Apple's, so it controls all three rectangles from the
+start — the one hard constraint is the easiest one for it to satisfy.

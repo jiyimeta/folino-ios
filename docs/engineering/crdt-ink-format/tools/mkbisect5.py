@@ -35,7 +35,10 @@ sys.path.insert(0, __file__.rsplit("/", 1)[0])
 import mkbisect  # noqa: E402
 import pbcodec  # noqa: E402
 
-PAGE_W, PAGE_H = 595.2756, 841.8898
+# The PAGE's actual MediaBox, not A4's nominal size. Using 595.2756 x 841.8898 against a page that is
+# really 595 x 842 puts the rect about 0.1pt out, and that is enough for Apple's markup to reject the
+# annotation outright -- the match has to be exact.
+PAGE_W, PAGE_H = 595.0, 842.0
 PAD = 1.4  # canvas units of padding around the raw points, in the ballpark Apple leaves for a thin pen
 
 
@@ -138,7 +141,9 @@ def main():
         set_archive_rect(archive, rect)
         out = f"{outdir}/v5-p{page}-{name}.archive"
         mkbisect.save(archive, index, payload, out)
-        specs.append(f"{page}:{out}:{rect[0]:.2f},{rect[1]:.2f},{rect[2]:.2f},{rect[3]:.2f}")
+        # Full precision: the annotation is rejected outright if /Rect and the archive rectangle differ by as
+        # little as 0.1pt, so this must not be rounded on the way through the spec string.
+        specs.append(f"{page}:{out}:{rect[0]:.6f},{rect[1]:.6f},{rect[2]:.6f},{rect[3]:.6f}")
         n = sum(len(mkbisect.records(b)) for _, b in pbcodec.strokes_of(payload))
         print(f"page {page}  {name:22s} points={n:3d}  rect=({rect[0]:.1f},{rect[1]:.1f},{rect[2]:.1f},{rect[3]:.1f})")
 
