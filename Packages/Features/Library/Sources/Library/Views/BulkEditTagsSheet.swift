@@ -63,9 +63,11 @@ struct BulkEditTagsSheet: View {
 
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeadingCompat) {
+        ToolbarItem(placement: .cancellationAction) {
             Button { dismiss() } label: { L10n.Common.cancel }
         }
+        // Stays on the compat helper: `.confirmationAction` renders this Done semibold on iOS, where it is
+        // regular today — measured against this file's preview (Task 16). See `PlatformToolbarCompat`.
         ToolbarItem(placement: .topBarTrailingCompat) {
             Button { onCommit(checked) } label: { L10n.Common.done }
                 .disabled(checked.isEmpty)
