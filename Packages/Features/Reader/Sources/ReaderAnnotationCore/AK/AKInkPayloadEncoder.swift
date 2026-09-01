@@ -88,7 +88,7 @@ public enum AKInkPayloadEncoder {
     /// them off reverses them, and the annotation is rejected outright.
     private static func records(of stroke: InkStroke, scale: CGFloat) -> Data {
         var out = Data(capacity: stroke.x.count * 24)
-        for i in stroke.x.indices {
+        for i in stroke.x.indices where i < stroke.y.count {
             let t = i < stroke.timeMillis.count
                 ? Float(stroke.timeMillis[i]) / 1000
                 : Float(i) * 0.008 // a plausible cadence when the source device gave no timing
