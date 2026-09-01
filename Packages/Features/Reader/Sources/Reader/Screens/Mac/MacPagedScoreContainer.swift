@@ -154,7 +154,7 @@ struct MacPagedScoreContainer: View {
     /// Bumped on every installed engraving; the only thing that makes the host rebuild the deck. See
     /// `MagnifyingScoreScrollView.contentGeneration`.
     @State private var layoutGeneration = 0
-    @State private var scrollRequest: MacDeckScrollRequest?
+    @State private var scrollRequest: MacScoreScrollRequest?
     @State private var scrollToken = 0
 
     var body: some View {
@@ -293,12 +293,12 @@ struct MacPagedScoreContainer: View {
     private func scrollToPage(containing cursor: ScoreCursor?) {
         guard let cursor, let sheet = pageSize, let target = pageIndex(containing: cursor) else { return }
         scrollToken += 1
-        scrollRequest = MacDeckScrollRequest(
+        scrollRequest = MacScoreScrollRequest(
             token: scrollToken,
-            rect: CGRect(
+            target: .visible(CGRect(
                 origin: MacPageDeckMetrics.pageOrigin(index: target, pageSize: sheet),
                 size: sheet,
-            ),
+            )),
         )
     }
 }

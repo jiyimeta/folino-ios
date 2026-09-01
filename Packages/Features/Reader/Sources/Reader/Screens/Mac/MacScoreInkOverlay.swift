@@ -51,6 +51,27 @@ struct MacScoreInkOverlay: View {
         return CGRect(x: 0, y: start, width: documentSize.width, height: max(0, end - start))
     }
 
+    /// `scrollBand`'s other axis, for a surface that scrolls sideways.
+    ///
+    /// **Horizontal mode makes this necessary rather than symmetric.** A horizontally engraved score is one system
+    /// tall and arbitrarily wide — twenty thousand points for a few minutes of music — so the whole-document raster
+    /// `scrollBand` avoids by height is here avoided by width, and by nothing else: the slicing below cuts by height,
+    /// which for a document this short yields a single slice as wide as the band. Bounding the band is therefore the
+    /// only thing standing between a scrolled strip and a hundred-megabyte bitmap. The snapping argument is
+    /// `scrollBand`'s, verbatim, on the other axis.
+    static func horizontalScrollBand(left: CGFloat, width: CGFloat, in documentSize: CGSize) -> CGRect {
+        guard width > 0, documentSize.width > 0 else {
+            return CGRect(origin: .zero, size: documentSize)
+        }
+        let start = max(0, (left / columnWidth).rounded(.down) * columnWidth)
+        let end = min(documentSize.width, ((left + width) / columnWidth).rounded(.up) * columnWidth)
+        return CGRect(x: start, y: 0, width: max(0, end - start), height: documentSize.height)
+    }
+
+    /// Widest column rasterized for a sideways-scrolling surface, and the grid `horizontalScrollBand` snaps to. The
+    /// same screenful-sized unit `sliceHeight` is, turned ninety degrees.
+    private static let columnWidth: CGFloat = 1024
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             // A zero-cost floor so the overlay keeps the surface's size even when there is no ink at all.

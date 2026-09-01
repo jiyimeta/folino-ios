@@ -23,14 +23,12 @@ struct MacCommands: Commands {
     @AppStorage(ReaderGlobalSettingsKey.layoutMode)
     private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
 
-    /// The picker's selection, folded through `macDisplayMode` on the way out and written back raw.
+    /// The picker's selection, resolved through `macDisplayMode` on the way out and written back raw.
     ///
-    /// Only the two modes the Mac can draw get menu entries — `ReaderLayoutMode.horizontal` exists and iOS offers it,
-    /// but the Mac has no horizontal container yet and an entry that renders nothing is worse than a missing one.
-    /// Binding the picker straight to the stored value would then mean a stored `horizontal` matches neither tag and
-    /// the menu shows **no** checkmark while the reader is drawing Page. The getter resolves it to the mode actually
-    /// on screen; the setter writes the user's pick verbatim, so choosing Page from a stored `horizontal` is what
-    /// retires it — never this menu on its own.
+    /// All three modes the reader offers have a Mac container now, so all three get menu entries. The resolution on
+    /// the way out is still what guarantees the checkmark names the mode actually on screen: it and
+    /// `MacReaderRootScreen` read the stored value through the same function, so an unrecognized raw value can never
+    /// leave the menu blank while the reader is drawing Page.
     private var displayMode: Binding<String> {
         Binding(
             get: { ReaderLayoutMode.macDisplayMode(storedRawValue: layoutModeRaw).rawValue },
@@ -66,6 +64,8 @@ struct MacCommands: Commands {
                     .tag(ReaderLayoutMode.page.rawValue)
                 Text("mac.menu.displayMode.vertical")
                     .tag(ReaderLayoutMode.vertical.rawValue)
+                Text("mac.menu.displayMode.horizontal")
+                    .tag(ReaderLayoutMode.horizontal.rawValue)
             } label: {
                 Text("mac.menu.displayMode")
             }

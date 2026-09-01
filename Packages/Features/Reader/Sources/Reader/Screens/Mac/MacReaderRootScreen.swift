@@ -1,7 +1,7 @@
-// PARITY(macos): the Mac reading surface's chrome — this screen renders the score in Page or Vertical mode, shows an
-//   imported PDF and the ink committed on either, lets them scroll, and plays them from a transport bar. The
-//   inspectors, the share / annotate / edit controls, Horizontal layout mode, and the score ⇄ original-PDF switch are
-//   all still iOS-only; see `ReaderRootScreen` for the surface being caught up to.
+// PARITY(macos): the Mac reading surface's chrome — this screen renders the score in all three display modes, shows
+//   an imported PDF and the ink committed on either, lets them scroll, and plays them from a transport bar. The
+//   inspectors, the share / annotate / edit controls, and the score ⇄ original-PDF switch are all still iOS-only; see
+//   `ReaderRootScreen` for the surface being caught up to.
 
 #if os(macOS)
 import Domain
@@ -20,9 +20,9 @@ import UtilityCore
 /// growing a seam of `#if`s down the middle of an 800-line file.
 ///
 /// What it deliberately does NOT do yet, each owned by a later task: the inspectors, the note-editing seam
-/// (`ReaderEditingHost`), Horizontal layout mode, and the score ⇄ original-PDF switch (the reader shows whichever
-/// rendition `displaySource` names, but has no chrome to change it). The transport is here — `MacTransportBar`, its
-/// own sibling of `ReaderTransportControl`.
+/// (`ReaderEditingHost`), and the score ⇄ original-PDF switch (the reader shows whichever rendition `displaySource`
+/// names, but has no chrome to change it). The transport is here — `MacTransportBar`, its own sibling of
+/// `ReaderTransportControl`.
 @MainActor
 public struct MacReaderRootScreen: View {
     @State private var viewModel: ReaderViewModel
@@ -148,10 +148,10 @@ public struct MacReaderRootScreen: View {
         // Page mode has no such case: its scroll view shows the desk, not paper.
         .navigationTitle(viewModel.scoreItem.title)
         .task {
-            // What the view model is told is the mode this screen actually DRAWS, not the raw preference — that is
-            // what the vertical pin protected, and it still has to hold now that the pin is a real branch:
-            // `playback_started` must never report a mode that is not on screen. `layoutMode` folds the one mode the
-            // Mac cannot draw (horizontal) into the one it substitutes, so the two can no longer disagree.
+            // What the view model is told is the mode this screen actually DRAWS, not the raw preference:
+            // `playback_started` must never report a mode that is not on screen. All three modes draw here now, so
+            // `layoutMode` substitutes nothing — but it stays the single resolution both this screen and the View
+            // menu read, which is what keeps them from disagreeing about an unrecognized stored value.
             viewModel.currentLayoutMode = layoutMode
             viewModel.playbackSession.startObservingCursor()
             viewModel.playbackSession.startObservingSoundfontDownload()
@@ -247,15 +247,12 @@ struct MacScoreContentView: View {
         }
     }
 
-    /// The mode branch. Both containers take the cursors as VALUES, read here — one level below the root — so a
+    /// The mode branch. Every container takes the cursors as VALUES, read here — one level below the root — so a
     /// per-tick cursor change re-renders the container and the leaves beneath it and never `MacReaderRootScreen`.
-    ///
-    /// `.horizontal` cannot arrive (the root folds it into `.page`), but the switch spells it out rather than
-    /// defaulting: if the Mac ever grows a horizontal container, this is the line that has to change.
     @ViewBuilder
     private func scoreContainer(score: Score) -> some View {
         switch layoutMode {
-        case .page, .horizontal:
+        case .page:
             MacPagedScoreContainer(
                 score: score,
                 staffSize: viewModel.layoutModel.effectiveStaffSize,
@@ -265,6 +262,20 @@ struct MacScoreContentView: View {
                 showAllMeasureNumbers: showAllMeasureNumbers,
                 playbackCursor: viewModel.playbackSession.displayCursor,
                 pageAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
+                autoFollowEnabled: autoFollowEnabled,
+                transposeSemitones: viewModel.transposeModel.effectiveSemitones,
+                viewModel: viewModel,
+            )
+        case .horizontal:
+            MacHorizontalScoreContainer(
+                score: score,
+                staffSize: viewModel.layoutModel.effectiveStaffSize,
+                honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
+                collapseMultiMeasureRests: collapseMultiMeasureRests,
+                showInvisibleElements: showInvisibleElements,
+                showAllMeasureNumbers: showAllMeasureNumbers,
+                playbackCursor: viewModel.playbackSession.displayCursor,
+                scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
                 autoFollowEnabled: autoFollowEnabled,
                 transposeSemitones: viewModel.transposeModel.effectiveSemitones,
                 viewModel: viewModel,
