@@ -7,6 +7,9 @@ struct ScoreListScreen: View {
     @Bindable var viewModel: ScoreListViewModel
     let library: LibraryViewModel
     let onOpen: (ScoreItem) -> Void
+    /// **macOS only**, in effect — see `ScoreListView.onOpenInNewWindow`. Every caller passes the same closure it
+    /// passes to `onOpen`, since there is no separate window to open yet; a later task gives this its own meaning.
+    let onOpenInNewWindow: (ScoreItem) -> Void
     let onEditTags: (ScoreItem) -> Void
     let onAddToPlaylist: (ScoreItem) -> Void
 
@@ -62,6 +65,7 @@ struct ScoreListScreen: View {
             isManualOrderActive: viewModel.isManualOrderActive,
             showsManualOrderOption: isPlaylistSource,
             onTap: openScore,
+            onOpenInNewWindow: onOpenInNewWindow,
             onToggleFavorite: { item in Task { await library.toggleFavorite(item) } },
             onConfirmDelete: { item in Task { await library.delete(item) } },
             onSelectSort: { viewModel.selectSort($0) },

@@ -7,6 +7,8 @@ import UtilityUI
 struct RecentlyDeletedScreen: View {
     let library: LibraryViewModel
     let onOpen: (ScoreItem) -> Void
+    /// **macOS only**, in effect — see `ScoreListView.onOpenInNewWindow`.
+    let onOpenInNewWindow: (ScoreItem) -> Void
 
     @State private var viewModel: RecentlyDeletedViewModel
     @State private var isSelecting = false
@@ -14,9 +16,14 @@ struct RecentlyDeletedScreen: View {
     @State private var pendingPermanentDelete: ScoreItem?
     @State private var isShowingBulkPermanentDeletePopover = false
 
-    init(library: LibraryViewModel, onOpen: @escaping (ScoreItem) -> Void) {
+    init(
+        library: LibraryViewModel,
+        onOpen: @escaping (ScoreItem) -> Void,
+        onOpenInNewWindow: @escaping (ScoreItem) -> Void,
+    ) {
         self.library = library
         self.onOpen = onOpen
+        self.onOpenInNewWindow = onOpenInNewWindow
         _viewModel = State(wrappedValue: RecentlyDeletedViewModel(repository: library.repository))
     }
 
@@ -34,33 +41,7 @@ struct RecentlyDeletedScreen: View {
                     Text("library.recentlyDeleted.empty.message", bundle: .module)
                 }
             } else {
-                RecentlyDeletedView(
-                    items: items,
-                    onTap: onOpen,
-                    onRestore: { item in Task { await library.restore(item) } },
-                    onRequestPermanentDelete: { pendingPermanentDelete = $0 },
-                    pendingPermanentDelete: $pendingPermanentDelete,
-                    onConfirmPermanentDelete: { item in
-                        Task { await library.permanentlyDelete(item) }
-                    },
-                    isSelecting: $isSelecting,
-                    selectedIDs: $selectedIDs,
-                    onBulkRestore: {
-                        let ids = selectedIDs
-                        Task {
-                            await library.bulkRestore(ids)
-                            exitSelectionMode()
-                        }
-                    },
-                    onBulkPermanentDelete: {
-                        let ids = selectedIDs
-                        Task {
-                            await library.bulkPermanentlyDelete(ids)
-                            exitSelectionMode()
-                        }
-                    },
-                    isShowingBulkPermanentDeletePopover: $isShowingBulkPermanentDeletePopover,
-                )
+                recentlyDeletedList(items: items)
             }
         }
         .navigationTitle(Text("library.recentlyDeleted.title", bundle: .module))
@@ -73,8 +54,9 @@ struct RecentlyDeletedScreen: View {
         //   with ⌘/⇧-click, the same bulk actions come from a context menu on the selection, and ⌫ deletes it.
         //   That works ONLY because the row carries no tap gesture there — any SwiftUI tap gesture leaves the
         //   selection permanently EMPTY, which silently made the context menu and ⌫ unreachable for two tasks
-        //   before it was measured. Selecting exactly one row is what opens it. See `RowOpenAffordance` for the
-        //   measurement and for both halves of the per-platform decision. Still open: the menu bar (Ⅳ).
+        //   before it was measured. Opening is its own action now, never a side effect of selecting a row — see
+        //   `RowOpenAffordance` for the measurement and for both halves of the per-platform decision. Still open:
+        //   the menu bar (Ⅳ).
         .toolbar {
             #if os(iOS)
             ToolbarItem(placement: .topBarTrailing) {
@@ -96,6 +78,38 @@ struct RecentlyDeletedScreen: View {
             #endif
         }
         .onAppear { library.analytics.logScreen(.recentlyDeleted) }
+    }
+
+    /// Split out of `body` to keep the `Group` closure under SwiftLint's `closure_body_length` budget.
+    private func recentlyDeletedList(items: [ScoreItem]) -> some View {
+        RecentlyDeletedView(
+            items: items,
+            onTap: onOpen,
+            onOpenInNewWindow: onOpenInNewWindow,
+            onRestore: { item in Task { await library.restore(item) } },
+            onRequestPermanentDelete: { pendingPermanentDelete = $0 },
+            pendingPermanentDelete: $pendingPermanentDelete,
+            onConfirmPermanentDelete: { item in
+                Task { await library.permanentlyDelete(item) }
+            },
+            isSelecting: $isSelecting,
+            selectedIDs: $selectedIDs,
+            onBulkRestore: {
+                let ids = selectedIDs
+                Task {
+                    await library.bulkRestore(ids)
+                    exitSelectionMode()
+                }
+            },
+            onBulkPermanentDelete: {
+                let ids = selectedIDs
+                Task {
+                    await library.bulkPermanentlyDelete(ids)
+                    exitSelectionMode()
+                }
+            },
+            isShowingBulkPermanentDeletePopover: $isShowingBulkPermanentDeletePopover,
+        )
     }
 
     private func exitSelectionMode() {

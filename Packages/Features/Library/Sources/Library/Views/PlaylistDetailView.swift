@@ -6,6 +6,8 @@ struct PlaylistDetailView: View {
     let playlistName: String
     let items: [ScoreItem]
     let onOpen: (ScoreItem) -> Void
+    /// **macOS only**, in effect — see `ScoreListView.onOpenInNewWindow`.
+    let onOpenInNewWindow: (ScoreItem) -> Void
     let onMove: (IndexSet, Int) -> Void
     let onRemoveFromPlaylist: (ScoreItem) -> Void
     let onRename: (String) -> Void
@@ -73,9 +75,10 @@ struct PlaylistDetailView: View {
         //   with ⌘/⇧-click, the same bulk actions come from a context menu on the selection, and ⌫ deletes it.
         //   That works ONLY because the row carries no tap gesture there — any SwiftUI tap gesture leaves the
         //   selection permanently EMPTY, which silently made the context menu and ⌫ unreachable for two tasks
-        //   before it was measured. Selecting exactly one row is what opens it. See `RowOpenAffordance` for the
-        //   measurement and for both halves of the per-platform decision. Still open: the menu bar (Ⅳ).
-        .macSelectionOpensScore(selectedIDs, in: items, onOpen: onOpen)
+        //   before it was measured. Opening is its own action now, never a side effect of selecting a row — see
+        //   `RowOpenAffordance` for the measurement and for both halves of the per-platform decision. Still open:
+        //   the menu bar (Ⅳ).
+        .macScoreOpenAffordance(selectedIDs, in: items, onOpen: onOpen, onOpenInNewWindow: onOpenInNewWindow)
         .safeAreaInset(edge: .bottom) {
             #if os(iOS)
             if isSelecting {
@@ -144,6 +147,10 @@ struct PlaylistDetailView: View {
     /// The row's own Remove action, unless this row is part of a multi-item selection — right-clicking anywhere
     /// inside a ⌘/⇧-click selection then offers the bulk actions instead, exactly as `ScoreListView` does. Built on
     /// every platform because `macContextMenuCompat`'s builder is still type-checked on iOS; only macOS renders it.
+    ///
+    /// On macOS, Open / Open in New Window are prepended in the single-row branch too — this row has no tap gesture
+    /// and no pre-existing "Open" menu item, so both live here; see `macScoreOpenAffordance`'s doc comment for why
+    /// they belong in the row's own menu and not in a second one.
     @ViewBuilder
     private func effectiveRowContextMenu(for item: ScoreItem) -> some View {
         #if os(macOS)
@@ -158,12 +165,34 @@ struct PlaylistDetailView: View {
                 onDelete: onBulkDelete,
             )
         } else {
+            openRowContextMenuContent(for: item)
+            Divider()
             removeFromPlaylistButton(for: item)
         }
         #else
         removeFromPlaylistButton(for: item)
         #endif
     }
+
+    #if os(macOS)
+    @ViewBuilder
+    private func openRowContextMenuContent(for item: ScoreItem) -> some View {
+        Button { onOpen(item) } label: {
+            Label {
+                L10n.Common.open
+            } icon: {
+                Image(systemName: "music.note")
+            }
+        }
+        Button { onOpenInNewWindow(item) } label: {
+            Label {
+                Text("library.open.newWindow", bundle: .module)
+            } icon: {
+                Image(systemName: "macwindow")
+            }
+        }
+    }
+    #endif
 
     private func toggleSelection(_ id: ScoreItemID) {
         if selectedIDs.contains(id) {
@@ -206,6 +235,7 @@ private struct PlaylistDetailViewPreviewHost: View {
                 playlistName: playlistName,
                 items: items,
                 onOpen: { _ in },
+                onOpenInNewWindow: { _ in },
                 onMove: { _, _ in },
                 onRemoveFromPlaylist: { (_: ScoreItem) in },
                 onRename: { _ in },

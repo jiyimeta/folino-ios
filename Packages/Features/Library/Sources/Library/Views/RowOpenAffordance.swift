@@ -4,8 +4,8 @@ import SwiftUI
 /// How a Library row is opened, per platform — the two halves of one decision, kept in one file so neither can be
 /// changed without seeing the other.
 ///
-/// **iOS taps the row. macOS selects it, and selecting is what opens it.** That is not a style preference; a
-/// SwiftUI tap gesture and `List(selection:)` cannot coexist on macOS, measured:
+/// **iOS taps the row. macOS puts no gesture on it at all.** That is not a style preference; a SwiftUI tap gesture
+/// and `List(selection:)` cannot coexist on macOS, measured:
 ///
 /// | gesture on the row | single-click selects | ⌘-click extends | double-click fires |
 /// | --- | --- | --- | --- |
@@ -14,20 +14,26 @@ import SwiftUI
 /// | `.onTapGesture(count: 2)` | NO | NO | YES |
 /// | `.simultaneousGesture(TapGesture(count: 2))` | NO | NO | YES |
 /// | `.highPriorityGesture(TapGesture(count: 2))` | NO | NO | YES |
+/// | `contextMenu(forSelectionType:primaryAction:)` | unmeasured | unmeasured | unmeasured |
 ///
 /// Every gesture form leaves `List(selection:)` permanently EMPTY — not merely unable to multi-select, but unable to
 /// select at all. Each failing row above fired its open action in the same measured run, so the events reach SwiftUI;
 /// what they never reach is the `NSTableView` underneath, because the gesture claims the click first. Attaching to
 /// the whole row instead of its content changes nothing, and `.contentShape(Rectangle())` alone is innocent.
+/// `contextMenu(forSelectionType:primaryAction:)` is a `List` API rather than a gesture overlay, so nothing above
+/// condemns it — but nothing measured it either, so it stays `unmeasured` until QA exercises a real double-click; see
+/// `macScoreOpenAffordance` below for what it currently drives.
 ///
 /// The consequence is why this matters: with the selection permanently empty, the Mac's bulk-action context menu
 /// (`selectedIDs.count > 1`) and its ⌫ binding (`guard !selectedIDs.isEmpty`) were both unreachable, silently.
 ///
-/// So on macOS the row carries no gesture and `macSelectionOpensScore` turns a one-row selection into the open.
-/// Spec §3.2 originally called for double-click; that is measured impossible, and the spec now records this table.
+/// **Selection no longer opens a row either — spec §2.2 severs that link.** A one-row selection used to be read as
+/// "open this score," which made a deliberate single-item bulk selection indistinguishable from "show me this
+/// score," and meant a stray ⌘-click on another row silently tore down whatever was open. `macScoreOpenAffordance`
+/// below is the row's opening action now: never a gesture, and never a side effect of selecting or deselecting.
 extension View {
     /// The row's tap-to-open gesture — **iOS only**. A no-op on macOS, where any tap gesture would empty
-    /// `List(selection:)`; see this file's doc comment for the measurement, and `macSelectionOpensScore` for what
+    /// `List(selection:)`; see this file's doc comment for the measurement, and `macScoreOpenAffordance` for what
     /// opens a row there instead.
     ///
     /// A helper rather than an inline `#if` because these calls sit inside a modifier chain, and SwiftFormat's
@@ -41,32 +47,49 @@ extension View {
         #endif
     }
 
-    /// **macOS only**: a selection of exactly one row is the open gesture.
+    /// **macOS only**: how a score row is opened, now that selecting it does not.
     ///
-    /// Above one, nothing opens — the selection is a bulk selection, and the Mac shell shows a count in the detail
-    /// instead. Below one, nothing opens either: clearing the selection leaves whatever was open on screen rather
-    /// than emptying the detail, which is what Mail and Finder do and what stops a stray ⌘-click from closing a
-    /// score the user is reading.
+    /// Four paths were the plan: double-click (via `primaryAction:` below), Return, the row's own context menu, and
+    /// a caller-supplied button — with the last three treated as the real fallback, not garnish, since
+    /// `contextMenu(forSelectionType:primaryAction:)` is unmeasured here (the new table row above).
     ///
-    /// **Exactly one state write reaches the shell from here**, and that is deliberate: `onOpen` is expected to set
-    /// the presented score and nothing else. A second write made from this handler re-enters the split view's
-    /// navigation observer in the same frame — see `MacShellView.openImportedScore` for the measurements that rule
-    /// records. In particular the sidebar must NOT be collapsed here: it would be a second write, and collapsing the
-    /// sidebar on the first click would make ⌘-clicking a second row impossible.
+    /// **Only two of those four live in this helper.** `ScoreListView.effectiveRowMenu` (and its equivalents in
+    /// `PlaylistDetailView` and `RecentlyDeletedView`) already install a `.contextMenu` on every row that switches to
+    /// bulk actions once more than one row is selected. A *second*, List-level menu from
+    /// `contextMenu(forSelectionType:)` on the same rows would fight that one for the same click — this is the same
+    /// "two menus on one row" hazard the measurement above documents for gestures, just one level up the API. So this
+    /// helper's own `menu:` closure is empty on purpose, and Open / Open in New Window are built into each caller's
+    /// existing row menu instead, calling `onOpen` / `onOpenInNewWindow` directly. What this helper contributes is
+    /// `primaryAction:` (double-click) and Return; the caller-supplied-button path is whatever UI a later task hangs
+    /// off the same two closures — this file does not build one.
+    ///
+    /// **What was actually verified here, and what was not.** `Scripts/build-macos-packages.sh` compiles this
+    /// helper and every call site with `menu:` empty, so the "two menus" collision the paragraph above describes
+    /// cannot arise from a type-check standpoint — there is only ever one populated `.contextMenu` per row. Which
+    /// menu a human sees on a real right-click, and whether `primaryAction:` actually fires on a real double-click,
+    /// were not observed by this change: that needs a running app and a pointer, not a build log. Both are on the
+    /// QA sheet in `task-2-report.md`; if double-click turns out dead, Return and the context-menu item are already
+    /// real, working fallbacks — see the previous paragraph.
     @ViewBuilder
-    func macSelectionOpensScore(
+    func macScoreOpenAffordance(
         _ selectedIDs: Set<ScoreItemID>,
         in items: [ScoreItem],
         onOpen: @escaping (ScoreItem) -> Void,
+        onOpenInNewWindow: @escaping (ScoreItem) -> Void,
     ) -> some View {
         #if os(macOS)
-        onChange(of: selectedIDs) { _, newValue in
-            guard newValue.count == 1, let id = newValue.first,
-                  let item = items.first(where: { $0.id == id })
-            else { return }
+        contextMenu(forSelectionType: ScoreItemID.self) { _ in
+            // Empty on purpose — see this function's doc comment. A populated menu here would compete with the
+            // caller's own per-row `.contextMenu` for the same rows; Open / Open in New Window live there instead.
+        } primaryAction: { ids in
+            guard let item = macRowOpenAffordanceSingleItem(ids, in: items) else { return }
             onOpen(item)
         }
-        .focusedSceneValue(\.libraryBulkSelectionCount, selectedIDs.count)
+        .onKeyPress(.return) {
+            guard let item = macRowOpenAffordanceSingleItem(selectedIDs, in: items) else { return .ignored }
+            onOpen(item)
+            return .handled
+        }
         #else
         self
         #endif
@@ -74,22 +97,13 @@ extension View {
 }
 
 #if os(macOS)
-extension FocusedValues {
-    private struct LibraryBulkSelectionCountKey: FocusedValueKey {
-        typealias Value = Int
-    }
-
-    /// How many Library rows are selected in this window, published so the Mac shell's detail column can show a
-    /// "N selected" state instead of a reader.
-    ///
-    /// A focused **scene** value rather than a callback threaded down through `LibraryRootScreen`: the selection
-    /// lives in three different screens' `@State`, each several pushes deep inside the sidebar's `NavigationStack`,
-    /// and a parameter would have to cross the Library package's screen signatures — and iOS call sites — to carry
-    /// something only the Mac shell reads. `MacShellView` already publishes `macCurrentScoreID` and
-    /// `macLibraryImportAction` the same way. Scene-scoped, so it survives focus moving into the detail column.
-    public var libraryBulkSelectionCount: Int? {
-        get { self[LibraryBulkSelectionCountKey.self] }
-        set { self[LibraryBulkSelectionCountKey.self] = newValue }
-    }
+/// Exactly one selected row, or `nil` — shared by `macScoreOpenAffordance`'s `primaryAction` and its Return handler.
+///
+/// Not a `static` member on the `View` extension above: a protocol extension cannot add a static member reachable as
+/// `Self.foo` from inside another extension method the way an earlier draft of this helper assumed, so this is a
+/// free function instead.
+private func macRowOpenAffordanceSingleItem(_ ids: Set<ScoreItemID>, in items: [ScoreItem]) -> ScoreItem? {
+    guard ids.count == 1, let id = ids.first else { return nil }
+    return items.first { $0.id == id }
 }
 #endif

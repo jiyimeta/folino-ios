@@ -7,12 +7,14 @@ import UtilityUI
 /// * trailing partial-swipe → permanent-delete (with popover confirm)
 /// * context menu → restore / permanent-delete (only those two) — on macOS, right-clicking inside a ⌘/⇧-click
 ///   selection of more than one row applies both to the whole selection instead of just that row
-/// * tap → open in Reader (iOS). On macOS there is no row gesture: selecting exactly one row is what opens it,
-///   because a tap gesture and `List(selection:)` cannot coexist — see `RowOpenAffordance`
+/// * tap → open in Reader (iOS). On macOS there is no row gesture — opening is its own action (double-click, Return,
+///   or a context-menu item), never a side effect of selection; see `RowOpenAffordance`
 /// * ⌫ (macOS only) → permanent-delete the selection, with the same popover confirm
 struct RecentlyDeletedView: View {
     let items: [ScoreItem]
     let onTap: (ScoreItem) -> Void
+    /// **macOS only**, in effect — see `ScoreListView.onOpenInNewWindow`.
+    let onOpenInNewWindow: (ScoreItem) -> Void
     let onRestore: (ScoreItem) -> Void
     let onRequestPermanentDelete: (ScoreItem) -> Void
     @Binding var pendingPermanentDelete: ScoreItem?
@@ -28,8 +30,9 @@ struct RecentlyDeletedView: View {
     //   with ⌘/⇧-click, the same bulk actions come from a context menu on the selection, and ⌫ deletes it.
     //   That works ONLY because the row carries no tap gesture there — any SwiftUI tap gesture leaves the
     //   selection permanently EMPTY, which silently made the context menu and ⌫ unreachable for two tasks
-    //   before it was measured. Selecting exactly one row is what opens it. See `RowOpenAffordance` for the
-    //   measurement and for both halves of the per-platform decision. Still open: the menu bar (Ⅳ).
+    //   before it was measured. Opening is its own action now, never a side effect of selecting a row — see
+    //   `RowOpenAffordance` for the measurement and for both halves of the per-platform decision. Still open: the
+    //   menu bar (Ⅳ).
     var body: some View {
         List(selection: $selectedIDs) {
             ForEach(items) { item in
@@ -37,7 +40,7 @@ struct RecentlyDeletedView: View {
                     .tag(item.id)
             }
         }
-        .macSelectionOpensScore(selectedIDs, in: items, onOpen: onTap)
+        .macScoreOpenAffordance(selectedIDs, in: items, onOpen: onTap, onOpenInNewWindow: onOpenInNewWindow)
         .bulkSelectionEditModeCompat(isSelecting: isSelecting)
         .popoverCompat(isPresented: $isShowingBulkPermanentDeletePopover) {
             bulkPermanentDeletePopoverContent
@@ -132,12 +135,18 @@ struct RecentlyDeletedView: View {
     /// anywhere inside a ⌘/⇧-click selection then offers the bulk actions instead, mirroring how AppKit list views
     /// resolve a selection-vs-single-item context menu. A single selected row keeps the row's own menu, which is
     /// already the same two actions.
+    ///
+    /// On macOS, Open / Open in New Window are prepended here too — this row has no tap gesture and no pre-existing
+    /// "Open" menu item to extend, so both come from this file rather than from a shared builder; see
+    /// `macScoreOpenAffordance`'s doc comment for why they live in the row's own menu and not in a second one.
     @ViewBuilder
     private func effectiveRowContextMenu(for item: ScoreItem) -> some View {
         #if os(macOS)
         if selectedIDs.contains(item.id), selectedIDs.count > 1 {
             bulkRowContextMenuContent
         } else {
+            openRowContextMenuContent(for: item)
+            Divider()
             rowContextMenu(for: item)
         }
         #else
@@ -146,6 +155,24 @@ struct RecentlyDeletedView: View {
     }
 
     #if os(macOS)
+    @ViewBuilder
+    private func openRowContextMenuContent(for item: ScoreItem) -> some View {
+        Button { onTap(item) } label: {
+            Label {
+                L10n.Common.open
+            } icon: {
+                Image(systemName: "music.note")
+            }
+        }
+        Button { onOpenInNewWindow(item) } label: {
+            Label {
+                Text("library.open.newWindow", bundle: .module)
+            } icon: {
+                Image(systemName: "macwindow")
+            }
+        }
+    }
+
     /// The same two actions `RecentlyDeletedBulkActionBar` offers on iOS, applied to the whole selection.
     @ViewBuilder
     private var bulkRowContextMenuContent: some View {

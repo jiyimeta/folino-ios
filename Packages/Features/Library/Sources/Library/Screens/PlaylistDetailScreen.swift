@@ -35,10 +35,10 @@ struct PlaylistDetailScreen: View {
         PlaylistDetailView(
             playlistName: playlist.name,
             items: orderedItems,
-            onOpen: { item in
-                library.analytics.log(.scoreOpened(from: .playlist))
-                onOpenInPlaylist(item, playlist.id)
-            },
+            onOpen: openScore,
+            // No separate window action reaches this screen yet — a later task threads a real one down from the
+            // Mac shell. Until then this mirrors `onOpen`, exactly as `onOpen` behaves on iOS.
+            onOpenInNewWindow: openScore,
             onMove: { offsets, destination in move(from: offsets, to: destination) },
             onRemoveFromPlaylist: { item in removeFromPlaylist(item) },
             onRename: { newName in Task { await commitRename(newName) } },
@@ -108,6 +108,13 @@ struct PlaylistDetailScreen: View {
         .onAppear { library.analytics.logScreen(.playlistDetail) }
     }
 
+    /// Log `select_content` attributed to this playlist, then hand the item to the reader-traversal callback. The
+    /// single source both `onOpen` and `onOpenInNewWindow` pass to `PlaylistDetailView` — see that call's comment.
+    private func openScore(_ item: ScoreItem) {
+        library.analytics.log(.scoreOpened(from: .playlist))
+        onOpenInPlaylist(item, playlist.id)
+    }
+
     private var orderedItems: [ScoreItem] {
         let lookup = Dictionary(uniqueKeysWithValues: library.repository.scoreItems.map { ($0.id, $0) })
         return PlaylistPresentation
@@ -141,7 +148,11 @@ struct PlaylistDetailScreen: View {
     private var bulkDeleteAlertBinding: Binding<Bool> {
         Binding(
             get: { bulkDeletePrompt != nil },
-            set: { isPresented in if !isPresented { bulkDeletePrompt = nil } },
+            set: { isPresented in
+                if !isPresented {
+                    bulkDeletePrompt = nil
+                }
+            },
         )
     }
 
@@ -158,7 +169,9 @@ struct PlaylistDetailScreen: View {
         var updated = current
         updated.orderedScoreItemIDs = ids
         Task {
-            if await save(updated) { library.analytics.log(.playlistReordered()) }
+            if await save(updated) {
+                library.analytics.log(.playlistReordered())
+            }
         }
     }
 
@@ -175,7 +188,9 @@ struct PlaylistDetailScreen: View {
     private func commitRename(_ newName: String) async {
         var updated = currentPlaylist()
         updated.name = newName
-        if await save(updated) { library.analytics.log(.playlistRenamed(source: .playlist)) }
+        if await save(updated) {
+            library.analytics.log(.playlistRenamed(source: .playlist))
+        }
     }
 
     private func commitDelete() async {
