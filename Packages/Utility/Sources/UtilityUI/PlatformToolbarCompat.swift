@@ -7,14 +7,19 @@ import SwiftUI
 //   regular, and `.cancellationAction` resolves to the LEADING slot, which throws a deliberately trailing Cancel
 //   across the bar. What is left is a decision rather than more migration — accept the semibold Done on iOS
 //   (which is what the platform asks for anyway), or pin the label's weight so the semantic placement keeps
-//   today's look. Per-screen measurements are below and at each call site.
+//   today's look. Be clear about how small the shipped win is: of the five migrations, exactly ONE is reachable
+//   on a Mac — BulkEditTagsSheet's Cancel, which now takes Esc. ShareRootView's four are semantically right at
+//   zero measured cost but have no macOS host at all (only the iOS share extension presents it), and two of
+//   those four are inside `private struct PreviewLoaded`, which ships nothing. Per-screen measurements are
+//   below and at each call site.
 //
-//   - `.cancellationAction` is pixel-identical to `topBarLeadingCompat` on iOS. BulkEditTagsSheet's Cancel and
-//     all four of ShareRootView's buttons migrated on that evidence.
+//   - `.cancellationAction` is identical to `topBarLeadingCompat` on iOS, within ±1 per channel over the whole
+//     frame. BulkEditTagsSheet's Cancel and ShareRootView's two Cancels migrated on that evidence;
+//     ShareRootView's two confirms migrated on the next bullet's.
 //   - `.confirmationAction`'s semibold cost 1492 px inside the button on AddToPlaylistSheet and EditTagsSheet,
 //     1362 on BulkEditTagsSheet. A confirm carrying an explicit button style is immune — ShareRootView's
-//     glass-prominent checkmark came out identical — so this is about the label's font weight, not the
-//     placement.
+//     glass-prominent checkmark came out identical within the same tolerance, in both its disabled and its
+//     enabled state — so this is about the label's font weight, not the placement.
 //   - BulkAddToPlaylistSheet's Cancel is the only bar button on its sheet and is deliberately trailing.
 //     Migrating it moved it across the bar and dragged the title with it: 17430 px.
 //
@@ -24,6 +29,15 @@ import SwiftUI
 //   `.navigation` and `.primaryAction` — fire on neither. Both directions came from the same run, so the
 //   negatives are not a dead delivery path. So the semibold Done above is not a cost for nothing: it is what
 //   Return costs.
+//
+//   Leaving a sheet on MIXED placements — a semantic Cancel beside a neutral Done — costs nothing on the Mac,
+//   which is not obvious and was measured rather than assumed. Rendered against a macOS destination,
+//   BulkEditTagsSheet's mixed toolbar is identical (±1 per channel, 1200x1024) to the same sheet with BOTH
+//   buttons semantic: `.cancellationAction` and `.primaryAction` group at the trailing edge in that order, which
+//   is where a Mac expects Cancel and a default button. It is the pre-migration layout that was wrong — with
+//   both on these helpers, `.navigation` put Cancel hard against the traffic lights with Done alone at the far
+//   trailing edge (17944 px apart in the toolbar band). So a holdout Done is a missing Return key, not a
+//   misplaced button.
 //
 //   Weigh the decision knowing the rest of the app already went the other way. Every sheet wearing the house
 //   confirm/close chrome — `SheetActionLabel` / `SheetConfirmButton`, five of them across Editor and ScoreUI —
