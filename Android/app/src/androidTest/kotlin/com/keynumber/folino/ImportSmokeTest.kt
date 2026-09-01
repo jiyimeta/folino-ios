@@ -1,11 +1,13 @@
 package com.keynumber.folino
 
+import android.os.Build
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.keynumber.folino.library.RoomLibraryStore
 import com.keynumber.folino.library.generated.LibraryAndroidStoreViewModel
 import org.junit.Assert.assertEquals
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -25,9 +27,27 @@ class ImportSmokeTest {
 
     @Before
     fun clearScores() {
-        // Known starting state on the emulator: drop existing rows so the delta is unambiguous.
+        // This wipes the library it runs against — `deleteRecord` is a DELETE, not a soft delete —
+        // and `connectedAndroidTest` runs on whatever `adb devices` shows. On 2026-08-31 that was a
+        // real Pixel, and it took the scores, per-score preferences and annotations with it (the
+        // .mscz files in filesDir survived, but nothing referenced them any more). The clearing
+        // itself is not optional: import de-duplicates, so a second run against a library that
+        // already holds the fixture would add nothing and fail the delta assertion. So gate the
+        // whole test on being an emulator rather than trying to clear more surgically.
+        assumeTrue("ImportSmokeTest clears the library; it only runs on an emulator", isEmulator())
         store.loadAll().forEach { store.deleteRecord(it.id) }
     }
+
+    // Emulator images report a `ranchu`/`goldfish` hardware and an `sdk_`-prefixed product; the
+    // fingerprint check catches images that predate those. Any one of them is enough — a real
+    // device matches none.
+    private fun isEmulator(): Boolean =
+        Build.HARDWARE == "ranchu" ||
+            Build.HARDWARE.startsWith("goldfish") ||
+            Build.PRODUCT.startsWith("sdk") ||
+            Build.PRODUCT.contains("emulator") ||
+            Build.FINGERPRINT.startsWith("generic") ||
+            Build.FINGERPRINT.contains("emulator")
 
     @Test
     fun importsFixtureScore() {
