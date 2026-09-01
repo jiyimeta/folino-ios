@@ -4,7 +4,24 @@ import Foundation
 import PDFKit
 import PencilKit
 import ReaderAnnotationCore
+#if canImport(UIKit)
 import UIKit
+#else
+import AppKit
+#endif
+
+// The bezier-path and color types PDFKit and PencilKit speak on this platform.
+//
+// Only the handoff is platform-bound: `PDFAnnotation.add(_:)` takes a `UIBezierPath` on iOS and an `NSBezierPath`
+// on macOS with no common overload, and `PKInk.color` is likewise `UIColor` / `NSColor`. The stroke geometry is
+// built once as a `CGPath` and converted at that boundary, so the placement math keeps a single copy.
+#if canImport(UIKit)
+private typealias PlatformBezierPath = UIBezierPath
+private typealias PlatformColor = UIColor
+#else
+private typealias PlatformBezierPath = NSBezierPath
+private typealias PlatformColor = NSColor
+#endif
 
 /// Stamps annotation ink onto a base PDF's pages as PDF ink annotations and returns the new document's bytes.
 ///
@@ -13,7 +30,7 @@ import UIKit
 /// page body any more. That is what makes the ink erasable as a first-class PDF object in any PDF editor, on any
 /// device, rather than a raster the app itself baked into the page.
 ///
-/// The appearance is drawn as vector, from the placed stroke's own per-point geometry — a `UIBezierPath` built by
+/// The appearance is drawn as vector, from the placed stroke's own per-point geometry — a `CGPath` built by
 /// walking the decoded (and placed) `PKStroke`'s points — rather than by rasterizing through PencilKit.
 /// `PKDrawing.image(from:scale:)` proved unusable on device: it returned a fully transparent raster for the user's
 /// own strokes, and twelve hypotheses (invocation style, every tool, color, storage format, stroke mask, point
@@ -127,12 +144,12 @@ enum AnnotatedPDFComposer {
         for stroke in placed.strokes {
             let points = Array(stroke.path)
             guard let first = points.first else { continue }
-            let path = UIBezierPath()
+            let path = CGMutablePath()
             path.move(to: annotationPoint(first.location))
             for point in points.dropFirst() {
                 path.addLine(to: annotationPoint(point.location))
             }
-            annotation.add(path)
+            annotation.add(PlatformBezierPath(cgPath: path))
         }
         annotation.color = color(of: firstStroke)
         let border = PDFBorder()
@@ -146,12 +163,35 @@ enum AnnotatedPDFComposer {
     /// into the color's alpha, since `PDFAnnotation` has no separate opacity property. Resolved under the light
     /// trait first: stored ink colors are canonical light-appearance sRGB, so a dynamic color inside a legacy
     /// `PKDrawing` archive must not come out dark-adapted on a white page.
-    private static func color(of stroke: PKStroke) -> UIColor {
-        let resolved = stroke.ink.color.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        guard resolved.getRed(&r, green: &g, blue: &b, alpha: &a) else { return resolved }
+    private static func color(of stroke: PKStroke) -> PlatformColor {
+        let inkColor = stroke.ink.color
+        guard let rgba = lightAppearanceRGBA(of: inkColor) else { return inkColor }
         let opacity = CGFloat(stroke.path.first?.opacity ?? 1)
-        return UIColor(red: r, green: g, blue: b, alpha: a * opacity)
+        return PlatformColor(red: rgba.r, green: rgba.g, blue: rgba.b, alpha: rgba.a * opacity)
+    }
+
+    /// `color`'s one platform-bound step: resolve a possibly-dynamic ink color under the LIGHT appearance and read
+    /// its sRGB components. iOS resolves through a trait collection; AppKit has no per-color equivalent, so the
+    /// conversion runs with the aqua appearance made current, which is what a dynamic `NSColor` consults.
+    ///
+    /// Returns `nil` when the color has no RGB representation (a pattern color), leaving the caller to pass the
+    /// original through untouched — the same fallback the iOS-only version took when `getRed` reported failure.
+    private static func lightAppearanceRGBA(
+        of color: PlatformColor,
+    ) -> (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat)? {
+        #if canImport(UIKit)
+        let resolved = color.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard resolved.getRed(&r, green: &g, blue: &b, alpha: &a) else { return nil }
+        return (r, g, b, a)
+        #else
+        var resolved: NSColor?
+        NSAppearance(named: .aqua)?.performAsCurrentDrawingAppearance {
+            resolved = color.usingColorSpace(.sRGB)
+        }
+        guard let resolved else { return nil }
+        return (resolved.redComponent, resolved.greenComponent, resolved.blueComponent, resolved.alphaComponent)
+        #endif
     }
 
     /// The median of `values`, or `nil` when empty.
