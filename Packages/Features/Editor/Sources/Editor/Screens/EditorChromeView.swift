@@ -155,6 +155,17 @@ public struct EditorChromeView: View {
         .onDisappear {
             undoManager?.removeAllActions(withTarget: viewModel)
         }
+        // The three-finger swipe is the one editing path with no button to grey out, so it is closed the same way
+        // `onDisappear` closes it: the trampolines come off while the transport runs, and one is armed again after.
+        // Without this the pad, the callout and the strip all go inert during playback while a swipe still rewrote
+        // the score under a cursor already reading from the pre-undo engine.
+        .onChange(of: viewModel.isPlaybackActive) { _, isPlaying in
+            if isPlaying {
+                undoManager?.removeAllActions(withTarget: viewModel)
+            } else if viewModel.canUndo {
+                viewModel.registerSystemUndo(with: undoManager)
+            }
+        }
         .onChange(of: viewModel.didSaveAsSiblingMSCZ) { _, saved in
             guard saved, !siblingMSCZNoticeShown else { return }
             siblingMSCZNoticeShown = true

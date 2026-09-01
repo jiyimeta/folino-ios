@@ -11,7 +11,7 @@ import UtilityUI
 ///
 /// iPhone (compact width), two 44 pt rows:
 ///  1. what the next note will BE — the durations (whole … sixteenth), the tuplet key, the tie key, the dot key;
-///  2. what to write, and undoing it — the pitch letters C–B, with ⌫ at the right end.
+///  2. what to write — the pitch letters C–B, with the rest key at the right end.
 ///
 /// The split is by job, not by convenience: everything on row 1 arms or re-times, everything on row 2 acts. ♯ / ♭
 /// are on neither — they live in `EditorCalloutView`, floating beside the note they alter.
@@ -93,7 +93,7 @@ public struct EditorPadView: View {
                 pitchKeys(isFlexible: false)
                 Divider().frame(height: Self.dividerHeight)
                 EditorContextOps.buttons(viewModel: viewModel)
-                deleteKey(isFlexible: false)
+                restKey(isFlexible: false)
             }
         }
     }
@@ -116,7 +116,7 @@ public struct EditorPadView: View {
             } else {
                 HStack(spacing: 4) {
                     pitchKeys(isFlexible: true)
-                    deleteKey(isFlexible: true)
+                    restKey(isFlexible: true)
                 }
             }
         }
@@ -134,7 +134,7 @@ public struct EditorPadView: View {
             litPitches: viewModel.litDrumPitches,
             isFlexible: isFlexible,
             press: { viewModel.pressDrumKey($0) },
-            restKey: AnyView(deleteKey(isFlexible: isFlexible)),
+            restKey: AnyView(restKey(isFlexible: isFlexible)),
             moreKey: AnyView(
                 EditorDrumMoreMenu(
                     layout: viewModel.drumPadLayout,
@@ -222,13 +222,13 @@ public struct EditorPadView: View {
         )
     }
 
-    /// ⌫ edits the SELECTION, so it goes inert unless the selection is a notehead: with the caret running ahead of
-    /// the selection during input, "something is selected" no longer implies "there is a note to delete", and
-    /// deleting a rest was never anything but a no-op anyway (it replaces a rest with a rest of the same length).
+    /// The rest key — a write key, and the pitch letters' silent twin: it writes into the slot the CARET marks and
+    /// then moves the caret on, so ♩ ♩𝄽 ♩ types straight through. It draws the ARMED length's rest, so the key
+    /// shows the silence you are about to get.
     ///
-    /// It wears a rest rather than a backspace arrow because that is literally what it leaves behind, and the rest
-    /// it draws is the armed length's — so the key shows the silence you are about to get.
-    private func deleteKey(isFlexible: Bool) -> some View {
+    /// Inert only when the caret is on nothing timed. It is not a ⌫ — deleting a note is what this key does when
+    /// the caret is ON that note, which a tap or ← / → puts it there.
+    private func restKey(isFlexible: Bool) -> some View {
         Button {
             viewModel.writeRest()
         } label: {
@@ -236,7 +236,7 @@ public struct EditorPadView: View {
         }
         .buttonStyle(PadKeyStyle(isFlexible: isFlexible))
         .disabled(!viewModel.canWriteRest)
-        .accessibilityLabel(Text("editor.pad.delete", bundle: .module))
+        .accessibilityLabel(Text("editor.pad.rest", bundle: .module))
     }
 }
 

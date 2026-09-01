@@ -49,6 +49,47 @@ struct EditorViewModelAuditionTests {
         #expect(fake.recordedScorePreviewCalls.first?.duration == 0.5)
     }
 
+    /// Stepping is a pick, exactly as a tap is: the caret says where you are, the note says what is there. Walking a
+    /// passage with the arrow keys in silence made it a guessing game.
+    @Test func `stepping the selection sounds the note it lands on`() async {
+        let fake = FakePlaybackController()
+        let vm = makeViewModel(playback: fake)
+        vm.beginSession(score: EditorFixtures.c4ThenD4Chords())
+        vm.select(.note(EditorFixtures.noteID(element: 1)))
+
+        vm.selectNextElement()
+        await vm.auditionTask?.value
+
+        #expect(fake.recordedScorePreviewCalls.map(\.noteID) == [EditorFixtures.noteID(element: 2)])
+    }
+
+    /// Same rule a tap keeps: never lay a one-shot preview over a running transport.
+    @Test func `stepping is silent while the transport runs`() async {
+        let fake = FakePlaybackController()
+        let vm = makeViewModel(playback: fake)
+        vm.beginSession(score: EditorFixtures.c4ThenD4Chords())
+        vm.select(.note(EditorFixtures.noteID(element: 1)))
+        vm.isPlaybackActive = true
+
+        vm.selectNextElement()
+        await vm.auditionTask?.value
+
+        #expect(fake.recordedScorePreviewCalls.isEmpty)
+    }
+
+    /// A step that lands on a rest has nothing to sound.
+    @Test func `stepping onto a rest sounds nothing`() async {
+        let fake = FakePlaybackController()
+        let vm = makeViewModel(playback: fake)
+        vm.beginSession(score: EditorFixtures.chordAtIndex1()) // quarter C4, then quarter rests
+        vm.select(.note(EditorFixtures.noteID(element: 1)))
+
+        vm.selectNextElement()
+        await vm.auditionTask?.value
+
+        #expect(fake.recordedScorePreviewCalls.isEmpty)
+    }
+
     @Test func `deleteSelection does not audition`() async {
         let fake = FakePlaybackController()
         let vm = makeViewModel(playback: fake)

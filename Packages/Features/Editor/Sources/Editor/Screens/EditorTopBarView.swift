@@ -144,13 +144,25 @@ public struct EditorTopBarView: View {
             undoButton
             redoButton
         }
+        .disabled(isEditingLocked)
         .interactiveGlassCompat()
+    }
+
+    /// Whether the controls that change the score are closed — the rule the pad and the callout already keep
+    /// (`EditorPadView`, `EditorCalloutView`): nothing mutates the score while the cursor is moving, because the
+    /// engine is playing a sequence loaded before the edit and cannot be told about one mid-phrase. The strip was
+    /// the hole in it — undo, redo, the voice picker and the measure menu were all still live. **完了 / revert /
+    /// discard are deliberately NOT closed**: ending the session is not editing, and the exits have to stay
+    /// reachable from a screen where everything else has gone quiet.
+    private var isEditingLocked: Bool {
+        viewModel.isPlaybackActive
     }
 
     /// Bare glyphs need something behind them to stay legible over arbitrary score content, so
     /// the voice picker gets glass of its own.
     private var voiceButton: some View {
         voiceMenu
+            .disabled(isEditingLocked)
             .interactiveGlassCompat()
     }
 
@@ -168,13 +180,17 @@ public struct EditorTopBarView: View {
     /// they've folded together.
     private var overflowMenu: some View {
         Menu {
-            instrumentsMenuRow
-            // Only on a percussion staff: on a pitched one there is no drum layout to edit, and a row that opened a
-            // sheet about keys the pad is not showing would be a puzzle rather than a feature.
-            if viewModel.isDrumStaffActive {
-                drumLayoutMenuRow
+            // Stays open while the transport runs (完了 and revert live in it here); only these rows close.
+            Group {
+                instrumentsMenuRow
+                // Only on a percussion staff: on a pitched one there is no drum layout to edit, and a row that
+                // opened a sheet about keys the pad is not showing would be a puzzle rather than a feature.
+                if viewModel.isDrumStaffActive {
+                    drumLayoutMenuRow
+                }
+                measureActionRows
             }
-            measureActionRows
+            .disabled(isEditingLocked)
             if viewModel.canRevertToOriginal {
                 revertMenuRow
             }
@@ -190,6 +206,7 @@ public struct EditorTopBarView: View {
     /// them — the cutout-tier row (no `ViewThatFits` at all) and `row(collapse: .expanded)` (where the session-end
     /// control keeps its own dedicated space). Both need somewhere for these three rows to live that isn't already
     /// spoken for.
+    /// Every row here changes the score, so this one closes whole while the transport runs.
     private var measureMenu: some View {
         Menu {
             instrumentsMenuRow
@@ -198,6 +215,7 @@ public struct EditorTopBarView: View {
             topBarIcon("ellipsis")
         }
         .tint(.primary)
+        .disabled(isEditingLocked)
         .accessibilityLabel(L10n.Common.more)
     }
 
