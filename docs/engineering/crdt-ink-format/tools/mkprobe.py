@@ -167,10 +167,19 @@ def main():
         #
         # Coexistence: folino writes many strokes to a page. With distinct identifiers they must stay distinct
         # drawings -- the accidental collision that edited the wrong page is the failure this rules out.
-        emit(5, "our-payload-ink-subtype", built, subtype="ink")
-        emit(6, "two-annotations-a", build(scaffold, BOX, (1.0, 0.1, 0.1, 1.0), 810_000_000.0, salt=0))
-        emit(6, "two-annotations-b", build(scaffold, BOX_B, (0.1, 0.3, 1.0, 1.0), 810_000_100.0, salt=100))
-        emit(7, "control-square", built)
+        #
+        # EVERY variant gets its own salt. The first attempt gave the subtype pair byte-identical payloads, to
+        # make the subtype the only variable -- which, now that identifiers are known to name the drawing, is
+        # precisely how to make two annotations the same drawing. Three of the four collided and the round
+        # answered nothing. Identifiers are free, so "identical apart from the identifiers" is the comparison
+        # that isolates the subtype; identical *including* them is not a comparison at all.
+        def variant(salt, box=BOX, rgba=(1.0, 0.1, 0.1, 1.0), when=810_000_000.0):
+            return build(scaffold, box, rgba, when, salt=salt)
+
+        emit(5, "ink-subtype", variant(10), subtype="ink")
+        emit(6, "coexist-upper", variant(30))
+        emit(6, "coexist-lower", variant(40, box=BOX_B, rgba=(0.1, 0.3, 1.0, 1.0)))
+        emit(7, "control-square", variant(20))
     else:
         emit(1, "built-scaffold-same", built)
         emit(2, "built-scaffold-travelled", built)
