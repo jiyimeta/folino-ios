@@ -2,6 +2,23 @@
 # Google Play; the wording mirrors that release's Play changelog under Android/fastlane/metadata/android/<locale>/
 # changelogs/<versionCode>.txt. Do not seed this file from App/Resources/VersionHistory.yml — the two platforms ship
 # different features on different timelines and have their own version numbering.
+- version: 1.2.0
+  descriptions:
+    - en: Added note editing
+      ja: 音符の編集機能を追加
+      ko: 음표 편집 기능 추가
+      zh-Hans: 新增音符编辑功能
+      zh-Hant: 新增音符編輯功能
+    - en: Added swiping the seek bar to switch its size
+      ja: 再生バーの大きさをスワイプで切り替える機能を追加
+      ko: 탐색 막대의 크기를 스와이프로 전환하는 기능 추가
+      zh-Hans: 新增滑动切换进度条大小的功能
+      zh-Hant: 新增滑動切換進度列大小的功能
+    - en: Changed the mixer to be organized by instrument
+      ja: ミキサーを楽器ごとの表示に変更
+      ko: 믹서를 악기별 표시로 변경
+      zh-Hans: 混音器改为按乐器显示
+      zh-Hant: 混音器改為依樂器顯示
 - version: 1.1.0
   descriptions:
     - en: Added PDF file import

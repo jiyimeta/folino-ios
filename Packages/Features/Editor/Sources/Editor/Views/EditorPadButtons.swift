@@ -208,7 +208,7 @@ enum PadKeyGlyph {
     private static let durationSize: CGFloat = 20
     private static let durationTrim = PadDurationGlyph.lineTrim(size: durationSize)
 
-    /// ⌫ key glyph — the rest the key would leave behind, in the same music font as the duration keys, so the two
+    /// Rest key glyph — the rest the key writes, in the same music font as the duration keys, so the two
     /// read as one family. Trimmed against the union of ALL rest glyphs (not just this one) so the key's height
     /// doesn't jump as the armed duration changes.
     static func rest(_ duration: NoteDuration?) -> some View {

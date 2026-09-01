@@ -496,6 +496,8 @@ public final class LibraryAndroidStore {
         case "pdf": .pdf
         case "midi": .midi
         case "audioM4A": .audioM4A
+        case "pdf_annotated": .annotatedPDF
+        case "pdf_original_annotated": .annotatedOriginalPDF
         default: nil
         }
     }
@@ -508,6 +510,8 @@ public final class LibraryAndroidStore {
         case .pdf: "pdf"
         case .midi: "midi"
         case .audioM4A: "audioM4A"
+        case .annotatedPDF: "pdf_annotated"
+        case .annotatedOriginalPDF: "pdf_original_annotated"
         }
     }
 
@@ -554,6 +558,11 @@ public final class LibraryAndroidStore {
         case .midi: return writeMIDI(score, to: outURL) ? outPath : ""
         case .pdf: return pdfRenderer.renderPdf(sourcePath, outPath) ? outPath : ""
         case .audioM4A: return audioExporter.exportAudio(sourcePath, outPath) ? outPath : ""
+        // PARITY(android): Annotated PDF export — Android needs an androidx.ink renderer and a PdfDocument writer to
+        //   fill these in. The placement logic is already shared (`AnnotatedExportPlanner` in ReaderAnnotationCore),
+        //   as is the availability rule (`AnnotatedExportAvailability`) and the filename
+        //   (`ScoreExportNaming.fileName`), so what is missing is the drawing half only.
+        case .annotatedPDF, .annotatedOriginalPDF: return ""
         }
     }
 
@@ -689,7 +698,9 @@ public final class LibraryAndroidStore {
         }
         var rowByID: [ScoreItemID: ScoreRowWire] = [:]
         for record in records where record.deletedAt <= 0 {
-            if let sid = scoreItemID(record.id) { rowByID[sid] = Self.row(record) }
+            if let sid = scoreItemID(record.id) {
+                rowByID[sid] = Self.row(record)
+            }
         }
         selectedPlaylistRows = PlaylistPresentation
             .orderedLiveIDs(playlist, liveIDs: liveIDs)
@@ -766,7 +777,9 @@ public final class LibraryAndroidStore {
     @WireletExpose
     public func deletePlaylist(_ id: String) {
         store.deletePlaylist(id: id)
-        if selectedPlaylistID == id { selectedPlaylistID = nil }
+        if selectedPlaylistID == id {
+            selectedPlaylistID = nil
+        }
         reloadPlaylists()
     }
 
@@ -888,7 +901,9 @@ public final class LibraryAndroidStore {
     @WireletExpose
     public func deleteTag(_ id: String) {
         store.deleteTag(id: id)
-        if selectedTagID == id { selectedTagID = nil }
+        if selectedTagID == id {
+            selectedTagID = nil
+        }
         reloadTags()
     }
 
@@ -907,7 +922,11 @@ public final class LibraryAndroidStore {
     @WireletExpose
     public func setTagAssigned(_ scoreId: String, _ tagId: String, _ assigned: Bool) {
         var members = tagMembership()[tagId] ?? []
-        if assigned { members.insert(scoreId) } else { members.remove(scoreId) }
+        if assigned {
+            members.insert(scoreId)
+        } else {
+            members.remove(scoreId)
+        }
         store.replaceTagItems(tagId, members.map { TagItemWire(tagId: tagId, scoreItemId: $0) })
         reloadTags()
     }

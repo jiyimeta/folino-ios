@@ -59,14 +59,23 @@ final class FakePlaybackController: PlaybackController {
     func load(
         score _: Score, displayTitle: String?, preferences: PlaybackPreferences,
     ) throws {
-        if let error = loadError { throw error }
+        if let error = loadError {
+            throw error
+        }
         loadCount += 1
         lastLoadedPreferences = preferences
         lastLoadedDisplayTitle = displayTitle
     }
 
+    /// How many `setCursor` calls had landed by the time `play` ran. The real engine consumes the seek as the
+    /// position to start from, so a seek that arrives after `play` starts the wrong passage and then restarts it.
+    private(set) var setCursorCountAtPlay: Int?
+
     func play(countIn: Bool) throws {
-        if let error = playError { throw error }
+        if let error = playError {
+            throw error
+        }
+        setCursorCountAtPlay = recordedSetCursorCalls.count
         playCount += 1
         lastPlayCountIn = countIn
     }
