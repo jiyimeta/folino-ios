@@ -35,7 +35,7 @@ let outPath = args[1]
 var added = 0
 for spec in args.dropFirst(2) {
     let parts = spec.split(separator: ":")
-    guard parts.count == 3, let pageNumber = Int(parts[0]),
+    guard parts.count >= 3, let pageNumber = Int(parts[0]),
           let archive = FileManager.default.contents(atPath: String(parts[1]))
     else {
         print("bad spec: \(spec)")
@@ -48,7 +48,10 @@ for spec in args.dropFirst(2) {
     }
     let rect = CGRect(x: n[0], y: n[1], width: n[2], height: n[3])
 
-    let annotation = PDFAnnotation(bounds: rect, forType: .square, withProperties: nil)
+    // Apple writes /Square. /Ink is what folino writes today and what other PDF tools treat as a real mark, so
+    // whether AKExtras is honoured on /Ink decides whether the export needs one annotation or two.
+    let subtype: PDFAnnotationSubtype = parts.count >= 4 && parts[3] == "ink" ? .ink : .square
+    let annotation = PDFAnnotation(bounds: rect, forType: subtype, withProperties: nil)
     annotation.color = .clear
     annotation.interiorColor = nil
     annotation.border = PDFBorder()

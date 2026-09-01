@@ -90,16 +90,20 @@ def rgba_field(r, g, b, a):
     return pbcodec.serialize([(i + 1, 5, struct.pack("<f", v)) for i, v in enumerate((r, g, b, a))])
 
 
-def build(scaffold, box, rgba, when):
-    """A complete drawing payload. `scaffold` is (stroke_fields, points_fields) or None to omit them."""
+def build(scaffold, box, rgba, when, salt=0):
+    """A complete drawing payload. `scaffold` is (stroke_fields, points_fields) or None to omit them.
+
+    `salt` moves every identifier in the payload. AnnotationKit keys a drawing by these, so two annotations
+    built with the same salt are one drawing to the markup no matter which page holds them.
+    """
     stroke_extra, points_extra = scaffold if scaffold else ([], [])
     points = sorted(points_extra + [
         (4, 0, 48),
         (5, 2, zigzag(box)),
         (6, 2, bbox_field(box)),
         (11, 1, struct.pack("<d", when)),
-        (13, 2, b"\x11" * 16),
-        (14, 2, b"\x22" * 16),
+        (13, 2, uid(salt + 1)),
+        (14, 2, uid(salt + 2)),
     ], key=lambda f: f[0])
     ink = pbcodec.serialize([
         (1, 2, rgba_field(*rgba)),
@@ -109,17 +113,18 @@ def build(scaffold, box, rgba, when):
     # `.2` occurs TWICE on every sample -- two distinct 16-byte identifiers, not one. Emitting a single one
     # made our payload structurally unlike Apple's, which is what the first probe round rejected.
     stroke = sorted(stroke_extra + [
-        (2, 2, uid(3)),
-        (2, 2, uid(5)),
+        (2, 2, uid(salt + 3)),
+        (2, 2, uid(salt + 5)),
         (4, 2, ink),
         (5, 2, pbcodec.serialize(points)),
-        (9, 2, uid(4)),
+        (9, 2, uid(salt + 4)),
     ], key=lambda f: f[0])
     drawing = pbcodec.serialize([(1, 0, 10), (2, 0, 10), (3, 2, pbcodec.serialize(stroke))])
     return pbcodec.serialize([(1, 0, 0), (2, 2, drawing)])
 
 
 BOX = (120.0, 200.0, 300.0, 90.0)  # canvas units, well inside every sample's canvas
+BOX_B = (120.0, 400.0, 300.0, 90.0)  # a second, clearly separated mark for the coexistence test
 
 
 def main():
@@ -140,22 +145,32 @@ def main():
 
     specs = []
 
-    def emit(page, name, payload):
+    def emit(page, name, payload, subtype=None):
         archive, index, _ = mkbisect.load(src(1 if foreign else page))
         rect = mkbisect5.to_page(archive, mkbisect5.stored_bbox(payload))
         mkbisect5.set_archive_rect(archive, rect)
         out = f"{outdir}/probe-p{page}-{name}.archive"
         mkbisect.save(archive, index, payload, out)
         ar = mkbisect5.annotation_rect(rect)
-        specs.append(f"{page}:{out}:{ar[0]:.6f},{ar[1]:.6f},{ar[2]:.6f},{ar[3]:.6f}")
-        print(f"page {page}  {name:24s} rect=({rect[0]:.1f},{rect[1]:.1f},{rect[2]:.1f},{rect[3]:.1f})")
+        spec = f"{page}:{out}:{ar[0]:.6f},{ar[1]:.6f},{ar[2]:.6f},{ar[3]:.6f}"
+        specs.append(spec + (f":{subtype}" if subtype else ""))
+        print(f"page {page}  {name:24s} rect=({rect[0]:.1f},{rect[1]:.1f},{rect[2]:.1f},{rect[3]:.1f})"
+              f"{'  subtype /' + subtype.capitalize() if subtype else ''}")
 
     built = build(scaffold, BOX, (1.0, 0.1, 0.1, 1.0), 810_000_000.0)
     if foreign:
-        # One variable each: page 2 carries Apple's own payload into our document, page 3 carries ours. If 2
-        # passes and 3 fails the writer is at fault; if both fail the document is.
-        emit(2, "apple-payload-our-doc", pbcodec.serialize(pbcodec.parse(mkbisect.load(src(1))[2])))
-        emit(3, "our-payload-our-doc", built)
+        # The two questions left before an encoder can be specified, plus a control.
+        #
+        # Subtype: Apple writes /Square, folino writes /Ink today. /Ink is the semantically correct annotation
+        # and the one other PDF tools select and delete properly, so if AKExtras is honoured on /Ink the
+        # export keeps every property it has now AND gains Apple's eraser, in one annotation.
+        #
+        # Coexistence: folino writes many strokes to a page. With distinct identifiers they must stay distinct
+        # drawings -- the accidental collision that edited the wrong page is the failure this rules out.
+        emit(5, "our-payload-ink-subtype", built, subtype="ink")
+        emit(6, "two-annotations-a", build(scaffold, BOX, (1.0, 0.1, 0.1, 1.0), 810_000_000.0, salt=0))
+        emit(6, "two-annotations-b", build(scaffold, BOX_B, (0.1, 0.3, 1.0, 1.0), 810_000_100.0, salt=100))
+        emit(7, "control-square", built)
     else:
         emit(1, "built-scaffold-same", built)
         emit(2, "built-scaffold-travelled", built)
