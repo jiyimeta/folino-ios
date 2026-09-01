@@ -247,3 +247,65 @@ for editing should move the ink to the payload's position, which is a clearer si
 
 Variant C is the shape production code would emit: everything understood is regenerated, and only fields still
 undecoded are copied as constants.
+
+---
+
+# Device bisect results (2026-09-01)
+
+Five rounds, each written back into a copy of the user's own Books-annotated PDF with untouched pages left in
+as controls. Three of the five rounds were invalidated by test-design errors on my side; those are recorded
+because the corrections are what produced the rule.
+
+## What is free to change
+
+Each of these was changed alone, written back to the page it came from, and **accepted** — the mark still
+erased and selected in Files:
+
+| field | path |
+| --- | --- |
+| point coordinates | `.2.3.5.5` |
+| the stored bounding box | `.2.3.5.6` |
+| the timestamp | `.2.3.5.11` |
+| the stroke's UUIDs | `.2.3.5.13`, `.2.3.5.14` |
+| the stroke container's UUIDs | `.2.3.2`, `.2.3.9` |
+| the point count | `.2.3.5.4` |
+
+So nothing inside the drawing payload is validated against anything we cannot generate. Fresh UUIDs and a
+current timestamp are fine.
+
+## The one rule
+
+Changing the archive's `rectangle` alone is rejected. Changing the annotation's `/Rect` alone is rejected.
+Rejection is total — the mark can neither be erased nor selected, so the payload is being discarded at load.
+
+**The stored bbox, the archive `rectangle` and the annotation `/Rect` must all describe the same box.**
+
+The mapping, verified against all eight samples to within 0.12pt:
+
+```
+sx, sy = pageW / drawingSize.Width, pageH / drawingSize.Height
+X = bbox.x * sx
+Y = pageH - (bbox.y + bbox.h) * sy
+W = bbox.w * sx
+H = bbox.h * sy
+```
+
+`drawingSize` is the archived canvas size (792.77 x 1122.06 for A4); point coordinates live in that canvas
+space, the rectangles in page space with y up.
+
+## Errors in my own test design, and what they cost
+
+Worth recording, because each one produced a confident wrong reading before it was caught:
+
+1. **Round 1** changed geometry *and* regenerated the timestamp and two UUIDs in the same variant, so it
+   isolated nothing.
+2. **Round 2** derived every variant from page 1's archive but wrote them onto pages 1-6. Each PDF annotation
+   keeps its own `/Rect`, so pages 2-6 disagreed with their own annotation before any intended edit mattered —
+   and page 1, the only page whose `/Rect` matched, was the only one accepted. This briefly looked like proof
+   that timestamps and UUIDs are validated. They are not.
+3. **Round 3** moved the ink and set both rectangles, but computed the rect from the *point coordinates*
+   instead of the stored bbox field. That loses the padding Apple keeps around the stroke — roughly half the
+   pen width, so it grows with thickness — putting the rect 0.7 to 5pt out and, again, mismatched.
+
+The lesson each time was the same: one variable per variant, and verify from the artifact that only that
+variable moved.

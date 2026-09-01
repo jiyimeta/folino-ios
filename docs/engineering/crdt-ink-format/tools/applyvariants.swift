@@ -4,10 +4,14 @@ import PDFKit
 // Writes prepared AKAnnotationV2 archives back into a PDF, one per page, leaving every other page untouched
 // so the untouched pages act as a control in the same document and the same viewing session.
 //
-//   applyvariants <source.pdf> <out.pdf> <page>:<archive> [<page>:<archive> ...]
+//   applyvariants <source.pdf> <out.pdf> <page>:<archive>[:x,y,w,h] [...]
 //
 // `page` is 1-based. The archive replaces the value of /AAPL:AKExtras → /AAPL:AKAnnotationV2 on that page's
 // first annotation; every other key on the annotation, and the page content, is left exactly as it was.
+//
+// The optional `x,y,w,h` also sets the annotation's own /Rect. That matters: a payload whose rectangle
+// disagrees with the annotation's /Rect is rejected wholesale by Apple's markup — it neither erases nor
+// selects — so any variant that moves the ink has to move both.
 
 let args = Array(CommandLine.arguments.dropFirst())
 guard args.count >= 3 else {
@@ -19,15 +23,24 @@ let sourcePath = args[0]
 let outPath = args[1]
 
 var replacements: [Int: Data] = [:]
+var rects: [Int: CGRect] = [:]
 for spec in args.dropFirst(2) {
-    let parts = spec.split(separator: ":", maxSplits: 1)
-    guard parts.count == 2, let page = Int(parts[0]),
+    let parts = spec.split(separator: ":")
+    guard parts.count >= 2, let page = Int(parts[0]),
           let data = FileManager.default.contents(atPath: String(parts[1]))
     else {
         print("bad spec: \(spec)")
         exit(2)
     }
     replacements[page] = data
+    if parts.count >= 3 {
+        let n = parts[2].split(separator: ",").compactMap { Double($0) }
+        guard n.count == 4 else {
+            print("bad rect in spec: \(spec)")
+            exit(2)
+        }
+        rects[page] = CGRect(x: n[0], y: n[1], width: n[2], height: n[3])
+    }
 }
 
 guard let sourceData = FileManager.default.contents(atPath: sourcePath),
@@ -57,6 +70,10 @@ for (page, archive) in replacements.sorted(by: { $0.key < $1.key }) {
         replacedKey = true
     }
     if replacedKey {
+        if let rect = rects[page] {
+            annotation.bounds = rect
+            print("page \(page): /Rect set to \(rect)")
+        }
         applied += 1
         print("page \(page): replaced AKAnnotationV2 (\(archive.count) bytes)")
     } else {
