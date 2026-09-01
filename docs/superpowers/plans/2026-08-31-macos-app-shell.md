@@ -1066,7 +1066,7 @@ Scripts/build-macos-app.sh
 
 Expected: `BUILD SUCCEEDED`.
 
-Launch, double-click an imported score. **Expected: the score engraves in the detail column.** This is the milestone's headline — if it draws, the whole chain works.
+Launch, click an imported score (a single click selects it, and selecting is what opens it — see spec §3.2). **Expected: the score engraves in the detail column.** This is the milestone's headline — if it draws, the whole chain works.
 
 - [ ] **Step 6: Confirm iOS did not move**
 

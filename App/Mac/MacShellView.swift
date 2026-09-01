@@ -21,6 +21,11 @@ struct MacShellView: View {
     @State private var libraryVM: LibraryViewModel
     @State private var sidebarPath = NavigationPath()
 
+    /// How many Library rows the sidebar has selected, published by whichever list owns the selection (see
+    /// `macSelectionOpensScore`). `nil` when no Library list is on screen. Only the >1 case is read here — a
+    /// one-row selection has already opened that score through `onOpenScore`.
+    @FocusedValue(\.libraryBulkSelectionCount) private var librarySelectionCount
+
     /// The adapters the detail column's reader needs, unwrapped once in `init` (see the guard there for why they are
     /// guaranteed non-nil) rather than at every use site.
     private let repository: any ScoreLibraryRepository
@@ -114,14 +119,19 @@ struct MacShellView: View {
         }
     }
 
-    /// Show `item` in this window and put the sidebar behind it. What the two user-driven callers — a click in the
-    /// library and a playlist open — mean by "open this score here".
+    /// Show `item` in this window. What every caller — a one-row selection in the library, a playlist open, the
+    /// recents shortcuts — means by "open this score here".
     ///
-    /// Both are button actions, so they run OUTSIDE any SwiftUI update and the two writes coalesce into a single
-    /// update. The post-import watcher does not have that luxury; see `openImportedScore`.
+    /// **It does not collapse the sidebar, and nothing else does either.** On macOS a one-row selection IS the open
+    /// gesture (see `macSelectionOpensScore`), so collapsing here would hide the list at the first click and make
+    /// ⌘-clicking a second row impossible — bulk selection would be structurally unreachable. The sidebar is the
+    /// user's to collapse, from ⌘0 or the split view's own control, and it behaves the same however a score was
+    /// opened rather than making the user remember which routes hide it.
+    ///
+    /// That it is now a single write also matters: this runs from inside a SwiftUI update when a selection change
+    /// drives it, which is exactly the regime `openImportedScore`'s measurements govern.
     private func openScore(_ item: ScoreItem) {
         scoreID = item.id
-        columnVisibility = .detailOnly
     }
 
     /// `openScore` for the post-import watcher, which runs INSIDE a SwiftUI update — and that difference is the whole
@@ -148,10 +158,14 @@ struct MacShellView: View {
     /// still fault while the same three split one-and-two do not. Do not extend the rule by reasoning — re-measure.
     ///
     /// So exactly one write stays here: the window's score, which is what puts the reader on screen and is the one
-    /// that would visibly lag the import if it waited. The other two go together one main-actor hop later, where
-    /// nothing is updating and they coalesce. Measured clean, twice, with the score opening and the sidebar
-    /// collapsing as before; every arrangement that leaves two writes in this handler faults, including simply
-    /// dropping the sidebar collapse.
+    /// that would visibly lag the import if it waited. The rest goes one main-actor hop later, where nothing is
+    /// updating.
+    ///
+    /// **The sidebar collapse is gone from here too, and that is the ruling's consequence, not a tidy-up.** A score
+    /// opened by import now behaves exactly like one opened by selecting its row: shown in the detail, sidebar left
+    /// alone. Keeping the collapse only for imports would have been a special case a reader has to hold in their
+    /// head — "the sidebar hides itself, but only if you got here by importing" — for no gain, since ⌘0 is one
+    /// keystroke away. Re-measured after the removal: the fault stays closed (see the report's harness).
     ///
     /// The hop is safe for `pendingScoreToOpen` specifically: the only reader is the watcher above, which is keyed on
     /// the id changing, so a value that stays set for one hop cannot re-trigger anything.
@@ -159,7 +173,6 @@ struct MacShellView: View {
         scoreID = item.id
         Task { @MainActor in
             libraryVM.pendingScoreToOpen = nil
-            columnVisibility = .detailOnly
         }
     }
 
@@ -204,7 +217,20 @@ struct MacShellView: View {
 
     @ViewBuilder
     private var detail: some View {
-        if let item = openScoreItem {
+        if let count = librarySelectionCount, count > 1 {
+            // More than one row selected: the selection is a bulk selection, so the detail reports it rather than
+            // showing one arbitrary member of it. The bulk actions themselves live where the selection does — the
+            // list's context menu and ⌫ — which is the Mail shape. Dropping back to one row shows that score again.
+            ContentUnavailableView {
+                Label {
+                    Text("app.detail.selectionCount.title \(count)")
+                } icon: {
+                    Image(systemName: "checklist")
+                }
+            } description: {
+                Text("app.detail.selectionCount.hint")
+            }
+        } else if let item = openScoreItem {
             // `id(item.id)` so switching the detail column to another score builds a fresh `MacReaderRootScreen` —
             // and with it a fresh `ReaderViewModel`, which is created once per screen instance in a `@State`.
             MacReaderRootScreen(

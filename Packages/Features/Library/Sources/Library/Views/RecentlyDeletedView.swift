@@ -7,7 +7,8 @@ import UtilityUI
 /// * trailing partial-swipe → permanent-delete (with popover confirm)
 /// * context menu → restore / permanent-delete (only those two) — on macOS, right-clicking inside a ⌘/⇧-click
 ///   selection of more than one row applies both to the whole selection instead of just that row
-/// * tap → open in Reader
+/// * tap → open in Reader (iOS). On macOS there is no row gesture: selecting exactly one row is what opens it,
+///   because a tap gesture and `List(selection:)` cannot coexist — see `RowOpenAffordance`
 /// * ⌫ (macOS only) → permanent-delete the selection, with the same popover confirm
 struct RecentlyDeletedView: View {
     let items: [ScoreItem]
@@ -22,10 +23,13 @@ struct RecentlyDeletedView: View {
     let onBulkPermanentDelete: () -> Void
     @Binding var isShowingBulkPermanentDeletePopover: Bool
 
-    // PARITY(macos): bulk-selection chrome — iOS needs an explicit Select mode because a touch list cannot distinguish
-    //   a tap-to-open from a tap-to-select. AppKit's List multi-selects natively with ⌘/⇧-click, so the Mac has no mode
-    //   and reaches the same bulk actions from a context menu on the selection and ⌫ (Task 14) — only the menu bar
-    //   (sub-project Ⅳ) is still open.
+    // PARITY(macos): bulk-selection chrome — iOS needs an explicit Select mode because a touch list cannot
+    //   distinguish a tap-to-open from a tap-to-select. macOS needs no mode: `List(selection:)` multi-selects
+    //   with ⌘/⇧-click, the same bulk actions come from a context menu on the selection, and ⌫ deletes it.
+    //   That works ONLY because the row carries no tap gesture there — any SwiftUI tap gesture leaves the
+    //   selection permanently EMPTY, which silently made the context menu and ⌫ unreachable for two tasks
+    //   before it was measured. Selecting exactly one row is what opens it. See `RowOpenAffordance` for the
+    //   measurement and for both halves of the per-platform decision. Still open: the menu bar (Ⅳ).
     var body: some View {
         List(selection: $selectedIDs) {
             ForEach(items) { item in
@@ -33,6 +37,7 @@ struct RecentlyDeletedView: View {
                     .tag(item.id)
             }
         }
+        .macSelectionOpensScore(selectedIDs, in: items, onOpen: onTap)
         .bulkSelectionEditModeCompat(isSelecting: isSelecting)
         .popoverCompat(isPresented: $isShowingBulkPermanentDeletePopover) {
             bulkPermanentDeletePopoverContent
@@ -59,7 +64,7 @@ struct RecentlyDeletedView: View {
         HStack(spacing: 0) {
             ScoreRow(scoreItem: item)
                 .contentShape(Rectangle())
-                .onTapGesture { handleRowTap(item) }
+                .rowTapToOpenCompat { handleRowTap(item) }
             if !isSelecting {
                 Menu {
                     rowContextMenu(for: item)

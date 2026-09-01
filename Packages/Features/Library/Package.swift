@@ -98,9 +98,10 @@ if isAndroid {
 let package = Package(
     name: "Library",
     defaultLocalization: "en",
-    // macOS is declared purely as a build floor, not as product support: this is NOT a macOS-enabled package —
-    // it is absent from Scripts/build-macos-packages.sh and its SwiftUI product does not compile for macOS (its
-    // EditMode-driven multi-select is woven into view signatures, deferred to sub-project IIIb). The floor exists
+    // macOS is BOTH real product support and a build floor. Sub-project IIIb forked the EditMode-driven
+    // bulk-selection chrome behind `#if os(iOS)` and rebuilt it on a platform-neutral `isSelecting: Bool`, so
+    // this package now compiles for macOS and is in Scripts/build-macos-packages.sh. (An earlier revision of
+    // this comment said the opposite; it was written before that work landed.) The floor separately exists
     // because `FolinoLibraryJNI`, the Android cross-compile target above, depends on Domain and UtilityCore, both
     // of which declare `.macOS(.v15)`, and that Android graph's host tests build for macOS. Mirrors Utility and
     // Domain, which are in the same graph for the same reason. Do not remove this as unused platform support:

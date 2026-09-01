@@ -38,7 +38,7 @@ struct PlaylistDetailView: View {
                     ForEach(items) { item in
                         ScoreRow(scoreItem: item)
                             .contentShape(Rectangle())
-                            .onTapGesture {
+                            .rowTapToOpenCompat {
                                 if isSelecting {
                                     toggleSelection(item.id)
                                 } else {
@@ -69,9 +69,13 @@ struct PlaylistDetailView: View {
             }
         }
         // PARITY(macos): bulk-selection chrome — iOS needs an explicit Select mode because a touch list cannot
-        //   distinguish a tap-to-open from a tap-to-select. AppKit's List multi-selects natively with ⌘/⇧-click, so
-        //   the Mac has no mode and reaches the same bulk actions from a context menu on the selection and ⌫
-        //   (Task 15) — only the menu bar (sub-project Ⅳ) is still open.
+        //   distinguish a tap-to-open from a tap-to-select. macOS needs no mode: `List(selection:)` multi-selects
+        //   with ⌘/⇧-click, the same bulk actions come from a context menu on the selection, and ⌫ deletes it.
+        //   That works ONLY because the row carries no tap gesture there — any SwiftUI tap gesture leaves the
+        //   selection permanently EMPTY, which silently made the context menu and ⌫ unreachable for two tasks
+        //   before it was measured. Selecting exactly one row is what opens it. See `RowOpenAffordance` for the
+        //   measurement and for both halves of the per-platform decision. Still open: the menu bar (Ⅳ).
+        .macSelectionOpensScore(selectedIDs, in: items, onOpen: onOpen)
         .safeAreaInset(edge: .bottom) {
             #if os(iOS)
             if isSelecting {

@@ -85,7 +85,13 @@ WindowGroup(for: ScoreItemID.self) { $scoreID in
 
 ### 3.2 Opening reuses the window; tabs are offered
 
-Double-clicking a row in the sidebar sets **the current window's** detail (window-local `@State`, seeded from the group's presented value). "Open in New Tab" and ⌘-double-click call `openWindow(value:)`. Because every window comes from one `WindowGroup`, AppKit's automatic tabbing supplies ⌘T, tab drag-out and Merge All Windows for free.
+Selecting a row in the sidebar sets **the current window's** detail (window-local `@State`, seeded from the group's presented value). "Open in New Tab" and ⌘-double-click call `openWindow(value:)`. Because every window comes from one `WindowGroup`, AppKit's automatic tabbing supplies ⌘T, tab drag-out and Merge All Windows for free.
+
+**Amended after implementation: this said "double-clicking", and double-click is measured unreachable.** A SwiftUI tap gesture on a row and `List(selection:)` cannot coexist on macOS. Measured against a bare `List(selection:)` control in the same run, every gesture form — `.onTapGesture`, `.onTapGesture(count: 2)`, `.simultaneousGesture(TapGesture(count: 2))` and `.highPriorityGesture(TapGesture(count: 2))`, attached to the row content or to the whole row — leaves the selection permanently EMPTY, not merely unable to multi-select. Each of those forms fired its own open action in the same run, so the events do reach SwiftUI; they never reach the `NSTableView` underneath, because the gesture claims the click first.
+
+So the Mac has no row gesture at all. **Selecting exactly one row is what opens it** — the Mail / Notes shape, and the same muscle memory an iPad user brings. Selecting more than one is a bulk selection: the detail shows "N selected" and the bulk actions come from the selection's context menu and ⌫.
+
+**A consequence, not a separate preference: nothing auto-collapses the sidebar.** Opening a score used to set `columnVisibility = .detailOnly`; with selection driving the detail that would hide the list on the first click and make ⌘-clicking a second row impossible, so multi-selection would be structurally unreachable. The sidebar is the user's to collapse (⌘0), and it behaves the same however a score was opened — including after an import, so there is no special case to remember.
 
 This is the MuseScore 4 complaint (§5.3) inverted: MuseScore forces a new window; folino defaults to reuse and offers tabs.
 
@@ -227,7 +233,7 @@ Each milestone ends green on both the iOS build and `Scripts/build-macos-app.sh`
 | --- | --- | --- |
 | **M0** | Target + layout scaffolding: `FolinoMac` in `project.yml`, `App/` three-way split, `module-architecture.md` revision, `Scripts/build-macos-app.sh` | `FolinoMac` builds and shows an empty window; `Folino` **and** `FolinoScreenshot` still build |
 | **M1** | Shell boots: Mac `AppBootstrap` composition (audio slots nil, Firebase per §7.1), `WindowGroup(for:)` + split view + `Settings` scene + command skeleton | Launch → empty library window; ⌘T opens a tab; relaunch restores windows |
-| **M2** | Library visible, read-only: the §4 state split, list renders, File ▸ Open and drag-and-drop import | Importing an `.mscz` shows a row that survives relaunch; double-click fills the detail with a placeholder |
+| **M2** | Library visible, read-only: the §4 state split, list renders, File ▸ Open and drag-and-drop import | Importing an `.mscz` shows a row that survives relaunch; selecting the row fills the detail with a placeholder (double-click is measured impossible — see §3.2) |
 | **M3** | Score renders: `MacReaderRootScreen`, Vertical then Page, PDF originals, read-only ink, §7.2's appearance fix | A score engraves vector-sharp at any magnification in both modes; iOS Reader behavior unchanged (existing tests green) |
 | **M4** | Playback: the §6 un-gating, the Mac route watcher, transport UI, space to play/pause | Audible playback with a moving cursor on the default device; unplugging headphones pauses; Now Playing reflects state |
 | **M5** | Library operations: multi-select and bulk actions, Recently Deleted, playlists (reorder verified per §4.4), tags | Every Library capability is reachable on Mac or recorded as a deliberate `PARITY(macos)` row |

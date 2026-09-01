@@ -20,7 +20,9 @@ struct ScoreListRow<RowMenu: View>: View {
         HStack(spacing: 0) {
             ScoreRow(scoreItem: item)
                 .contentShape(Rectangle())
-                .onTapGesture {
+                // iOS only — see `rowTapToOpenCompat`. The closure is unchanged; macOS simply installs no gesture,
+                // because any gesture here empties `List(selection:)`.
+                .rowTapToOpenCompat {
                     if isSelecting {
                         onToggleSelection()
                     } else {
