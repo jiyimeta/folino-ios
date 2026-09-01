@@ -44,7 +44,7 @@ public struct ShareRootView: View {
                 .navigationTitle(Text("share_extension.title", bundle: .module))
                 .inlineNavigationTitleCompat()
                 .toolbar {
-                    ToolbarItem(placement: .topBarLeadingCompat) {
+                    ToolbarItem(placement: .cancellationAction) {
                         Button {
                             session.discard(token: token)
                             onComplete(.init(outcome: .cancelled))
@@ -53,7 +53,7 @@ public struct ShareRootView: View {
                         }
                     }
 
-                    ToolbarItem(placement: .topBarTrailingCompat) {
+                    ToolbarItem(placement: .confirmationAction) {
                         Button {
                             finalize(decision: .saveAndOpen(selection))
                         } label: {
@@ -236,12 +236,12 @@ private struct PreviewLoaded: View {
             .navigationTitle(Text("share_extension.title", bundle: .module))
             .inlineNavigationTitleCompat()
             .toolbar {
-                ToolbarItem(placement: .topBarLeadingCompat) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button {} label: {
                         Text("share_extension.cancel", bundle: .module)
                     }
                 }
-                ToolbarItem(placement: .topBarTrailingCompat) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button {} label: { Image(systemName: "checkmark") }
                         .glassProminentButtonStyleCompat()
                         .disabled(files.isEmpty)
