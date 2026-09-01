@@ -206,3 +206,44 @@ twice a single stroke, not three times, so the undone stroke left no tombstone. 
 Round-trip first, synthesize second: decode a real sample, re-encode it with our own writer, put it back in a
 PDF, and confirm the eraser still works. Only then start changing geometry. That separates "our writer is
 faithful" from "our geometry is right", which are different failures.
+
+---
+
+# Round trip verified without a device (2026-09-01)
+
+`tools/pbcodec.py selfcheck` parses Apple's payload and writes it back. On four samples of different sizes
+(303, 2512, 4599, 7145 bytes) the result is **byte-identical** to the input. So the read/write path is faithful,
+and any later difference on device is attributable to what we changed rather than to how we rewrote it.
+
+`tools/pbcodec.py points` confirms the stroke model end to end: the two-line sample separates into exactly two
+strokes of 93 and 80 points, each payload exactly 24 × count bytes, at the two y positions the marks were drawn
+at, both at `width = 26` — and with no third stroke, confirming again that the undone thick line left nothing.
+
+## Coordinate spaces
+
+Points live in a **canvas space** (792.77 × 1122.06 for an A4 page); the archive's `X/Y/Width/Height` rect is in
+**page space** (595 × 842, y up). The conversion is `page = canvas × 0.7504` with the y axis flipped about the
+page height. Checked against the single-dot sample: canvas (335.2, 450.6) → x 251.6 against a stored `X` of
+249.93, and `842 − 450.6 × 0.7504 = 503.8` against a stored bottom edge of `502.07 + 1.5`.
+
+`originalModelBaseScaleFactor` in the archive is 0.799731, which is **not** that ratio; its meaning is still
+unknown, and it is left untouched.
+
+## The three-variant test
+
+`tools/mkvariants.py` builds three archives from one real sample, and `tools/applyvariants.swift` writes them
+into a copy of the source PDF — one per page, leaving the other pages untouched so they act as a control in the
+same document and the same viewing session.
+
+| variant | what it changes | what a failure means |
+| --- | --- | --- |
+| A round-trip | nothing; parsed and re-serialized | our read/write path damages the payload |
+| B translated | every point moved in x, and the archive rect moved to match | geometry may not be rewritten |
+| C synthesized | our own 48-point zigzag, fresh UUIDs and timestamp, undecoded scaffolding copied | one of the values we generate is validated |
+
+**The variants deliberately do not touch `/AP`.** The visible ink therefore still shows the original mark until
+something re-renders it. That is a feature of the test: if Apple's markup adopts the payload, opening the file
+for editing should move the ink to the payload's position, which is a clearer signal than the eraser alone.
+
+Variant C is the shape production code would emit: everything understood is regenerated, and only fields still
+undecoded are copied as constants.
