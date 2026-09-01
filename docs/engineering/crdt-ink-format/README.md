@@ -342,10 +342,22 @@ W = bbox.w * sx
 H = bbox.h * sy
 ```
 
-Two consequences for any implementation:
+And the annotation's `/Rect` is **not** the archive rectangle. It is that rectangle grown by exactly one point
+on every side — measured at `-1.0 / -1.0 / +2.0 / +2.0` on all eight samples, to four decimals:
+
+```
+/Rect = (X - 1, Y - 1, W + 2, H + 2)
+```
+
+Setting `/Rect` equal to the archive rectangle, which is what it looks like it should be, puts every edge 1pt
+out and the annotation is discarded. An earlier round passed only because it re-set `/Rect` to the value it
+already had, which happened to be correct.
+
+Three consequences for any implementation:
 
 - use the page's actual MediaBox, never a nominal paper size
 - do not round the value on its way to `/Rect`; 0.1pt is already too much
+- grow `/Rect` by 1pt on each side relative to the archive rectangle
 
 ## What this means for folino
 

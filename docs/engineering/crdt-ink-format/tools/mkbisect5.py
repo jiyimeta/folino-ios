@@ -67,10 +67,22 @@ def stored_bbox(payload):
 
 
 def to_page(archive, box):
+    """Canvas bbox -> the archive's `rectangle`, in page space. Exact on all eight samples."""
     cw, ch = canvas_size(archive)
     sx, sy = PAGE_W / cw, PAGE_H / ch
     x, y, w, h = box
     return (x * sx, PAGE_H - (y + h) * sy, w * sx, h * sy)
+
+
+def annotation_rect(archive_rect):
+    """The PDF annotation's /Rect is the archive rectangle grown by exactly 1pt on every side.
+
+    Measured at -1.0 / -1.0 / +2.0 / +2.0 on all eight samples, to four decimals. Setting /Rect equal to the
+    archive rectangle instead -- which is what it looks like it should be -- puts it 1pt out on each edge and
+    the annotation is rejected.
+    """
+    x, y, w, h = archive_rect
+    return (x - 1.0, y - 1.0, w + 2.0, h + 2.0)
 
 
 def set_archive_rect(archive, rect):
@@ -143,7 +155,8 @@ def main():
         mkbisect.save(archive, index, payload, out)
         # Full precision: the annotation is rejected outright if /Rect and the archive rectangle differ by as
         # little as 0.1pt, so this must not be rounded on the way through the spec string.
-        specs.append(f"{page}:{out}:{rect[0]:.6f},{rect[1]:.6f},{rect[2]:.6f},{rect[3]:.6f}")
+        ar = annotation_rect(rect)
+        specs.append(f"{page}:{out}:{ar[0]:.6f},{ar[1]:.6f},{ar[2]:.6f},{ar[3]:.6f}")
         n = sum(len(mkbisect.records(b)) for _, b in pbcodec.strokes_of(payload))
         print(f"page {page}  {name:22s} points={n:3d}  rect=({rect[0]:.1f},{rect[1]:.1f},{rect[2]:.1f},{rect[3]:.1f})")
 
