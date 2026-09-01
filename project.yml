@@ -167,6 +167,9 @@ targets:
       - path: App/Resources/Localizable.xcstrings
         type: file
         buildPhase: resources
+      - path: App/Resources/VersionHistory.yml
+        type: file
+        buildPhase: resources
       - path: App/Resources/folino.icon
         type: file
         buildPhase: resources
