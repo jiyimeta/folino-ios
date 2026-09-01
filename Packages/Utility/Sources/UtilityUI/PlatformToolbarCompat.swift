@@ -18,6 +18,13 @@ import SwiftUI
 //   - BulkAddToPlaylistSheet's Cancel is the only bar button on its sheet and is deliberately trailing.
 //     Migrating it moved it across the bar and dragged the title with it: 17430 px.
 //
+//   The Mac keyboard payoff is measured, not assumed (Task 16, standalone AppKit probe against real sheets,
+//   the event addressed to the SHEET window's number): `.cancellationAction` fires on Esc and
+//   `.confirmationAction` fires on Return, while the two neutral placements this file substitutes —
+//   `.navigation` and `.primaryAction` — fire on neither. Both directions came from the same run, so the
+//   negatives are not a dead delivery path. So the semibold Done above is not a cost for nothing: it is what
+//   Return costs.
+//
 //   Two things are deliberately NOT in this gap. `doneToolbarCompat` below emits no macOS toolbar item at all,
 //   so migrating its iOS branch would be pure iOS risk for no Mac keyboard gain. And the sites holding a menu,
 //   an overflow, a spacer or the Settings-gear seam — ScoreListView, LibraryRootScreen, ManageEntityToolbar,
