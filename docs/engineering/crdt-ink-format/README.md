@@ -500,3 +500,27 @@ across the eight samples, so they encode *something*; one fixed set is now known
 pen drawing in two different documents.
 
 Dropping them entirely was tested in the same round and produced no ink, so they are not optional — keep them.
+
+## The annotation stays `/Ink` (2026-09-01)
+
+Apple writes `/Square`. folino writes `/Ink`, which is the semantically correct annotation for a pen mark and
+the one other PDF tools select and delete properly. Whether `AKExtras` is honoured on `/Ink` decided whether
+the export could keep what it has or would have to move to `/Square` and carry its appearance separately.
+
+**It is honoured.** An `/Ink` annotation carrying the payload erases, selects and *moves* in Apple's markup,
+alongside `/Square` annotations on other pages, with no interference between them. So the change to the
+shipped export is additive: the same annotation it already builds, plus one key.
+
+Two annotations on one page, with distinct identifiers, are independently erasable, selectable and movable.
+Nothing bleeds between pages. The identifiers do all the work of keeping marks apart.
+
+### The round before this one measured nothing, and it is worth knowing why
+
+To make the subtype the only variable, its two variants were given byte-identical payloads. Identifiers name
+the drawing — established one round earlier — so identical payloads are the definition of "the same drawing",
+and a third variant kept a default salt and joined them. Three of the four were one drawing; edits crossed
+between pages exactly as that arrangement requires.
+
+Identifiers are free, so *identical apart from the identifiers* is the comparison that isolates a subtype.
+*Identical including them* is not a comparison. `tools/checkids.py` now fails a round whose variants share an
+identifier, which is the same rule production code has to follow.
