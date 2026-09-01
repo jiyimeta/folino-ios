@@ -36,6 +36,14 @@ struct PlaylistDetailView: View {
                     Text("library.playlist.empty.hint", bundle: .module)
                 }
             } else {
+                // PARITY(macos): bulk-selection chrome — iOS needs an explicit Select mode because a touch list
+                //   cannot distinguish a tap-to-open from a tap-to-select. macOS needs no mode: `List(selection:)`
+                //   multi-selects with ⌘/⇧-click, the same bulk actions come from a context menu on the selection,
+                //   and ⌫ deletes it. That works ONLY because the row carries no tap gesture there — any SwiftUI
+                //   tap gesture leaves the selection permanently EMPTY, which silently made the context menu and ⌫
+                //   unreachable for two tasks before it was measured. Opening is its own action now, never a side
+                //   effect of selecting a row — see `RowOpenAffordance` for the measurement and for both halves of
+                //   the per-platform decision. Still open: the menu bar (Ⅳ).
                 List(selection: $selectedIDs) {
                     ForEach(items) { item in
                         ScoreRow(scoreItem: item)
@@ -64,21 +72,13 @@ struct PlaylistDetailView: View {
                     // If a Mac row picks up but will not drop, this is where the affordance goes.
                     .onMove(perform: onMove)
                 }
+                .macScoreOpenAffordance(selectedIDs, in: items, onOpen: onOpen, onOpenInNewWindow: onOpenInNewWindow)
                 .deleteCommandCompat {
                     guard !selectedIDs.isEmpty else { return }
                     onBulkDelete()
                 }
             }
         }
-        // PARITY(macos): bulk-selection chrome — iOS needs an explicit Select mode because a touch list cannot
-        //   distinguish a tap-to-open from a tap-to-select. macOS needs no mode: `List(selection:)` multi-selects
-        //   with ⌘/⇧-click, the same bulk actions come from a context menu on the selection, and ⌫ deletes it.
-        //   That works ONLY because the row carries no tap gesture there — any SwiftUI tap gesture leaves the
-        //   selection permanently EMPTY, which silently made the context menu and ⌫ unreachable for two tasks
-        //   before it was measured. Opening is its own action now, never a side effect of selecting a row — see
-        //   `RowOpenAffordance` for the measurement and for both halves of the per-platform decision. Still open:
-        //   the menu bar (Ⅳ).
-        .macScoreOpenAffordance(selectedIDs, in: items, onOpen: onOpen, onOpenInNewWindow: onOpenInNewWindow)
         .safeAreaInset(edge: .bottom) {
             #if os(iOS)
             if isSelecting {
