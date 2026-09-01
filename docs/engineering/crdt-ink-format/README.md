@@ -381,7 +381,12 @@ start — the one hard constraint is the easiest one for it to satisfy.
 Ink moved to a new position, ink synthesized in place, and ink synthesized at a different position on the page
 were **all accepted on device** — each erases and selects in Files exactly like Apple's own markup.
 
-The format is solved. folino can write ink that Apple's own tools edit.
+> **This section overstated the result when it was written, and the next round proved it.** Every variant above
+> synthesized *geometry* inside scaffolding copied from the very sample it was written back into. That shows the
+> geometry is free; it does not show an encoder can emit the format, because the fields whose meaning is still
+> unknown had never once been supplied by us. Modifying a structure can succeed on parts of it you do not
+> understand. Only synthesis tests whether you know the rules — see **Built, not edited** below, which is where
+> the format actually got solved, and which found two defects in our writer that this round could not have.
 
 ## The complete recipe
 
@@ -441,3 +446,57 @@ selects, and only the `/AP` keeps it visible.
 Write an encoder from folino's `InkStroke` to this structure, then place the annotation with the three-box
 rule. folino creates its own annotations rather than editing Apple's, so it controls all three boxes from the
 start. Verify the same way this was verified: on a device, with the eraser.
+
+# Built, not edited (2026-09-01)
+
+The round above left one thing untested, and it was the one that mattered: every accepted payload had been an
+Apple payload with our geometry in it. So the next round built the payload from named quantities — point
+records included — and created the annotation from nothing, on a document Apple had never touched.
+
+| variant | payload | document | result |
+| --- | --- | --- | --- |
+| A | Apple's, verbatim | folino's own export, 595.4458 x 841.6944 | accepted |
+| B | ours, built | Apple's `ink-samples 2.pdf` | accepted |
+| C | ours, built | folino's own export | accepted |
+
+**That is the format solved.** Not "we can edit Apple's ink" but "we can write ink Apple's tools edit": our
+bytes, our annotation, our document, our page size, and the eraser and the lasso both find it.
+
+Variant A also cleared three things at once that no earlier round could separate — creating the annotation
+ourselves, using a document with no Apple provenance, and computing the rect against a MediaBox that is not
+A4's nominal size. None of them matter. The payload was the only variable left, which is what made the two
+defects below findable.
+
+## Two defects in our writer, both structural
+
+`tools/diffbuilt.py` compares structure before values, and both fell out of the first comparison:
+
+- **The stroke carries `.2` twice** — two distinct 16-byte identifiers, not one. We emitted one.
+  `tools/constfields.py` had already printed `2x` against that field, and it was read as repetition noise
+  rather than as structure.
+- **The trailing constant pair is a value, little-endian.** `0xFE54` is the bytes `54 fe`. Transcribing this
+  document's own note as a byte literal reversed it.
+
+Neither is visible in a values-only diff, and neither would have been found by another device round. When a
+black-box oracle rejects something, compare shape first.
+
+## The UUIDs identify the ink, and must be unique per annotation
+
+The probe generated its UUIDs deterministically so a rebuilt variant would be byte-identical, which made pages
+1 and 2 carry byte-identical payloads. Erasing on page 2 then edited **page 1's** ink.
+
+So AnnotationKit keys a drawing by the identifiers inside the payload, not by the annotation or the page that
+holds it. Two annotations sharing them are one drawing as far as the markup is concerned.
+
+**Every annotation folino writes needs freshly generated UUIDs.** Reusing them — the obvious optimization when
+one score's strokes all come from one drawing — makes the eraser delete a mark on another page. This was found
+by accident, not by design; nothing else in the investigation would have caught it, and it would have shipped.
+
+## What is still copied rather than understood
+
+`.2.3.1`, the `.2.3.3` pair and `.2.3.10` on the stroke, and `.2.3.5.1/.2/.3/.9` on the points container are
+carried as one fixed set lifted from a sample. `constfields.py` shows they take two to five distinct values
+across the eight samples, so they encode *something*; one fixed set is now known to work for a single-stroke
+pen drawing in two different documents.
+
+Dropping them entirely was tested in the same round and produced no ink, so they are not optional — keep them.
