@@ -114,6 +114,52 @@ struct AnnotatedPDFComposerAKTests {
         #expect(abs(bounds.height - expected.height) < 0.001)
     }
 
+    // MARK: Reading the rectangle back out of a payload
+
+    /// `PropertyListSerialization` hands a `CF$UID` back as an opaque `CFKeyedArchiverUID` that answers no typed
+    /// accessor, so the index it wraps is parsed out of its `-description`. Same approach as `AKInkArchiveTests`,
+    /// which explains it at length; test-only, production code never inspects a UID this way.
+    private static func uidIndex(_ any: Any) throws -> Int {
+        let text = String(describing: any)
+        let afterMarker = try #require(text.range(of: "value = ")).upperBound
+        let closeBrace = try #require(text.range(of: "}", range: afterMarker ..< text.endIndex))
+        return try #require(Int(text[afterMarker ..< closeBrace.lowerBound]))
+    }
+
+    private static func resolved(_ objects: [Any], _ uid: Any) throws -> Any {
+        let index = try uidIndex(uid)
+        return try #require(objects.indices.contains(index) ? objects[index] : nil)
+    }
+
+    /// The `rectangle` an `AKAnnotationV2` archive carries, as page-space (y-up) geometry. This is the value
+    /// Apple's markup compares against the annotation's `/Rect`, so reading it back is the only way a test can
+    /// tell "this annotation has a payload" apart from "this annotation has ITS payload".
+    static func archiveRectangle(base64: String) throws -> CGRect {
+        let data = try #require(Data(base64Encoded: base64))
+        let root = try #require(
+            try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+        )
+        let objects = try #require(root["$objects"] as? [Any])
+        let top = try #require(root["$top"] as? [String: Any])
+        let rootUID = try #require(top["root"])
+        let rootObject = try #require(try resolved(objects, rootUID) as? [String: Any])
+        let rectangleUID = try #require(rootObject["rectangle"])
+        let rectangle = try #require(try resolved(objects, rectangleUID) as? [String: Any])
+        // An archived NSDictionary stores its contents as two parallel UID arrays, so each key and value has to
+        // be resolved through `$objects` in turn.
+        let keyUIDs = try #require(rectangle["NS.keys"] as? [Any])
+        let valueUIDs = try #require(rectangle["NS.objects"] as? [Any])
+        var values: [String: Double] = [:]
+        for (keyUID, valueUID) in zip(keyUIDs, valueUIDs) {
+            let key = try #require(try resolved(objects, keyUID) as? String)
+            values[key] = try #require(try resolved(objects, valueUID) as? Double)
+        }
+        return try CGRect(
+            x: #require(values["X"]), y: #require(values["Y"]),
+            width: #require(values["Width"]), height: #require(values["Height"]),
+        )
+    }
+
     /// A real folino export's measured page height, deliberately not a standard paper size.
     ///
     /// `rectangleAgrees` above reads the page height from the same place the composer does, so it cannot catch the
@@ -210,11 +256,24 @@ struct AnnotatedPDFComposerAKTests {
         #expect(result.akEncodeFailures == 0)
         let page = try #require(PDFDocument(data: result.data)?.page(at: 0))
         #expect(page.annotations.contains { $0.type == "Text" }, "the base document's own annotation must survive")
-        let inkPayloads = page.annotations
-            .filter { $0.type == "Ink" }
-            .map { Self.akPayloadString(of: $0) }
-        #expect(inkPayloads.count == 2)
-        #expect(inkPayloads.allSatisfy { $0 != nil })
-        #expect(inkPayloads[0] != inkPayloads[1])
+        let ink = page.annotations.filter { $0.type == "Ink" }
+        #expect(ink.count == 2)
+
+        // Distinct, non-nil payloads are not enough: two payloads SWAPPED between the two annotations would
+        // satisfy that and still be rejected in silence by Apple's markup, because each annotation's /Rect would
+        // then disagree with the rectangle inside the payload it carries. So each archive is decoded and checked
+        // against its OWN annotation under the three-box rule — /Rect is the archive rectangle grown one point
+        // on every side.
+        var seen = Set<String>()
+        for annotation in ink {
+            let base64 = try #require(Self.akPayloadString(of: annotation))
+            #expect(seen.insert(base64).inserted, "two annotations must never share a payload")
+            let rectangle = try Self.archiveRectangle(base64: base64)
+            let expected = annotation.bounds.insetBy(dx: 1, dy: 1)
+            #expect(abs(rectangle.minX - expected.minX) < 0.001)
+            #expect(abs(rectangle.minY - expected.minY) < 0.001)
+            #expect(abs(rectangle.width - expected.width) < 0.001)
+            #expect(abs(rectangle.height - expected.height) < 0.001)
+        }
     }
 }

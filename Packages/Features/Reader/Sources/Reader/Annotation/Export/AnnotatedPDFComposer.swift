@@ -24,8 +24,8 @@ private typealias PlatformColor = NSColor
 #endif
 
 // PARITY(android): erasable ink in exported PDFs — the AKAnnotationV2 encoder is already shared in
-// ReaderAnnotationCore, but Android has no PDF export to call it from, and would need a Deflating
-// implementation over zlib.
+//   ReaderAnnotationCore, but Android has no PDF export to call it from, and would need a Deflating
+//   implementation over zlib.
 
 /// Stamps annotation ink onto a base PDF's pages as PDF ink annotations and returns the new document's bytes.
 ///
@@ -99,6 +99,7 @@ enum AnnotatedPDFComposer {
             }
             slots.append(PayloadSlot(
                 pageIndex: placement.pageIndex, annotationIndex: indexOnPage,
+                expectedBounds: composed.annotation.bounds,
                 base64: payload.base64EncodedString(),
             ))
         }
@@ -108,21 +109,29 @@ enum AnnotatedPDFComposer {
         }
         guard !slots.isEmpty else { return (stamped, akEncodeFailures) }
 
-        guard let payloaded = attachingAKPayloads(to: stamped, slots: slots) else {
+        guard let attached = attachingAKPayloads(to: stamped, slots: slots) else {
             // The marks themselves are already in `stamped`; only their editability is lost, which is exactly
             // what the failure count means.
             return (stamped, akEncodeFailures + slots.count)
         }
-        return (payloaded, akEncodeFailures)
+        return (attached.data, akEncodeFailures + attached.unplaced)
     }
 
-    /// Where one annotation's payload has to land once the document has been serialized: the page it is on, and
-    /// its position in that page's `/Annots` order. PDFKit preserves that order across a serialize/parse round
-    /// trip, and the composer only ever APPENDS to a page, so the index recorded before `addAnnotation` names the
-    /// same annotation on the way back in.
+    /// Where one annotation's payload has to land once the document has been serialized: the page it is on, its
+    /// position in that page's `/Annots` order, and the bounds it had going in. PDFKit preserves that order
+    /// across a serialize/parse round trip, and the composer only ever APPENDS to a page, so the index recorded
+    /// before `addAnnotation` names the same annotation on the way back in.
+    ///
+    /// `expectedBounds` is what turns that from an assumption into a checked one. Should PDFKit ever drop or
+    /// reorder an annotation on some document neither the composer nor its tests construct, every index below
+    /// the gap shifts and a payload would land on one of the BASE document's own annotations — which, because
+    /// AnnotationKit names a drawing by the identifiers inside the payload, means an eraser stroke deleting a
+    /// mark the user never drew. That failure is invisible from the outside, so it is checked rather than
+    /// reasoned about.
     private struct PayloadSlot {
         let pageIndex: Int
         let annotationIndex: Int
+        let expectedBounds: CGRect
         let base64: String
     }
 
@@ -140,18 +149,38 @@ enum AnnotatedPDFComposer {
     /// xref writer to stay correct on documents PDFKit chooses to compress.
     ///
     /// `nil` when the round trip cannot be completed, leaving the caller with the already-stamped bytes.
-    private static func attachingAKPayloads(to stamped: Data, slots: [PayloadSlot]) -> Data? {
+    /// Otherwise the new bytes and how many payloads found no annotation to sit on — a slot that cannot be
+    /// placed is a silent loss of editability, so it is counted rather than skipped quietly.
+    private static func attachingAKPayloads(
+        to stamped: Data, slots: [PayloadSlot],
+    ) -> (data: Data, unplaced: Int)? {
         guard let document = PDFDocument(data: stamped) else { return nil }
+        var unplaced = 0
         for slot in slots {
             guard let page = document.page(at: slot.pageIndex),
                   slot.annotationIndex < page.annotations.count
-            else { continue }
-            page.annotations[slot.annotationIndex].setValue(
+            else {
+                unplaced += 1
+                continue
+            }
+            // Identity, not just a bounds check on the array: the annotation at this index has to be the ink
+            // annotation that was put there. `/Rect` is carried through PDF as decimal text, so it is compared
+            // with a tolerance rather than for equality.
+            let target = page.annotations[slot.annotationIndex]
+            guard target.type == "Ink",
+                  abs(target.bounds.minX - slot.expectedBounds.minX) < 0.01,
+                  abs(target.bounds.minY - slot.expectedBounds.minY) < 0.01
+            else {
+                unplaced += 1
+                continue
+            }
+            target.setValue(
                 ["AAPL:AKAnnotationV2": slot.base64],
                 forAnnotationKey: PDFAnnotationKey(rawValue: "AAPL:AKExtras"),
             )
         }
-        return document.dataRepresentation()
+        guard let data = document.dataRepresentation() else { return nil }
+        return (data, unplaced)
     }
 
     /// One stamped annotation, plus Apple's editable payload for it when one could be built. A placement that
