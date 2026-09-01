@@ -814,7 +814,27 @@ git commit -m "feat(reader): encode an InkStroke as Apple's ink drawing payload"
 - Consumes: `GzipWriter`, `Deflating` (Task 2), `AKInkGeometry` (Task 3).
 - Produces: `enum AKInkArchive` with `static func archive(payload: Data, archiveRect: CGRect, drawingSize: CGSize, uuid: UUID, deflater: Deflating) throws -> Data`.
 
-An `NSKeyedArchiver` plist written by hand, because the object it encodes is `AKInkAnnotation2` — an AnnotationKit class we cannot link. The graph is 18 objects; see `tools/dumparchive.py` output in the format reference.
+The object being encoded is `AKInkAnnotation2`, a class in the private AnnotationKit framework that is absent
+from the iOS SDK, so it cannot be instantiated. The archive format itself is public. The graph is 18 objects;
+`tools/dumparchive.py` prints a real one.
+
+**The approach below replaces this task's original text, which did not work.** It said to hand-write the plist
+with `["CF$UID": n]` dictionaries. Measured: `PropertyListSerialization` keeps those as ordinary dictionaries
+with a `CF$UID` key — they never become binary-plist UIDs, and the archive is not a keyed archive at all. The
+route that does work, verified end to end before this task was dispatched:
+
+1. Declare a local shim class conforming to `NSCoding` that encodes exactly the keys Apple's object carries.
+2. `NSKeyedArchiver(requiringSecureCoding: false)` plus `setClassName("AKInkAnnotation2", for: Shim.self)`
+   before encoding. This is public API and produces genuine `CFKeyedArchiverUID` values.
+3. `setClassName` writes only `$classname`, omitting the `$classes` array Apple's archive carries. Read the
+   produced plist back with `.mutableContainers`, insert
+   `["AKInkAnnotation2", "AKInkAnnotation", "AKAnnotation", "NSObject"]` as `$classes` on that one entry, and
+   re-serialize as binary. Measured: the UIDs survive that round trip and `NSKeyedUnarchiver` accepts the
+   result.
+
+**Do not name the shim classes `@objc(AKAnnotation)` and friends** to get the hierarchy for free. AnnotationKit
+is a private framework that PDFKit may load into the same process, and registering a duplicate Objective-C
+class name there is a real hazard rather than a style question.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -890,93 +910,125 @@ Expected: `cannot find 'AKInkArchive' in scope`.
 import CoreGraphics
 import Foundation
 
-/// The `NSKeyedArchiver` plist Apple stores its ink annotation in, written by hand.
+/// The `NSKeyedArchiver` archive Apple stores its ink annotation in.
 ///
-/// `NSKeyedArchiver` itself cannot help: the object being encoded is `AKInkAnnotation2`, a class in the private
-/// AnnotationKit framework that is absent from the iOS SDK. The archive format is public, though, and the graph
-/// is small — a flat dictionary of scalars, two boxed `NSMutableDictionary` rectangles, one gzipped blob.
+/// The object being encoded is `AKInkAnnotation2`, a class in the private AnnotationKit framework that is
+/// absent from the iOS SDK, so it cannot be instantiated. The archive format is public, though: a shim class
+/// encodes the same keys, and `setClassName` makes the archive claim Apple's name for it.
 ///
-/// The scalars that are not geometry are carried verbatim from a real sample. `originalModelBaseScaleFactor` in
-/// particular is not the canvas-to-page ratio and its role is unexplained; it is copied, not computed.
+/// Writing the plist by hand does not work. `PropertyListSerialization` keeps a `["CF$UID": n]` dictionary as
+/// an ordinary dictionary — it never becomes a binary-plist UID — so the result is not a keyed archive at all.
+///
+/// The scalars that are not geometry are carried verbatim from a real sample. `originalModelBaseScaleFactor`
+/// in particular is not the canvas-to-page ratio and its role is unexplained; it is copied, not computed.
 enum AKInkArchive {
+    /// Encodes the keys Apple's object carries. Named for what it is: this is not AnnotationKit's class, it
+    /// just serializes to the same shape. The name it archives under is set on the archiver, deliberately not
+    /// with `@objc(AKInkAnnotation2)` — PDFKit may load the real AnnotationKit into this process, and
+    /// registering a duplicate Objective-C class name there is a hazard.
+    private final class Shim: NSObject, NSCoding {
+        let rectangle: NSMutableDictionary
+        let drawingSize: NSMutableDictionary
+        let uuid: String
+        let drawing: Data
+
+        init(rectangle: NSMutableDictionary, drawingSize: NSMutableDictionary, uuid: String, drawing: Data) {
+            self.rectangle = rectangle
+            self.drawingSize = drawingSize
+            self.uuid = uuid
+            self.drawing = drawing
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { nil }
+
+        func encode(with coder: NSCoder) {
+            coder.encode(rectangle, forKey: "rectangle")
+            coder.encode(drawingSize, forKey: "drawingSize")
+            coder.encode(uuid, forKey: "UUID")
+            coder.encode(drawing, forKey: "drawing")
+            coder.encode(2, forKey: "akPlat")
+            coder.encode(2, forKey: "akVers")
+            coder.encode(0, forKey: "formContentType")
+            coder.encode(1, forKey: "originalExifOrientation")
+            coder.encode(0.7997311827956989, forKey: "originalModelBaseScaleFactor")
+            coder.encode(false, forKey: "AKIsFormFieldKey")
+            coder.encode(true, forKey: "editsDisableAppearanceOverride")
+            coder.encode(true, forKey: "shouldUsePlaceholderText")
+            coder.encode(false, forKey: "textIsClipped")
+            coder.encode(false, forKey: "textIsFixedHeight")
+            coder.encode(false, forKey: "textIsFixedWidth")
+        }
+    }
+
+    enum ArchiveError: Error { case malformedArchive }
+
     static func archive(
         payload: Data, archiveRect: CGRect, drawingSize: CGSize, uuid: UUID, deflater: Deflating,
     ) throws -> Data {
-        let drawing = try GzipWriter.gzip(payload, using: deflater)
-
-        // $objects is index-addressed; every UID below refers to a slot in this array, so the order is the
-        // structure. Index 0 is always the "$null" placeholder.
-        var objects: [Any] = ["$null"]
-        func add(_ object: Any) -> [String: Any] {
-            objects.append(object)
-            return ["CF$UID": objects.count - 1]
-        }
-
-        let dictionaryClass = add([
-            "$classname": "NSMutableDictionary",
-            "$classes": ["NSMutableDictionary", "NSDictionary", "NSObject"],
-        ])
-
-        func box(_ values: KeyValuePairs<String, Double>) -> [String: Any] {
-            let keys = values.map { add($0.key) }
-            let numbers = values.map { add($0.value) }
-            return add(["NS.keys": keys, "NS.objects": numbers, "$class": dictionaryClass])
-        }
-
-        let uuidRef = add(uuid.uuidString)
-        let rectRef = box([
-            "X": archiveRect.origin.x, "Y": archiveRect.origin.y,
-            "Width": archiveRect.width, "Height": archiveRect.height,
-        ])
-        let sizeRef = box(["Width": drawingSize.width, "Height": drawingSize.height])
-        let drawingRef = add(drawing)
-        let rootClass = add([
-            "$classname": "AKInkAnnotation2",
-            "$classes": ["AKInkAnnotation2", "AKInkAnnotation", "AKAnnotation", "NSObject"],
-        ])
-
-        let root = add([
-            "UUID": uuidRef,
-            "rectangle": rectRef,
-            "drawingSize": sizeRef,
-            "drawing": drawingRef,
-            "akPlat": 2,
-            "akVers": 2,
-            "formContentType": 0,
-            "originalExifOrientation": 1,
-            "originalModelBaseScaleFactor": 0.7997311827956989,
-            "AKIsFormFieldKey": false,
-            "editsDisableAppearanceOverride": true,
-            "shouldUsePlaceholderText": true,
-            "textIsClipped": false,
-            "textIsFixedHeight": false,
-            "textIsFixedWidth": false,
-            "customPlaceholderText": ["CF$UID": 0],
-            "$class": rootClass,
-        ])
-
-        return try PropertyListSerialization.data(
-            fromPropertyList: [
-                "$version": 100_000,
-                "$archiver": "NSKeyedArchiver",
-                "$top": ["root": root],
-                "$objects": objects,
+        let shim = Shim(
+            rectangle: [
+                "X": archiveRect.origin.x, "Y": archiveRect.origin.y,
+                "Width": archiveRect.width, "Height": archiveRect.height,
             ],
-            format: .binary, options: 0,
+            drawingSize: ["Width": drawingSize.width, "Height": drawingSize.height],
+            uuid: uuid.uuidString,
+            drawing: try GzipWriter.gzip(payload, using: deflater),
         )
+
+        let archiver = NSKeyedArchiver(requiringSecureCoding: false)
+        archiver.setClassName("AKInkAnnotation2", for: Shim.self)
+        archiver.encode(shim, forKey: NSKeyedArchiveRootObjectKey)
+        archiver.finishEncoding()
+
+        return try addingClassHierarchy(to: archiver.encodedData)
+    }
+
+    /// `setClassName` writes only `$classname`; Apple's archive carries `$classes` as well, and no accepted
+    /// device test has ever run without it. Rather than find out on a device — which costs a person a round —
+    /// insert it. The UIDs survive this round trip; `NSKeyedUnarchiver` accepts the rewritten archive.
+    private static func addingClassHierarchy(to data: Data) throws -> Data {
+        guard var plist = try PropertyListSerialization
+            .propertyList(from: data, options: [.mutableContainers], format: nil) as? [String: Any],
+            var objects = plist["$objects"] as? [Any]
+        else { throw ArchiveError.malformedArchive }
+
+        for (i, object) in objects.enumerated() {
+            guard var entry = object as? [String: Any],
+                  entry["$classname"] as? String == "AKInkAnnotation2" else { continue }
+            entry["$classes"] = ["AKInkAnnotation2", "AKInkAnnotation", "AKAnnotation", "NSObject"]
+            objects[i] = entry
+        }
+        plist["$objects"] = objects
+
+        return try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
     }
 }
 ```
 
 - [ ] **Step 4: Run the tests and confirm they pass**
 
-Expected: 3 tests ran, 3 passed. If `PropertyListSerialization` rejects the `CF$UID` dictionaries, the plist encoder needs real `CFKeyedArchiverUID` values — construct them with `CFKeyedArchiverUIDCreate` via `unsafeBitCast` to `Any`, or fall back to writing the plist with `NSKeyedArchiver`'s own `encode` of a placeholder object graph and substituting the class name. Note in the commit which route was taken.
+Expected: 4 tests ran, 4 passed.
+
+The archive's structure is checkable against a real sample rather than against this plan's prose. After the
+suite is green, dump one of ours and one of Apple's and compare the object graphs:
+
+```
+python3 docs/engineering/crdt-ink-format/tools/dumparchive.py docs/engineering/crdt-ink-format/samples/ppk-p1-1.bin
+```
+
+Write a produced archive to a file from the test (or a scratch `xcrun swift` script) and run the same tool on
+it. **The key set, the two `NSMutableDictionary` boxes and the class entries should match; the values will
+not.** Put the two dumps in your report. If a key Apple carries is missing from ours — `customPlaceholderText`
+is the one most likely to differ, since it points at the `$null` placeholder — say so rather than adding it
+speculatively; whether it matters is a question for the device round, and the report is where that decision
+gets made.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add Packages/Features/Reader/Sources/ReaderAnnotationCore/AK/AKInkArchive.swift Packages/Features/Reader/Tests/ReaderTests/AKInkArchiveTests.swift
-git commit -m "feat(reader): hand-write the AKInkAnnotation2 keyed archive"
+git commit -m "feat(reader): build the AKInkAnnotation2 keyed archive through NSKeyedArchiver"
 ```
 
 ---
