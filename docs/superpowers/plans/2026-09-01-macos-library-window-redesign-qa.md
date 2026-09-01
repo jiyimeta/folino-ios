@@ -12,7 +12,8 @@ recorded, record it there before moving on; several items point at a specific fi
 
 Work top to bottom. Section A is one continuous session launched from a terminal — it deliberately front-loads
 everything that needs the terminal-launched, log-capturing run so you don't have to relaunch for each item.
-Sections B–F can be done in any order, each in a normal (Dock/Finder-launched) run unless noted.
+Sections B–H can be done in any order, each in a normal (Dock/Finder-launched) run unless noted — except
+Section H, which needs a launch with an empty library and says how to arrange one.
 
 **Setup, once, before Section A:**
 
@@ -26,7 +27,7 @@ terminal for Section A and normally (Finder/Dock, or `open`) for the rest.
 
 ---
 
-## Section A — one terminal-launched session (covers items 1–12)
+## Section A — one terminal-launched session (covers items 1–13)
 
 Quit any already-running copy of the app first (so this is a clean launch, and so stderr capture below actually
 belongs to this run). Then, from Terminal:
@@ -37,7 +38,7 @@ belongs to this run). Then, from Terminal:
 
 Use the *binary's* path directly, not `open` — a redirected **stdout is fully buffered**, so `print` output
 would never reach the file and an empty log would look exactly like "nothing happened." The direct-binary launch
-avoids that trap. Leave this running for the rest of Section A; you'll grep `/tmp/folino-qa.log` at item 11.
+avoids that trap. Leave this running for the rest of Section A; you'll grep `/tmp/folino-qa.log` at item 12.
 
 ### 1. Launch window shape
 
@@ -116,12 +117,19 @@ If both fallbacks work, this is the measured failure the file's own doc comment 
 row (`contextMenu(forSelectionType:primaryAction:)`) to `YES`/`NO` for each of its three columns, matching
 what you observed.
 
-**A third fallback — a toolbar Open button — does not exist, and that's a known gap, not something to go
-looking for.** The design spec (§2.2) names four open paths, including a toolbar Open button, but only three
-were actually built: double-click, Return, and the context menu. The button was never implemented. Return and
-the context menu already cover the case where double-click is dead; the missing button only matters if
-double-click *also* turns out dead, in which case note it as a follow-up — whether the button is still wanted
-is a product call, not something this pass decides.
+**Two affordances the spec names were never built. Neither is something to go looking for.** Both are recorded
+here so the whole known deviation from the spec sits in one place:
+
+1. **A toolbar Open button** (spec §2.2's fourth open path). Only three of the four were built: double-click,
+   Return, and the context menu. Return and the context menu already cover the case where double-click is dead;
+   the missing button only matters if double-click *also* turns out dead, in which case note it as a follow-up —
+   whether the button is still wanted is a product call, not something this pass decides.
+2. **⌥-double-click for Open in New Window** (spec §2.3). `contextMenu(forSelectionType:primaryAction:)` hands
+   `primaryAction:` a selection and nothing else — no modifier flags — so the ⌥ half cannot be read where a
+   double-click arrives. The affordance itself is not lost: **every score row's context menu carries an Open in
+   New Window item**, and that is what to exercise instead. Do not report "⌥-double-click doesn't open a new
+   window" as a defect; it was never wired. See the doc comment on `macScoreOpenAffordance` in
+   `RowOpenAffordance.swift`.
 
 **Now repeat inside a playlist** (open any playlist from the sidebar, double-click a score row inside it).
 **This is not optional and does not follow from the All Scores result above.** `PlaylistDetailView` attaches the
@@ -212,7 +220,41 @@ score. No double windows, no missed opens, no window left showing an empty/blank
 -scene `onChange` ordering for one shared `@Observable` object is an unmeasured claim in this branch. Note
 exactly which path (1–4 above) misbehaved.
 
-### 10. The `+` toolbar menu and the failing-import alert
+### 10. Import from a score window with the browser CLOSED — duplicate, and corrupt
+
+Item 9 path 2 covers the *happy* path of importing from a score window. This item covers the two unhappy ones,
+which take a completely different route through the app and were a real defect until this fix round: neither
+alert has a host in a score window, so both silently stalled.
+
+**What to do:** Open a score, then **⌘W the browser** so only the score window is left (spec §2.3 says ⌘W
+dismisses it — this is a normal flow, not an edge case). With the score window key:
+
+1. **Duplicate:** File ▸ Import (⇧⌘I) a file that is already in the library.
+2. **Corrupt:** File ▸ Import a file that cannot be imported (rename a non-score file to `.mscz`, or truncate
+   one).
+
+**Pass — and the criterion names the window:** In both cases **the library browser window comes to the front
+by itself, and the alert appears on the browser**, not on the score window. The duplicate case shows the
+Open / Import as duplicate / Cancel prompt; the corrupt case shows the import-error alert. Answering it works
+(choosing Open opens the existing score in a score window). Exactly one alert appears — never two, and never
+one on each window.
+
+**Then check the alert does not come back.** Dismiss it, ⌘W the browser again, and press ⌘O. The browser must
+reopen **clean** — no alert about the file you imported a moment ago.
+
+**Fail:** Nothing happens at all (the import silently stalls and no window appears); or the browser appears but
+carries no alert; or two alerts appear; or the browser reopens later still presenting a stale alert about an
+import you already dealt with. That last one was the original defect's second half: `duplicatePrompt` /
+`currentError` live on the process-wide `LibraryViewModel` and were never cleared, so the browser's next first
+body pass presented an alert about a file imported minutes earlier.
+
+**What this exercises:** `MacShellView.importAction` — after `startImport` settles it reads
+`LibraryViewModel.hasPendingImportPrompt` and calls `openWindow(id:)` to summon the browser. The alerts are
+mounted in exactly ONE place in the whole app (`libraryRootPresentations`, applied only by `MacLibraryBrowser`),
+so "two alerts at once" should be structurally impossible rather than merely unlikely — if you see two, that is
+a much bigger finding than a missing one, and say so.
+
+### 11. The `+` toolbar menu and the failing-import alert
 
 **What to do:** In the browser toolbar, click the **`+`** menu (leftmost toolbar item). It should offer three
 items: **New score**, **New playlist**, **New tag**. Try each:
@@ -230,7 +272,7 @@ file to look importable, or use a deliberately truncated file) and import it via
 (nothing happens, no error shown). All four of these presentations are newly reachable on macOS in this branch
 and have never been opened before now.
 
-### 11. Check the log
+### 12. Check the log
 
 Quit the app. Now:
 
@@ -263,7 +305,7 @@ a SwiftUI fault-level log — not just the one string above.
 **The next item needs a fresh, Japanese-language launch — you've already quit the app for this grep, so there's
 no extra quit-and-relaunch cost to doing it right now.**
 
-### 12. Locale check — Japanese
+### 13. Locale check — Japanese
 
 **What to do:** Relaunch the app forced into Japanese, without touching your Mac's system language for the rest
 of your session:
@@ -285,7 +327,7 @@ translated text — that specific shape (the identifier itself, unrendered) is w
 localization entry looks like. Only the compiled string table was checked before this branch shipped; nobody
 has read these three strings rendered in an actual Japanese-language menu.
 
-Quit this Japanese-language instance when done. Sections B–F below don't need Japanese — launch normally
+Quit this Japanese-language instance when done. Sections B–H below don't need Japanese — launch normally
 (your Mac's regular language) again for them.
 
 ---
@@ -318,13 +360,28 @@ necessarily knows about it.
 Not covered by item 5 above on purpose — Recently Deleted never had an "Open" action before this branch and its
 row menu differs from the plain list's.
 
-**What to do:** Go to Recently Deleted. Try double-click, Return, and the row's context menu on a deleted item.
+**What to do:** Go to Recently Deleted. Try all four open paths on a deleted item: double-click, Return, the
+row's context menu ▸ **Open**, and the row's context menu ▸ **Open in New Window**.
 
-**Pass:** Whatever "open" means for a deleted item in this screen (e.g. preview, or restore-and-open, per
-whatever the row's Open menu item is wired to) behaves consistently across all three trigger paths, without
-double-clicking a row causing a crash or silent no-op that differs from the other two paths.
+**Pass:** Each path opens a score window that **actually shows the deleted score** — its music renders, its
+title is in the window title, and the leading library toolbar button is there. All four behave the same way.
 
-**Fail:** One path works and another silently does nothing, or it crashes. Note which path.
+**"Consistent" is not the criterion — showing the score is.** The first version of this item asked only that
+the paths "behave consistently," and all four consistently opened a *blank* window: `MacShellView` resolved the
+window's score id against `repository.scoreItems`, which excludes soft-deleted rows, so the lookup returned
+`nil` every time and the window rendered the empty `ContentUnavailableView` — with no toolbar, hence no way back
+to the library. That criterion passed a defect. `MacShellView.openScoreItem` now falls back to
+`deletedScoreItems`; this item is the first check of that fix.
+
+**Fail:** Any path opens an empty window ("No score selected"-style placeholder, no toolbar), one path works and
+another silently does nothing, or it crashes. Note which path.
+
+**Also check what a deleted score's window does after the score leaves the trash**, since both exits are
+reachable while the window is open: with the score window open, go back to the browser and **Restore** the item
+(it becomes a live score) — then, separately, on another one, **Delete Permanently**. The restore case should
+leave the window working; the permanent-delete case is expected to fall back to the empty window, since the row
+is then in neither list. Record what you saw for each rather than judging it — no fix depends on a particular
+answer here.
 
 ---
 
@@ -370,6 +427,81 @@ preview at 1000pt wide — wider than the real minimum.
 
 ---
 
+## Section G — renaming and deleting a playlist / tag from the SIDEBAR
+
+The sidebar's own context menu is the only way to rename or delete a playlist or a tag from the browser — the
+iOS management screens (`LibraryRoute.playlists` / `.tags`) were deleted by this redesign, not relocated. It
+has never been exercised, and there are two independent things to check here: **whether the alerts appear at
+all**, and **what happens to the selection afterwards**.
+
+**Why the alert half is its own question.** Both alerts hang off a `List` that sits in a `NavigationSplitView`
+sidebar column. This repo has a recorded pitfall about attaching a presentation modifier inside a list
+container (a `Section` case: the sheet opens and closes again in the same frame). It is an *adjacent* case, not
+the same one, and nobody has measured this one — so "the alert simply never appears, or flashes and vanishes"
+is a plausible outcome and worth reporting precisely.
+
+**What to do — rename, on both kinds of row:**
+
+1. Right-click a **playlist** row in the sidebar ▸ **Rename**. Type a new name, confirm.
+2. Right-click a **tag** row ▸ **Rename**. Same.
+
+**Pass:** A text-field alert appears and stays up. Confirming renames the row (the sidebar row's label changes,
+and so does the content pane's title if that source is selected). Cancelling changes nothing. Entering an empty
+name, or the name it already had, is a no-op rather than an error.
+
+**What to do — delete, and specifically delete the row you are LOOKING at:**
+
+3. Select a playlist in the sidebar so its scores fill the content pane. **With that same playlist selected**,
+   right-click it ▸ **Delete**, and confirm.
+4. Repeat with a tag.
+
+**Pass:** A confirmation alert appears naming the row (`Delete "<name>"?`). Confirming removes the sidebar row
+**and moves the selection to All Scores** — the content pane shows the All Scores list. Cancelling changes
+nothing.
+
+**Fail:** The alert never appears, or appears and immediately dismisses itself (that is the list-container
+pitfall above — say so explicitly, it points at a known class of fix). Or: the row disappears but the content
+pane is left showing **"Playlist not found" / "Tag not found"** with no row highlighted in the sidebar and no
+obvious way out. That stranded state was the defect this fix round closed (`clearSelectionIfGone` in
+`MacLibrarySidebar.swift`, mirroring what the detail screens' own delete already did); seeing it again means
+the fix did not take.
+
+Also delete a playlist/tag that is **not** the selected source, and confirm the selection stays where it was —
+the recovery must not fire for a row you were not looking at.
+
+**One cosmetic thing you will see, which is not a bug:** the delete alert's *title* comes from a string key
+whose name says "score" (`library.score.delete.title`). Its text is generic in every language (`Delete "%@"?`),
+so it reads correctly for a playlist and a tag; it is reused deliberately. Only report it if the rendered text
+actually says something about a score.
+
+---
+
+## Section H — the empty library (first run)
+
+**What to do:** Launch with an empty library — a Mac that has never run folino, a fresh macOS user account, or
+by moving the app's container aside before launch (`~/Library/Containers/com.KeyNumber.Folino`, if it is
+sandboxed; otherwise its Application Support directory). Do not delete a library you care about to produce this
+state; a second user account is the cheap way.
+
+**Pass:** The browser presents with four sidebar rows (Recently Opened, All Scores, Favorites, Recently Deleted
+— no playlists, no tags), none of them showing a badge, and the content pane shows an empty state: the "No
+Scores Yet" title plus a hint that **names how to import** — File ▸ Import… (⇧⌘I), or dragging score files onto
+the window. Both routes named in that hint must actually work from this state: try the drag, and try the menu
+item. (A zero count renders as no badge at all, not as a literal `0`; that is `.badge(0)`'s own behavior and not
+something to report.)
+
+**Fail:** The content pane is blank — no title, no hint, nothing. That was the state before this fix round:
+`LibraryRootScreen` had an empty state and the Mac browser is not that screen, so a first-run Mac showed an
+empty window whose only two import routes (a menu-bar item and drag-and-drop) are both invisible on screen.
+
+**Note what the `+` menu offers here, and do not treat the absence of Import as a defect.** The `+` menu has
+New score / New playlist / New tag and deliberately **no Import** — iOS's Import item arms a file importer that
+only the iOS root screen hosts, so on the Mac it would be a silent no-op. The empty-state hint is the
+replacement for it. If you think the `+` menu *should* carry Import, that is a product change (it needs a Mac
+file-importer host built first), not a bug to file.
+
+---
+
 ## Summary — where each item traces back to
 
 | Item(s) | Source |
@@ -383,11 +515,14 @@ preview at 1000pt wide — wider than the real minimum.
 | 7 (tab vs. standalone, Merge All Windows, tear-off) | Task 5 report, "What remains unverified"; design doc §2.3/line 88 |
 | 8 (⌘O, toolbar button) | Task 7 report, "What remains unverified" |
 | 9 (import seam, all 4 paths) | Task 6 report, Fix round 1 "New concerns" 1 |
-| 10 (`+` menu, failing-import alert) | Task 6 report, Fix round 2 "What remains for QA" 1–3 |
-| 11 (`NavigationRequestObserver`, positive control) | Task 6 report §6 item 3; Fix round 1 "New concerns" 4 |
-| 12 (locale check, Japanese) | Task 7 report, "What remains unverified" |
+| 10 (import from a score window, browser closed: duplicate + corrupt) | Final review C1; fixed by `MacShellView.importAction` |
+| 11 (`+` menu, failing-import alert) | Task 6 report, Fix round 2 "What remains for QA" 1–3 |
+| 12 (`NavigationRequestObserver`, positive control) | Task 6 report §6 item 3; Fix round 1 "New concerns" 4 |
+| 13 (locale check, Japanese) | Task 7 report, "What remains unverified" |
 | B (two windows, one plays) | Task 5 report "What remains unverified"; Task 8 report `PARITY(macos)` marker |
-| C (Recently Deleted open affordance) | Task 2 report, Wrinkle 2 |
+| C (Recently Deleted open affordance, incl. what it must SHOW) | Task 2 report, Wrinkle 2; final review I1 (the old criterion passed a blank window) |
 | D (playlist reorder) | Task 8 brief / original plan item; never reached by any harness |
 | E (dark mode) | Plan requirement, both window kinds |
 | F (browser minimum width) | Task 6 report, Fix round 2 "What remains for QA" 4 |
+| G (sidebar rename / delete, dangling selection) | Final review I4; the sidebar menu had no coverage at all |
+| H (empty library, first run) | Final review I2; fixed by `MacLibraryBrowser.emptyLibrary` |
