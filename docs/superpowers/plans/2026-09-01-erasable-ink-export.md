@@ -1231,6 +1231,16 @@ git commit -m "test(reader): pin our payload's structure against a real Apple sa
 - Also adds `AnalyticsEvent.annotatedExportAKEncodeFailed(count:)` in
   `Packages/Domain/Sources/Domain/Analytics/AnalyticsEvent+Factories.swift`, beside `annotatedExportDrifted`.
 
+**The composer must keep compiling for macOS.** `main` landed `615abcb6` while this plan was being executed:
+`AnnotatedPDFComposer` no longer imports UIKit unconditionally. Geometry is built as a `CGMutablePath` and
+converted at the last moment through a `PlatformBezierPath` typealias, and the light-appearance colour
+resolution sits behind `#if canImport(UIKit)`. `Scripts/build-macos-packages.sh` is a gate, and that commit
+exists because this one file failed it.
+
+Nothing in this task needs a UI framework — `AKInkGeometry`, `AKInkPayloadEncoder` and `AKInkArchive` are
+Foundation and CoreGraphics, and `Compression` exists on macOS — so the rule is simply: do not reach for a
+UIKit-only API, and use the existing typealiases where a platform type is unavoidable.
+
 Three changes to `makeAnnotation`:
 
 1. **The bounds come from `AKInkGeometry.inkBox`**, computed from `InkStroke` geometry, replacing
@@ -1490,7 +1500,18 @@ xcodebuild test -scheme Reader -destination 'platform=iOS Simulator,name=iPhone 
 Expected: every existing test still passes, plus the three new ones. **Report the counts, not "tests pass".**
 
 `AnnotatedPDFComposerTests` and `ReaderAnnotatedPDFEndToEndTests` already exist and already exercise this
-method. Expect two kinds of break, and fix them in the source of truth rather than by loosening an assertion:
+method.
+
+**One of them asserts the exact thing this task changes.** `AnnotatedPDFComposerTests` has a test named "the
+exported annotation is a plain unlocked Ink annotation with no private PencilKit keys", and it asserts
+`annotation.value(forAnnotationKey: PDFAnnotationKey(rawValue: "AAPL:AKExtras")) == nil`. That assertion was
+correct when it was written — the export deliberately carried no private keys — and this task deliberately
+makes it false. Rewrite it to assert what the export now guarantees: still subtype `Ink`, still unlocked
+(`/F` without bits 128 or 512), still no `PPK` or `PPKType`, and now **with** `AAPL:AKExtras` carrying an
+`AAPL:AKAnnotationV2` value that base64-decodes to a non-empty archive. Keep the test's intent — the mark stays
+a first-class, deletable PDF ink annotation — and update what it measures.
+
+Expect two more kinds of break, and fix them in the source of truth rather than by loosening an assertion:
 
 - **The return type changed.** Call sites need `.data`. Mechanical.
 - **An annotation's bounds may have moved.** The box now comes from `InkStroke` geometry rather than

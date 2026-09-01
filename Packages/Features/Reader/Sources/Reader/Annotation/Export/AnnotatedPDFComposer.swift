@@ -23,6 +23,10 @@ private typealias PlatformBezierPath = NSBezierPath
 private typealias PlatformColor = NSColor
 #endif
 
+// PARITY(android): erasable ink in exported PDFs — the AKAnnotationV2 encoder is already shared in
+// ReaderAnnotationCore, but Android has no PDF export to call it from, and would need a Deflating
+// implementation over zlib.
+
 /// Stamps annotation ink onto a base PDF's pages as PDF ink annotations and returns the new document's bytes.
 ///
 /// Each placed stroke becomes its own `PDFAnnotation` of subtype `.ink`, added to its destination page. The base
@@ -40,13 +44,20 @@ private typealias PlatformColor = NSColor
 /// around it. The visible cost is pressure taper and marker blending, which a single-width vector stroke
 /// approximates rather than reproduces; monoline (a constant-width tool) is exact.
 ///
-/// Nothing private is written alongside. An earlier revision carried the placed stroke's
-/// `PKDrawing.dataRepresentation()` under Apple's own `/PPK` key, in the hope that Apple's markup tools would
-/// adopt folino's ink as an editable PencilKit drawing. They do not: swapping only the `/PPK` container inside
-/// one of Apple's own annotated PDFs showed its markup needs a private `crdt` container that no public PencilKit
-/// route emits — `dataRepresentation()` produces a `wrd`-prefixed one — and imitating every other field Books
-/// writes changed nothing. So the blob was inert here and cost roughly 21 KB per page, and it is gone. The
-/// decoding of that container is a separate investigation; see `docs/engineering/crdt-ink-format/`.
+/// Each annotation also carries Apple's own `/AAPL:AKExtras` → `AAPL:AKAnnotationV2` archive, which is what makes
+/// the mark ERASABLE in Apple's markup rather than merely visible. An earlier revision instead carried the placed
+/// stroke's `PKDrawing.dataRepresentation()` under `/PPK`, in the hope that Apple's tools would adopt it as an
+/// editable PencilKit drawing; they do not — that route needs a private `crdt` container no public PencilKit API
+/// emits. `AKAnnotationV2` is the container AnnotationKit actually reads, and `AKInkPayloadEncoder` /
+/// `AKInkArchive` write it from the neutral `InkStroke` geometry. See `docs/engineering/crdt-ink-format/`.
+///
+/// Attaching that key needs two serialization passes rather than one — see `attachingAKPayloads`, which is where
+/// the measurement behind that lives.
+///
+/// Attaching it is strictly best-effort: a stroke whose payload cannot be built (a pixel-erased stroke carrying a
+/// `mask`, an archive failure) is written exactly as it was before the payload existed — an `/Ink` annotation with
+/// folino's own vector appearance — so the worst case is the behavior that already shipped. The count of such
+/// strokes travels back out of `compose` so the renderer can log it.
 ///
 /// The annotations are deliberately NOT locked (`/F` keeps PDFKit's default rather than Books' Print + Locked +
 /// LockedContents). folino wants other editors to be able to select and delete these marks; Books locks its own
@@ -58,30 +69,97 @@ enum AnnotatedPDFComposer {
     ///     unchanged; only new ink annotations are added.
     ///   - drawings: the stored anchors the placements index into.
     ///   - placements: from `AnnotatedExportPlanner`, in page-local coordinates (points, origin top-left, y down).
-    /// - Returns: the composed document's bytes.
+    /// - Returns: the composed document's bytes, and how many of the stamped annotations went out without an
+    ///   `AKAnnotationV2` payload. The composer is a stateless `enum` with no analytics of its own, so the count
+    ///   travels back to `ReaderAnnotatedPDFRenderer` — which holds one — rather than the composer reaching
+    ///   sideways for a dependency.
     /// - Throws: `DomainError.scoreWriteFailed` when `basePDF` cannot be read as a PDF, or when the composed
     ///   document cannot be re-serialized.
     static func compose(
         basePDF: Data,
         drawings: [DrawingAnchor],
         placements: [InkPlacement],
-    ) throws -> Data {
+    ) throws -> (data: Data, akEncodeFailures: Int) {
         guard let document = PDFDocument(data: basePDF) else {
             throw DomainError.scoreWriteFailed(reason: "annotated export: base PDF is unreadable")
         }
 
+        var akEncodeFailures = 0
+        var slots: [PayloadSlot] = []
         for placement in placements {
             guard placement.pageIndex >= 0, placement.pageIndex < document.pageCount,
                   let page = document.page(at: placement.pageIndex),
-                  let annotation = makeAnnotation(for: placement, drawings: drawings, page: page)
+                  let composed = makeAnnotation(for: placement, drawings: drawings, page: page)
             else { continue }
-            page.addAnnotation(annotation)
+            let indexOnPage = page.annotations.count
+            page.addAnnotation(composed.annotation)
+            guard let payload = composed.akPayload else {
+                akEncodeFailures += 1
+                continue
+            }
+            slots.append(PayloadSlot(
+                pageIndex: placement.pageIndex, annotationIndex: indexOnPage,
+                base64: payload.base64EncodedString(),
+            ))
         }
 
-        guard let data = document.dataRepresentation() else {
+        guard let stamped = document.dataRepresentation() else {
             throw DomainError.scoreWriteFailed(reason: "annotated export: could not serialize the composed PDF")
         }
-        return data
+        guard !slots.isEmpty else { return (stamped, akEncodeFailures) }
+
+        guard let payloaded = attachingAKPayloads(to: stamped, slots: slots) else {
+            // The marks themselves are already in `stamped`; only their editability is lost, which is exactly
+            // what the failure count means.
+            return (stamped, akEncodeFailures + slots.count)
+        }
+        return (payloaded, akEncodeFailures)
+    }
+
+    /// Where one annotation's payload has to land once the document has been serialized: the page it is on, and
+    /// its position in that page's `/Annots` order. PDFKit preserves that order across a serialize/parse round
+    /// trip, and the composer only ever APPENDS to a page, so the index recorded before `addAnnotation` names the
+    /// same annotation on the way back in.
+    private struct PayloadSlot {
+        let pageIndex: Int
+        let annotationIndex: Int
+        let base64: String
+    }
+
+    /// The second serialization pass, and the reason there is one.
+    ///
+    /// `/AAPL:AKExtras` set on an annotation PDFKit created THIS session does not survive `dataRepresentation()`.
+    /// AnnotationKit adopts every freshly built annotation on the way out and rewrites that key with its own
+    /// `AKIdentityHash` / `AKPDFAnnotationDictionary` / `AKAnnotationObject` trio — measured to happen even when
+    /// nothing set the key at all, so it is adoption rather than a reaction to our value, and whatever was there
+    /// is simply gone. Setting the key on an annotation PARSED BACK from the serialized bytes is not adopted:
+    /// the value is written verbatim and the synthesized trio is replaced.
+    ///
+    /// Hence: stamp and serialize, reopen, attach, serialize again. The cost is one extra parse and write of the
+    /// document; the alternative is splicing the key into the PDF bytes by hand, which means owning an object and
+    /// xref writer to stay correct on documents PDFKit chooses to compress.
+    ///
+    /// `nil` when the round trip cannot be completed, leaving the caller with the already-stamped bytes.
+    private static func attachingAKPayloads(to stamped: Data, slots: [PayloadSlot]) -> Data? {
+        guard let document = PDFDocument(data: stamped) else { return nil }
+        for slot in slots {
+            guard let page = document.page(at: slot.pageIndex),
+                  slot.annotationIndex < page.annotations.count
+            else { continue }
+            page.annotations[slot.annotationIndex].setValue(
+                ["AAPL:AKAnnotationV2": slot.base64],
+                forAnnotationKey: PDFAnnotationKey(rawValue: "AAPL:AKExtras"),
+            )
+        }
+        return document.dataRepresentation()
+    }
+
+    /// One stamped annotation, plus Apple's editable payload for it when one could be built. A placement that
+    /// produces no annotation at all is not counted as a payload failure — nothing was exported for it to be
+    /// missing from.
+    private struct ComposedAnnotation {
+        let annotation: PDFAnnotation
+        let akPayload: Data?
     }
 
     /// Decodes the placed drawing, bakes the placement's transform into its points (page-local, top-left origin,
@@ -90,7 +168,7 @@ enum AnnotatedPDFComposer {
     /// collapses to nothing (clipped fully off the page).
     private static func makeAnnotation(
         for placement: InkPlacement, drawings: [DrawingAnchor], page: PDFPage,
-    ) -> PDFAnnotation? {
+    ) -> ComposedAnnotation? {
         guard placement.drawingIndex >= 0, placement.drawingIndex < drawings.count,
               var stored = InkStrokePencilKitBridge.decodeStoredDrawing(
                   drawings[placement.drawingIndex].encodedDrawing,
@@ -107,18 +185,22 @@ enum AnnotatedPDFComposer {
 
         let pageSize = page.bounds(for: .mediaBox).size
 
-        // `PKDrawing.bounds` already encloses the rendered ink (stroke width included), same as the raster
-        // composition this replaced; pad by a point for anti-aliasing slack and clip to the page.
-        let pageLocalBounds = placed.bounds.insetBy(dx: -1, dy: -1)
-            .intersection(CGRect(origin: .zero, size: pageSize))
-        guard pageLocalBounds.width > 0, pageLocalBounds.height > 0 else { return nil }
-
-        // Annotation space is the page's own space with a bottom-left origin; `pageLocalBounds`, like every
-        // placement, is page-local with a top-left origin and y down — flip the rect, not the points.
-        let annotationBounds = CGRect(
-            x: pageLocalBounds.minX, y: pageSize.height - pageLocalBounds.maxY,
-            width: pageLocalBounds.width, height: pageLocalBounds.height,
+        // One box, and all three rectangles derived from it. The payload's stored bounding box, the archive's
+        // rectangle and this annotation's /Rect must agree to well under a tenth of a point or Apple's markup
+        // discards the annotation in silence, and deriving them separately cannot guarantee that. Note this is
+        // deliberately NOT clipped to the page: an intersection would move the rectangle out from under the
+        // payload. The page height read here is the REAL media box, never a nominal paper size — folino's own
+        // exports measure 595.4458 x 841.6944, and A4's nominal 841.8898 against that is already enough drift to
+        // lose the annotation.
+        let inkStroke = placedInkStroke(
+            drawings[placement.drawingIndex].encodedDrawing, transform: placement.transform,
         )
+        let inkBox = inkStroke.flatMap { AKInkGeometry.inkBox(of: [$0]) }
+            ?? placed.bounds.insetBy(dx: -1, dy: -1)
+        guard inkBox.intersects(CGRect(origin: .zero, size: pageSize)) else { return nil }
+
+        let archiveRect = AKInkGeometry.archiveRect(inkBox, pageHeight: pageSize.height)
+        let annotationBounds = AKInkGeometry.annotationRect(archiveRect)
 
         // `PDFAnnotation.border.lineWidth` is a single width for the whole stroke; the median across every point
         // (not the mean) is the more faithful representative for a tapered stroke, where a few very thin or very
@@ -155,7 +237,72 @@ enum AnnotatedPDFComposer {
         let border = PDFBorder()
         border.lineWidth = lineWidth
         annotation.border = border
-        return annotation
+
+        // The payload is not attached here: setting `/AAPL:AKExtras` on an annotation this session created does
+        // not survive serialization. `attachingAKPayloads` explains why and does it on the way back in.
+        return ComposedAnnotation(
+            annotation: annotation,
+            akPayload: inkStroke.flatMap {
+                akPayload(for: $0, inkBox: inkBox, archiveRect: archiveRect, pageSize: pageSize)
+            },
+        )
+    }
+
+    /// The placed stroke as neutral geometry, for the Apple ink payload.
+    ///
+    /// The stored blob is FINK bytes for everything written since the neutral format landed, and a `PKDrawing`
+    /// archive for older data and for pixel-erased strokes. The archive route needs PencilKit to read, so it goes
+    /// through the existing bridge; a stroke carrying a `mask` cannot be expressed as an `InkStroke` at all and
+    /// returns nil, which costs it the payload and nothing else.
+    ///
+    /// The transform applied here is exactly the one `makeAnnotation` gives the `PKDrawing` — scale then
+    /// translate, so `x * sp + px` — because `InkStroke.x`/`y` are anchor-relative staff-space (sp) units, not
+    /// page points. Skipping it would hand `AKInkGeometry` pre-placement coordinates and put every payload's box
+    /// somewhere near the page's top-left corner.
+    private static func placedInkStroke(_ stored: Data, transform: StrokeTransform) -> InkStroke? {
+        var stroke: InkStroke
+        if InkStrokeCodec.isInkStroke(stored) {
+            guard let decoded = try? InkStrokeCodec.decode(stored) else { return nil }
+            stroke = decoded
+        } else {
+            guard let drawing = try? PKDrawing(data: stored),
+                  let pk = drawing.strokes.first, pk.mask == nil
+            else { return nil }
+            stroke = InkStrokePencilKitBridge.inkStroke(from: pk)
+        }
+        let sp = Float(transform.sp)
+        stroke.x = stroke.x.map { $0 * sp + Float(transform.px) }
+        stroke.y = stroke.y.map { $0 * sp + Float(transform.py) }
+        stroke.width = stroke.width.map { $0 * sp }
+        stroke.baseWidthSp *= sp
+        return stroke
+    }
+
+    /// The Apple ink payload for one placed stroke, or nil if it cannot be built.
+    ///
+    /// Failure here must never fail an export. A stroke without a payload is written exactly as it was before this
+    /// existed — an `/Ink` annotation with a vector appearance — so the worst case is the behavior that shipped.
+    ///
+    /// The identifiers are freshly generated for every annotation and never reused. AnnotationKit names a drawing
+    /// by the identifiers inside its payload rather than by the annotation holding it, so two annotations sharing
+    /// them are one drawing: an eraser stroke on one deletes the other, on whatever page it happens to be.
+    private static func akPayload(
+        for stroke: InkStroke, inkBox: CGRect, archiveRect: CGRect, pageSize: CGSize,
+    ) -> Data? {
+        let identifiers = (0 ..< 5).map { _ in withUnsafeBytes(of: UUID().uuid) { Data($0) } }
+        let payload = AKInkPayloadEncoder.payload(
+            for: stroke, inkBox: inkBox, identifiers: identifiers,
+            timestamp: Date().timeIntervalSinceReferenceDate,
+        )
+        do {
+            return try AKInkArchive.archive(
+                payload: payload, archiveRect: archiveRect,
+                drawingSize: AKInkGeometry.drawingSize(pageSize: pageSize),
+                uuid: UUID(), deflater: AppleDeflater(),
+            )
+        } catch {
+            return nil
+        }
     }
 
     /// The annotation's color, folding the stroke's PencilKit opacity — a per-point translucency multiplier

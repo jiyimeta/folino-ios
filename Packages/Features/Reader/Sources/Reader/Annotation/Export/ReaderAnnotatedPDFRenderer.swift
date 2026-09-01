@@ -18,8 +18,10 @@ public struct ReaderAnnotatedPDFRenderer: AnnotatedPDFRendering {
     /// - Parameters:
     ///   - pdfRenderer: the plain engraving-to-PDF path — the same renderer the unannotated `.pdf` share uses, so
     ///     the annotated export's pages are the pages the plain export would have produced.
-    ///   - analytics: where `annotated_export_drifted` is logged when `driftReason` trips. Defaults to a no-op so
-    ///     tests and other callers that don't care about the signal need not supply one.
+    ///   - analytics: where `annotated_export_drifted` is logged when `driftReason` trips, and
+    ///     `annotated_export_ak_encode_failed` when the composer could not build Apple's editable ink payload for
+    ///     some of the stamped strokes. Defaults to a no-op so tests and other callers that don't care about the
+    ///     signals need not supply one.
     public init(pdfRenderer: any ScorePDFRenderer, analytics: any Analytics = NoopAnalytics()) {
         self.pdfRenderer = pdfRenderer
         self.analytics = analytics
@@ -44,11 +46,15 @@ public struct ReaderAnnotatedPDFRenderer: AnnotatedPDFRendering {
             )
         }
         guard !placements.isEmpty else { return basePDF }
-        return try await MainActor.run {
+        let result = try await MainActor.run {
             try AnnotatedPDFComposer.compose(
                 basePDF: basePDF, drawings: drawings, placements: placements,
             )
         }
+        if result.akEncodeFailures > 0 {
+            analytics.log(.annotatedExportAKEncodeFailed(count: result.akEncodeFailures))
+        }
+        return result.data
     }
 
     public func renderAnnotatedOriginalPDF(basePDF: Data, drawings: [DrawingAnchor]) async throws -> Data {
@@ -64,11 +70,15 @@ public struct ReaderAnnotatedPDFRenderer: AnnotatedPDFRendering {
         }
         let placements = AnnotatedExportPlanner.planPaged(drawings: drawings, pageFrames: frames)
         guard !placements.isEmpty else { return basePDF }
-        return try await MainActor.run {
+        let result = try await MainActor.run {
             try AnnotatedPDFComposer.compose(
                 basePDF: basePDF, drawings: drawings, placements: placements,
             )
         }
+        if result.akEncodeFailures > 0 {
+            analytics.log(.annotatedExportAKEncodeFailed(count: result.akEncodeFailures))
+        }
+        return result.data
     }
 
     /// The drift guard. `EngravedExportLayout` mirrors five lines of `PDFExporter.export`; if a swift-sheet-music

@@ -540,3 +540,35 @@ between pages exactly as that arrangement requires.
 Identifiers are free, so *identical apart from the identifiers* is the comparison that isolates a subtype.
 *Identical including them* is not a comparison. `tools/checkids.py` now fails a round whose variants share an
 identifier, which is the same rule production code has to follow.
+
+## The key needs two serialization passes (2026-09-02)
+
+Everything above was measured with command-line tools that opened a PDF, set the key and saved. Inside the app
+— and inside the Reader test bundle, which is where this surfaced — the same three lines silently lose the
+payload. `/AAPL:AKExtras` set on a `PDFAnnotation` that PDFKit created THIS session does not survive
+`dataRepresentation()`.
+
+The control is what makes it unambiguous. Serializing an `/Ink` annotation with **nothing set on it at all**
+still produces an `/AAPL:AKExtras` in the output, holding AnnotationKit's own trio:
+
+```
+/AAPL:AKExtras << /AAPL:AKIdentityHash (…64 hex…)
+                  /AAPL:AKPDFAnnotationDictionary << /F 4 /Subtype /Ink /Rect […] … >>
+                  /AAPL:AKAnnotationObject (YnBsaXN0MDD… NSKeyedArchiver …) >>
+```
+
+Byte-for-byte the same output whether our key carried a real 1341-byte archive, seven bytes of garbage, or was
+never set: 6595 bytes, `AKAnnotationV2` absent from the file every time. So this is AnnotationKit *adopting*
+each freshly built annotation on the way out, not reacting to what we wrote — and the adoption overwrites the
+key wholesale. `write(to:)` behaves identically; it is the same serializer.
+
+**Setting the key on an annotation parsed back from serialized bytes is not adopted.** Stamp the annotations,
+serialize, reopen the result, set `/AAPL:AKExtras` on the parsed annotations, serialize again: the value is
+written verbatim (1788 base64 chars, exactly what went in), and the synthesized trio is replaced rather than
+merged. That is what `AnnotatedPDFComposer` now does, mapping payload to annotation by position in the page's
+`/Annots` order — the composer only appends, so the index recorded before `addAnnotation` names the same
+annotation on the way back in.
+
+One more trap on the read side: PDFKit does **not** enumerate `/AAPL:AKExtras` in `annotationKeyValues` for an
+annotation parsed from a file, though `value(forAnnotationKey:)` returns it. A test written the obvious way
+reports the key missing from a document that demonstrably contains it.
