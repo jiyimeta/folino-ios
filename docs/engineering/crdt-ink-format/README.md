@@ -471,9 +471,20 @@ defects below findable.
 
 `tools/diffbuilt.py` compares structure before values, and both fell out of the first comparison:
 
-- **The stroke carries `.2` twice** — two distinct 16-byte identifiers, not one. We emitted one.
-  `tools/constfields.py` had already printed `2x` against that field, and it was read as repetition noise
-  rather than as structure.
+- **The stroke carries `.2` twice** — we emitted one. `tools/constfields.py` had already printed `2x` against
+  that field, and it was read as repetition noise rather than as structure.
+
+  **What those two fields are was described wrongly here, and `tools/checkstrokeids.py` corrects it.** They are
+  not "two distinct identifiers". Across the eight samples the first is the *same* value on every one
+  (`bd66b0cd…`) and the second is *all zeros* — and sample 5 carries **three** of them, with an extra value
+  ahead of the constant. So `.2` is a repeated field of varying length whose first entry is not per-stroke
+  identity at all. Sample 5 is the page where the mark was drawn, undone and redrawn, which is suggestive but
+  not established.
+
+  None of this changes the encoder: two fields carrying fresh UUIDs were accepted on device, which is the only
+  evidence that decides it. It changes what a future reader should believe — the rationale, not the bytes. If
+  the golden test is ever re-pinned to a different sample, note that sample 5 would not match a two-field
+  encoder.
 - **The trailing constant pair is a value, little-endian.** `0xFE54` is the bytes `54 fe`. Transcribing this
   document's own note as a byte literal reversed it.
 
@@ -491,6 +502,11 @@ holds it. Two annotations sharing them are one drawing as far as the markup is c
 **Every annotation folino writes needs freshly generated UUIDs.** Reusing them — the obvious optimization when
 one score's strokes all come from one drawing — makes the eraser delete a mark on another page. This was found
 by accident, not by design; nothing else in the investigation would have caught it, and it would have shipped.
+
+Be precise about what that experiment showed, though: the two colliding pages shared *every* identifier, so it
+does not say which one keys the drawing. Apple's own `.2` is the same value on all eight samples, so that one
+is certainly not the key — leaving `.9`, `.2.3.5.13` and `.2.3.5.14`. Generating all of them fresh is correct
+either way, and cheaper than finding out which.
 
 ## What is still copied rather than understood
 
