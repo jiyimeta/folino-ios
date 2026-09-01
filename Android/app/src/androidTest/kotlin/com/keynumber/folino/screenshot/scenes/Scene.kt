@@ -16,13 +16,18 @@ class Scene(
 
 object Scenes {
     // `order` drives the output filename (NN.png) AND the Play Store display order:
-    // Reader+cursor, display-hidden, whole-piece-repeat, AB-repeat, Library, PiP.
+    // Reader+cursor, note editing, display-hidden, whole-piece-repeat, AB-repeat, Library, PiP.
+    //
+    // Note editing sits second, where iOS puts it (`02_NoteEditing`): after the shot that establishes what the
+    // app shows, before the ones that adjust how it is shown or played. It is also the newest thing the app
+    // does, and a listing's second image is the last one most people scroll to.
     val all: List<Scene> = listOf(
         Scene("ReaderCursor", 10) { l, t -> ReaderCursorScene(l, t) },
-        Scene("DisplayHidden", 20) { l, t -> DisplayHiddenScene(l, t) },
-        Scene("LoopAll", 30) { l, t -> LoopAllScene(l, t) },
-        Scene("AbRepeat", 40) { l, t -> AbRepeatScene(l, t) },
-        Scene("Library", 50) { l, t -> LibraryScene(l, t) },
-        Scene("Pip", 60) { l, t -> PipScene(l, t) },
+        Scene("NoteEditing", 20) { l, t -> NoteEditingScene(l, t) },
+        Scene("DisplayHidden", 30) { l, t -> DisplayHiddenScene(l, t) },
+        Scene("LoopAll", 40) { l, t -> LoopAllScene(l, t) },
+        Scene("AbRepeat", 50) { l, t -> AbRepeatScene(l, t) },
+        Scene("Library", 60) { l, t -> LibraryScene(l, t) },
+        Scene("Pip", 70) { l, t -> PipScene(l, t) },
     )
 }

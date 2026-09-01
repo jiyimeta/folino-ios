@@ -201,7 +201,7 @@ struct PagedZoomedSurface: View {
                 // would perceive the page advancing whenever they tap the lower screen area.
                 let pageEndY = pageStartY + pageHeight
                 let insidePage = value.location.y >= pageStartY && value.location.y <= pageEndY
-                if let host = editingHost, host.isEditing {
+                if let host = editingHost, host.wantsScoreTaps {
                     // Same guard, different answer. The blank band under the last system on this page is still a tap
                     // on THIS page's paper — it means "nothing here", i.e. deselect. Hit-testing it would instead
                     // land on whatever system the next page starts with, silently selecting a note the user can't

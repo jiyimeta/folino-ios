@@ -232,6 +232,10 @@ struct VerticalScoreContainer: View {
             ) else { return }
             autoScroll(realCursor: playbackCursor, lookaheadCursor: scrollAnchorCursor, viewport: viewport)
         }
+        // ← / → (and every other move of the caret) brings it back on screen — see `scrollCaretIntoView`.
+        .onChange(of: editingHost?.caretItem) { _, _ in
+            scrollCaretIntoView(viewport: viewport)
+        }
         // Reproject (and reseed the canvas) ONLY on reflow / score-swap (document changes) and initial appear — NOT on
         // `viewModel.annotationDrawings`. While the user is drawing, the canvas is the source of truth; reseeding it
         // with the round-tripped `display(...)` projection (different bytes from the live ink, so the echo guard can't
@@ -387,6 +391,23 @@ struct VerticalScoreContainer: View {
         lastWidth = width
     }
 
+    /// Keep the editing caret on screen, the way the playhead is kept on screen while paused.
+    ///
+    /// Zoomed in, ← / → walked the caret straight off the edge and the user had to chase it by hand — the marker
+    /// that says "the next note lands here" is the one thing that must never be off screen. It reuses the paused
+    /// branch of `autoScroll` (`adjustedScrollOffset` on both axes) rather than playback's pin-to-top: stepping is a
+    /// deliberate, one-slot move, so the score should give way as little as it has to.
+    ///
+    /// Not gated on `autoFollowEnabled` or `isPlaybackFollowSuspended`. Those say how much the score may move ITSELF
+    /// while the transport runs; this movement is the direct answer to a key the user just pressed.
+    private func scrollCaretIntoView(viewport: CGSize) {
+        guard let host = editingHost, host.isEditing,
+              let item = host.displayCaretItem, let doc = document,
+              let rect = doc.editingCaretRect(for: item, in: score)
+        else { return }
+        scrollIntoView(contentRect: rect, viewport: viewport)
+    }
+
     private func autoScroll(
         realCursor: ScoreCursor?,
         lookaheadCursor: ScoreCursor?,
@@ -450,6 +471,35 @@ struct VerticalScoreContainer: View {
             return
         }
 
+        pendingScroll = .animated(CGPoint(x: newX, y: newY))
+    }
+
+    /// Smallest scroll that brings a score-content rect fully into the viewport on both axes, leaving it alone when
+    /// it is already there. The shared tail of `autoScroll`'s paused branch and `scrollCaretIntoView` — the padding
+    /// and zoom conversion belong to the surface's composition, so both callers have to do them the same way.
+    private func scrollIntoView(contentRect rect: CGRect, viewport: CGSize) {
+        guard let doc = document else { return }
+        let zoom = effectiveZoom(for: doc, viewport: viewport)
+        let pad = 8 * doc.metrics.sp * zoom
+        let topPad = scoreTopPadding + topChromeInset
+        let hPad = scoreInset(viewportWidth: viewport.width)
+
+        let curX = liveScrollOffset.x
+        let curY = liveScrollOffset.y
+        let newX = adjustedScrollOffset(
+            currentOffset: curX,
+            targetMin: (rect.minX + hPad) * zoom, targetMax: (rect.maxX + hPad) * zoom,
+            viewportSize: viewport.width, pad: pad,
+        )
+        let newY = adjustedScrollOffset(
+            currentOffset: curY,
+            targetMin: (rect.minY + topPad) * zoom, targetMax: (rect.maxY + topPad) * zoom,
+            viewportSize: viewport.height, pad: pad,
+        )
+
+        if abs(newX - curX) < 0.5, abs(newY - curY) < 0.5 {
+            return
+        }
         pendingScroll = .animated(CGPoint(x: newX, y: newY))
     }
 

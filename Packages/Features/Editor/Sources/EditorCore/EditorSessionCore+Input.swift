@@ -2,7 +2,8 @@ import Domain
 import Foundation
 import SheetMusicCore
 
-/// The pad's core operations — note input, delete, duration change — per spec §5.3.
+/// The pad's note input and duration keys, per spec §5.3. The rest key and the delete it grew out of are next
+/// door, in `EditorSessionCore+Rest.swift`.
 extension EditorSessionCore {
     /// Letter key C…B — writes at the CARET. Rest at the caret → `.inputNote` (composited with a re-time when a
     /// different duration is armed); note at the caret → a two-way fork: notehead 0 (or a length that crosses the
@@ -17,7 +18,7 @@ extension EditorSessionCore {
     /// "another note in the one I just wrote".
     ///
     /// Afterwards the selection lands on the note that was written and the caret moves on to the next timed element
-    /// (spec §11-5: advance on after keys), so ♯ / ♭ / ⌫ keep addressing the note rather than the empty slot ahead.
+    /// (spec §11-5: advance on after keys), so ♯ / ♭ keep addressing the note rather than the empty slot ahead.
     public func inputPitch(letter: Character) {
         guard let score else { return }
         if isAddToChordArmed, case let .note(noteID)? = selectedItem {
@@ -51,7 +52,7 @@ extension EditorSessionCore {
     /// against the pre-split score at a post-split index would read the wrong neighbours. The drum key, whose pitch
     /// is literal, composes the two into one step instead (§5.5). The case is only reachable by stepping → into an
     /// empty bar before writing anything.
-    private func writeTarget(in score: Score) -> SheetMusicCore.ScoreItemID? {
+    func writeTarget(in score: Score) -> SheetMusicCore.ScoreItemID? {
         guard let column = caretColumn else { return caretItem }
         guard let resolved = ColumnNavigation.slot(inVoice: activeVoice, at: column, in: score) else { return nil }
         guard resolved.tickWithinSlot != 0 else {
@@ -70,92 +71,6 @@ extension EditorSessionCore {
               reResolved.tickWithinSlot == 0
         else { return nil }
         return SelectionRederivation.item(at: reResolved.slot, in: split, preferringNoteIndex: nil)
-    }
-
-    /// ⌫ — acts on the SELECTION (the note you last wrote or tapped, not the slot the caret is parked on).
-    /// Multi-note chord + `.note` selection → `.removeNoteFromChord`; single-note chord or whole-element selection →
-    /// `.delete` (same-duration rest, measure length invariant), or a full-measure rest when that delete empties the
-    /// measure (the engine's own full-measure-rest collapse); `.tuplet` selection → `.removeTuplet`. Selection stays
-    /// on the affected slot (now a rest) via re-derivation.
-    public func deleteSelection() {
-        guard let selectedItem, let score else { return }
-        switch selectedItem {
-        case let .note(noteID):
-            guard case let .chord(chord)? = score[VoiceElementID(noteID)] else { return }
-            if chord.notes.count > 1 {
-                apply(.removeNoteFromChord(at: noteID))
-            } else {
-                deleteElement(at: VoiceElementID(noteID))
-            }
-        case let .rest(restID):
-            deleteElement(at: VoiceElementID(restID))
-        case let .tuplet(tupletID):
-            apply(.removeTuplet(at: VoiceElementID(
-                staff: tupletID.staff,
-                measureIndex: tupletID.measureIndex,
-                voiceIndex: tupletID.voiceIndex,
-                elementIndex: tupletID.startElementIndex,
-            )))
-        case .clef:
-            return
-        }
-    }
-
-    /// The rest key. Writes a rest of the ARMED length at the selection — over a note, the note goes and that rest
-    /// takes its place; over a rest already there, that rest is re-timed.
-    ///
-    /// One rule for both, because the key's own glyph is the armed length's rest and it promises the same thing
-    /// whatever is underneath: "this slot becomes a rest of THIS length". A note is not the exception it used to be —
-    /// deleting it and keeping the note's own length silently ignored half of what the pad was showing, exactly as
-    /// `inputPitch(letter:onNote:)` refuses to do on the pitch side.
-    public func writeRest() {
-        guard let selectedItem, let score else { return }
-        switch selectedItem {
-        case let .note(noteID):
-            writeRest(over: VoiceElementID(noteID), in: score)
-        case let .rest(restID):
-            writeRest(over: VoiceElementID(restID), in: score)
-        case .tuplet:
-            deleteSelection()
-        case .clef:
-            return
-        }
-    }
-
-    /// Writes a rest of the armed length over the timed slot at `location`, whatever is currently in it.
-    ///
-    /// The guard is the key's INTERPRETATION and stays here: with nothing armed, the armed length already in the
-    /// slot, or a tuplet member (whose lengths are the tuplet's to decide), the key falls back to a plain delete on
-    /// a note and does nothing on a rest — exactly as before. Everything past the guard is planning, and
-    /// `.writeRest` owns it now: the cross-barline run of rests, the `.measure` promotion for a bar-filling length,
-    /// and the delete-plus-retime composite over a note (with the PLAIN delete — re-timing must not collapse the
-    /// bar it empties, that would throw away the length the user just stated).
-    private func writeRest(over location: VoiceElementID, in score: Score) {
-        guard case let .chord(current)? = score[location] else { return }
-        let isNote = !current.notes.isEmpty
-        guard let armed = armedInputDuration, current.duration != armed, !isInsideTuplet(location) else {
-            if isNote {
-                deleteSelection()
-            }
-            return
-        }
-        apply(.writeRest(at: location, duration: armed))
-    }
-
-    /// Whether the rest key has something to write into: any timed slot, note or rest.
-    public var canWriteRest: Bool {
-        switch selectedItem {
-        case .note, .rest: true
-        case .tuplet, .clef, .none: false
-        }
-    }
-
-    /// `.delete`: a plain delete leaves a same-duration rest; a delete that empties its bar collapses the voice-
-    /// measure to ONE measure rest (the engine's own full-measure-rest collapse), reporting the collapsed rest as
-    /// the affected location — so re-derivation lands the selection there without the explicit `select` this method
-    /// used to do.
-    private func deleteElement(at location: VoiceElementID) {
-        apply(.delete(at: location))
     }
 
     /// Duration key — arms only, and never touches the score. A length key states what the NEXT note or rest will
@@ -353,7 +268,10 @@ extension EditorSessionCore {
     /// next timed element in voice order (spec §11-5: advance on after pitch-key input) — nil past the end of the
     /// staff. Both are placed in one go, before the audition, so the preview sounds the note that was actually
     /// written. A refused edit (`revision` unmoved) leaves everything where it was.
-    private func land(after location: VoiceElementID, unlessStillAt previousGeneration: Int) {
+    ///
+    /// `nil` for `previousGeneration` means "no edit was attempted" — the rest key's already-so case, where the
+    /// markers still have to move but there is nothing to guard against and nothing to sound.
+    func land(after location: VoiceElementID, unlessStillAt previousGeneration: Int?) {
         land(selection: location, caretAfter: location, unlessStillAt: previousGeneration)
     }
 
@@ -375,13 +293,18 @@ extension EditorSessionCore {
     /// The two-slot form of `land(after:)`, for a note written as a tied chain: the selection belongs on where the
     /// note starts, the caret on what follows where it ends.
     private func land(
-        selection slot: VoiceElementID, caretAfter tail: VoiceElementID, unlessStillAt previousGeneration: Int,
+        selection slot: VoiceElementID, caretAfter tail: VoiceElementID, unlessStillAt previousGeneration: Int?,
     ) {
-        guard revision != previousGeneration, let score else { return }
+        if let previousGeneration, revision == previousGeneration {
+            return
+        }
+        guard let score else { return }
         let written = SelectionRederivation.item(at: slot, in: score, preferringNoteIndex: nil)
         let next = ElementNavigator.nextTimedElement(after: tail, in: score)
             .flatMap { SelectionRederivation.item(at: $0, in: score, preferringNoteIndex: nil) }
         place(selection: written, caret: next)
-        auditionSelectedNote(unlessStillAt: previousGeneration)
+        if let previousGeneration {
+            auditionSelectedNote(unlessStillAt: previousGeneration)
+        }
     }
 }

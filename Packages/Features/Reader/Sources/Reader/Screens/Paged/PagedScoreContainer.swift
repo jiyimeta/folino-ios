@@ -274,6 +274,14 @@ struct PagedScoreContainer: View {
             ) else { return }
             followCursor(pageAnchorCursor ?? playbackCursor)
         }
+        // The page-mode answer to `VerticalScoreContainer.scrollCaretIntoView`: there is nowhere to scroll to, so
+        // stepping the caret past the last bar on the page turns to the page that holds it. `followCursor` already
+        // knows how to find a page from a cursor, and a caret makes one — the same `.item` cursor a press of play
+        // starts from mid-edit (`ReaderRootScreen`'s `startCursorProvider`).
+        .onChange(of: editingHost?.caretItem) { _, _ in
+            guard let host = editingHost, host.isEditing, let item = host.displayCaretItem else { return }
+            followCursor(.item(item))
+        }
         .onChange(of: pageState.pageIndex) { _, _ in reprojectCurrentPage(viewport: viewport) }
         .onChange(of: document) { _, _ in reprojectCurrentPage(viewport: viewport) }
         // See `VerticalScoreContainer`: the part-index re-seed is the one path on which the model, not the canvas,

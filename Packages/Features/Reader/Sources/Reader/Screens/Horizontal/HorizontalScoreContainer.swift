@@ -170,6 +170,10 @@ struct HorizontalScoreContainer: View {
             ) else { return }
             autoScroll(realCursor: playbackCursor, lookaheadCursor: scrollAnchorCursor, viewport: viewport)
         }
+        // ← / → (and every other move of the caret) brings it back on screen — see `scrollCaretIntoView`.
+        .onChange(of: editingHost?.caretItem) { _, _ in
+            scrollCaretIntoView(viewport: viewport)
+        }
         // Reproject on reflow / score-swap / appear and on async annotation-load (not while annotating).
         .onChange(of: document) { _, _ in reprojectAnnotations() }
         // See `VerticalScoreContainer`: the part-index re-seed is the one path on which the model, not the canvas,
@@ -396,6 +400,39 @@ struct HorizontalScoreContainer: View {
             return
         }
 
+        pendingScroll = .animated(CGPoint(x: newX, y: newY))
+    }
+
+    /// Keep the editing caret on screen. See `VerticalScoreContainer.scrollCaretIntoView` for why this is a plain
+    /// keep-in-view and why no follow setting gates it.
+    ///
+    /// It follows the CARET's own rect on both axes rather than its measure's, unlike the paused playback branch
+    /// above: on a horizontal roll a measure is often wider than the viewport, and keeping the measure in view would
+    /// stop moving at the bar line while the caret walked on past the right edge.
+    private func scrollCaretIntoView(viewport: CGSize) {
+        guard let host = editingHost, host.isEditing,
+              let item = host.displayCaretItem, let doc = document,
+              let rect = doc.editingCaretRect(for: item, in: score)
+        else { return }
+
+        let zoom = viewModel.viewportZoom
+        let pad = 8 * doc.metrics.sp * zoom
+        let curX = liveScrollOffset.x
+        let curY = liveScrollOffset.y
+        let newX = adjustedScrollOffset(
+            currentOffset: curX,
+            targetMin: (rect.minX + scorePadding) * zoom, targetMax: (rect.maxX + scorePadding) * zoom,
+            viewportSize: viewport.width, pad: pad,
+        )
+        let newY = adjustedScrollOffset(
+            currentOffset: curY,
+            targetMin: (rect.minY + scorePadding) * zoom, targetMax: (rect.maxY + scorePadding) * zoom,
+            viewportSize: viewport.height, pad: pad,
+        )
+
+        if abs(newX - curX) < 0.5, abs(newY - curY) < 0.5 {
+            return
+        }
         pendingScroll = .animated(CGPoint(x: newX, y: newY))
     }
 

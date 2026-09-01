@@ -416,6 +416,13 @@ public struct ReaderRootScreen: View {
                 else { return nil }
                 return .item(item)
             }
+            // The score a press of play should catch the engine up with — see
+            // `ReaderViewModel.adoptEditedScoreForPlaybackIfStale`. Same pairing as `startCursorProvider` above, and
+            // wired here for the same reason: this is where the host and the playback session are both in scope.
+            viewModel.editedScoreProvider = { [weak editingHost] in
+                guard let host = editingHost, host.isEditing else { return nil }
+                return host.editedScore
+            }
             pipDisplayOptions.apply(to: viewModel.pipSession)
             await viewModel.load()
             await viewModel.playbackSession.prepareForPlayback()

@@ -64,7 +64,7 @@ public final class EditorSessionCore {
 
     // Two different things, coinciding only when a target is picked explicitly (tap, ← / →). The caret is where the
     // NEXT note lands; the selection is the note the editing keys act on. Writing a run of notes moves the caret on
-    // after each one while the selection stays on the note just written — so ♯ / ♭ / ⌫ keep addressing what you just
+    // after each one while the selection stays on the note just written — so ♯ / ♭ keep addressing what you just
     // played rather than the empty slot ahead of it.
     public internal(set) var selectedItem: SheetMusicCore.ScoreItemID?
     public internal(set) var caretItem: SheetMusicCore.ScoreItemID?
@@ -87,7 +87,7 @@ public final class EditorSessionCore {
         caretItem != nil || selectedItem != nil
     }
 
-    /// Whether the SELECTION names a notehead — the shape ⌫ / ♯ / ♭ need. False for a rest, a tuplet bracket, or an
+    /// Whether the SELECTION names a notehead — the shape ♯ / ♭ need. False for a rest, a tuplet bracket, or an
     /// empty selection, which is what gates those three keys: with the caret running ahead of the selection, "there
     /// is a caret" no longer implies "there is a note to sharpen".
     public var isNoteSelected: Bool {
@@ -337,7 +337,7 @@ public final class EditorSessionCore {
         sessionEditDepth -= 1
         revision += 1
         mutationTicket += 1
-        rederiveSelection()
+        rederiveSelectionTogether()
         isDirty = true
     }
 
@@ -346,7 +346,7 @@ public final class EditorSessionCore {
         sessionEditDepth += 1
         revision += 1
         mutationTicket += 1
-        rederiveSelection()
+        rederiveSelectionTogether()
         isDirty = true
     }
 

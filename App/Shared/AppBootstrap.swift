@@ -155,7 +155,7 @@ final class AppBootstrap {
             self.originalStore = originalStore
             self.importer = importer
             incomingShareCoordinator = shareCoordinator
-            installAudioStack(gateway: gateway)
+            installAudioStack(gateway: gateway, annotationStore: annotationStore)
             reachability = LiveNetworkReachability()
             migrateAnnotationFormatIfNeeded(database: database)
 
@@ -195,11 +195,15 @@ final class AppBootstrap {
         analytics = FirebaseAnalyticsClient.make(collectionEnabled: enabled)
     }
 
-    private func installAudioStack(gateway: LiveScoreFileGateway) {
+    private func installAudioStack(gateway: LiveScoreFileGateway, annotationStore: LiveAnnotationStore) {
         let stack = AudioStackFactory.make(
             gateway: gateway,
             scoresDirectory: AppPaths.scoresDirectory,
             shareTempDirectory: AppPaths.shareTempDirectory,
+            annotatedPDFRenderer: ReaderAnnotatedPDFRenderer(
+                pdfRenderer: CoreGraphicsPDFRenderer(), analytics: analytics ?? NoopAnalytics(),
+            ),
+            annotationStore: annotationStore,
         )
         museScoreGeneralProvider = stack.museScoreGeneralProvider
         soundfontResolver = stack.soundfontResolver

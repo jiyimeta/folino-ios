@@ -134,6 +134,10 @@ private func shareMenuFormatText(for format: ScoreShareFormat) -> Text {
         Text("scoreUI.format.midi", bundle: .module)
     case .audioM4A:
         Text("scoreUI.format.m4a", bundle: .module)
+    case .annotatedPDF:
+        Text("scoreUI.format.pdf.annotated", bundle: .module)
+    case .annotatedOriginalPDF:
+        Text("scoreUI.format.originalPDF.annotated", bundle: .module)
     }
 }
 
@@ -141,7 +145,7 @@ private func shareMenuIconName(for format: ScoreShareFormat) -> String {
     switch format {
     case .museScoreV4, .museScoreV3:
         "doc.zipper"
-    case .pdf:
+    case .pdf, .annotatedPDF, .annotatedOriginalPDF:
         "doc.richtext"
     case .midi:
         "pianokeys"

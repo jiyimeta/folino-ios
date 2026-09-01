@@ -34,6 +34,8 @@ enum AudioStackFactory {
         gateway: LiveScoreFileGateway,
         scoresDirectory: URL,
         shareTempDirectory: URL,
+        annotatedPDFRenderer: any AnnotatedPDFRendering,
+        annotationStore: any AnnotationStore,
         installedChecker: any InstalledAppChecking = platformInstalledChecker,
     ) -> AudioStack {
         let reclaimer = SharedSoundfontReclaimer(
@@ -64,6 +66,8 @@ enum AudioStackFactory {
             gateway: gateway,
             audioExporter: audioExporter,
             pdfRenderer: CoreGraphicsPDFRenderer(),
+            annotatedPDFRenderer: annotatedPDFRenderer,
+            annotationStore: annotationStore,
         )
         let metadataReader = LiveScoreMetadataReader(
             gateway: gateway,

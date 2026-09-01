@@ -82,7 +82,7 @@ struct HorizontalZoomedSurface: View {
     private func tapSeekGesture(document: LayoutDocument) -> some Gesture {
         SpatialTapGesture(coordinateSpace: .named("scoreSurface"))
             .onEnded { value in
-                if let host = editingHost, host.isEditing {
+                if let host = editingHost, host.wantsScoreTaps {
                     host.onTap(value.location)
                     return
                 }

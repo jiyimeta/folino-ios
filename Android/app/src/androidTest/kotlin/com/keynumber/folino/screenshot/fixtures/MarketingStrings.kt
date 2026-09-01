@@ -33,6 +33,29 @@ object MarketingStrings {
                 "清晰易讀、專注的樂譜顯示\n可匯入 MIDI 和 mscz",
             ),
         ),
+        // scene.noteEditing -> NoteEditing (bullet)
+        "NoteEditing" to mapOf(
+            "en" to SceneCopy(
+                "Edit the notes in the score",
+                "Change pitch and length\nEnter notes and rests with ease",
+            ),
+            "ja" to SceneCopy(
+                "楽譜の中身を編集",
+                "音符の高さ・長さを変更\n音符や休符を簡単入力",
+            ),
+            "ko" to SceneCopy(
+                "악보 내용을 편집",
+                "음표의 음높이와 길이 변경\n음표와 쉼표를 간편하게 입력",
+            ),
+            "zh-Hans" to SceneCopy(
+                "编辑乐谱内容",
+                "更改音符的音高与时值\n轻松输入音符和休止符",
+            ),
+            "zh-Hant" to SceneCopy(
+                "編輯樂譜內容",
+                "變更音符的音高與時值\n輕鬆輸入音符和休止符",
+            ),
+        ),
         // scene.visualInspector -> DisplayHidden (bullet)
         "DisplayHidden" to mapOf(
             "en" to SceneCopy(
@@ -153,6 +176,7 @@ object MarketingStrings {
     // Per-scene bullet flag (mirrors the iOS scenes' `subtitleBullet`). Same across all locales.
     private val bulletScenes: Set<String> = setOf(
         "ReaderCursor",
+        "NoteEditing",
         "DisplayHidden",
         "LoopAll",
         "Library",

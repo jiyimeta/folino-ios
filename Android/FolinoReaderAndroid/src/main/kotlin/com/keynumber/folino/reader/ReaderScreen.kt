@@ -32,7 +32,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Pause
@@ -41,7 +41,6 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.Draw
-import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
@@ -92,6 +91,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -1240,22 +1240,16 @@ fun ReaderScreen(
                     // same white the score page draws on, so the seek-bar-off bottom area reads as one
                     // continuous white surface rather than the theme background tint.
                     .background(Color.White)
-                    .padding(
-                        bottom = if (!showsSeekBarNow &&
-                            (layoutMode == ReaderLayoutMode.HORIZONTAL || layoutMode == ReaderLayoutMode.PAGE)
-                        ) {
-                            fabClusterReservedHeight
-                        } else {
-                            0.dp
-                        },
-                    )
                     // Report the layout width from HERE, not from the score surface below. This Box is
                     // composed for every state (Loading included), so the engine gets the real width before
                     // it lays anything out. Measuring it inside the Ready branch instead meant the width was
                     // only known after a layout had already been computed and drawn at the seed width — the
                     // score then visibly stretched sideways when the second layout landed. The score
                     // surfaces are `fillMaxSize` inside this Box, so the width measured here is the one they
-                    // render into; only the bottom padding above differs.
+                    // render into; only the inner Box's bottom reservation differs, and that is height.
+                    //
+                    // `editingViewportPx` is this box, not the reserved one: the chrome floats HERE, so the
+                    // tuck's "past the edge" and "a fifth of the short side" are answers about this frame.
                     .onSizeChanged { size ->
                         if (size.width > 0) readerVm.setLayoutWidthMm(layoutWidthMm(size.width, readerDensity.density))
                         // The same measurement the pad's tuck geometry needs: a threshold of "a fifth of the short
@@ -1265,86 +1259,77 @@ fun ReaderScreen(
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                when (val s = state) {
-                    is ReaderState.Loading -> Text("Loading…")
-                    is ReaderState.Error -> Text(s.message, style = MaterialTheme.typography.bodyLarge)
-                    is ReaderState.Ready -> when (layoutMode) {
-                        ReaderLayoutMode.VERTICAL -> ReadyScore(
-                            state = s,
-                            scoreHandle = scoreHandle,
-                            fontProvider = fontProvider,
-                            audioVm = audioVm,
-                            readerVm = readerVm,
-                            layoutOptions = layoutOptions,
-                            // Pad the scroll content's bottom by the FAB cluster height (when the seek bar
-                            // is off) so the last system can scroll out from under the floating play FAB.
-                            bottomContentPad = editingBottomContentPad,
-                            annotation = annotationSurface,
-                            autoFollowEnabled = autoFollowEnabled,
-                            layoutGeneration = layoutGeneration,
-                            isPlaybackActive = isPlaying,
-                            editing = editing,
-                            onSelectItem = onSelectItem,
-                            onTapSeekItem = { lastTapSeekItem = it },
-                            onSetSelectionDuration = onSetSelectionDuration,
-                            onSetSelectionDots = onSetSelectionDots,
-                            onToggleSelectionDot = onToggleSelectionDot,
-                            onShiftPitch = onShiftPitch,
-                            onShiftOctave = onShiftOctave,
-                        )
-                        ReaderLayoutMode.HORIZONTAL -> HorizontalScore(
-                            s, scoreHandle, fontProvider, audioVm, layoutOptions,
-                            autoFollowEnabled = autoFollowEnabled,
-                            annotation = annotationSurface,
-                            readerVm = readerVm,
-                            bottomContentPad = editingBottomContentPad,
-                            layoutGeneration = layoutGeneration,
-                            isPlaybackActive = isPlaying,
-                            editing = editing,
-                            onSelectItem = onSelectItem,
-                            onTapSeekItem = { lastTapSeekItem = it },
-                            onSetSelectionDuration = onSetSelectionDuration,
-                            onSetSelectionDots = onSetSelectionDots,
-                            onToggleSelectionDot = onToggleSelectionDot,
-                            onShiftPitch = onShiftPitch,
-                            onShiftOctave = onShiftOctave,
-                        )
-                        // No `bottomContentPad` here, deliberately: page mode paginates from the viewport's own
-                        // height, so reserving room for the editing chrome would re-flow the whole score the
-                        // moment the pad moved. iOS refuses the same inset for the same reason
-                        // (`horizontalEditingInsets` applies to HORIZONTAL only).
-                        ReaderLayoutMode.PAGE -> PagedScore(
-                            state = s,
-                            scoreHandle = scoreHandle,
-                            fontProvider = fontProvider,
-                            audioVm = audioVm,
-                            readerVm = readerVm,
-                            pageTapHintDismissed = pageTapHintDismissed,
-                            onDismissPageTapHint = onDismissPageTapHint,
-                            autoFollowEnabled = autoFollowEnabled,
-                            pageTurnButtonsVisible = pageTurnButtonsVisible,
-                            annotation = annotationSurface,
-                            layoutGeneration = layoutGeneration,
-                            isPlaybackActive = isPlaying,
-                            selectionTintArgb = selectionTintArgb,
-                            editing = editing,
-                            onSelectItem = onSelectItem,
-                            onTapSeekItem = { lastTapSeekItem = it },
-                            onSetSelectionDuration = onSetSelectionDuration,
-                            onSetSelectionDots = onSetSelectionDots,
-                            onToggleSelectionDot = onToggleSelectionDot,
-                            onShiftPitch = onShiftPitch,
-                            onShiftOctave = onShiftOctave,
-                        )
-                    }
-                    is ReaderState.ReadyPdf -> when (layoutMode) {
-                        // Horizontal is not reachable for a PDF (it is not among the offered modes for
-                        // this state), so it falls to the vertical surface below along with VERTICAL itself —
-                        // the same "everything else" fallback the plan calls for.
-                        ReaderLayoutMode.PAGE -> readerVm.pdfPageSource?.let { pdfSource ->
-                            PagedPdfScore(
+                // The FAB cluster's band is reserved on THIS box, not on the one above: the editing chrome is a
+                // sibling of this Box, and reserving the band up there lifted the chrome with the score, leaving an
+                // unexplained strip under the stepper pill in horizontal and page mode (vertical never showed it,
+                // because there the inset goes into the scroll content instead). The score still clears the
+                // floating transport; the chrome still sits on the real bottom edge.
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(
+                            bottom = if (!showsSeekBarNow &&
+                                (layoutMode == ReaderLayoutMode.HORIZONTAL || layoutMode == ReaderLayoutMode.PAGE)
+                            ) {
+                                fabClusterReservedHeight
+                            } else {
+                                0.dp
+                            },
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    when (val s = state) {
+                        is ReaderState.Loading -> Text("Loading…")
+                        is ReaderState.Error -> Text(s.message, style = MaterialTheme.typography.bodyLarge)
+                        is ReaderState.Ready -> when (layoutMode) {
+                            ReaderLayoutMode.VERTICAL -> ReadyScore(
                                 state = s,
-                                source = pdfSource,
+                                scoreHandle = scoreHandle,
+                                fontProvider = fontProvider,
+                                audioVm = audioVm,
+                                readerVm = readerVm,
+                                layoutOptions = layoutOptions,
+                                // Pad the scroll content's bottom by the FAB cluster height (when the seek bar
+                                // is off) so the last system can scroll out from under the floating play FAB.
+                                bottomContentPad = editingBottomContentPad,
+                                annotation = annotationSurface,
+                                autoFollowEnabled = autoFollowEnabled,
+                                layoutGeneration = layoutGeneration,
+                                isPlaybackActive = isPlaying,
+                                editing = editing,
+                                onSelectItem = onSelectItem,
+                                onTapSeekItem = { lastTapSeekItem = it },
+                                onSetSelectionDuration = onSetSelectionDuration,
+                                onSetSelectionDots = onSetSelectionDots,
+                                onToggleSelectionDot = onToggleSelectionDot,
+                                onShiftPitch = onShiftPitch,
+                                onShiftOctave = onShiftOctave,
+                            )
+                            ReaderLayoutMode.HORIZONTAL -> HorizontalScore(
+                                s, scoreHandle, fontProvider, audioVm, layoutOptions,
+                                autoFollowEnabled = autoFollowEnabled,
+                                annotation = annotationSurface,
+                                readerVm = readerVm,
+                                bottomContentPad = editingBottomContentPad,
+                                layoutGeneration = layoutGeneration,
+                                isPlaybackActive = isPlaying,
+                                editing = editing,
+                                onSelectItem = onSelectItem,
+                                onTapSeekItem = { lastTapSeekItem = it },
+                                onSetSelectionDuration = onSetSelectionDuration,
+                                onSetSelectionDots = onSetSelectionDots,
+                                onToggleSelectionDot = onToggleSelectionDot,
+                                onShiftPitch = onShiftPitch,
+                                onShiftOctave = onShiftOctave,
+                            )
+                            // No `bottomContentPad` here, deliberately: page mode paginates from the viewport's own
+                            // height, so reserving room for the editing chrome would re-flow the whole score the
+                            // moment the pad moved. iOS refuses the same inset for the same reason
+                            // (`horizontalEditingInsets` applies to HORIZONTAL only).
+                            ReaderLayoutMode.PAGE -> PagedScore(
+                                state = s,
+                                scoreHandle = scoreHandle,
+                                fontProvider = fontProvider,
                                 audioVm = audioVm,
                                 readerVm = readerVm,
                                 pageTapHintDismissed = pageTapHintDismissed,
@@ -1352,18 +1337,47 @@ fun ReaderScreen(
                                 autoFollowEnabled = autoFollowEnabled,
                                 pageTurnButtonsVisible = pageTurnButtonsVisible,
                                 annotation = annotationSurface,
+                                layoutGeneration = layoutGeneration,
+                                isPlaybackActive = isPlaying,
+                                selectionTintArgb = selectionTintArgb,
+                                editing = editing,
+                                onSelectItem = onSelectItem,
+                                onTapSeekItem = { lastTapSeekItem = it },
+                                onSetSelectionDuration = onSetSelectionDuration,
+                                onSetSelectionDots = onSetSelectionDots,
+                                onToggleSelectionDot = onToggleSelectionDot,
+                                onShiftPitch = onShiftPitch,
+                                onShiftOctave = onShiftOctave,
                             )
                         }
-                        else -> readerVm.pdfPageSource?.let { pdfSource ->
-                            PdfVerticalScore(
-                                state = s,
-                                source = pdfSource,
-                                audioVm = audioVm,
-                                readerVm = readerVm,
-                                bottomContentPad = if (!showsSeekBarNow) fabClusterReservedHeight else 0.dp,
-                                annotation = annotationSurface,
-                                autoFollowEnabled = autoFollowEnabled,
-                            )
+                        is ReaderState.ReadyPdf -> when (layoutMode) {
+                            // Horizontal is not reachable for a PDF (it is not among the offered modes for
+                            // this state), so it falls to the vertical surface below along with VERTICAL itself —
+                            // the same "everything else" fallback the plan calls for.
+                            ReaderLayoutMode.PAGE -> readerVm.pdfPageSource?.let { pdfSource ->
+                                PagedPdfScore(
+                                    state = s,
+                                    source = pdfSource,
+                                    audioVm = audioVm,
+                                    readerVm = readerVm,
+                                    pageTapHintDismissed = pageTapHintDismissed,
+                                    onDismissPageTapHint = onDismissPageTapHint,
+                                    autoFollowEnabled = autoFollowEnabled,
+                                    pageTurnButtonsVisible = pageTurnButtonsVisible,
+                                    annotation = annotationSurface,
+                                )
+                            }
+                            else -> readerVm.pdfPageSource?.let { pdfSource ->
+                                PdfVerticalScore(
+                                    state = s,
+                                    source = pdfSource,
+                                    audioVm = audioVm,
+                                    readerVm = readerVm,
+                                    bottomContentPad = if (!showsSeekBarNow) fabClusterReservedHeight else 0.dp,
+                                    annotation = annotationSurface,
+                                    autoFollowEnabled = autoFollowEnabled,
+                                )
+                            }
                         }
                     }
                 }
@@ -1707,58 +1721,40 @@ fun ReaderTopBar(
                     onRevertToOriginal = onRevertToOriginal,
                 )
             } else {
-                IconButton(onClick = onShare) {
-                    Icon(
-                        Icons.Filled.Share,
-                        contentDescription = stringResource(R.string.reader_share),
-                    )
-                }
+                // Order matches iOS's strip exactly: the two "this score" actions, then the two that write into
+                // it, then the two inspectors. iOS builds that as three groups — `scoreActionButtons`
+                // (info, share), the editing pair, and `inspectorGroup` (playback, display) — and folds them
+                // right-to-left when the width runs out. Android has no fold, so only the order carries over,
+                // but the grouping is the reason for it: what the score IS, what you do TO it, how you VIEW it.
                 IconButton(onClick = onEditInfo) {
                     Icon(
                         Icons.Outlined.Info,
                         contentDescription = stringResource(R.string.reader_edit_info),
                     )
                 }
+                IconButton(onClick = onShare) {
+                    Icon(
+                        Icons.Filled.Share,
+                        contentDescription = stringResource(R.string.reader_share),
+                    )
+                }
                 // The six reading actions have to be told apart at a glance, so no two of them may share a
                 // silhouette. `Tune` (horizontal sliders) and `ViewList` (horizontal rules) used to sit side by
                 // side here, and `EditNote` (pencil over rules) and `Edit` (pencil) right after them — four
-                // glyphs drawn from two families. An open book for the display inspector breaks the
-                // horizontal-rule family; the annotation toggle's marker (below) breaks the pencil one, leaving
-                // `EditNote` as the only pencil in the bar.
-                //
-                // The audio inspector keeps `Tune` — it is a mixer, and faders are what it should look like —
-                // but stood UP. Turning it 90° both clears the last horizontal-rule collision and says the same
-                // thing iOS says here, where this button is `slider.vertical.3`. Rotating the real glyph rather
-                // than drawing a vertical one keeps it Material's own geometry (there is no `TuneVertical` in
-                // the icon set; the whole `*Vert*` list is alignment and swap icons, no faders).
-                IconButton(
-                    onClick = onPlaybackControls,
-                    // Three hints point here — metronome, repeat and the mixer all live behind this button, and
-                    // only one of them is ever offered.
-                    modifier = Modifier.readerHintAnchor(ReaderHintTarget.PLAYBACK_INSPECTOR_BUTTON),
-                ) {
-                    Icon(
-                        Icons.Filled.Tune,
-                        contentDescription = stringResource(R.string.reader_playback_settings),
-                        modifier = Modifier.rotate(-90f),
-                    )
-                }
-                IconButton(
-                    onClick = onDisplaySettings,
-                    modifier = Modifier.readerHintAnchor(ReaderHintTarget.VISUAL_INSPECTOR_BUTTON),
-                ) {
-                    Icon(
-                        Icons.Filled.AutoStories,
-                        contentDescription = stringResource(R.string.reader_display_settings),
-                    )
-                }
+                // glyphs drawn from two families. A sheet with lines for the display inspector breaks the
+                // horizontal-rule family; the annotation toggle's marker breaks the pencil one, leaving no
+                // pencil in the bar at all.
                 if (canEdit) {
+                    // Notes, matching iOS's `music.quarternote.3` — see that button's own note for why it stopped
+                    // being a pencil: a compose glyph reads as "make a new score" on a screen where a score is
+                    // already open, and this button writes into the one you are looking at. Material has no
+                    // multi-note glyph, so the drawable is ours (`ic_music_note_3`).
                     IconButton(
                         onClick = onStartEditing,
                         modifier = Modifier.readerHintAnchor(ReaderHintTarget.NOTE_EDITING_BUTTON),
                     ) {
                         Icon(
-                            Icons.Outlined.EditNote,
+                            painterResource(R.drawable.ic_music_note_3),
                             contentDescription = stringResource(R.string.reader_editing_start),
                         )
                     }
@@ -1791,6 +1787,36 @@ fun ReaderTopBar(
                                 R.string.reader_annotate_start
                             },
                         ),
+                    )
+                }
+                // The audio inspector keeps `Tune` — it is a mixer, and faders are what it should look like —
+                // but stood UP. Turning it 90° both clears the last horizontal-rule collision and says the same
+                // thing iOS says here, where this button is `slider.vertical.3`. Rotating the real glyph rather
+                // than drawing a vertical one keeps it Material's own geometry (there is no `TuneVertical` in
+                // the icon set; the whole `*Vert*` list is alignment and swap icons, no faders).
+                IconButton(
+                    onClick = onPlaybackControls,
+                    // Three hints point here — metronome, repeat and the mixer all live behind this button, and
+                    // only one of them is ever offered.
+                    modifier = Modifier.readerHintAnchor(ReaderHintTarget.PLAYBACK_INSPECTOR_BUTTON),
+                ) {
+                    Icon(
+                        Icons.Filled.Tune,
+                        contentDescription = stringResource(R.string.reader_playback_settings),
+                        modifier = Modifier.rotate(-90f),
+                    )
+                }
+                // A sheet with text lines, which is what iOS puts here (`text.page`). Deliberately NOT the open
+                // book: that glyph is already spoken for by the PAGE layout mode inside the very sheet this button
+                // opens (`DisplayInspectorSheet`'s mode picker), and a button that shows one of its own options'
+                // icons reads as "go to page mode" rather than "display settings".
+                IconButton(
+                    onClick = onDisplaySettings,
+                    modifier = Modifier.readerHintAnchor(ReaderHintTarget.VISUAL_INSPECTOR_BUTTON),
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Article,
+                        contentDescription = stringResource(R.string.reader_display_settings),
                     )
                 }
             }
