@@ -19,6 +19,14 @@ PKG_PATH="$ROOT/Packages/Infrastructure"
 JNI_DIR="$ROOT/Android/FolinoSoundfontAndroid/src/main/jniLibs"
 SDK_BUNDLE="$HOME/Library/org.swift.swiftpm/swift-sdks/swift-6.3.3-RELEASE_android.artifactbundle"
 RUNTIME_BASE="$SDK_BUNDLE/swift-android/swift-resources/usr/lib"
+# `--swift-sdk <triple>` filters by triple, and more than one installed bundle can match it (a
+# 6.3.2 and a 6.3.3 Android SDK both answer to `aarch64-unknown-linux-android28`). SwiftPM then
+# picks one and only warns — which is how these libraries came to be compiled against 6.3.2's
+# SDK while the runtime staged below came out of the 6.3.3 bundle named in SDK_BUNDLE.
+# Point the search at a directory holding just that bundle so exactly one candidate matches.
+SDK_SEARCH_DIR="$(mktemp -d)"
+trap 'rm -rf "$SDK_SEARCH_DIR"' EXIT
+ln -s "$SDK_BUNDLE" "$SDK_SEARCH_DIR/$(basename "$SDK_BUNDLE")"
 
 if [[ -z "${ANDROID_NDK_HOME:-}" ]]; then
     sdk_root="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
@@ -54,6 +62,7 @@ for entry in "${TARGETS[@]}"; do
     echo "==> Building libFolinoSoundfontJNI.so for $abi ($triple)"
     swift build --package-path "$PKG_PATH" \
                 --product FolinoSoundfontJNI \
+                --swift-sdks-path "$SDK_SEARCH_DIR" \
                 --swift-sdk "$triple" \
                 -c release
 
