@@ -21,11 +21,6 @@ struct MacShellView: View {
     @State private var libraryVM: LibraryViewModel
     @State private var sidebarPath = NavigationPath()
 
-    /// How many Library rows the sidebar has selected, published by whichever list owns the selection (see
-    /// `macSelectionOpensScore`). `nil` when no Library list is on screen. Only the >1 case is read here — a
-    /// one-row selection has already opened that score through `onOpenScore`.
-    @FocusedValue(\.libraryBulkSelectionCount) private var librarySelectionCount
-
     /// The adapters the detail column's reader needs, unwrapped once in `init` (see the guard there for why they are
     /// guaranteed non-nil) rather than at every use site.
     private let repository: any ScoreLibraryRepository
@@ -217,20 +212,7 @@ struct MacShellView: View {
 
     @ViewBuilder
     private var detail: some View {
-        if let count = librarySelectionCount, count > 1 {
-            // More than one row selected: the selection is a bulk selection, so the detail reports it rather than
-            // showing one arbitrary member of it. The bulk actions themselves live where the selection does — the
-            // list's context menu and ⌫ — which is the Mail shape. Dropping back to one row shows that score again.
-            ContentUnavailableView {
-                Label {
-                    Text("app.detail.selectionCount.title \(count)")
-                } icon: {
-                    Image(systemName: "checklist")
-                }
-            } description: {
-                Text("app.detail.selectionCount.hint")
-            }
-        } else if let item = openScoreItem {
+        if let item = openScoreItem {
             // `id(item.id)` so switching the detail column to another score builds a fresh `MacReaderRootScreen` —
             // and with it a fresh `ReaderViewModel`, which is created once per screen instance in a `@State`.
             MacReaderRootScreen(
