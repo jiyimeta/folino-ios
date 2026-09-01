@@ -20,8 +20,10 @@ write this format from an InkStroke and nothing else.
   python3 mkprobe.py <samples-dir> <outdir>
 """
 import glob
+import random
 import struct
 import sys
+import uuid
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 import mkbisect  # noqa: E402
@@ -44,16 +46,27 @@ def constants_from(path):
     )
 
 
+def uid(seed):
+    """A well-formed random UUID, reproducible across runs so a rebuilt variant is byte-identical.
+
+    Apple's are real UUIDs; whether anything checks the version nibble is unknown, and a probe is not the
+    place to find out by accident -- the encoder will emit real ones, so the probe does too.
+    """
+    return uuid.UUID(int=random.Random(seed).getrandbits(128), version=4).bytes
+
+
 def record(t, x, y, width, force):
     """One 24-byte point record, assembled from named quantities.
 
     [0:4] f32 time, [4:8] f32 x, [8:12] f32 y, [12:14] u16 width, [14:16] u16 1000, [16:18] u16 0,
     [18:20] u16 force, [20:22] 0xAAAA, [22:24] 0xFE54. The last two are the same on every sample and every
     stroke; the two zero-ish slots likewise. Nothing here is copied from a sample.
+
+    The trailing pair is written as VALUES, little-endian: 0xFE54 is the bytes `54 fe`, not `fe 54`. Spelling
+    them as a literal the way the notes read them off got the order backwards.
     """
     return (struct.pack("<fff", t, x, y)
-            + struct.pack("<HHHH", width, 1000, 0, force)
-            + b"\xaa\xaa\xfe\x54")
+            + struct.pack("<HHHHHH", width, 1000, 0, force, 0xAAAA, 0xFE54))
 
 
 def zigzag(box, n=48, width=26, force=340):
@@ -93,11 +106,14 @@ def build(scaffold, box, rgba, when):
         (2, 2, b"com.apple.ink.pen"),
         (3, 0, 3),
     ])
+    # `.2` occurs TWICE on every sample -- two distinct 16-byte identifiers, not one. Emitting a single one
+    # made our payload structurally unlike Apple's, which is what the first probe round rejected.
     stroke = sorted(stroke_extra + [
-        (2, 2, b"\x33" * 16),
+        (2, 2, uid(3)),
+        (2, 2, uid(5)),
         (4, 2, ink),
         (5, 2, pbcodec.serialize(points)),
-        (9, 2, b"\x44" * 16),
+        (9, 2, uid(4)),
     ], key=lambda f: f[0])
     drawing = pbcodec.serialize([(1, 0, 10), (2, 0, 10), (3, 2, pbcodec.serialize(stroke))])
     return pbcodec.serialize([(1, 0, 0), (2, 2, drawing)])
