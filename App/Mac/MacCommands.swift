@@ -8,11 +8,15 @@ import UniformTypeIdentifiers
 /// The menu-bar skeleton. Sub-project Ⅳ fills in the editing commands and the full key map; this is only what the
 /// shell itself needs, plus the display-mode picker a reader wants on day one.
 struct MacCommands: Commands {
-    /// The frontmost window's open score and import action, published by `MacShellView` via `focusedSceneValue`.
-    /// `@FocusedValue` follows scene focus, so these always read the state of whichever window is key — the right
-    /// notion of "current selection" for a File-menu command in a multi-window app. `LibraryRootScreen` exposes no
-    /// per-row context-menu seam, which is what a per-row "Open in New Window" would otherwise hang off of, so this
-    /// reads the window's currently open score instead.
+    /// The frontmost window's open score and import action, published via `focusedSceneValue` — the score by
+    /// `MacShellView`, the import action by `MacShellView` and by the library browser's window content both, since
+    /// `@FocusedValue` follows *scene* focus and one window's publication is invisible from another. So these always
+    /// read the state of whichever window is key, which is the right notion of "current selection" for a File-menu
+    /// command in a multi-window app.
+    ///
+    /// `macCurrentScoreID` is the *window's* open score, not a library row: File ▸ Open in New Window duplicates the
+    /// score you are looking at. Opening a specific row in a new window is the browser's job and the browser has it
+    /// — every score row's own context menu carries an Open in New Window item (see `RowOpenAffordance`).
     @FocusedValue(\.macCurrentScoreID) private var currentScoreID
     @FocusedValue(\.macLibraryImportAction) private var libraryImportAction
     @Environment(\.openWindow) private var openWindow

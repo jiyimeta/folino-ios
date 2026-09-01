@@ -18,8 +18,9 @@ func libraryRootDestination(
         AllScoresScreen(
             library: viewModel,
             onOpen: onOpenScore,
-            // No separate window action reaches this level yet — a later task threads a real one down from the
-            // Mac shell. Until then this mirrors `onOpen`, exactly as `onOpen` behaves on iOS.
+            // Mirrors `onOpen`, and stays that way: this whole file is the iOS root screen's push destinations,
+            // and iOS has no second window to open into. The Mac reaches these same leaf screens from
+            // `MacLibraryBrowser`, which passes a real `openWindow(value:)` closure here instead.
             onOpenInNewWindow: onOpenScore,
             onEditTags: onEditTags,
             onAddToPlaylist: onAddToPlaylist,

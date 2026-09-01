@@ -60,7 +60,7 @@ private final class MacWindowTabProbe: NSView {
 ///
 /// The Mac app builds exactly one `LivePlaybackController` per launch (`AudioStackFactory.make`, wired once by
 /// `AppBootstrap.start()` and handed to every window's `MacReaderRootScreen` through `bootstrap.playbackController` —
-/// see `MacShellView.detail`), so every score window already drives the same underlying engine; a second window's
+/// see `MacShellView.content`), so every score window already drives the same underlying engine; a second window's
 /// `load` already displaces whatever the first was playing at the engine level. What it does not do on its own is
 /// leave the first window's own transport UI in a state that agrees with that — its `ReaderPlaybackSession` still
 /// believes it is playing until something tells it otherwise. `takeOver` is that something: it calls the one member

@@ -7,8 +7,9 @@ struct ScoreListScreen: View {
     @Bindable var viewModel: ScoreListViewModel
     let library: LibraryViewModel
     let onOpen: (ScoreItem) -> Void
-    /// **macOS only**, in effect — see `ScoreListView.onOpenInNewWindow`. Every caller passes the same closure it
-    /// passes to `onOpen`, since there is no separate window to open yet; a later task gives this its own meaning.
+    /// **macOS only**, in effect — see `ScoreListView.onOpenInNewWindow`. `MacLibraryBrowser` passes a real
+    /// `openWindow(value:)` closure; the iOS callers pass the same one they pass to `onOpen`, because iOS has no
+    /// second window to open into.
     let onOpenInNewWindow: (ScoreItem) -> Void
     let onEditTags: (ScoreItem) -> Void
     let onAddToPlaylist: (ScoreItem) -> Void

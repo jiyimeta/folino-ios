@@ -68,12 +68,46 @@ struct MacShellView: View {
         content
             .frame(minWidth: 900, minHeight: 600)
             .background(MacWindowTabAssist())
-            .focusedSceneValue(\.macLibraryImportAction) { url in await libraryVM.startImport(from: url) }
+            .focusedSceneValue(\.macLibraryImportAction, importAction)
             // A score window must open what its own File ▸ Import brought in, even with the browser closed — see
             // `ImportedScoreOpener`. The browser installs the same watcher; `MacImportedScoreClaim` is what stops
             // them from opening the score twice.
             .opensImportedScores(from: libraryVM)
             .focusedCurrentScoreID(scoreID)
+    }
+
+    /// File ▸ Import while THIS window is key — and the reason it is not just `await libraryVM.startImport(from:)`.
+    ///
+    /// **Both of the import flow's alerts have exactly one host in the whole app, and it is the browser.**
+    /// `ImportErrorAlert` and `DuplicateImportAlert` are mounted only by `libraryRootPresentations`, applied only by
+    /// `MacLibraryBrowser`. A score window mounts neither, so importing a duplicate (or a corrupt file) from here
+    /// with the browser closed used to arm `duplicatePrompt` / `currentError` with nothing on screen to answer them:
+    /// the import silently stalled, the flag stayed set, and the next ⌘O opened the browser already presenting an
+    /// alert about a file imported who-knows-when.
+    ///
+    /// **The arbitration decision: one host, summoned — not a second host, guarded.** Mounting the presentations
+    /// here too would put two hosts on one process-wide `@Observable`, and every guard that could keep them from
+    /// both presenting (key-window state, a claim token) is a *timing* argument — the same class of reasoning
+    /// `openImportedScore`'s measurements say not to trust, and worse here because an alert's presentation binding
+    /// is re-evaluated on every body pass rather than fired once. A key-window guard is actively hazardous: an
+    /// alert is its own key window on macOS, so the guard would flip false while the alert is up, and the binding's
+    /// `set(false)` would clear the very error it is showing. So there is still exactly ONE mount point, and two
+    /// simultaneous alerts are structurally impossible rather than merely unlikely — no code path can produce a
+    /// second one, because no second one exists.
+    ///
+    /// What this adds is only the summons: after the import settles, if it left a prompt armed, bring the single
+    /// host forward. `openWindow(id:)` on a `Window` scene focuses the existing instance or creates the one
+    /// instance, and the browser's first body pass reads `duplicatePrompt != nil` and presents — the same
+    /// evaluate-on-appear behavior that produced the stale-alert bug, used deliberately. Nothing is summoned on the
+    /// ordinary path: a clean import sets `pendingScoreToOpen`, which `opensImportedScores` turns into a score
+    /// window without the browser ever appearing.
+    ///
+    /// One state write is not at issue here: this runs from `NSOpenPanel`'s completion (`MacCommands`), not from
+    /// inside a SwiftUI update, and `openWindow` is the only call it makes.
+    private func importAction(_ url: URL) async {
+        await libraryVM.startImport(from: url)
+        guard libraryVM.hasPendingImportPrompt else { return }
+        openWindow(id: MacWindowID.library)
     }
 
     @ViewBuilder
@@ -111,8 +145,9 @@ struct MacShellView: View {
                 }
             }
         } else {
-            // No score chosen yet — or the window's `scoreID` names a row the library no longer holds (deleted from
-            // the browser, or a restored window value that outlived its score). Both read as an empty window.
+            // No score chosen yet — or the window's `scoreID` names a row the library holds neither live nor in the
+            // trash (permanently deleted, or a restored window value that outlived its score). Both read as an empty
+            // window. A soft-deleted score is NOT this case; see `openScoreItem`.
             ContentUnavailableView {
                 Label {
                     Text("app.detail.empty.title")
@@ -123,14 +158,24 @@ struct MacShellView: View {
         }
     }
 
-    /// The `ScoreItem` this window's `scoreID` names, looked up in the library's live rows (`scoreItems` excludes
-    /// soft-deleted ones — those are `deletedScoreItems`). Two things only: the reader is built from the current row
-    /// rather than a stale copy, and a `scoreID` whose row is gone yields `nil` and an empty window. It does NOT
+    /// The `ScoreItem` this window's `scoreID` names. Two things only: the reader is built from the current row
+    /// rather than a stale copy, and a `scoreID` no row carries at all yields `nil` and an empty window. It does NOT
     /// push later edits into a reader that is already open — `MacReaderRootScreen` seeds its view model once per
     /// `.id(item.id)`, and a title edit does not change the id.
+    ///
+    /// **`deletedScoreItems` is searched too, and that fallback is load-bearing.** `scoreItems` excludes soft-deleted
+    /// rows, so a live-rows-only lookup made every Open path in Recently Deleted — the row menu's Open and Open in
+    /// New Window, Return, and double-click — mint a permanently empty window: the id resolved to nothing, and the
+    /// empty branch below carries no toolbar, so not even the library button was there to get back with. iOS opens a
+    /// deleted score fine (`App/iOS/AppShellView.swift`'s `onOpenScore` is handed the `ScoreItem` itself, never an
+    /// id to re-resolve), and behavior matches iOS; the Mac carries an id because a window's identity has to be
+    /// `Codable` for restoration, which is a storage detail and not a reason to diverge. A soft-deleted row still
+    /// has its file on disk — that is what makes Restore possible — so the reader opens it exactly as it opens any
+    /// other.
     private var openScoreItem: ScoreItem? {
         guard let scoreID else { return nil }
         return repository.scoreItems.first { $0.id == scoreID }
+            ?? repository.deletedScoreItems.first { $0.id == scoreID }
     }
 }
 

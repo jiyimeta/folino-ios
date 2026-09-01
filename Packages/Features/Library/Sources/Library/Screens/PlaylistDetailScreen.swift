@@ -36,8 +36,12 @@ struct PlaylistDetailScreen: View {
             playlistName: playlist.name,
             items: orderedItems,
             onOpen: openScore,
-            // No separate window action reaches this screen yet — a later task threads a real one down from the
-            // Mac shell. Until then this mirrors `onOpen`, exactly as `onOpen` behaves on iOS.
+            // Both go through `openScore`, on both platforms, because a playlist opens into playlist *context*:
+            // `onOpenInPlaylist` is the screen's only open channel and it carries the `PlaylistID`. On the Mac that
+            // closure ends in `openWindow(value:)`, so a row here does open a window — what it cannot do is open a
+            // second one distinct from the default. See the `PARITY(macos)` marker on `MacLibraryWindowContent`'s
+            // `onOpenInPlaylist`: the playlist id is dropped at the window boundary, and closing that gap is what
+            // gives this pair two different meanings.
             onOpenInNewWindow: openScore,
             onMove: { offsets, destination in move(from: offsets, to: destination) },
             onRemoveFromPlaylist: { item in removeFromPlaylist(item) },

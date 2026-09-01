@@ -264,6 +264,15 @@ private struct ImportedScoreOpener: ViewModifier {
         }
     }
 
+    // PARITY(macos): the new-score wizard's edit session — a score created from the wizard opens read-only on the
+    //   Mac. `LibraryViewModel.createScore` arms `pendingOpenInEditSession` alongside `pendingScoreToOpen` and the
+    //   pair is the contract; iOS honours it (`App/iOS/AppShellView.swift` reads
+    //   `consumePendingOpenInEditSession()` and starts the reader in an edit session). macOS has no editor until
+    //   sub-project Ⅳ, so `openImportedScore` below consumes the arm and drops it — consuming rather than ignoring,
+    //   because the flag is `public private(set)` and only that call clears it, so leaving it set armed it for the
+    //   rest of the process. Closing this means opening the new score window straight into an edit session once the
+    //   Mac editor exists.
+
     /// Opens `item` for the post-import watcher, which runs INSIDE a SwiftUI update — and that difference is the
     /// whole reason this is not two plain statements in the handler above.
     ///
@@ -299,10 +308,19 @@ private struct ImportedScoreOpener: ViewModifier {
     ///
     /// `MacImportedScoreClaim.claim` in the handler is not a second write: it touches a plain `static var`, which
     /// invalidates no view and schedules no update. See that type's doc comment.
+    ///
+    /// The hop's two writes are two separate `Task`s on purpose, one write each. `pendingOpenInEditSession` has to
+    /// be disarmed here — see the PARITY marker above — and folding both writes into the one existing hop is
+    /// precisely the tidy-up the measurements above rule out: three writes inside a single deferred `Task` still
+    /// faulted, while the same writes split across turns did not. One write per main-actor turn is the shape the
+    /// evidence supports, so this keeps it rather than reasoning that a second write is probably fine.
     private func openImportedScore(_ item: ScoreItem) {
         openWindow(value: MacWindowScore(scoreID: item.id))
         Task { @MainActor in
             viewModel.pendingScoreToOpen = nil
+        }
+        Task { @MainActor in
+            _ = viewModel.consumePendingOpenInEditSession()
         }
     }
 }

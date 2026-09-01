@@ -62,10 +62,14 @@ enum LibrarySourceList {
         ]
 
         for playlist in playlists {
-            let liveMemberCount = playlist.orderedScoreItemIDs.count(where: { liveIDs.contains($0) })
-            rows.append(
-                LibrarySourceRow(source: .playlist(playlist.id), title: playlist.name, count: liveMemberCount),
-            )
+            rows.append(LibrarySourceRow(
+                source: .playlist(playlist.id),
+                title: playlist.name,
+                // The shared projection, not a local re-implementation of it: `PlaylistPresentation` is what iOS's
+                // `PlaylistsListView` and the Android store both count through, and this row's contract is to agree
+                // with them.
+                count: PlaylistPresentation.liveMemberCount(playlist, liveIDs: liveIDs),
+            ))
         }
 
         for tag in tags {

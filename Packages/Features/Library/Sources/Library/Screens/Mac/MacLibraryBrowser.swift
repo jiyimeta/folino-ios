@@ -64,6 +64,12 @@ public struct MacLibraryBrowser: View {
         }
         .frame(minWidth: 820, minHeight: 520)
         .toolbar { addMenuToolbarItem }
+        // The Mac's `.library` screen view. It fired from `LibraryRootScreen` on both platforms until the browser
+        // stopped being that screen, which left the Mac's funnel with a hole exactly where its library is — while
+        // `.playlistDetail`, `.tagDetail` and `.scoreInfo` kept firing from their own screens, so the gap was
+        // invisible in aggregate. The browser window is created once and lives until ⌘W, so `onAppear` is one event
+        // per visit, the same cardinality the iOS root screen produces.
+        .onAppear { viewModel.analytics.logScreen(.library) }
         // The whole presentation set `LibraryRootScreen` mounts on iOS, applied unchanged rather than re-declared —
         // this is the one place either platform's library surface hosts them, so a sheet added there arrives here.
         //
@@ -72,6 +78,11 @@ public struct MacLibraryBrowser: View {
         // stopped being `LibraryRootScreen`: the duplicate-import prompt (without which re-importing a file already
         // in the library simply stalls — `startImport` sets `duplicatePrompt` and returns), the import-error alert,
         // and the new-score wizard.
+        //
+        // **This is the app's ONLY host for those two import alerts, deliberately.** A score window mounts none of
+        // this; when its own File ▸ Import arms a prompt, it summons this window rather than growing a second host
+        // for the same process-wide view model — see `MacShellView.importAction` for why one mount point beats any
+        // guard between two.
         .libraryRootPresentations(
             viewModel: viewModel,
             editTagsTarget: $editTagsTarget,
@@ -142,6 +153,44 @@ public struct MacLibraryBrowser: View {
         }
     }
 
+    /// The detail column: the first-run empty state when there is nothing in the library at all, otherwise the
+    /// selected source's screen.
+    @ViewBuilder
+    private var content: some View {
+        if isLibraryEmpty {
+            emptyLibrary
+        } else {
+            sourceContent
+        }
+    }
+
+    /// The same emptiness test `LibraryRootScreen.rootList` applies on iOS — nothing anywhere, not merely no scores
+    /// in the selected source. One playlist or one trashed score is enough to make the sidebar worth reading, and
+    /// then the per-source screens' own empty states are the right thing to show.
+    private var isLibraryEmpty: Bool {
+        viewModel.repository.scoreItems.isEmpty
+            && viewModel.repository.tags.isEmpty
+            && viewModel.repository.playlists.isEmpty
+            && viewModel.repository.deletedScoreItems.isEmpty
+    }
+
+    /// First run: every sidebar badge reads `0` and every source's pane is blank, so without this the window says
+    /// nothing at all. The title and the `library.allScores.empty.*` half are iOS's, unchanged — what is Mac-specific
+    /// is naming the way in. iOS puts Import in the `+` menu; the Mac's `+` menu deliberately does not carry it (see
+    /// `addMenuToolbarItem`), which leaves File ▸ Import and dropping files on the window as the only import routes,
+    /// and neither of those is visible on screen. So the hint names them.
+    private var emptyLibrary: some View {
+        ContentUnavailableView {
+            Label {
+                Text("library.allScores.empty.title", bundle: .module)
+            } icon: {
+                Image(systemName: "music.note")
+            }
+        } description: {
+            Text("library.browser.empty.hint", bundle: .module)
+        }
+    }
+
     /// The selected source's screen. Every case is one of the existing leaf screens (Task 2 already gave each of
     /// them the `onOpenInNewWindow` closure this window needs), except `.recents`: there is no `AllScoresScreen`-like
     /// wrapper over `ScoreListViewModel.Source.recents` yet, so this builds `ScoreListScreen` directly on
@@ -150,7 +199,7 @@ public struct MacLibraryBrowser: View {
     /// SwiftUI would reuse the previous screen's `@State`-held `ScoreListViewModel` — pointed at the old tag/playlist
     /// — instead of building a fresh one for the new selection.
     @ViewBuilder
-    private var content: some View {
+    private var sourceContent: some View {
         switch selection {
         case .recents:
             ScoreListScreen(
@@ -240,6 +289,22 @@ private func isImportableScoreURL(_ url: URL) -> Bool {
 #Preview("Browser") {
     MacLibraryBrowser(
         viewModel: previewMacLibrarySidebarViewModel(),
+        onOpenScore: { _ in },
+        onOpenScoreInNewWindow: { _ in },
+        onOpenInPlaylist: { _, _ in },
+    )
+    .frame(width: 1000, height: 640)
+}
+
+// First run — the state `emptyLibrary` exists for, and the only way to see it without emptying a real library.
+#Preview("Empty library") {
+    let repository = PreviewMacLibrarySidebarRepository()
+    repository.scoreItems = []
+    repository.deletedScoreItems = []
+    repository.tags = []
+    repository.playlists = []
+    return MacLibraryBrowser(
+        viewModel: previewMacLibrarySidebarViewModel(repository: repository),
         onOpenScore: { _ in },
         onOpenScoreInNewWindow: { _ in },
         onOpenInPlaylist: { _, _ in },

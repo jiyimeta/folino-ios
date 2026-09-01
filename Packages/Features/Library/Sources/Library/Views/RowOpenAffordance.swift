@@ -63,6 +63,18 @@ extension View {
     /// `primaryAction:` (double-click) and Return; the caller-supplied-button path is whatever UI a later task hangs
     /// off the same two closures — this file does not build one.
     ///
+    /// **`onOpenInNewWindow` is not called from this helper, and that is the second unbuilt open affordance.** Spec
+    /// §2.3 gives opening two shapes: the default (a new tab of the frontmost score window, or a standalone window
+    /// when there is none) and **⌥-double-click for Open in New Window**. Only the default was built.
+    /// `contextMenu(forSelectionType:primaryAction:)` hands `primaryAction:` a selection and nothing else — no
+    /// modifier flags, no event — so the ⌥ half cannot be read at the one place a double-click arrives, and reading
+    /// `NSEvent.modifierFlags` at that moment would be guessing at whether the flag belongs to this click. The
+    /// parameter stays because it is live: every caller's own row `.contextMenu` builds an **Open in New Window**
+    /// item on it, which is the affordance the user actually has. Alongside the toolbar Open button the spec also
+    /// names and nothing built (`macScoreOpenAffordance`'s doc above, and the QA sheet), these are the two open
+    /// affordances the spec describes and this branch does not ship — both are on the QA sheet's known-deviation
+    /// note, and closing the ⌥ one means an open path that carries the modifier, not a change here.
+    ///
     /// **What was actually verified here, and what was not.** `Scripts/build-macos-packages.sh` compiles this
     /// helper and every call site with `menu:` empty, so the "two menus" collision the paragraph above describes
     /// cannot arise from a type-check standpoint — there is only ever one populated `.contextMenu` per row. Which

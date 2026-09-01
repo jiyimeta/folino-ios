@@ -203,18 +203,34 @@ struct MacLibrarySidebar: View {
     }
 
     /// Reuses `LibraryViewModel.deletePlaylist` / `.deleteTag` — the exact calls `PlaylistsListScreen` /
-    /// `TagsListScreen` make for the same rows on iOS.
+    /// `TagsListScreen` make for the same rows on iOS — and then moves the selection off the row it just removed.
     private func commitDelete(_ row: LibrarySourceRow) async {
         switch row.source {
         case let .playlist(id):
             guard let playlist = viewModel.repository.playlists.first(where: { $0.id == id }) else { return }
             await viewModel.deletePlaylist(playlist)
+            clearSelectionIfGone(row.source, stillExists: viewModel.repository.playlists.contains { $0.id == id })
         case let .tag(id):
             guard let tag = viewModel.repository.tags.first(where: { $0.id == id }) else { return }
             await viewModel.deleteTag(tag)
+            clearSelectionIfGone(row.source, stillExists: viewModel.repository.tags.contains { $0.id == id })
         case .recents, .allScores, .favorites, .recentlyDeleted:
             return
         }
+    }
+
+    /// Mirrors what the detail path already does: `MacLibraryBrowser` hands `PlaylistDetailScreen` /
+    /// `TagDetailScreen` an `onPlaylistDeleted` / `onTagDeleted` of `{ selection = .allScores }`, so deleting from
+    /// the content pane lands on All Scores. The sidebar's own Delete was the one path that skipped it, which left
+    /// `List(selection:)` holding a `LibrarySource` no row carries any more and the content pane stuck on
+    /// "Playlist not found" / "Tag not found" with nothing to click out of it.
+    ///
+    /// Success is read off the repository rather than off a return value because `deletePlaylist` / `deleteTag`
+    /// return `Void` and route their failure into `currentError` — so a delete that threw must leave the selection
+    /// alone, and the row is still there to say so.
+    private func clearSelectionIfGone(_ source: LibrarySource, stillExists: Bool) {
+        guard !stillExists, selection == source else { return }
+        selection = .allScores
     }
 }
 
@@ -286,10 +302,14 @@ enum MacLibrarySidebarPreviewFactory {
     }
 }
 
+/// `repository` is a parameter so the browser's empty-library preview can hand in a blank one rather than
+/// duplicating the eight stub adapters below.
 @MainActor
-func previewMacLibrarySidebarViewModel() -> LibraryViewModel {
+func previewMacLibrarySidebarViewModel(
+    repository: PreviewMacLibrarySidebarRepository = PreviewMacLibrarySidebarRepository(),
+) -> LibraryViewModel {
     LibraryViewModel(
-        repository: PreviewMacLibrarySidebarRepository(),
+        repository: repository,
         originalStore: PreviewMacLibrarySidebarOriginalStore(),
         importer: PreviewMacLibrarySidebarFileImporter(),
         gateway: PreviewMacLibrarySidebarFileGateway(),
