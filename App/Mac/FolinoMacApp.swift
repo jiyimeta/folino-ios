@@ -309,11 +309,22 @@ private struct ImportedScoreOpener: ViewModifier {
     /// `MacImportedScoreClaim.claim` in the handler is not a second write: it touches a plain `static var`, which
     /// invalidates no view and schedules no update. See that type's doc comment.
     ///
-    /// The hop's two writes are two separate `Task`s on purpose, one write each. `pendingOpenInEditSession` has to
-    /// be disarmed here — see the PARITY marker above — and folding both writes into the one existing hop is
-    /// precisely the tidy-up the measurements above rule out: three writes inside a single deferred `Task` still
-    /// faulted, while the same writes split across turns did not. One write per main-actor turn is the shape the
-    /// evidence supports, so this keeps it rather than reasoning that a second write is probably fine.
+    /// **The two deferred writes are two separate `Task`s, and that arrangement is UNMEASURED — do not read the
+    /// paragraphs above as endorsing it.** `pendingOpenInEditSession` has to be disarmed somewhere (see the PARITY
+    /// marker above), which makes two deferred writes rather than one, and there were two ways to place them:
+    ///
+    /// * **One inline write + two in the single existing hop.** This is literally the "same three split
+    ///   one-and-two" the measurement above records as CLEAN. It is the arrangement with evidence behind it, and it
+    ///   is the one this method does NOT use.
+    /// * **One inline write + two adjacent single-write `Task`s** — what is written below. Nobody has measured
+    ///   this. Two adjacent unstructured `Task`s are two main-actor *turns*, and the fault is reported per *frame*;
+    ///   those are not the same unit, so "two turns" does not follow from anything in the table.
+    ///
+    /// It is written this way because keeping every handler to one write is the invariant the whole method is
+    /// built around, and it seemed the more conservative reading — but that is a preference, not a measurement, and
+    /// the measured-clean alternative was available and was not taken. If QA's `NavigationRequestObserver` grep
+    /// ever fires around a new-score open, collapsing these two `Task`s into the one hop is the first thing to try,
+    /// because that is the shape the evidence already covers.
     private func openImportedScore(_ item: ScoreItem) {
         openWindow(value: MacWindowScore(scoreID: item.id))
         Task { @MainActor in

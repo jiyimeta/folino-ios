@@ -233,6 +233,14 @@ dismisses it — this is a normal flow, not an edge case). With the score window
 2. **Corrupt:** File ▸ Import a file that cannot be imported (rename a non-score file to `.mscz`, or truncate
    one).
 
+**Pick exactly ONE file in the open panel each time.** The panel allows multi-selection
+(`allowsMultipleSelection = true`) and `MacCommands.presentImportPanel` loops over the picked URLs without
+waiting for you to answer anything, while `duplicatePrompt` is a **single slot** that a later file in the same
+batch overwrites — and the browser can be summoned once per prompting file. That is a pre-existing weakness this
+fix round did not create and did not worsen, but a multi-file pick makes this item's result unreadable. If you
+want to poke at the multi-file case, do it as a separate, clearly-labelled note **after** you have the
+single-file answer.
+
 **Pass — and the criterion names the window:** In both cases **the library browser window comes to the front
 by itself, and the alert appears on the browser**, not on the score window. The duplicate case shows the
 Open / Import as duplicate / Cancel prompt; the corrupt case shows the import-error alert. Answering it works
@@ -242,6 +250,14 @@ one on each window.
 **Then check the alert does not come back.** Dismiss it, ⌘W the browser again, and press ⌘O. The browser must
 reopen **clean** — no alert about the file you imported a moment ago.
 
+**Also record where the windows ended up, as characterization rather than pass/fail.** You deliberately ⌘W'd
+the browser at the start of this item, and answering the alert leaves it open again — sitting behind (or in
+front of) the score window. Nobody has decided whether that is right: the alternative would be for the browser
+to close itself again once it has served the alert, which nothing implements. Describe what you actually see —
+which window is frontmost after you dismiss the alert, and whether the browser reappearing feels like an
+intrusion or like the library simply being where imports land. That observation is the input to the decision,
+not a defect report.
+
 **Fail:** Nothing happens at all (the import silently stalls and no window appears); or the browser appears but
 carries no alert; or two alerts appear; or the browser reopens later still presenting a stale alert about an
 import you already dealt with. That last one was the original defect's second half: `duplicatePrompt` /
@@ -249,10 +265,30 @@ import you already dealt with. That last one was the original defect's second ha
 body pass presented an alert about a file imported minutes earlier.
 
 **What this exercises:** `MacShellView.importAction` — after `startImport` settles it reads
-`LibraryViewModel.hasPendingImportPrompt` and calls `openWindow(id:)` to summon the browser. The alerts are
-mounted in exactly ONE place in the whole app (`libraryRootPresentations`, applied only by `MacLibraryBrowser`),
-so "two alerts at once" should be structurally impossible rather than merely unlikely — if you see two, that is
-a much bigger finding than a missing one, and say so.
+`LibraryViewModel.hasPendingImportPrompt` and calls `openWindow(id:)` to summon the browser. The two import
+alerts are mounted in exactly ONE place in the whole app (`libraryRootPresentations`, applied only by
+`MacLibraryBrowser`), so "two import alerts at once" should be structurally impossible rather than merely
+unlikely — if you see two, that is a much bigger finding than a missing one, and say so.
+
+**One known residual, so you meet it knowing its shape rather than cold.** There IS a second `.alert` bound to
+`viewModel.currentError` in the app: `NewScoreSheet` mounts its own
+(`Packages/Features/Library/Sources/Library/NewScore/NewScoreSheet.swift`). It cannot collide with the
+root-level error alert, because `ImportErrorAlert.presentationBinding` is explicitly gated on
+`!viewModel.isNewScoreSheetPresented` — SwiftUI will not surface a root alert from a view that is already
+presenting a sheet, and that gate is what keeps the two from racing. **`DuplicateImportAlert` has no such
+gate.** So there is one narrow hole:
+
+> Leave the **new-score wizard sheet open** on the browser. Switch to a score window and File ▸ Import a file
+> that is already in the library. The summon fires and brings the browser forward — but the browser is
+> presenting the wizard sheet, so the duplicate prompt has nowhere to appear, and `duplicatePrompt` latches
+> again exactly as it did before this fix round.
+
+**Try it, and record what happens** — it is a prediction from reading the code, not an observation. Note in
+particular whether the prompt appears once you dismiss the wizard, or stays lost until a later ⌘O surfaces it
+as a stale alert. This is a pre-existing gap in `LibraryRootPresentations` rather than something the summon
+introduced (the wizard is browser-only, so on iOS the same shape is reachable too), and closing it means giving
+`DuplicateImportAlert` the same `!isNewScoreSheetPresented` gate its sibling has — plus deciding what re-shows
+the prompt afterwards. Do **not** attempt this variant until you have the plain single-file result above.
 
 ### 11. The `+` toolbar menu and the failing-import alert
 
