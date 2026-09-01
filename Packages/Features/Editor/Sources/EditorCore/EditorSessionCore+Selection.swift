@@ -17,11 +17,12 @@ extension EditorSessionCore {
     /// preserved rather than cleared.
     ///
     /// Which of the two followed the intent depends on which one it was aimed at. The keys are split between them
-    /// (duration / tuplet write at the caret, ⌫ / ♯ / ♭ / tie edit the selection), so re-deriving both from the
-    /// affected slot would collapse the lead the caret holds during a run of input: a duration key would drag the
-    /// selection off the note just written, and ♯ would drag the caret back onto it, making the next letter overwrite
-    /// what was just sharpened. Whichever one wasn't aimed at keeps its own slot; when the two already share a slot —
-    /// the ordinary case, and every case before the first note of a run — both follow.
+    /// (duration / tuplet / the letters / the rest key all write at the caret, ♯ / ♭ / tie edit the selection), so
+    /// re-deriving both from the affected slot would collapse the lead the caret holds during a run of input: a
+    /// duration key would drag the selection off the note just written, and ♯ would drag the caret back onto it,
+    /// making the next letter overwrite what was just sharpened. Whichever one wasn't aimed at keeps its own slot;
+    /// when the two already share a slot — the ordinary case, and every case before the first note of a run — both
+    /// follow.
     func rederiveSelection() {
         guard let session, let location = session.lastAffectedLocation else { return }
         let score = session.score

@@ -65,7 +65,7 @@ public final class EditorViewModel {
         caretItem != nil || selectedItem != nil
     }
 
-    /// Whether the SELECTION names a notehead — the shape ⌫ / ♯ / ♭ need.
+    /// Whether the SELECTION names a notehead — the shape ♯ / ♭ need.
     public var isNoteSelected: Bool {
         if case .note = selectedItem {
             true

@@ -29,7 +29,7 @@ public enum PadGlyphs {
         (.sixteenth, "\u{E1D9}"), // note16thUp
     ]
 
-    /// The rest counterpart of `ordered`, same durations in the same order. The ⌫ key wears one of these: what that
+    /// The rest counterpart of `ordered`, same durations in the same order. The rest key wears one of these: what that
     /// key does is turn a note into a rest, so it shows the rest it is about to leave behind rather than a generic
     /// backspace arrow.
     ///

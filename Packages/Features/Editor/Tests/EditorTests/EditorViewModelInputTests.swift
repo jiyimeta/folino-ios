@@ -187,6 +187,68 @@ struct EditorViewModelInputTests {
 
     // MARK: - the rest key
 
+    /// The rhythm this key exists for. Input leaves the selection on the note just written and the caret one slot
+    /// on; a rest key addressed at the selection wrote its rest over that note instead of after it.
+    @Test func `a rest after a note lands on the next beat, not on the note just written`() throws {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.select(.rest(EditorFixtures.restID(element: 1))) // beat 1 of a 4/4 bar
+
+        vm.inputPitch(letter: "c")
+        vm.writeRest()
+
+        // Beat 1 still holds the C, beat 2 is now the rest, and the caret has moved on to beat 3.
+        let note = try #require(vm.score?[EditorFixtures.noteID(element: 1)])
+        #expect(note.pitch == 60)
+        guard case let .chord(beat2)? = vm.score?[VoiceElementID(EditorFixtures.restID(element: 2))] else {
+            Issue.record("expected a rest on beat 2")
+            return
+        }
+        #expect(beat2.notes.isEmpty)
+        #expect(beat2.duration == .quarter)
+        #expect(vm.selectedItem == .rest(EditorFixtures.restID(element: 2)))
+        #expect(vm.caretItem == .rest(EditorFixtures.restID(element: 3)))
+    }
+
+    /// Skipping beats: the slot already holds the rest that was asked for, so nothing is written — but the key was
+    /// still a write, and a caret that stayed put would make the bar untypeable.
+    @Test func `the rest key advances the caret even when the slot already holds that rest`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.select(.rest(EditorFixtures.restID(element: 1)))
+        vm.setDuration(.quarter) // what beat 1 already is
+
+        vm.writeRest()
+
+        #expect(vm.caretItem == .rest(EditorFixtures.restID(element: 2)))
+        #expect(vm.generation == 0) // nothing applied, so no undo step was spent
+
+        vm.writeRest()
+
+        #expect(vm.caretItem == .rest(EditorFixtures.restID(element: 3)))
+        #expect(vm.generation == 0)
+    }
+
+    /// Deleting survives the move to the caret: a tap places both markers, so the key still turns the note it names
+    /// into a rest.
+    @Test func `tapping a note and pressing the rest key still replaces that note`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.select(.rest(EditorFixtures.restID(element: 1)))
+        vm.inputPitch(letter: "c")
+        vm.inputPitch(letter: "d") // caret is now on beat 3, two slots past the C
+
+        vm.select(.note(EditorFixtures.noteID(element: 1))) // tap the C back
+
+        vm.writeRest()
+
+        guard case let .chord(beat1)? = vm.score?[VoiceElementID(EditorFixtures.restID(element: 1))] else {
+            Issue.record("expected a rest on beat 1")
+            return
+        }
+        #expect(beat1.notes.isEmpty)
+    }
+
     @Test func `the rest key re-times a selected rest to the armed length instead of doing nothing`() {
         let vm = makeViewModel()
         vm.beginSession(score: EditorFixtures.fourQuarterRests())
