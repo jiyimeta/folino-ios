@@ -224,7 +224,7 @@ struct MacLibrarySidebar: View {
 /// tag row show a nonzero badge.
 @MainActor
 @Observable
-private final class PreviewMacLibrarySidebarRepository: ScoreLibraryRepository {
+final class PreviewMacLibrarySidebarRepository: ScoreLibraryRepository {
     private static let openScore = MacLibrarySidebarPreviewFactory.item(
         title: "Trio in D", summary: "Violin, Viola, Cello", lastOpenedAt: Date(), isFavorite: true,
         tagIDs: [PreviewMacLibrarySidebarRepository.practiceTag.id],
@@ -271,7 +271,7 @@ private final class PreviewMacLibrarySidebarRepository: ScoreLibraryRepository {
     }
 }
 
-private enum MacLibrarySidebarPreviewFactory {
+enum MacLibrarySidebarPreviewFactory {
     static func item(
         title: String, summary: String, lastOpenedAt: Date?, isFavorite: Bool, tagIDs: Set<TagID>,
         deletedAt: Date? = nil,
@@ -287,7 +287,7 @@ private enum MacLibrarySidebarPreviewFactory {
 }
 
 @MainActor
-private func previewMacLibrarySidebarViewModel() -> LibraryViewModel {
+func previewMacLibrarySidebarViewModel() -> LibraryViewModel {
     LibraryViewModel(
         repository: PreviewMacLibrarySidebarRepository(),
         originalStore: PreviewMacLibrarySidebarOriginalStore(),
@@ -303,7 +303,7 @@ private func previewMacLibrarySidebarViewModel() -> LibraryViewModel {
 /// None of these adapters are exercised by rendering the sidebar — it only reads `viewModel.repository` and calls
 /// rename/delete, neither of which a static preview drives — so every method is a stub, as in
 /// `NewScoreSheet+Previews.swift`.
-private struct PreviewMacLibrarySidebarOriginalStore: ScoreOriginalStore {
+struct PreviewMacLibrarySidebarOriginalStore: ScoreOriginalStore {
     func captureOriginalIfNeeded(for item: ScoreItem) -> ScoreItem {
         item
     }
@@ -317,7 +317,7 @@ private struct PreviewMacLibrarySidebarOriginalStore: ScoreOriginalStore {
     }
 }
 
-private struct PreviewMacLibrarySidebarFileImporter: ScoreFileImporter {
+struct PreviewMacLibrarySidebarFileImporter: ScoreFileImporter {
     func prepareImport(sourceURL _: URL) throws -> ImportPlan {
         throw DomainError.unsupportedFormat("preview")
     }
@@ -327,7 +327,7 @@ private struct PreviewMacLibrarySidebarFileImporter: ScoreFileImporter {
     }
 }
 
-private struct PreviewMacLibrarySidebarFileGateway: ScoreFileGateway {
+struct PreviewMacLibrarySidebarFileGateway: ScoreFileGateway {
     func detectFormat(fileName _: String) -> ScoreFormat? {
         nil
     }
@@ -345,7 +345,7 @@ private struct PreviewMacLibrarySidebarFileGateway: ScoreFileGateway {
     }
 }
 
-private struct PreviewMacLibrarySidebarShareService: ScoreShareService {
+struct PreviewMacLibrarySidebarShareService: ScoreShareService {
     func availableFormats(for _: ScoreItem) -> [ScoreShareFormatOption] {
         []
     }
@@ -355,13 +355,13 @@ private struct PreviewMacLibrarySidebarShareService: ScoreShareService {
     }
 }
 
-private struct PreviewMacLibrarySidebarMetadataReading: ScoreMetadataReading {
+struct PreviewMacLibrarySidebarMetadataReading: ScoreMetadataReading {
     func readMetadata(for _: ScoreItem) throws -> ScoreFileMetadata {
         throw DomainError.unsupportedFormat("preview")
     }
 }
 
-private struct PreviewMacLibrarySidebarFileCreator: ScoreFileCreator {
+struct PreviewMacLibrarySidebarFileCreator: ScoreFileCreator {
     func createScore(_: Score) throws -> ScoreItem {
         throw DomainError.unsupportedFormat("preview")
     }
