@@ -19,6 +19,10 @@ struct MacHorizontalScoreStrip: View {
     let document: LayoutDocument?
     let score: Score
     let scoreOptions: ScoreViewOptions
+    /// Read ONLY inside the click handler, never in `body` — see `tapSeekGesture`. A gesture action runs outside
+    /// SwiftUI's observation tracking, so touching it there registers no dependency and no scroll frame reaches the
+    /// engraving through it.
+    let viewportState: MacScoreViewportState
 
     /// The name the click-to-seek gesture reads its location in: the un-padded `ScoreView` frame, which is the
     /// `LayoutDocument`'s own coordinate space.
@@ -66,12 +70,37 @@ struct MacHorizontalScoreStrip: View {
     }
 
     /// Click-to-seek, in the document's own space.
+    ///
+    /// **Clicks that land under the sticky pane are rejected, and that is a correctness rule rather than a polish
+    /// one.** The pane is `allowsHitTesting(false)` — deliberately, so it can never swallow a scroll — which means a
+    /// click on it falls straight through to the music it is covering, and that music is by definition scrolled
+    /// past: clicking the frozen part labels would seek to a measure the reader cannot see. Guarding here rather
+    /// than trying to swallow the click on the pane keeps the fix independent of how AppKit and SwiftUI order hit
+    /// testing between a representable and the SwiftUI siblings drawn over it.
+    ///
+    /// The covered span is `[scoreScrollX, stickyTrailingX]` — the same trailing edge that drives which measure the
+    /// pane displays, so the guard and the pane can never disagree about where the pane ends. This mirrors
+    /// `MacPageScoreLayer`'s guard against clicks on the blank paper below a sheet's last system: a named coordinate
+    /// space is wider than what the reader can act on, and the gesture is where that gets reconciled.
     private func tapSeekGesture(document: LayoutDocument) -> some Gesture {
         SpatialTapGesture(coordinateSpace: .named(Self.coordinateSpace))
             .onEnded { value in
+                guard !isUnderStickyPane(documentX: value.location.x, document: document) else { return }
                 guard let cursor = nearestCursor(at: value.location, in: document) else { return }
                 viewModel.playbackSession.setManualCursor(cursor)
             }
+    }
+
+    /// Whether `documentX` is hidden behind the sticky pane at the current scroll offset. False whenever the pane is
+    /// not on screen, which is every scroll position before the score's own bracket reaches the leading edge.
+    private func isUnderStickyPane(documentX: CGFloat, document: LayoutDocument) -> Bool {
+        guard !state.measureContexts.isEmpty else { return false }
+        let geometry = MacStickyPaneGeometry(document: document, scrollX: viewportState.scroll.x)
+        guard geometry.isVisible else { return false }
+        return documentX < document.stickyTrailingX(
+            scoreScrollX: geometry.scoreScrollX,
+            measureContexts: state.measureContexts,
+        )
     }
 }
 

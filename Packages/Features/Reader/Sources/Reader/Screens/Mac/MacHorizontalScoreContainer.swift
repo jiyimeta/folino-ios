@@ -86,6 +86,7 @@ struct MacHorizontalScoreContainer: View {
                     document: state.document,
                     score: score,
                     scoreOptions: scoreOptions,
+                    viewportState: viewportState,
                 )
             }
             stickyPane
@@ -168,6 +169,10 @@ struct MacHorizontalScoreContainer: View {
                     // scale comes after.
                     .offset(x: -geometry.bracketHostingX, y: -viewportState.scroll.y)
                     .scaleEffect(viewportState.magnification, anchor: .topLeading)
+                    // Transparent to the pointer, so it can never swallow a scroll over the leading edge of the
+                    // window. The click that then falls through to the music underneath is rejected on the other
+                    // side, in `MacHorizontalScoreStrip.tapSeekGesture` — that music is scrolled past, and seeking
+                    // to it would move the cursor somewhere the reader cannot see.
                     .allowsHitTesting(false)
             }
         }
@@ -326,8 +331,13 @@ struct MacHorizontalScoreContainer: View {
     }
 
     /// Content rect of the measure the cursor sits on, regardless of `.item` vs `.beat`. The follow trigger is "the
-    /// measure overflows the window", not "the cursor crosses an edge" — the same rule the iOS container applies, and
-    /// every system is scanned so an honored layout break (which puts measures on a second row) still resolves.
+    /// measure overflows the window", not "the cursor crosses an edge" — the same rule the iOS container applies.
+    ///
+    /// **The scan over every system is defensive, not load-bearing: this mode engraves to exactly one.** It was
+    /// written believing an honored layout break could put measures on a second row, and that turns out to be
+    /// impossible while `wrapToViewWidth` is false — see `MacStickyPaneGeometry.bracketHostingX` for the measurement
+    /// and the engraver gate that settles it. The loop is kept because it costs one comparison on a one-element
+    /// array and is the shape that stays correct if that ever changes.
     private func measureRect(for cursor: ScoreCursor, in document: LayoutDocument) -> CGRect? {
         let index = measureIndex(of: cursor)
         for system in document.systems {

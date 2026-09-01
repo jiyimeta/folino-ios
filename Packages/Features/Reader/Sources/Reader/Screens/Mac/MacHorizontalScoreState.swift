@@ -69,6 +69,24 @@ final class MacHorizontalScoreState {
 /// `Examples/Apple/SheetMusicExample/macOS/HorizontalScoreContainer.swift`.
 struct MacStickyPaneGeometry {
     /// The bracket's X in the hosted content's own unmagnified coordinates — document X plus the strip's inset.
+    ///
+    /// **Taken from the FIRST system, which in this mode is the only one — measured, not assumed.** The container
+    /// passes `breakPolicy: .honor`, so the obvious worry is a score with an explicit `<LayoutBreak>line` engraving
+    /// to a second row that this pane would then be misaligned against. It cannot happen here, and the reason is
+    /// structural rather than incidental: the engraver gates BOTH of its system-ending paths on `wrapToViewWidth`
+    /// (`LayoutEngine+Packing.swift:310` for explicit breaks, `:234` for the balanced-span lookahead, plus the
+    /// width-driven wraps), and horizontal mode passes `wrapToViewWidth: false`. ssm's own comment at that gate says
+    /// so outright — line breaks are ignored in single-line layouts, "mirroring MuseScore's `LayoutMode::LINE` /
+    /// `LayoutMode::HORIZONTAL_FIXED` branch where `lineBreak = false` regardless of the flag". Page breaks take the
+    /// same gated path (`measureForcesLineBreak` covers both, and it has exactly one call site in the packer).
+    ///
+    /// Confirmed against ssm 2.3.1 on `testSingleNoteDynamics.mscx` — 38 measures carrying nine explicit
+    /// `<LayoutBreak><subtype>line</subtype>` — engraved in this mode's exact configuration at the Mac's default
+    /// staff size: **one system**, a 2136 pt strip, with `.honor` and `.ignoreAll` producing byte-identical geometry.
+    ///
+    /// So `.first` is correct rather than lucky. If a future ssm ever lets a second system through here, this pane
+    /// would slide out of alignment once the reader scrolls onto that row, and the fix is to select the system
+    /// containing `scroll.y` instead — the scan in `MacHorizontalScoreContainer.measureRect` is the shape to copy.
     let bracketHostingX: CGFloat
     /// Score-relative X (unmagnified) of the leftmost visible score pixel, floored at the start of the document so an
     /// elastic over-scroll to the left does not run the measure lookup off the front.

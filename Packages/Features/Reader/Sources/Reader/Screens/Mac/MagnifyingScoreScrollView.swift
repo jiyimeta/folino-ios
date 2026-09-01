@@ -185,6 +185,12 @@ struct MagnifyingScoreScrollView<Content: View>: NSViewRepresentable {
 
     /// Ease the clip view to `point`. Animated rather than snapped for the reason the iOS containers animate their
     /// follow: a cursor that jumps the score sideways every few beats is harder to read than one that slides it.
+    ///
+    /// `reflectScrolledClipView` belongs in the completion handler, not in the animation block. Called inside, it
+    /// runs before the animator has moved anything and so reflects the PRE-animation origin — the scrollers would be
+    /// told about a scroll that has not happened yet and never told about the one that did. (The reference
+    /// implementation this host is adapted from calls it inline; that is the one place this deliberately departs
+    /// from it, in favour of Apple's documented ordering.)
     private func animate(_ scrollView: NSScrollView, to point: CGPoint) {
         let clipView = scrollView.contentView
         NSAnimationContext.runAnimationGroup { context in
@@ -192,7 +198,12 @@ struct MagnifyingScoreScrollView<Content: View>: NSViewRepresentable {
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             context.allowsImplicitAnimation = true
             clipView.animator().setBoundsOrigin(point)
-            scrollView.reflectScrolledClipView(clipView)
+        } completionHandler: {
+            // AppKit runs this on the main thread but the closure carries no isolation of its own, and
+            // `reflectScrolledClipView` is main-actor-isolated. Same assumption `willStartLiveMagnify`'s KVO makes.
+            MainActor.assumeIsolated {
+                scrollView.reflectScrolledClipView(clipView)
+            }
         }
     }
 
@@ -251,7 +262,7 @@ final class MagnifyingScoreScrollCoordinator: NSObject {
 
     /// Mirror the clip view's origin (and, when known, the magnification) into the viewport observable — deferred
     /// to the next main-queue callout when a SwiftUI update pass is what moved the scroll view.
-    func publish(clipView: NSClipView, magnification: CGFloat?) {
+    private func publish(clipView: NSClipView, magnification: CGFloat?) {
         let origin = clipView.bounds.origin
         guard !isApplyingUpdate else {
             DispatchQueue.main.async { [weak self] in
