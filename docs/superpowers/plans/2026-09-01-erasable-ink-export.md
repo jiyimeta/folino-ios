@@ -1008,7 +1008,7 @@ enum AKInkArchive {
 
 - [ ] **Step 4: Run the tests and confirm they pass**
 
-Expected: 4 tests ran, 4 passed.
+Expected: 3 tests ran, 3 passed — matching the three `@Test` functions in Step 1.
 
 The archive's structure is checkable against a real sample rather than against this plan's prose. After the
 suite is green, dump one of ours and one of Apple's and compare the object graphs:
