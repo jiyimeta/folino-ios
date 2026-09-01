@@ -44,4 +44,56 @@ struct ReaderViewModelEditingTests {
         #expect(controller.releaseEngineCount == 1)
         #expect(controller.loadCount == 2)
     }
+
+    /// The whole point of the stale check: pressing play mid-session has to hear the notes just written. Adoption
+    /// used to run only at `finishEditing()`, so everything played during a session was the pre-session score.
+    @Test
+    func `pressing play mid-session reloads the engine from the edited score`() async {
+        let controller = FakePlaybackController()
+        let vm = makeVM(controller: controller)
+        await vm.load()
+        await vm.playbackSession.prepareForPlayback()
+        #expect(controller.loadCount == 1)
+
+        let edited = makeEditedScore()
+        vm.editedScoreProvider = { edited }
+
+        await vm.playbackSession.togglePlayback()
+
+        #expect(vm.loadState.score == edited)
+        #expect(controller.releaseEngineCount == 1)
+        #expect(controller.loadCount == 2)
+    }
+
+    /// The other half, and the reason the check compares scores instead of trusting a flag: `startEditing` seeds the
+    /// host with the score already loaded, so an edit session that has changed nothing must cost nothing. A reload
+    /// here would stall every "tap 音符入力, then play".
+    @Test
+    func `pressing play with nothing edited leaves the engine alone`() async {
+        let controller = FakePlaybackController()
+        let vm = makeVM(controller: controller)
+        await vm.load()
+        await vm.playbackSession.prepareForPlayback()
+        let loaded = vm.loadState.score
+        vm.editedScoreProvider = { loaded }
+
+        await vm.playbackSession.togglePlayback()
+
+        #expect(controller.releaseEngineCount == 0)
+        #expect(controller.loadCount == 1)
+    }
+
+    /// Outside an edit session the provider answers nil, and the transport is untouched.
+    @Test
+    func `pressing play outside an edit session leaves the engine alone`() async {
+        let controller = FakePlaybackController()
+        let vm = makeVM(controller: controller)
+        await vm.load()
+        await vm.playbackSession.prepareForPlayback()
+
+        await vm.playbackSession.togglePlayback()
+
+        #expect(controller.releaseEngineCount == 0)
+        #expect(controller.loadCount == 1)
+    }
 }

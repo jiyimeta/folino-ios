@@ -124,6 +124,14 @@ final class ReaderPlaybackSession {
     var preferencesProvider: () -> ReaderPreferences? = { nil }
     var scoreItemProvider: () -> ScoreItem? = { nil }
 
+    /// Asked once, on the way into playing, to catch the engine up if an edit has left its score behind. Wired by
+    /// `ReaderViewModel` to `adoptEditedScoreForPlaybackIfStale()`; a no-op outside an edit session and whenever
+    /// nothing has changed since the last load.
+    ///
+    /// Here rather than per edit because a reload is `controller.load` — the whole engine, soundfonts included. Once
+    /// at the press of play costs the user a wait they asked for; on every keystroke it would cost them the session.
+    var reloadStaleScore: () async -> Void = {}
+
     /// Callbacks — fired after state transitions so the owner can fan out to PiP / repeat / etc.
     var onPlayingChanged: (Bool) -> Void = { _ in }
     var onCursorChanged: () -> Void = {}
@@ -199,6 +207,12 @@ final class ReaderPlaybackSession {
     }
 
     func togglePlayback() async {
+        // Before anything reads `scoreProvider()`, and before `startCursorProvider()` places a cursor that has to
+        // address the score the engine is about to hold: an edit made during this session is not in the engine yet.
+        // Only on the way IN — pausing plays nothing, so it has nothing to catch up with.
+        if !isPlaying {
+            await reloadStaleScore()
+        }
         guard let controller,
               let score = scoreProvider(),
               let prefs = preferencesProvider(),
@@ -295,7 +309,9 @@ final class ReaderPlaybackSession {
         else { return }
         // Already downloaded at Reader open → the natural controller.load(...) will pick up the
         // high-quality SF2 on its own, no swap needed.
-        if case .downloaded = provider.downloadState { return }
+        if case .downloaded = provider.downloadState {
+            return
+        }
         if #available(iOS 26, *) {
             soundfontDownloadTask = Task { @MainActor [weak self] in
                 let stream = Observations { provider.downloadState }

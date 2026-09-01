@@ -485,6 +485,24 @@ final class ReaderViewModel {
         pipSession.armIfReady()
     }
 
+    /// The editor's live score while an edit session is open, or `nil` outside one. Wired by `ReaderRootScreen`,
+    /// which is the only thing holding both the host and this view model.
+    @ObservationIgnored var editedScoreProvider: @MainActor () -> Score? = { nil }
+
+    /// The transport's way in: catch the engine up with whatever has been edited since it last loaded.
+    ///
+    /// This is what makes playback mid-session hear the notes just written. Before it, `adoptEditedScore` ran only at
+    /// `finishEditing()`, so everything played during a session was the score as it stood when the session opened.
+    ///
+    /// Whether there is anything to do is decided by COMPARING the two scores rather than by a flag the editor
+    /// raises. A flag would have to be lowered by every adoption and not raised by the seeding write `startEditing`
+    /// makes with the score already loaded — two ways to drift out of step, in exchange for saving one `==` on a
+    /// tap that is about to rebuild the audio engine anyway.
+    func adoptEditedScoreForPlaybackIfStale() async {
+        guard let edited = editedScoreProvider(), edited != loadState.score else { return }
+        await adoptEditedScore(edited)
+    }
+
     /// Rebuild `visibleScore` from the loaded score and the current layout / transpose inputs. Cheap no-op when nothing
     /// is loaded. Called on load and from the layout / transpose change hooks, never from a view body.
     func recomputeVisibleScore() {

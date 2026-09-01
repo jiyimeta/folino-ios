@@ -37,6 +37,9 @@ extension ReaderViewModel {
         playbackSession.onReachedEnd = { [weak self] in
             await self?.handlePlaybackReachedEnd()
         }
+        playbackSession.reloadStaleScore = { [weak self] in
+            await self?.adoptEditedScoreForPlaybackIfStale()
+        }
     }
 
     func wirePiPSession() {
