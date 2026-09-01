@@ -1,8 +1,27 @@
 import SwiftUI
 
-// PARITY(macos): toolbar placement and title display mode — these substitute neutral macOS behavior so shared
-//   screens compile. Ⅲb migrates each call site to a semantic placement (.cancellationAction /
-//   .confirmationAction), which is what actually earns Esc / Return key equivalents on a Mac sheet.
+// PARITY(macos): sheet Esc / Return key equivalents — four Library sheet buttons still reach these neutral
+//   placements instead of `.cancellationAction` / `.confirmationAction`, so those Mac sheets have no Esc and no
+//   default button. Task 16 migrated one screen at a time, diffing each against its own rendered preview, and
+//   stopped where the iOS render moved: `.confirmationAction` renders a TEXT Done semibold where iOS renders it
+//   regular, and `.cancellationAction` resolves to the LEADING slot, which throws a deliberately trailing Cancel
+//   across the bar. What is left is a decision rather than more migration — accept the semibold Done on iOS
+//   (which is what the platform asks for anyway), or pin the label's weight so the semantic placement keeps
+//   today's look. Per-screen measurements are below and at each call site.
+//
+//   - `.cancellationAction` is pixel-identical to `topBarLeadingCompat` on iOS. BulkEditTagsSheet's Cancel and
+//     all four of ShareRootView's buttons migrated on that evidence.
+//   - `.confirmationAction`'s semibold cost 1492 px inside the button on AddToPlaylistSheet and EditTagsSheet,
+//     1362 on BulkEditTagsSheet. A confirm carrying an explicit button style is immune — ShareRootView's
+//     glass-prominent checkmark came out identical — so this is about the label's font weight, not the
+//     placement.
+//   - BulkAddToPlaylistSheet's Cancel is the only bar button on its sheet and is deliberately trailing.
+//     Migrating it moved it across the bar and dragged the title with it: 17430 px.
+//
+//   Two things are deliberately NOT in this gap. `doneToolbarCompat` below emits no macOS toolbar item at all,
+//   so migrating its iOS branch would be pure iOS risk for no Mac keyboard gain. And the sites holding a menu,
+//   an overflow, a spacer or the Settings-gear seam — ScoreListView, LibraryRootScreen, ManageEntityToolbar,
+//   CreateEntityToolbar — are neither a cancellation nor a confirmation, and belong on a neutral placement.
 
 extension ToolbarItemPlacement {
     /// `.topBarLeading` on iOS; `.navigation` on macOS, which is the leading edge of a Mac toolbar.
