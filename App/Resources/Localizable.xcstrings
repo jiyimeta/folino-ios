@@ -791,70 +791,104 @@
         }
       }
     },
-    "mac.menu.openInNewTab": {
+    "mac.menu.openInNewWindow": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open in New Tab"
+            "value": "Open in New Window"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "新規タブで開く"
+            "value": "新しいウインドウで開く"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "새 탭에서 열기"
+            "value": "새 윈도우에서 열기"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在新标签页中打开"
+            "value": "在新窗口中打开"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "在新分頁中開啟"
+            "value": "在新視窗中開啟"
           }
         }
       }
     },
-    "mac.menu.toggleLibrary": {
+    "mac.menu.showLibrary": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Show Library"
+            "value": "Open…"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ライブラリを表示"
+            "value": "開く…"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "라이브러리 표시"
+            "value": "열기…"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "显示资料库"
+            "value": "打开…"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "顯示資料庫"
+            "value": "開啟…"
+          }
+        }
+      }
+    },
+    "mac.toolbar.showLibrary": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開く…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "열기…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟…"
           }
         }
       }

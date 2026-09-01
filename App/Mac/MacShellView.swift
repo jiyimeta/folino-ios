@@ -22,6 +22,7 @@ struct MacShellView: View {
     /// key. `@FocusedValue` follows *scene* focus, so the browser window's own publication is invisible from here —
     /// a score window has to publish its own, and it has to be the same view model the browser is watching.
     let libraryVM: LibraryViewModel
+    @Environment(\.openWindow) private var openWindow
 
     /// The adapters this window's reader needs, unwrapped once in `init` (see the guard there for why they are
     /// guaranteed non-nil) rather than at every use site.
@@ -96,6 +97,19 @@ struct MacShellView: View {
                 analytics: bootstrap.analytics ?? NoopAnalytics(),
             )
             .id(item.id)
+            .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    Button {
+                        openWindow(id: MacWindowID.library)
+                    } label: {
+                        Label {
+                            Text("mac.toolbar.showLibrary")
+                        } icon: {
+                            Image(systemName: "square.grid.2x2")
+                        }
+                    }
+                }
+            }
         } else {
             // No score chosen yet — or the window's `scoreID` names a row the library no longer holds (deleted from
             // the browser, or a restored window value that outlived its score). Both read as an empty window.
@@ -121,7 +135,7 @@ struct MacShellView: View {
 }
 
 extension View {
-    /// Publishes `id` as this window's focused score, for `MacCommands`'s File ▸ Open in New Tab to read via
+    /// Publishes `id` as this window's focused score, for `MacCommands`'s File ▸ Open in New Window to read via
     /// `@FocusedValue`. Omitted entirely (rather than published as `nil`) when there is no open score, which is
     /// exactly what leaves `@FocusedValue` reading `nil` and the menu command disabled.
     @ViewBuilder

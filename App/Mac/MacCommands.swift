@@ -6,13 +6,12 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// The menu-bar skeleton. Sub-project Ⅳ fills in the editing commands and the full key map; this is only what the
-/// shell itself needs, plus the two toggles a reader wants on day one.
+/// shell itself needs, plus the display-mode picker a reader wants on day one.
 struct MacCommands: Commands {
-    @Binding var columnVisibility: NavigationSplitViewVisibility
     /// The frontmost window's open score and import action, published by `MacShellView` via `focusedSceneValue`.
     /// `@FocusedValue` follows scene focus, so these always read the state of whichever window is key — the right
     /// notion of "current selection" for a File-menu command in a multi-window app. `LibraryRootScreen` exposes no
-    /// per-row context-menu seam, which is what a per-row "Open in New Tab" would otherwise hang off of, so this
+    /// per-row context-menu seam, which is what a per-row "Open in New Window" would otherwise hang off of, so this
     /// reads the window's currently open score instead.
     @FocusedValue(\.macCurrentScoreID) private var currentScoreID
     @FocusedValue(\.macLibraryImportAction) private var libraryImportAction
@@ -40,6 +39,12 @@ struct MacCommands: Commands {
         // Import lands beside the system's own New/Open items rather than in a menu of its own.
         CommandGroup(after: .newItem) {
             Button {
+                openWindow(id: MacWindowID.library)
+            } label: {
+                Text("mac.menu.showLibrary")
+            }
+            .keyboardShortcut("o", modifiers: .command)
+            Button {
                 presentImportPanel()
             } label: {
                 Text("mac.menu.import")
@@ -58,7 +63,10 @@ struct MacCommands: Commands {
                     openWindow(value: MacWindowScore(scoreID: currentScoreID))
                 }
             } label: {
-                Text("mac.menu.openInNewTab")
+                // Not "Open in New Tab": at the default "Prefer tabs when opening documents" system setting,
+                // `openWindow(value:)` opens a standalone window, and whether AppKit later folds it into a tab is
+                // decided by `MacWindowTabAssist` and that system preference — this label can't promise a tab.
+                Text("mac.menu.openInNewWindow")
             }
             .disabled(currentScoreID == nil)
         }
@@ -73,13 +81,6 @@ struct MacCommands: Commands {
             } label: {
                 Text("mac.menu.displayMode")
             }
-            Divider()
-            Button {
-                columnVisibility = columnVisibility == .detailOnly ? .doubleColumn : .detailOnly
-            } label: {
-                Text("mac.menu.toggleLibrary")
-            }
-            .keyboardShortcut("0", modifiers: .command)
             Divider()
         }
     }

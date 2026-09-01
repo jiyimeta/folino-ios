@@ -10,8 +10,8 @@ import UtilityCore
 /// The value that identifies one of `FolinoMacApp`'s score windows, and what `WindowGroup(for:)` dedupes on. `scoreID`
 /// alone isn't enough: `WindowGroup(for:)` reuses (refocuses) an existing window that already presents an equal
 /// value rather than opening a second one, so `openWindow(value:)` with a bare `ScoreItem.ID` would make
-/// `MacCommands`'s "Open in New Tab" a no-op whenever the score is already showing in the frontmost window.
-/// `tabInstance` exists purely to make every fresh "Open in New Tab" invocation compare unequal to every window
+/// `MacCommands`'s "Open in New Window" a no-op whenever the score is already showing in the frontmost window.
+/// `tabInstance` exists purely to make every fresh "Open in New Window" invocation compare unequal to every window
 /// already open, guaranteeing a new window every time — it plays no other role and is never read back.
 struct MacWindowScore: Hashable, Codable {
     var scoreID: ScoreItem.ID
@@ -87,7 +87,6 @@ struct FolinoMacApp: App {
     /// `startAppServices()` fills it in the same turn `bootstrap.start()` returns, and every scene unwraps it
     /// together with `bootstrap.isReady`, so neither can outrun the other.
     @State private var libraryVM: LibraryViewModel?
-    @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
     /// Owns the "mark this version's history as seen" bookkeeping for `SettingsSheet`'s About section, mirroring
     /// `App/iOS/AppShellView.swift`'s `versionHistoryPresenter`. The cold-launch "show what's new" sheet iOS also
     /// drives from this type is a separate, larger feature (its own presentation host wired into the window
@@ -111,7 +110,7 @@ struct FolinoMacApp: App {
             }
             .task { startAppServices() }
         }
-        .commands { MacCommands(columnVisibility: $columnVisibility) }
+        .commands { MacCommands() }
 
         // `Text(verbatim:)` rather than a string key: `folino` is the brand, written lowercase wherever a user can
         // read it, and it is never translated — a `LocalizedStringKey` here would mint a catalog entry that must
