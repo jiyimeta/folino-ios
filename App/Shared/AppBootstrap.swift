@@ -17,7 +17,7 @@ private enum AnnotationMigrationKey {
     static let neutralFormatMigrated = "annotation.neutralFormatMigrated.v1"
 }
 
-/// What the platform's audio and sharing adapters amount to, handed back by the per-platform `AudioStackFactory`.
+/// What the app's audio and sharing adapters amount to, handed back by `AudioStackFactory`.
 ///
 /// `playbackController` is typed through the `Domain.PlaybackController` protocol rather than the concrete
 /// `LivePlaybackController`, and stays optional. Both platforms now build a real one — `LivePlaybackController` is no

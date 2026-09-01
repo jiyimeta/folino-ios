@@ -5,28 +5,36 @@ import Reader
 import ScoreFiles
 import Soundfonts
 
-/// `SharedSoundfontReclaimer.installedChecker` on macOS: there is no `UIApplication.canOpenURL` sibling-app probe, and
-/// no Mac sibling app to detect yet — always report nothing installed. The reclaimer then falls back to whatever this
-/// app's own opt-in state says, exactly as it would on iOS with no siblings installed.
-struct NoSiblingAppChecker: InstalledAppChecking {
-    func isInstalled(urlScheme: String) -> Bool {
-        false
-    }
-}
-
-/// Builds the macOS audio and sharing adapter stack for `AppBootstrap`. Same shape as the iOS `AudioStackFactory` in
-/// `App/iOS/AudioStackFactory.swift`, and now the same adapters too: `LivePlaybackController` and
-/// `LiveScoreAudioExporter` are no longer iOS-gated, so the Mac gets the real ones rather than a `nil` controller and
-/// an export stub. The single remaining difference is `UIKitInstalledAppChecker`, replaced here by
-/// `NoSiblingAppChecker` — there is no Mac sibling app to probe for a shared soundfont.
+/// Builds the audio and sharing adapter stack `AppBootstrap` installs.
 ///
-/// `@MainActor` because `LiveMuseScoreGeneralProvider.init` is — mirrors the iOS factory's annotation.
+/// **One factory, not a pair.** This started as `App/iOS/AudioStackFactory.swift` and `App/Mac/AudioStackFactory.swift`
+/// because the Mac then had no `LivePlaybackController` and no `LiveScoreAudioExporter` — real divergence, and spec
+/// §2.4's paired-file rule is exactly for that. Un-gating both adapters collapsed the difference to a single injected
+/// argument, and one injectable argument is not the "genuinely different behavior per platform" that rule licenses;
+/// two 70-line files that differ in one identifier are just a place for the halves to drift apart.
+///
+/// `@MainActor` because `LiveMuseScoreGeneralProvider.init` and `LivePlaybackController.init` both are — this used to
+/// run inline inside `AppBootstrap` (itself `@MainActor`), so the isolation travels with the extraction.
 @MainActor
 enum AudioStackFactory {
+    /// The platform's sibling-app probe, and the whole of what differs between iOS and macOS here.
+    ///
+    /// iOS asks `UIApplication.canOpenURL`; macOS has no such probe and no Mac sibling app to find, so it reports
+    /// nothing installed and the reclaimer falls back to this app's own opt-in state — the same answer iOS gives when
+    /// no sibling is installed.
+    static var platformInstalledChecker: any InstalledAppChecking {
+        #if os(iOS)
+        UIKitInstalledAppChecker()
+        #else
+        NoSiblingAppChecker()
+        #endif
+    }
+
     static func make(
         gateway: LiveScoreFileGateway,
         scoresDirectory: URL,
         shareTempDirectory: URL,
+        installedChecker: any InstalledAppChecking = platformInstalledChecker,
     ) -> AudioStack {
         let reclaimer = SharedSoundfontReclaimer(
             soundfontsDirectory: AppPaths.soundfontsDirectory,
@@ -36,7 +44,7 @@ enum AudioStackFactory {
             ownDisplayName: (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
                 ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String) ?? "folino",
             siblings: AppBootstrap.soundfontSiblings,
-            installedChecker: NoSiblingAppChecker(),
+            installedChecker: installedChecker,
         )
         let provider = LiveMuseScoreGeneralProvider(
             targetDirectory: AppPaths.soundfontsDirectory, reclaimer: reclaimer,
