@@ -21,14 +21,10 @@ struct MacPageDeck: View {
 
     var body: some View {
         if let doc = document, !pages.isEmpty {
-            // Projected ONCE for the whole deck, not per sheet: `AnnotationAnchoring.display` decodes and places every
-            // stored stroke, and doing that 27 times for a 27-page score would pay for the whole layer per page.
+            // Projected ONCE for the whole deck, not per sheet: the projection decodes and places every stored
+            // stroke, and doing that 27 times for a 27-page score would pay for the whole layer per page.
             // `MacScoreInkOverlay` picks each sheet's share out of it by geometry.
-            let ink = AnnotationAnchoring.display(
-                viewModel.annotationDrawings, in: doc,
-                // Stored anchors are in source addressing; `doc` is engraved from the staff-filtered score.
-                staffFilter: .current(viewModel: viewModel, editingHost: nil),
-            )
+            let ink = MacScoreEngraving.projectedInk(viewModel, into: doc)
             HStack(alignment: .top, spacing: MacPageDeckMetrics.pageGap) {
                 ForEach(pages.indices, id: \.self) { index in
                     MacScorePage(
@@ -99,8 +95,9 @@ struct MacScorePage: View {
             height: pageSize.height - MacPageDeckMetrics.margin * 2,
         )
         // The paper. This is the sheet, not the desk — the desk is `MacReaderGround.desk`, painted once behind the
-        // whole deck by `MacPagedScoreContainer`. The iOS paged surface paints the same white for the same reason:
-        // the run-out beneath the last system on a page is still page.
+        // whole deck by `MacPagedScoreContainer`. Both come from `MacReaderGround` by name rather than as a literal
+        // `Color.white`, so a retune of "what paper is" reaches the sheet and the vertical scroll together. The iOS
+        // paged surface paints the same white for the same reason: the run-out beneath the last system is still page.
         return MacPageScoreLayer(
             viewModel: viewModel,
             cursorSlot: cursorSlot,
@@ -115,7 +112,7 @@ struct MacScorePage: View {
         .clipped()
         .padding(MacPageDeckMetrics.margin)
         .frame(width: pageSize.width, height: pageSize.height, alignment: .topLeading)
-        .background(Color.white)
+        .background(MacReaderGround.paper)
         .overlay(Rectangle().stroke(Color.gray.opacity(0.35), lineWidth: 0.5))
         .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
     }

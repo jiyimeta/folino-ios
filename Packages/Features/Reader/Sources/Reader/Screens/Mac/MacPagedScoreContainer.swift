@@ -55,7 +55,7 @@ enum MacPageDeckMetrics {
         let availableHeight = viewport.height - deckPadding * 2
         guard pageSize.width > 0, pageSize.height > 0, availableWidth > 0, availableHeight > 0 else { return 1 }
         let fit = min(availableWidth / pageSize.width, availableHeight / pageSize.height, 1.0)
-        return min(max(fit, MacScoreMagnification.minimum), MacScoreMagnification.maximum)
+        return MacScoreMagnification.clamped(fit)
     }
 }
 
@@ -138,7 +138,7 @@ struct MacPagedScoreContainer: View {
     let pageAnchorCursor: ScoreCursor?
     /// User opt-out: when false, continuous playback no longer scrolls the deck.
     let autoFollowEnabled: Bool
-    /// Transpose offset in semitones. Only used to invalidate the layout cache via `MacPagedLayoutKey` — the score
+    /// Transpose offset in semitones. Only used to invalidate the layout cache via `MacScoreLayoutKey` — the score
     /// passed in is already transposed.
     let transposeSemitones: Int
     let viewModel: ReaderViewModel
@@ -227,21 +227,19 @@ struct MacPagedScoreContainer: View {
     }
 
     private var scoreOptions: ScoreViewOptions {
-        ScoreViewOptions(
-            staffSize: staffSize, systemGap: staffSize * 1.25,
-            wrapToViewWidth: true, includeTitleFrame: true,
-            breakPolicy: honorLayoutBreaks ? .honor : .ignoreAll,
-            breakIndicatorVisibility: .none,
-            multiMeasureRest: collapseMultiMeasureRests
-                ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
-                : .disabled,
-            showsInvisibleElements: showInvisibleElements,
-            measureNumbers: showAllMeasureNumbers ? .everyMeasure : .systemStart,
+        MacScoreEngraving.options(
+            staffSize: staffSize,
+            honorLayoutBreaks: honorLayoutBreaks,
+            collapseMultiMeasureRests: collapseMultiMeasureRests,
+            showInvisibleElements: showInvisibleElements,
+            showAllMeasureNumbers: showAllMeasureNumbers,
         )
     }
 
-    private var layoutKey: MacPagedLayoutKey {
-        MacPagedLayoutKey(
+    /// No `width`: the sheet is a fixed size, so a resize changes the magnification the user sees and nothing about
+    /// the pagination.
+    private var layoutKey: MacScoreLayoutKey {
+        MacScoreLayoutKey(
             score: score,
             size: staffSize,
             honorLayoutBreaks: honorLayoutBreaks,
@@ -311,39 +309,4 @@ private struct MacDeckFitKey: Equatable {
     let pageSize: CGSize?
 }
 
-/// Identity for the `.task(id:)` that re-engraves the score. The window is deliberately absent: the sheet is a fixed
-/// size, so a resize changes the magnification the user sees and nothing about the pagination.
-private struct MacPagedLayoutKey: Hashable {
-    let scoreSignature: Int
-    let size: CGFloat
-    let honorLayoutBreaks: Bool
-    let collapseMultiMeasureRests: Bool
-    let showInvisibleElements: Bool
-    let showAllMeasureNumbers: Bool
-    let transposeSemitones: Int
-
-    init(
-        score: Score,
-        size: CGFloat,
-        honorLayoutBreaks: Bool,
-        collapseMultiMeasureRests: Bool,
-        showInvisibleElements: Bool,
-        showAllMeasureNumbers: Bool,
-        transposeSemitones: Int,
-    ) {
-        // `Score` is Equatable but not Hashable. Same cheap identity proxy the other containers use: structural shape
-        // plus opening clefs, which is what makes a clef override re-trigger the task.
-        scoreSignature = score.parts.count
-            ^ (score.totalStaffCount << 8)
-            ^ (score.division << 16)
-            ^ score.openingClefSignature
-            ^ (transposeSemitones << 24)
-        self.size = size
-        self.honorLayoutBreaks = honorLayoutBreaks
-        self.collapseMultiMeasureRests = collapseMultiMeasureRests
-        self.showInvisibleElements = showInvisibleElements
-        self.showAllMeasureNumbers = showAllMeasureNumbers
-        self.transposeSemitones = transposeSemitones
-    }
-}
 #endif

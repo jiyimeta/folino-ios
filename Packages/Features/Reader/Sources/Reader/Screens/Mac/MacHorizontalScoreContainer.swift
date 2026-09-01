@@ -5,7 +5,6 @@
 
 #if os(macOS)
 import Domain
-import PencilKit
 import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicUI
@@ -44,7 +43,7 @@ struct MacHorizontalScoreContainer: View {
     let scrollAnchorCursor: ScoreCursor?
     /// User opt-out: when false, continuous playback no longer scrolls the strip.
     let autoFollowEnabled: Bool
-    /// Transpose offset in semitones. Only used to invalidate the layout cache via `MacHorizontalLayoutKey` — the
+    /// Transpose offset in semitones. Only used to invalidate the layout cache via `MacScoreLayoutKey` — the
     /// score passed in is already transposed.
     let transposeSemitones: Int
     let viewModel: ReaderViewModel
@@ -182,21 +181,21 @@ struct MacHorizontalScoreContainer: View {
     /// push the score down inside what is essentially a single long row. Identical to the iOS container's options,
     /// which is what makes the two modes the same mode.
     private var scoreOptions: ScoreViewOptions {
-        ScoreViewOptions(
-            staffSize: staffSize, systemGap: staffSize * 1.25,
-            wrapToViewWidth: false, includeTitleFrame: false,
-            breakPolicy: honorLayoutBreaks ? .honor : .ignoreAll,
-            breakIndicatorVisibility: .none,
-            multiMeasureRest: collapseMultiMeasureRests
-                ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
-                : .disabled,
-            showsInvisibleElements: showInvisibleElements,
-            measureNumbers: showAllMeasureNumbers ? .everyMeasure : .systemStart,
+        MacScoreEngraving.options(
+            staffSize: staffSize,
+            honorLayoutBreaks: honorLayoutBreaks,
+            collapseMultiMeasureRests: collapseMultiMeasureRests,
+            showInvisibleElements: showInvisibleElements,
+            showAllMeasureNumbers: showAllMeasureNumbers,
+            wrapToViewWidth: false,
+            includeTitleFrame: false,
         )
     }
 
-    private var layoutKey: MacHorizontalLayoutKey {
-        MacHorizontalLayoutKey(
+    /// No `width`: horizontal mode lays the score out at its natural width, so a resize changes what is visible and
+    /// nothing about the engraving.
+    private var layoutKey: MacScoreLayoutKey {
+        MacScoreLayoutKey(
             score: score,
             size: staffSize,
             honorLayoutBreaks: honorLayoutBreaks,
@@ -223,15 +222,7 @@ struct MacHorizontalScoreContainer: View {
     /// annotation-layer watcher — never from a body, and in particular never from the strip, whose body re-runs on
     /// every playback tick. Same rule `MacInkProjection` states for the vertical container.
     private func projectInk(into document: LayoutDocument?) {
-        guard let document else {
-            state.ink = PKDrawing()
-            return
-        }
-        state.ink = AnnotationAnchoring.display(
-            viewModel.annotationDrawings, in: document,
-            // Stored anchors are in source addressing; `document` is engraved from the staff-filtered score.
-            staffFilter: .current(viewModel: viewModel, editingHost: nil),
-        )
+        state.ink = MacScoreEngraving.projectedInk(viewModel, into: document)
     }
 
     /// The column of document space the window currently shows, snapped to the ink raster's grid.

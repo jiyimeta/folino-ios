@@ -55,6 +55,15 @@ final class MacScoreViewportState {
 enum MacScoreMagnification {
     static let minimum: CGFloat = 0.25
     static let maximum: CGFloat = 4.0
+
+    /// Bring a computed fit into the range the scroll view will accept.
+    ///
+    /// The two seeds that call this stay separate on purpose: the page deck fits a fixed sheet on BOTH axes inside a
+    /// deck-padded viewport, horizontal mode fits only the strip's HEIGHT inside an inset one. Only the clamp is
+    /// common, and folding two different fits into one function would take more arguments than it saves lines.
+    static func clamped(_ magnification: CGFloat) -> CGFloat {
+        min(max(magnification, minimum), maximum)
+    }
 }
 
 /// Hosts a SwiftUI page deck inside an `NSScrollView` whose `allowsMagnification` does the zooming.

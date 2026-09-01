@@ -39,7 +39,7 @@ struct MacVerticalScoreContainer: View {
     /// User opt-out: when false, continuous playback no longer auto-scrolls. Manual navigation still keeps its
     /// target in view (see `readerShouldFollowPlayback`).
     let autoFollowEnabled: Bool
-    /// Transpose offset in semitones. Only used to invalidate the layout cache via `MacVerticalLayoutKey` — the score
+    /// Transpose offset in semitones. Only used to invalidate the layout cache via `MacScoreLayoutKey` — the score
     /// passed in is already transposed.
     let transposeSemitones: Int
     let viewModel: ReaderViewModel
@@ -123,8 +123,8 @@ struct MacVerticalScoreContainer: View {
         }
     }
 
-    private func layoutKey(width: CGFloat) -> MacVerticalLayoutKey {
-        MacVerticalLayoutKey(
+    private func layoutKey(width: CGFloat) -> MacScoreLayoutKey {
+        MacScoreLayoutKey(
             score: score,
             size: staffSize,
             width: width,
@@ -144,16 +144,12 @@ struct MacVerticalScoreContainer: View {
     }
 
     private var scoreOptions: ScoreViewOptions {
-        ScoreViewOptions(
-            staffSize: staffSize, systemGap: staffSize * 1.25,
-            wrapToViewWidth: true, includeTitleFrame: true,
-            breakPolicy: honorLayoutBreaks ? .honor : .ignoreAll,
-            breakIndicatorVisibility: .none,
-            multiMeasureRest: collapseMultiMeasureRests
-                ? .collapse(minimumMeasures: ReaderPreferences.multiMeasureRestThreshold)
-                : .disabled,
-            showsInvisibleElements: showInvisibleElements,
-            measureNumbers: showAllMeasureNumbers ? .everyMeasure : .systemStart,
+        MacScoreEngraving.options(
+            staffSize: staffSize,
+            honorLayoutBreaks: honorLayoutBreaks,
+            collapseMultiMeasureRests: collapseMultiMeasureRests,
+            showInvisibleElements: showInvisibleElements,
+            showAllMeasureNumbers: showAllMeasureNumbers,
         )
     }
 
@@ -170,15 +166,7 @@ struct MacVerticalScoreContainer: View {
     /// annotation-layer watcher — never from a body, and in particular never from `MacVerticalScoreSurface`, whose
     /// body re-runs on every playback tick. See `MacInkProjection`.
     private func projectInk(into document: LayoutDocument?) {
-        guard let document else {
-            inkProjection.drawing = PKDrawing()
-            return
-        }
-        inkProjection.drawing = AnnotationAnchoring.display(
-            viewModel.annotationDrawings, in: document,
-            // Stored anchors are in source addressing; `document` is engraved from the staff-filtered score.
-            staffFilter: .current(viewModel: viewModel, editingHost: nil),
-        )
+        inkProjection.drawing = MacScoreEngraving.projectedInk(viewModel, into: document)
     }
 
     /// Playback follow, in the scroll content's own coordinate space. Identical policy to the iOS container: during
@@ -359,42 +347,4 @@ private func macVerticalZoom(
     return userZoom * fit
 }
 
-/// Identity for the `.task(id:)` that re-engraves the score. Mirrors the iOS container's `TaskKey` minus the editing
-/// generation — the Mac reader has no edit session yet.
-private struct MacVerticalLayoutKey: Hashable {
-    let scoreSignature: Int
-    let size: CGFloat
-    let width: CGFloat
-    let honorLayoutBreaks: Bool
-    let collapseMultiMeasureRests: Bool
-    let showInvisibleElements: Bool
-    let showAllMeasureNumbers: Bool
-    let transposeSemitones: Int
-
-    init(
-        score: Score,
-        size: CGFloat,
-        width: CGFloat,
-        honorLayoutBreaks: Bool,
-        collapseMultiMeasureRests: Bool,
-        showInvisibleElements: Bool,
-        showAllMeasureNumbers: Bool,
-        transposeSemitones: Int,
-    ) {
-        // `Score` is Equatable but not Hashable. Same cheap identity proxy the iOS container uses: structural shape
-        // plus opening clefs, which is what makes a clef override re-trigger the task.
-        scoreSignature = score.parts.count
-            ^ (score.totalStaffCount << 8)
-            ^ (score.division << 16)
-            ^ score.openingClefSignature
-            ^ (transposeSemitones << 24)
-        self.size = size
-        self.width = width
-        self.honorLayoutBreaks = honorLayoutBreaks
-        self.collapseMultiMeasureRests = collapseMultiMeasureRests
-        self.showInvisibleElements = showInvisibleElements
-        self.showAllMeasureNumbers = showAllMeasureNumbers
-        self.transposeSemitones = transposeSemitones
-    }
-}
 #endif

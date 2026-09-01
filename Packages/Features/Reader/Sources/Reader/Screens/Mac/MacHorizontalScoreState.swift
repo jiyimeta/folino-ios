@@ -26,7 +26,7 @@ enum MacHorizontalMetrics {
         let framedHeight = documentSize.height + contentInset * 2
         guard framedHeight > 0, viewport.height > 0 else { return 1 }
         let fit = min(viewport.height / framedHeight, 1.0)
-        return min(max(fit, MacScoreMagnification.minimum), MacScoreMagnification.maximum)
+        return MacScoreMagnification.clamped(fit)
     }
 }
 
@@ -112,39 +112,4 @@ struct MacHorizontalFitKey: Equatable {
     let documentSize: CGSize?
 }
 
-/// Identity for the `.task(id:)` that re-engraves the score. The window is deliberately absent: horizontal mode lays
-/// the score out at its natural width, so a resize changes what is visible and nothing about the engraving.
-struct MacHorizontalLayoutKey: Hashable {
-    let scoreSignature: Int
-    let size: CGFloat
-    let honorLayoutBreaks: Bool
-    let collapseMultiMeasureRests: Bool
-    let showInvisibleElements: Bool
-    let showAllMeasureNumbers: Bool
-    let transposeSemitones: Int
-
-    init(
-        score: Score,
-        size: CGFloat,
-        honorLayoutBreaks: Bool,
-        collapseMultiMeasureRests: Bool,
-        showInvisibleElements: Bool,
-        showAllMeasureNumbers: Bool,
-        transposeSemitones: Int,
-    ) {
-        // `Score` is Equatable but not Hashable. Same cheap identity proxy the other containers use: structural shape
-        // plus opening clefs, which is what makes a clef override re-trigger the task.
-        scoreSignature = score.parts.count
-            ^ (score.totalStaffCount << 8)
-            ^ (score.division << 16)
-            ^ score.openingClefSignature
-            ^ (transposeSemitones << 24)
-        self.size = size
-        self.honorLayoutBreaks = honorLayoutBreaks
-        self.collapseMultiMeasureRests = collapseMultiMeasureRests
-        self.showInvisibleElements = showInvisibleElements
-        self.showAllMeasureNumbers = showAllMeasureNumbers
-        self.transposeSemitones = transposeSemitones
-    }
-}
 #endif
