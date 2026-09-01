@@ -1721,55 +1721,29 @@ fun ReaderTopBar(
                     onRevertToOriginal = onRevertToOriginal,
                 )
             } else {
-                IconButton(onClick = onShare) {
-                    Icon(
-                        Icons.Filled.Share,
-                        contentDescription = stringResource(R.string.reader_share),
-                    )
-                }
+                // Order matches iOS's strip exactly: the two "this score" actions, then the two that write into
+                // it, then the two inspectors. iOS builds that as three groups — `scoreActionButtons`
+                // (info, share), the editing pair, and `inspectorGroup` (playback, display) — and folds them
+                // right-to-left when the width runs out. Android has no fold, so only the order carries over,
+                // but the grouping is the reason for it: what the score IS, what you do TO it, how you VIEW it.
                 IconButton(onClick = onEditInfo) {
                     Icon(
                         Icons.Outlined.Info,
                         contentDescription = stringResource(R.string.reader_edit_info),
                     )
                 }
+                IconButton(onClick = onShare) {
+                    Icon(
+                        Icons.Filled.Share,
+                        contentDescription = stringResource(R.string.reader_share),
+                    )
+                }
                 // The six reading actions have to be told apart at a glance, so no two of them may share a
                 // silhouette. `Tune` (horizontal sliders) and `ViewList` (horizontal rules) used to sit side by
                 // side here, and `EditNote` (pencil over rules) and `Edit` (pencil) right after them — four
-                // glyphs drawn from two families. An open book for the display inspector breaks the
-                // horizontal-rule family; the annotation toggle's marker (below) breaks the pencil one, leaving
-                // `EditNote` as the only pencil in the bar.
-                //
-                // The audio inspector keeps `Tune` — it is a mixer, and faders are what it should look like —
-                // but stood UP. Turning it 90° both clears the last horizontal-rule collision and says the same
-                // thing iOS says here, where this button is `slider.vertical.3`. Rotating the real glyph rather
-                // than drawing a vertical one keeps it Material's own geometry (there is no `TuneVertical` in
-                // the icon set; the whole `*Vert*` list is alignment and swap icons, no faders).
-                IconButton(
-                    onClick = onPlaybackControls,
-                    // Three hints point here — metronome, repeat and the mixer all live behind this button, and
-                    // only one of them is ever offered.
-                    modifier = Modifier.readerHintAnchor(ReaderHintTarget.PLAYBACK_INSPECTOR_BUTTON),
-                ) {
-                    Icon(
-                        Icons.Filled.Tune,
-                        contentDescription = stringResource(R.string.reader_playback_settings),
-                        modifier = Modifier.rotate(-90f),
-                    )
-                }
-                // A sheet with text lines, which is what iOS puts here (`text.page`). Deliberately NOT the open
-                // book: that glyph is already spoken for by the PAGE layout mode inside the very sheet this button
-                // opens (`DisplayInspectorSheet`'s mode picker), and a button that shows one of its own options'
-                // icons reads as "go to page mode" rather than "display settings".
-                IconButton(
-                    onClick = onDisplaySettings,
-                    modifier = Modifier.readerHintAnchor(ReaderHintTarget.VISUAL_INSPECTOR_BUTTON),
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.Article,
-                        contentDescription = stringResource(R.string.reader_display_settings),
-                    )
-                }
+                // glyphs drawn from two families. A sheet with lines for the display inspector breaks the
+                // horizontal-rule family; the annotation toggle's marker breaks the pencil one, leaving no
+                // pencil in the bar at all.
                 if (canEdit) {
                     // Notes, matching iOS's `music.quarternote.3` — see that button's own note for why it stopped
                     // being a pencil: a compose glyph reads as "make a new score" on a screen where a score is
@@ -1813,6 +1787,36 @@ fun ReaderTopBar(
                                 R.string.reader_annotate_start
                             },
                         ),
+                    )
+                }
+                // The audio inspector keeps `Tune` — it is a mixer, and faders are what it should look like —
+                // but stood UP. Turning it 90° both clears the last horizontal-rule collision and says the same
+                // thing iOS says here, where this button is `slider.vertical.3`. Rotating the real glyph rather
+                // than drawing a vertical one keeps it Material's own geometry (there is no `TuneVertical` in
+                // the icon set; the whole `*Vert*` list is alignment and swap icons, no faders).
+                IconButton(
+                    onClick = onPlaybackControls,
+                    // Three hints point here — metronome, repeat and the mixer all live behind this button, and
+                    // only one of them is ever offered.
+                    modifier = Modifier.readerHintAnchor(ReaderHintTarget.PLAYBACK_INSPECTOR_BUTTON),
+                ) {
+                    Icon(
+                        Icons.Filled.Tune,
+                        contentDescription = stringResource(R.string.reader_playback_settings),
+                        modifier = Modifier.rotate(-90f),
+                    )
+                }
+                // A sheet with text lines, which is what iOS puts here (`text.page`). Deliberately NOT the open
+                // book: that glyph is already spoken for by the PAGE layout mode inside the very sheet this button
+                // opens (`DisplayInspectorSheet`'s mode picker), and a button that shows one of its own options'
+                // icons reads as "go to page mode" rather than "display settings".
+                IconButton(
+                    onClick = onDisplaySettings,
+                    modifier = Modifier.readerHintAnchor(ReaderHintTarget.VISUAL_INSPECTOR_BUTTON),
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Article,
+                        contentDescription = stringResource(R.string.reader_display_settings),
                     )
                 }
             }
