@@ -208,7 +208,17 @@ extension EditorSessionCore {
     /// host code only, which is exactly how Android's edit mode ended up silent on tap.
     public func selectFromTap(_ item: SheetMusicCore.ScoreItemID?) {
         select(item)
-        guard case let .note(noteID)? = item, !isPlaybackActive else { return }
+        auditionSelectionIfAudible()
+    }
+
+    /// Previews whatever the selection now names, when it is a note and the transport is quiet.
+    ///
+    /// The rule a tap and the ← / → keys share: both are "put me on this note", and both answer by playing it. A
+    /// key that moved the marker in silence made walking a passage a guessing game — the caret says WHERE you are,
+    /// the note says WHAT is there. Rests fall through, having nothing to sound; so does a running transport, for
+    /// the same reason a tap does — a one-shot preview on top of continuous playback.
+    func auditionSelectionIfAudible() {
+        guard case let .note(noteID)? = selectedItem, !isPlaybackActive else { return }
         audition(noteID)
     }
 }

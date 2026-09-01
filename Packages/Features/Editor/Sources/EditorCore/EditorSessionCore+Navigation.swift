@@ -30,5 +30,9 @@ extension EditorSessionCore {
               let destination = walk(column, score)
         else { return }
         place(column: destination, preferring: location.voiceIndex)
+        // Stepping is a pick, exactly as a tap is, so it sounds what it landed on — see
+        // `auditionSelectionIfAudible`. Only after a step that MOVED: a key held at the end of the staff holds the
+        // selection rather than clearing it, and re-sounding the same note per press would read as a stutter.
+        auditionSelectionIfAudible()
     }
 }
