@@ -34,4 +34,12 @@ struct AKProtobufWriterTests {
         w.varint(1, 300)
         #expect(w.data == Data([0x08, 0xAC, 0x02]))
     }
+
+    @Test
+    func `a double field uses wire type 1, little-endian`() {
+        var w = ProtobufWriter()
+        w.double(1, 1.0)
+        // field 1, wire type 1 -> tag 0x09; 1.0 -> 00 00 00 00 00 00 F0 3F
+        #expect(w.data == Data([0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F]))
+    }
 }
