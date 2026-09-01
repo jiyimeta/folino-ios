@@ -24,9 +24,9 @@ struct MacWindowTabAssist: NSViewRepresentable {
 
 /// The probe behind `MacWindowTabAssist`. Writes `tabbingIdentifier` / `tabbingMode` once per window, deferred and
 /// latched exactly as `MacScrollViewAppearanceProbe.apply` is — see that file's doc comment for the measurement this
-/// inherits: writing AppKit window state from inside `updateNSView` re-enters the split view's navigation observer in
-/// the same frame and faults `NavigationRequestObserver tried to update multiple times per frame` (2 faults in 7
-/// launches with an immediate write, 0 in 6 without). `viewDidMoveToWindow` runs outside `updateNSView`'s own pass,
+/// inherits: writing AppKit window state from inside `updateNSView` re-enters the navigation observer in the same
+/// frame and faults `NavigationRequestObserver tried to update multiple times per frame` (2 faults in 7 launches
+/// with an immediate write, 0 in 6 without). `viewDidMoveToWindow` runs outside `updateNSView`'s own pass,
 /// but the write still has to hop to the next main-queue turn to stay clear of whatever SwiftUI update placed this
 /// view in its window in the first place, so it takes the same `DispatchQueue.main.async` detour. `applied` is the
 /// same idempotence guard: a re-entrant `viewDidMoveToWindow` (this view briefly leaving and rejoining the same
@@ -48,6 +48,13 @@ private final class MacWindowTabProbe: NSView {
     }
 }
 
+// PARITY(macos): one score plays at a time — `MacScorePlayback.takeOver(from:)` below is defined but nothing calls
+//   it. The play action lives in `Packages/Features/Reader/Sources/Reader/Screens/Mac/MacTransportBar.swift`, whose
+//   button calls `viewModel.togglePlayback()` directly; reaching it from `App/Mac` would mean threading a closure
+//   through `MacReaderRootScreen` into `ReaderViewModel` — a cross-Feature seam this branch deliberately did not
+//   invent. `bootstrap.playbackController` is one shared instance handed to every score window, so two score
+//   windows both drive the same engine, but neither window's own transport UI is told when the other takes over.
+
 /// Stops whatever score is currently sounding before another score window starts a new one, so "one score plays at a
 /// time" holds even though nothing stops two windows from both showing a transport bar.
 ///
@@ -60,11 +67,6 @@ private final class MacWindowTabProbe: NSView {
 /// `Domain.PlaybackController` exposes for stopping a running transport,
 /// `pause() async` (`Packages/Domain/Sources/Domain/Protocols/PlaybackController.swift:22`) — there is no separate
 /// "stop", and `Domain` has no `PlaybackControlling` protocol, only `PlaybackController`.
-///
-/// **Not called from anywhere yet.** `MacReaderRootScreen` (`Reader/Screens/Mac/MacReaderRootScreen.swift`) has no
-/// play action of its own to hook — the transport's play button lives in `MacTransportBar`, a sibling file this task
-/// does not touch — so there is no existing seam to call this from. Wiring it in is later work (Ⅳ's), not this task's;
-/// see the task-5 report for what was checked before reaching that conclusion.
 @MainActor
 enum MacScorePlayback {
     static func takeOver(from controller: any PlaybackController) async {
