@@ -20,9 +20,9 @@ public struct MacLibraryBrowser: View {
     let onOpenInPlaylist: (ScoreItem, PlaylistID) -> Void
 
     @State private var selection: LibrarySource? = .recents
-    /// Recents has no `ScoreListViewModel.Source` case of its own — see this file's `content` doc comment — so this
-    /// screen builds its own `ScoreListScreen` on an `.all`-sourced view model and forces its sort, the same way
-    /// `AllScoresScreen` builds one in its own `init`. Held here (not recreated per `body`) so the view model's
+    /// `ScoreListViewModel.Source.recents` filters to opened items and defaults to `.lastOpenedDesc` on its own —
+    /// see that case's doc comment — so this screen only needs to build one, the same way `AllScoresScreen` builds
+    /// its own `ScoreListViewModel` in its own `init`. Held here (not recreated per `body`) so the view model's
     /// state — search text, an in-pane sort change — survives switching to another source and back.
     @State private var recentsListViewModel: ScoreListViewModel
 
@@ -42,11 +42,9 @@ public struct MacLibraryBrowser: View {
         self.onOpenScore = onOpenScore
         self.onOpenScoreInNewWindow = onOpenScoreInNewWindow
         self.onOpenInPlaylist = onOpenInPlaylist
-        let recentsListViewModel = ScoreListViewModel(
-            source: .all, repository: viewModel.repository, analytics: viewModel.analytics,
-        )
-        recentsListViewModel.sort = .lastOpenedDesc
-        _recentsListViewModel = State(wrappedValue: recentsListViewModel)
+        _recentsListViewModel = State(wrappedValue: ScoreListViewModel(
+            source: .recents, repository: viewModel.repository, analytics: viewModel.analytics,
+        ))
     }
 
     public var body: some View {
@@ -79,10 +77,10 @@ public struct MacLibraryBrowser: View {
     }
 
     /// The selected source's screen. Every case is one of the existing leaf screens (Task 2 already gave each of
-    /// them the `onOpenInNewWindow` closure this window needs), except `.recents`: `ScoreListViewModel.Source` has
-    /// no case for "opened scores only," so there is no existing screen that filters to them, and adding one is out
-    /// of scope here — see `recentsListViewModel`. `.tag` / `.playlist` are keyed by `.id(_:)` because the switch's
-    /// branch position alone does not change when only the associated `TagID` / `PlaylistID` changes, and without it
+    /// them the `onOpenInNewWindow` closure this window needs), except `.recents`: there is no `AllScoresScreen`-like
+    /// wrapper over `ScoreListViewModel.Source.recents` yet, so this builds `ScoreListScreen` directly on
+    /// `recentsListViewModel` instead. `.tag` / `.playlist` are keyed by `.id(_:)` because the switch's branch
+    /// position alone does not change when only the associated `TagID` / `PlaylistID` changes, and without it
     /// SwiftUI would reuse the previous screen's `@State`-held `ScoreListViewModel` — pointed at the old tag/playlist
     /// — instead of building a fresh one for the new selection.
     @ViewBuilder

@@ -122,6 +122,7 @@ struct ScoreListScreen: View {
         case .favorites: return .favorites
         case .taggedWith: return .tag
         case .playlist: return .playlist
+        case .recents: return .recentlyOpened
         }
     }
 

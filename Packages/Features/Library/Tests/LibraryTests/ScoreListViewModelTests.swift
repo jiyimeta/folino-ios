@@ -12,6 +12,7 @@ struct ScoreListViewModelTests {
         title: String,
         composer: String? = nil,
         addedOffset: TimeInterval = 0,
+        lastOpenedOffset: TimeInterval? = nil,
         tagIDs: Set<TagID> = [],
     ) -> ScoreItem {
         ScoreItem(
@@ -20,7 +21,7 @@ struct ScoreListViewModelTests {
             localFileName: "\(title).mscx", contentHash: title,
             sizeBytes: 0, lengthBeats: 0, defaultTempoBpm: 120, primaryKey: nil,
             addedAt: base.addingTimeInterval(addedOffset),
-            lastOpenedAt: nil, tagIDs: tagIDs, isFavorite: false,
+            lastOpenedAt: lastOpenedOffset.map { base.addingTimeInterval($0) }, tagIDs: tagIDs, isFavorite: false,
         )
     }
 
@@ -154,5 +155,29 @@ struct ScoreListViewModelTests {
         let vm = ScoreListViewModel(source: .favorites, repository: repo)
         vm.sort = .titleAsc
         #expect(vm.displayedItems.map(\.title) == ["Fav", "Fav2"])
+    }
+
+    @Test func `source recents excludes never-opened items and includes opened ones`() {
+        let neverOpened = Self.makeItem(title: "Never opened")
+        let openedOnce = Self.makeItem(title: "Opened once", lastOpenedOffset: 100)
+        let repo = Self.makeRepo(items: [neverOpened, openedOnce])
+        let vm = ScoreListViewModel(source: .recents, repository: repo)
+        #expect(vm.displayedItems.map(\.title) == ["Opened once"])
+    }
+
+    @Test func `recents sort selection does not persist to the global library sort`() throws {
+        let defaults = try Self.makeDefaults("test.librarySort.recents")
+        let repo = Self.makeRepo(items: [])
+        let recentsVM = ScoreListViewModel(source: .recents, repository: repo, defaults: defaults)
+        recentsVM.selectSort(.titleAsc)
+        // Recents' own sort changed...
+        #expect(recentsVM.sort == .titleAsc)
+        // ...but `.all` must not see it: the key Recents would have written stays untouched.
+        let libraryVM = ScoreListViewModel(source: .all, repository: repo, defaults: defaults)
+        #expect(libraryVM.sort == .dateAddedDesc)
+        // `.all` itself still writes the key — this is what proves the guard is source-specific, not broken.
+        libraryVM.selectSort(.composerAsc)
+        let reloadedLibraryVM = ScoreListViewModel(source: .all, repository: repo, defaults: defaults)
+        #expect(reloadedLibraryVM.sort == .composerAsc)
     }
 }
