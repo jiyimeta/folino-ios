@@ -69,6 +69,12 @@ The rule's intent (no Feature ever composes Infrastructure) is unchanged; only t
 
 ## 3. The window model
 
+> **SUPERSEDED 2026-09-01** by `2026-09-01-macos-library-window-redesign-design.md`. The whole of §3 described a
+> `NavigationSplitView` shell whose sidebar hosted the iOS `LibraryRootScreen`. That arrangement is unshippable: a
+> `NavigationStack` push inside a `NavigationSplitView` sidebar renders bottom-anchored on macOS 26.4.1, so every
+> Library screen the Mac reached was blank. Read the new document instead; what remains true here is the
+> `MacWindowScore` value type and the single score `WindowGroup`.
+
 ### 3.1 One `WindowGroup`, presenting a score
 
 The umbrella spec already decided this in §5.3: "standard macOS window tabbing. **One window = library sidebar (collapsible) + score tabs**."
@@ -110,6 +116,11 @@ A `Window("Library")` plus a `WindowGroup(for:)` cannot tab together — distinc
 ---
 
 ## 4. Library's macOS form
+
+> **SUPERSEDED 2026-09-01** by `2026-09-01-macos-library-window-redesign-design.md`. §4.1's finding — the selection
+> state is already neutral, only the chrome is iOS — still holds and is reused. What is superseded is where that
+> selection lives and what a click does: selection moved into a separate library browser window, and selecting a row
+> no longer opens it. §4.4's "verify `.onMove` on a macOS List" also survives.
 
 ### 4.1 The selection *state* is already neutral; only the *mode* is iOS
 
