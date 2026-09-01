@@ -57,6 +57,11 @@ public enum AKInkArchive {
             coder.encode(false, forKey: "textIsClipped")
             coder.encode(false, forKey: "textIsFixedHeight")
             coder.encode(false, forKey: "textIsFixedWidth")
+            // Every accepted archive in this investigation carries this key, pointing at the archive's
+            // `$null` placeholder object; ours is otherwise the only one without it. Encoding `nil` here is
+            // what reproduces that: `NSKeyedArchiver` writes an explicit `$null` reference rather than
+            // omitting the key, matching Apple's archive rather than merely resembling it.
+            coder.encode(nil as Any?, forKey: "customPlaceholderText")
         }
     }
 
