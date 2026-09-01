@@ -2,6 +2,7 @@
 import Domain
 import SwiftUI
 import UniformTypeIdentifiers
+import UtilityUI
 
 /// The Mac library browser window's whole content: `MacLibrarySidebar` (Task 3) in the sidebar column, the selected
 /// source's scores in the detail column.
@@ -32,6 +33,13 @@ public struct MacLibraryBrowser: View {
     @State private var editTagsTarget: ScoreItem?
     @State private var addToPlaylistTarget: ScoreItem?
 
+    /// The create-playlist / create-tag alerts' state, held here for the same reason `LibraryRootScreen` holds it:
+    /// `libraryRootPresentations` drives the alerts, and the `+` menu below arms them.
+    @State private var isCreatingPlaylist = false
+    @State private var newPlaylistName = ""
+    @State private var isCreatingTag = false
+    @State private var newTagName = ""
+
     public init(
         viewModel: LibraryViewModel,
         onOpenScore: @escaping (ScoreItem) -> Void,
@@ -55,12 +63,24 @@ public struct MacLibraryBrowser: View {
             content
         }
         .frame(minWidth: 820, minHeight: 520)
-        .sheet(item: $editTagsTarget) { item in
-            EditTagsScreen(scoreItem: item, library: viewModel)
-        }
-        .sheet(item: $addToPlaylistTarget) { item in
-            AddToPlaylistScreen(scoreItem: item, library: viewModel)
-        }
+        .toolbar { addMenuToolbarItem }
+        // The whole presentation set `LibraryRootScreen` mounts on iOS, applied unchanged rather than re-declared —
+        // this is the one place either platform's library surface hosts them, so a sheet added there arrives here.
+        //
+        // It replaces the two hand-rolled `.sheet(item:)` calls this view used to carry (which were themselves a copy
+        // of this modifier's first two), and it restores three presentations the Mac lost the moment the browser
+        // stopped being `LibraryRootScreen`: the duplicate-import prompt (without which re-importing a file already
+        // in the library simply stalls — `startImport` sets `duplicatePrompt` and returns), the import-error alert,
+        // and the new-score wizard.
+        .libraryRootPresentations(
+            viewModel: viewModel,
+            editTagsTarget: $editTagsTarget,
+            addToPlaylistTarget: $addToPlaylistTarget,
+            isCreatingPlaylist: $isCreatingPlaylist,
+            newPlaylistName: $newPlaylistName,
+            isCreatingTag: $isCreatingTag,
+            newTagName: $newTagName,
+        )
         // Moved from `MacShellView.sidebar` — the library, not the reader, is what a dropped file belongs to, and the
         // library is this window now. Same body as the one it came from: filter to importable files, start each
         // import, and report `true` only when at least one file qualified.
@@ -73,6 +93,52 @@ public struct MacLibraryBrowser: View {
                 }
             }
             return true
+        }
+    }
+
+    /// The browser's `+` menu — the Mac's counterpart to `LibraryRootScreen.addMenu`, and what makes the three
+    /// presentations above reachable. Same three actions, same glyphs, same string keys; nothing new is worded here.
+    ///
+    /// **iOS's fourth item, Import, is deliberately absent.** It arms `viewModel.isFileImporterPresented`, and the
+    /// `.fileImporter` that answers it lives on `LibraryRootScreen`, not in `libraryRootPresentations` — so the item
+    /// would be a third silent no-op. The Mac already imports through File ▸ Import (⇧⌘I), which drives
+    /// `NSOpenPanel` directly; see `MacCommands.presentImportPanel`. A menu-bar command is the platform's own idiom.
+    @ToolbarContentBuilder
+    private var addMenuToolbarItem: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                Button {
+                    viewModel.isNewScoreSheetPresented = true
+                } label: {
+                    Label {
+                        Text("library.newScore.title", bundle: .module)
+                    } icon: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                }
+                Button {
+                    newPlaylistName = ""
+                    isCreatingPlaylist = true
+                } label: {
+                    Label {
+                        Text("library.playlist.create.title", bundle: .module)
+                    } icon: {
+                        Image(systemName: "music.note.list")
+                    }
+                }
+                Button {
+                    newTagName = ""
+                    isCreatingTag = true
+                } label: {
+                    Label {
+                        Text("library.tag.create.title", bundle: .module)
+                    } icon: {
+                        Image(systemName: "tag")
+                    }
+                }
+            } label: {
+                Image(systemName: "plus").accessibilityLabel(L10n.Common.add)
+            }
         }
     }
 
