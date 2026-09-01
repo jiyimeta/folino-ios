@@ -337,7 +337,7 @@ public final class EditorSessionCore {
         sessionEditDepth -= 1
         revision += 1
         mutationTicket += 1
-        rederiveSelection()
+        rederiveSelectionTogether()
         isDirty = true
     }
 
@@ -346,7 +346,7 @@ public final class EditorSessionCore {
         sessionEditDepth += 1
         revision += 1
         mutationTicket += 1
-        rederiveSelection()
+        rederiveSelectionTogether()
         isDirty = true
     }
 

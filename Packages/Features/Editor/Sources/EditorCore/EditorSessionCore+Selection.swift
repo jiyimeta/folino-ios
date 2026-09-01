@@ -11,10 +11,11 @@ import SheetMusicCore
 extension EditorSessionCore {
     // MARK: - Selection re-derivation
 
-    /// Re-derives the selection and the caret from the engine's post-mutation `lastAffectedLocation`. Engine IDs are
-    /// positional, so a stored selection can drift after any mutation — after every apply/undo/redo both are
-    /// recomputed against the current score. When no slot was touched (`lastAffectedLocation == nil`) they are
-    /// preserved rather than cleared.
+    /// Re-derives the selection and the caret from the engine's post-mutation `lastAffectedLocation`, the way an
+    /// applied INTENT wants them. Engine IDs are positional, so a stored selection can drift after any mutation.
+    /// When no slot was touched (`lastAffectedLocation == nil`) both are preserved rather than cleared.
+    ///
+    /// Undo and redo take `rederiveSelectionTogether()` instead — see there for why the rule below is not theirs.
     ///
     /// Which of the two followed the intent depends on which one it was aimed at. The keys are split between them
     /// (duration / tuplet / the letters / the rest key all write at the caret, ♯ / ♭ / tie edit the selection), so
@@ -38,6 +39,25 @@ extension EditorSessionCore {
         } else {
             select(affected)
         }
+    }
+
+    /// Undo and redo's re-derivation: both markers land together on the slot the change touched.
+    ///
+    /// The split above is a rule about COMMANDS. A duration key aims at the caret, ♯ aims at the selection, and
+    /// whichever one was not aimed at keeps its own slot so a run of input keeps the caret's lead. **Undo aims at
+    /// neither.** What it does is put one slot back the way it was, and that slot is the only place either marker
+    /// can sensibly be afterwards: it is what the user is looking at, and it is what the next letter should retype.
+    ///
+    /// Read through the split rule, undo left the caret wherever the input had pushed it — one slot PAST the note it
+    /// had just taken away, so typing again skipped a beat. It looked right in an empty bar only by accident: there
+    /// the undo restores a measure rest, which deletes the slot the caret named, and the `?? affected` fallback
+    /// dropped it onto the right one. The moment a second note gave that slot something to keep existing as, the
+    /// caret stayed behind on it.
+    func rederiveSelectionTogether() {
+        guard let session, let location = session.lastAffectedLocation else { return }
+        select(SelectionRederivation.item(
+            at: location, in: session.score, preferringNoteIndex: previousNoteIndex(at: location),
+        ))
     }
 
     /// Re-resolves a slot the intent did NOT target against the mutated score. `nil` when the slot was spliced away

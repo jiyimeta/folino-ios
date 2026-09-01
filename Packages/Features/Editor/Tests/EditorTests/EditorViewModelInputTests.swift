@@ -185,6 +185,59 @@ struct EditorViewModelInputTests {
         #expect(!vm.hasEditTarget)
     }
 
+    // MARK: - undo
+
+    /// Undo puts both markers back on the slot whose edit it took away, so the next letter retypes it. Anything else
+    /// leaves the caret pointing past a slot the user is looking straight at.
+    @Test func `undoing an input puts the caret back on the slot it emptied`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.select(.rest(EditorFixtures.restID(element: 1)))
+
+        vm.inputPitch(letter: "c")
+        #expect(vm.caretItem == .rest(EditorFixtures.restID(element: 2)))
+
+        vm.undo()
+
+        #expect(vm.caretItem == .rest(EditorFixtures.restID(element: 1)))
+        #expect(vm.selectedItem == .rest(EditorFixtures.restID(element: 1)))
+    }
+
+    /// The same, one note further in — the case that exposed it. After a SECOND input the caret is on beat 3 and the
+    /// slot it names still exists once the undo lands, so re-deriving "the marker the command did not aim at" left
+    /// the caret sitting on beat 3 while beat 2 went back to a rest.
+    @Test func `undoing the second of two inputs puts the caret back on the second slot`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.select(.rest(EditorFixtures.restID(element: 1)))
+
+        vm.inputPitch(letter: "c")
+        vm.inputPitch(letter: "d")
+        #expect(vm.caretItem == .rest(EditorFixtures.restID(element: 3)))
+
+        vm.undo()
+
+        #expect(vm.caretItem == .rest(EditorFixtures.restID(element: 2)))
+        #expect(vm.selectedItem == .rest(EditorFixtures.restID(element: 2)))
+        // Beat 1's note is untouched — only the second input came back off.
+        #expect(vm.score?[EditorFixtures.noteID(element: 1)] != nil)
+    }
+
+    /// Redo is the same rule in the other direction: it lands on what it just put back, ready to be undone again.
+    @Test func `redoing an input lands both markers on the note it restored`() {
+        let vm = makeViewModel()
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.select(.rest(EditorFixtures.restID(element: 1)))
+
+        vm.inputPitch(letter: "c")
+        vm.inputPitch(letter: "d")
+        vm.undo()
+        vm.redo()
+
+        #expect(vm.caretItem == .note(EditorFixtures.noteID(element: 2)))
+        #expect(vm.selectedItem == .note(EditorFixtures.noteID(element: 2)))
+    }
+
     // MARK: - the rest key
 
     /// The rhythm this key exists for. Input leaves the selection on the note just written and the caret one slot
