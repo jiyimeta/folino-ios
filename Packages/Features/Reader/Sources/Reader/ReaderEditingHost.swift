@@ -114,6 +114,16 @@ public final class ReaderEditingHost {
         return displayItem(for: caretItem)
     }
 
+    /// Whether a tap on the score belongs to the editor rather than to the transport.
+    ///
+    /// Editing owns the tap — except while the transport is running, where it goes back to meaning "seek here", the
+    /// same as outside edit mode. Every editing control is inert during playback anyway (`EditorViewModel`'s
+    /// `isPlaybackActive` closes the pad, the callout and the strip), so a tap that only re-selected would have been
+    /// a tap that did nothing, on the one surface where the reader most wants to jump around.
+    var wantsScoreTaps: Bool {
+        isEditing && !isPlaying
+    }
+
     /// Rebuilds `id` on a different staff, leaving measure / voice / element indices alone. `.clef` passes through:
     /// the editor has no clef-editing UI, so a clef ID never travels this path.
     private static func restamping(
