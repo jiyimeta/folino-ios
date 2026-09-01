@@ -4,7 +4,6 @@ import CrashReporting
 import Domain
 import Foundation
 import ImportExport
-import ImportExportAppGroup
 import Observation
 import Persistence
 import Reader
@@ -77,7 +76,8 @@ final class AppBootstrap {
     private(set) var metadataReader: LiveScoreMetadataReader?
     private(set) var incomingShareCoordinator: IncomingShareCoordinator?
     /// Drains cross-app score hand-offs (`folino://open-score`) staged by a sibling app in the shared App Group.
-    /// `nil` when that container is unavailable, in which case the route degrades to doing nothing.
+    /// `nil` when `SharedContainerTasks` declines to build one — on iOS because the container is unavailable, on
+    /// macOS always — in which case the route degrades to doing nothing.
     private(set) var incomingScoreCoordinator: IncomingScoreCoordinator?
     private(set) var crashReporter: (any CrashReporter)?
     private(set) var analytics: (any Analytics)?
@@ -117,8 +117,8 @@ final class AppBootstrap {
         do {
             try prepareDirectories()
             cleanupLegacySoundfontCacheIfNeeded()
-            reconcileSoundfontToSharedContainerIfNeeded()
-            stampSharedCapabilities()
+            SharedContainerTasks.reconcileSoundfontToSharedContainer()
+            SharedContainerTasks.stampCapabilities(appVersion: AppVersion.current.description)
             let writer = SharedContainerTasks.playlistsIndexWriter()
             let database = try AppDatabase(databaseURL: AppPaths.databaseURL)
             let annotationStore = LiveAnnotationStore(database: database)
@@ -271,15 +271,14 @@ final class AppBootstrap {
         }
     }
 
-    /// Move-then-dedup the high-quality SoundFont into the shared App Group container before the provider is built.
-    /// No-op when the container is unavailable (resolvers degrade to the legacy private path).
-    private func reconcileSoundfontToSharedContainerIfNeeded() {
-        guard let shared = AppPaths.sharedSoundfontsDirectory else { return }
-        SoundfontContainerMigration().reconcile(
-            fileName: SoundfontPreset.highQuality.fileName,
-            sharedDirectory: shared,
-            legacyDirectory: AppPaths.legacySoundfontsDirectory,
-            minimumValidByteSize: Self.soundfontMinimumValidByteSize,
+    /// The cross-app `folino://open-score` drain, over whichever adapters the bootstrap has by then. A thin binding of
+    /// the seam's factory to `self`; the decision of whether such a coordinator exists at all belongs to
+    /// `SharedContainerTasks`, which declines outright on macOS.
+    private func makeIncomingScoreCoordinator(importer: any ScoreFileImporter) -> IncomingScoreCoordinator? {
+        SharedContainerTasks.makeIncomingScoreCoordinator(
+            importer: importer,
+            analytics: analytics ?? NoopAnalytics(),
+            crashReporter: crashReporter ?? NoopCrashReporter(),
         )
     }
 
