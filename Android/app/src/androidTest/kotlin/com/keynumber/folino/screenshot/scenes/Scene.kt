@@ -15,17 +15,22 @@ class Scene(
 }
 
 object Scenes {
-    // `order` drives the output filename (NN.png) AND the Play Store display order:
-    // Reader+cursor, note editing, display-hidden, whole-piece-repeat, AB-repeat, Library, PiP.
+    // `order` drives the output filename (NN.png) AND the Play Store display order, and the sequence is iOS's
+    // (`ScreenshotScene`'s `id` prefixes) one for one, so the two listings tell the same story in the same
+    // order: what the app shows, what you write into it, how it plays, how it looks, section practice, the
+    // library, picture-in-picture.
     //
-    // Note editing sits second, where iOS puts it (`02_NoteEditing`): after the shot that establishes what the
-    // app shows, before the ones that adjust how it is shown or played. It is also the newest thing the app
-    // does, and a listing's second image is the last one most people scroll to.
+    // The names differ because each platform named its scene after what it stages rather than after the
+    // feature: iOS's `playbackInspector` is this `LoopAll`, and its `visualInspector` is this `DisplayHidden`
+    // (the same pairing `MarketingStrings` records against each entry).
+    //
+    // iOS has an eighth, `08_Annotation`, that Android has no scene for — annotation ships on both, so that is
+    // a gap in this list rather than a difference between the apps.
     val all: List<Scene> = listOf(
         Scene("ReaderCursor", 10) { l, t -> ReaderCursorScene(l, t) },
         Scene("NoteEditing", 20) { l, t -> NoteEditingScene(l, t) },
-        Scene("DisplayHidden", 30) { l, t -> DisplayHiddenScene(l, t) },
-        Scene("LoopAll", 40) { l, t -> LoopAllScene(l, t) },
+        Scene("LoopAll", 30) { l, t -> LoopAllScene(l, t) },
+        Scene("DisplayHidden", 40) { l, t -> DisplayHiddenScene(l, t) },
         Scene("AbRepeat", 50) { l, t -> AbRepeatScene(l, t) },
         Scene("Library", 60) { l, t -> LibraryScene(l, t) },
         Scene("Pip", 70) { l, t -> PipScene(l, t) },
