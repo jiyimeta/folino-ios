@@ -2,7 +2,6 @@ import Compression
 import CoreGraphics
 import Domain
 import Foundation
-@testable import Reader
 @testable import ReaderAnnotationCore
 import Testing
 
@@ -94,6 +93,15 @@ struct AKInkGoldenTests {
         let ourPoints = try #require(ProtobufReaderStub.field(5, in: ourStroke))
         #expect(shape(ourPoints).map(\.0) == shape(applePoints).map(\.0))
         #expect(shape(ourPoints).map(\.1) == shape(applePoints).map(\.1))
+
+        // Field 4 on the stroke is the ink submessage (colour, tool identifier, and one unexplained varint).
+        // It's only checked as one length-delimited blob at the stroke level above; this descends one level
+        // further so a wire-type flip inside it — exactly the kind of defect this file exists to catch —
+        // doesn't hide behind "it's still a valid length-delimited field."
+        let appleInk = try #require(ProtobufReaderStub.field(4, in: appleStroke))
+        let ourInk = try #require(ProtobufReaderStub.field(4, in: ourStroke))
+        #expect(shape(ourInk).map(\.0) == shape(appleInk).map(\.0))
+        #expect(shape(ourInk).map(\.1) == shape(appleInk).map(\.1))
     }
 
     @Test
