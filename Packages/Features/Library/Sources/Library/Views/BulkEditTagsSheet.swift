@@ -69,7 +69,7 @@ struct BulkEditTagsSheet: View {
         // Stays on the compat helper: `.confirmationAction` renders this Done semibold on iOS, where it is
         // regular today — 1362 pixels, all inside the button, measured against this file's preview (Task 16).
         // Fewer than the 1492 the other sheets measured because this Done is disabled in the preview's state.
-        // See `PlatformToolbarCompat`.
+        // See `PlatformViewCompat`.
         ToolbarItem(placement: .topBarTrailingCompat) {
             Button { onCommit(checked) } label: { L10n.Common.done }
                 .disabled(checked.isEmpty)

@@ -230,4 +230,25 @@ extension View {
         self
         #endif
     }
+
+    /// Presents `content` as a popover anchored to whichever view this is attached to, on macOS only; a no-op on
+    /// iOS. For a confirmation that a Mac reaches from a keyboard command or a context menu, where iOS reaches the
+    /// same confirmation from a bulk-action bar that carries its own popover.
+    ///
+    /// A helper rather than an inline `#if` for the same reason as `activeEditModeCompat()`: this sits inside a
+    /// modifier chain, and SwiftFormat's `--ifdef no-indent` de-indents the whole chain when a `#if` interrupts one
+    /// of its links.
+    @ViewBuilder
+    public func popoverCompat(
+        isPresented: Binding<Bool>,
+        @ViewBuilder content: @escaping () -> some View,
+    ) -> some View {
+        #if os(macOS)
+        popover(isPresented: isPresented) {
+            content()
+        }
+        #else
+        self
+        #endif
+    }
 }

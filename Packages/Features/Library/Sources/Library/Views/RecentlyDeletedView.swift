@@ -75,10 +75,13 @@ struct RecentlyDeletedView: View {
                 .accessibilityLabel(L10n.Common.more)
             }
         }
-        .swipeActionsCompat(edge: .leading, allowsFullSwipe: true) { restoreSwipeButton(for: item) }
+        // Raw `.swipeActions`, not a compat helper: the modifier is macOS 12+, so it compiles on both platforms and
+        // is simply inert where there is no touch swipe. `ScoreListRow` in this same package calls it raw twice and
+        // builds for macOS.
+        .swipeActions(edge: .leading, allowsFullSwipe: true) { restoreSwipeButton(for: item) }
         // Full swipe disabled — accidental hard-deletes here are unrecoverable, so require a deliberate tap that
         // triggers the popover confirm.
-        .swipeActionsCompat(edge: .trailing, allowsFullSwipe: false) {
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             permanentDeleteSwipeButton(for: item)
         }
         .contextMenu { effectiveRowContextMenu(for: item) }
@@ -248,47 +251,5 @@ struct RecentlyDeletedView: View {
         } else {
             selectedIDs.insert(id)
         }
-    }
-}
-
-extension View {
-    /// `.swipeActions` on iOS; a no-op on macOS, which has no touch-swipe gesture and so no meaning for these — the
-    /// restore / permanent-delete pair is always reachable from the row's context menu too, so nothing is lost.
-    ///
-    /// A helper rather than an inline `#if` because these calls sit inside a modifier chain (`.swipeActionsCompat(...)
-    /// .swipeActionsCompat(...).contextMenu(...).popover(...)`), and SwiftFormat's `--ifdef no-indent` de-indents the
-    /// whole chain when a `#if` interrupts one of its links.
-    @ViewBuilder
-    func swipeActionsCompat<Content: View>(
-        edge: HorizontalEdge,
-        allowsFullSwipe: Bool,
-        @ViewBuilder content: () -> Content,
-    ) -> some View {
-        #if os(iOS)
-        swipeActions(edge: edge, allowsFullSwipe: allowsFullSwipe, content: content)
-        #else
-        self
-        #endif
-    }
-
-    /// Presents `content` as a popover, macOS only, anchored to whichever view this is attached to — the macOS-only
-    /// bulk permanent-delete confirmation. A no-op on iOS, which drives the same confirmation from
-    /// `RecentlyDeletedBulkActionBar`'s own popover instead.
-    ///
-    /// A helper rather than an inline `#if` for the same reason as `swipeActionsCompat` above: this sits inside a
-    /// modifier chain, and SwiftFormat's `--ifdef no-indent` de-indents the whole chain when a `#if` interrupts one
-    /// of its links.
-    @ViewBuilder
-    func popoverCompat<Content: View>(
-        isPresented: Binding<Bool>,
-        @ViewBuilder content: @escaping () -> Content,
-    ) -> some View {
-        #if os(macOS)
-        popover(isPresented: isPresented) {
-            content()
-        }
-        #else
-        self
-        #endif
     }
 }

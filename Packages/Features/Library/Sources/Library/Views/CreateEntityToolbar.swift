@@ -57,7 +57,7 @@ private struct CreateEntityToolbarModifier: ViewModifier {
         // Neutral placement on purpose, and NOT `.confirmationAction` despite the "+" reading like a commit.
         // This sits on a list SCREEN, not on a sheet: it opens the create alert rather than confirming anything,
         // and there is nothing on screen for a Mac's Return key to commit. The alert's own Add button is the
-        // confirmation, and SwiftUI already makes it that alert's default. See `PlatformToolbarCompat`.
+        // confirmation, and SwiftUI already makes it that alert's default. See `PlatformViewCompat`.
         ToolbarItem(placement: .topBarTrailingCompat) { createButton }
     }
 

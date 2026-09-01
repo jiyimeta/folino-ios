@@ -67,7 +67,7 @@ struct BulkAddToPlaylistSheet: View {
         // `.cancellationAction` to the LEADING slot, and this sheet's Cancel is deliberately trailing — it is
         // the only bar button, and every other Library sheet puts its single dismiss button there. Migrating
         // moved the button across the bar and dragged the title with it — 17430 pixels, measured against this
-        // file's preview (Task 16). See `PlatformToolbarCompat`.
+        // file's preview (Task 16). See `PlatformViewCompat`.
         ToolbarItem(placement: .topBarTrailingCompat) {
             Button { dismiss() } label: { L10n.Common.cancel }
         }
