@@ -1408,8 +1408,8 @@ public static func annotatedExportAKEncodeFailed(count: Int) -> AnalyticsEvent {
 }
 ```
 
-Check the `parameters` value type against its neighbours — if the enum has no `.int` case, use
-`.string(String(count))`.
+`.int(Int)` exists — `scoreCreated(template:partCount:)` in the same file uses it for `part_count`. Log the
+count raw; this codebase buckets at analysis time, not at collection.
 
 3. In `ReaderAnnotatedPDFRenderer`, both call sites take `.data`, and after each:
 
