@@ -25,6 +25,15 @@ import SwiftUI
 //   negatives are not a dead delivery path. So the semibold Done above is not a cost for nothing: it is what
 //   Return costs.
 //
+//   Weigh the decision knowing the rest of the app already went the other way. Every sheet wearing the house
+//   confirm/close chrome — `SheetActionLabel` / `SheetConfirmButton`, five of them across Editor and ScoreUI —
+//   is already on semantic placements, and asks no weight question at all because its labels are glyphs with an
+//   explicit prominent style. `NewScoreSheet`, in the same package as the four holdouts, is already on
+//   `.confirmationAction` with a plain TEXT "Create", so a semibold text confirmation is a look this app
+//   ships today. The four holdouts are simply the last sheets still drawing "Cancel" / "Done" as words in plain
+//   buttons, so the tidiest close is probably to give them the house chrome first and let the placement follow —
+//   but that changes what a shipped screen looks like, which is not the migration's call to make.
+//
 //   Two things are deliberately NOT in this gap. `doneToolbarCompat` below emits no macOS toolbar item at all,
 //   so migrating its iOS branch would be pure iOS risk for no Mac keyboard gain. And the sites holding a menu,
 //   an overflow, a spacer or the Settings-gear seam — ScoreListView, LibraryRootScreen, ManageEntityToolbar,
