@@ -68,6 +68,10 @@ struct MacShellView: View {
             .frame(minWidth: 900, minHeight: 600)
             .background(MacWindowTabAssist())
             .focusedSceneValue(\.macLibraryImportAction) { url in await libraryVM.startImport(from: url) }
+            // A score window must open what its own File ▸ Import brought in, even with the browser closed — see
+            // `ImportedScoreOpener`. The browser installs the same watcher; `MacImportedScoreClaim` is what stops
+            // them from opening the score twice.
+            .opensImportedScores(from: libraryVM)
             .focusedCurrentScoreID(scoreID)
     }
 

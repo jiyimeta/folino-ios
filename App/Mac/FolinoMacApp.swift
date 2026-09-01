@@ -25,6 +25,47 @@ enum MacWindowID {
     static let library = "library"
 }
 
+/// The single-owner guard behind `opensImportedScores(from:)`: it decides which of the several windows watching
+/// `LibraryViewModel.pendingScoreToOpen` is the one that actually opens the score.
+///
+/// **Why a guard is needed at all.** Every window scene installs the watcher (it must — either window kind can start
+/// an import, and either can be closed), so one `pendingScoreToOpen` can be seen by the browser plus every open score
+/// window. Without arbitration each of them would call `openWindow(value:)` and the user would get N windows for one
+/// import.
+///
+/// **Why this arbitration is correct.** All watchers run on the main actor, and all of them observe the same value,
+/// so for a given id they run in the same update pass — before the `nil` that clears it, which is deferred by one
+/// main-actor hop. The first to arrive stores the id and returns `true`; every later one compares equal and gets
+/// `false`. Ordering between windows does not matter, only that one of them is first. A watcher installed *late*
+/// (a window opened after the value was set) never fires for it at all, since `onChange` reports changes, not the
+/// current value.
+///
+/// **Why it is keyed on the id and released on `nil` rather than latched.** `ImportDecision.openExisting` makes
+/// `commitImport` return the score that was already in the library, so two separate imports of the same file
+/// genuinely can publish the *same* `ScoreItem.ID`. A latch on the id alone would silently refuse the second one.
+/// Releasing on the `nil` transition — which every watcher sees, one hop after the open — keeps the invariant
+/// "`claimedID` is non-nil exactly while one open is in flight" instead.
+///
+/// **This is deliberately not SwiftUI state.** A `@State` bookkeeping write is precisely the second write that
+/// `ImportedScoreOpener.openImportedScore`'s measurements forbid. A `static var` on a plain enum invalidates no view
+/// and schedules no update, so it is not a write in the sense those measurements are about — but that reasoning is
+/// exactly the kind the measurement's own closing note says not to trust, so it is on the QA sheet to re-measure.
+@MainActor
+enum MacImportedScoreClaim {
+    private static var claimedID: ScoreItem.ID?
+
+    /// `true` for the first watcher to offer `id`, `false` for every later one until `release()`.
+    static func claim(_ id: ScoreItem.ID) -> Bool {
+        guard claimedID != id else { return false }
+        claimedID = id
+        return true
+    }
+
+    static func release() {
+        claimedID = nil
+    }
+}
+
 /// The Mac app's entry point. Drives the real `AppBootstrap` and reports its state — a spinner while it runs, then
 /// the content or the failure.
 ///
@@ -39,8 +80,8 @@ struct FolinoMacApp: App {
     /// File ▸ Import.
     ///
     /// **One instance per process, not one per window.** `pendingScoreToOpen` is set on whichever instance ran the
-    /// import, and the watcher that consumes it lives in the browser window — so a score window importing through
-    /// its own instance would queue a score nothing was watching for.
+    /// import, and every window watches it (`opensImportedScores(from:)`) — so a window importing through its own
+    /// instance would queue a score none of those watchers could see.
     ///
     /// It is `Optional` because it cannot exist before `AppBootstrap` has produced the adapters it is built from.
     /// `startAppServices()` fills it in the same turn `bootstrap.start()` returns, and every scene unwraps it
@@ -152,10 +193,10 @@ struct FolinoMacApp: App {
     }
 }
 
-/// The library window's content: the browser, plus the post-import watcher that used to live on `MacShellView`.
+/// The library window's content.
 ///
-/// A view rather than inline scene content because both halves need a view context — `@Environment(\.openWindow)`
-/// and `onChange`.
+/// A view rather than inline scene content because it needs a view context: `@Environment(\.openWindow)`, the
+/// imported-score watcher, and the focused value below all require one.
 private struct MacLibraryWindowContent: View {
     let viewModel: LibraryViewModel
     @Environment(\.openWindow) private var openWindow
@@ -177,12 +218,49 @@ private struct MacLibraryWindowContent: View {
             //   `MacShellView.sidebar`, which no longer exists — the gap did not close, its call site did.)
             onOpenInPlaylist: { item, _ in openWindow(value: MacWindowScore(scoreID: item.id)) },
         )
-        .onChange(of: viewModel.pendingScoreToOpen?.id) { _, newID in
-            // Mirrors `AppShellView.ReadyShell`'s watcher: a successful import (File ▸ Import, or a drag onto the
-            // browser) opens the new score, same as iOS — in a score window, because that is where scores live now.
-            guard let newID,
-                  let item = viewModel.pendingScoreToOpen,
-                  item.id == newID else { return }
+        // The browser has no file importer of its own, so File ▸ Import is the *only* import route while this window
+        // is key — and on a fresh launch with an empty library it is the only import route the app has at all.
+        // `@FocusedValue` follows scene focus, so a score window publishing this does nothing for the browser; the
+        // browser has to publish its own.
+        .focusedSceneValue(\.macLibraryImportAction) { url in await viewModel.startImport(from: url) }
+            .opensImportedScores(from: viewModel)
+    }
+}
+
+/// Opens whatever `LibraryViewModel.pendingScoreToOpen` names, in a score window.
+///
+/// **Installed in every window scene, because every window can start an import and every window can be closed.**
+/// File ▸ Import is published by the browser *and* by each score window; the browser's drag-and-drop drop target and
+/// its new-score wizard start imports too. Parking one watcher in the browser would lose every import made while it
+/// is closed (and `onChange` does not fire for a value that was already set when the window reopens), while parking
+/// it in a score window loses the browser's own routes.
+///
+/// **Why the watcher and not the initiator.** The plan's preferred shape was "whoever starts an import opens its
+/// result", which would need `startImport` to hand its caller the score. It does not, and cannot be made to without
+/// changing `LibraryViewModel`'s contract: it returns `Void`, and on the duplicate path it returns *before* the
+/// import is committed at all (it only sets `duplicatePrompt`; the user's later choice runs `commit`, which is what
+/// sets `pendingScoreToOpen`). Two further setters — the new-score wizard's `createScore(from:)` and that same
+/// post-prompt `commit` — run inside the Library module with no initiator closure to call back into. So
+/// `pendingScoreToOpen` genuinely is the only channel, and the arbitration moves into `MacImportedScoreClaim`
+/// instead — see its doc comment for why exactly one watcher acts.
+private struct ImportedScoreOpener: ViewModifier {
+    let viewModel: LibraryViewModel
+    @Environment(\.openWindow) private var openWindow
+
+    func body(content: Content) -> some View {
+        content.onChange(of: viewModel.pendingScoreToOpen?.id) { _, newID in
+            // Mirrors `AppShellView.ReadyShell`'s watcher: a successful import (File ▸ Import, a drag onto the
+            // browser) or a newly created score opens it, same as iOS — in a score window, because that is where
+            // scores live now.
+            guard let newID else {
+                // The clear made one hop below, seen by every watcher. Ends the claim so a later import that
+                // republishes the same id is not mistaken for this one.
+                MacImportedScoreClaim.release()
+                return
+            }
+            guard let item = viewModel.pendingScoreToOpen,
+                  item.id == newID,
+                  MacImportedScoreClaim.claim(newID) else { return }
             openImportedScore(item)
         }
     }
@@ -216,12 +294,25 @@ private struct MacLibraryWindowContent: View {
     /// that would visibly lag the import if it waited — and the clear one main-actor hop later, where nothing is
     /// updating. Re-measuring belongs to QA.
     ///
-    /// The hop is safe for `pendingScoreToOpen` specifically: the only reader is the watcher above, which is keyed on
-    /// the id changing, so a value that stays set for one hop cannot re-trigger anything.
+    /// The hop is safe for `pendingScoreToOpen` specifically: its only readers are these watchers, which are keyed on
+    /// the id changing, so a value that stays set for one hop cannot re-trigger an open — the claim above refuses a
+    /// repeat of the same id, and the `nil` this writes is what releases it.
+    ///
+    /// `MacImportedScoreClaim.claim` in the handler is not a second write: it touches a plain `static var`, which
+    /// invalidates no view and schedules no update. See that type's doc comment.
     private func openImportedScore(_ item: ScoreItem) {
         openWindow(value: MacWindowScore(scoreID: item.id))
         Task { @MainActor in
             viewModel.pendingScoreToOpen = nil
         }
+    }
+}
+
+extension View {
+    /// Installs the watcher that opens an imported (or newly created) score in a score window. Every window scene
+    /// gets one — see `ImportedScoreOpener` for why, and `MacImportedScoreClaim` for what keeps them from all
+    /// opening the same score at once.
+    func opensImportedScores(from viewModel: LibraryViewModel) -> some View {
+        modifier(ImportedScoreOpener(viewModel: viewModel))
     }
 }

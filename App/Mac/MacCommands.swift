@@ -45,6 +45,10 @@ struct MacCommands: Commands {
                 Text("mac.menu.import")
             }
             .keyboardShortcut("i", modifiers: [.command, .shift])
+            // Both window kinds publish `macLibraryImportAction`, so this is `nil` only when neither is key (the
+            // Settings window, say). Disabling rather than letting `presentImportPanel` open a panel whose picked
+            // files `action?(url)` would silently drop.
+            .disabled(libraryImportAction == nil)
             Button {
                 if let currentScoreID {
                     // A fresh `tabInstance` every time: `WindowGroup(for:)` reuses (refocuses) a window whose
