@@ -76,7 +76,9 @@ private struct MacEditingMenuItem: View {
 /// `docs/superpowers/plans/2026-09-02-macos-edit-session-bench.md`).
 ///
 /// **A:** every shortcut sits on the menu item; a BARE key only while a target is focused, so a text field that has
-/// taken focus (the target reads `nil`) gets the letter.
+/// taken focus (the target reads `nil`) gets the letter. A additionally requires the view-scoped `focusedValue`
+/// publication the bench file describes — today only `focusedSceneValue` exists (`MacEditableReaderScreen`), which
+/// is not enough: it follows scene focus, not view focus, so a sheet's text field would not read `nil`.
 /// **B:** modifier-bearing shortcuts sit on the menu item; bare keys are delivered by `MacEditingKeyMap` and the
 /// item shows none.
 private struct MacEditingShortcut: ViewModifier {

@@ -271,15 +271,6 @@ private struct ImportedScoreOpener: ViewModifier {
         }
     }
 
-    // PARITY(macos): the new-score wizard's edit session — a score created from the wizard opens read-only on the
-    //   Mac. `LibraryViewModel.createScore` arms `pendingOpenInEditSession` alongside `pendingScoreToOpen` and the
-    //   pair is the contract; iOS honours it (`App/iOS/AppShellView.swift` reads
-    //   `consumePendingOpenInEditSession()` and starts the reader in an edit session). macOS has no editor until
-    //   sub-project Ⅳ, so `openImportedScore` below consumes the arm and drops it — consuming rather than ignoring,
-    //   because the flag is `public private(set)` and only that call clears it, so leaving it set armed it for the
-    //   rest of the process. Closing this means opening the new score window straight into an edit session once the
-    //   Mac editor exists.
-
     /// Opens `item` for the post-import watcher, which runs INSIDE a SwiftUI update — and that difference is the
     /// whole reason this is not two plain statements in the handler above.
     ///
@@ -317,8 +308,9 @@ private struct ImportedScoreOpener: ViewModifier {
     /// invalidates no view and schedules no update. See that type's doc comment.
     ///
     /// **The two deferred writes are two separate `Task`s, and that arrangement is UNMEASURED — do not read the
-    /// paragraphs above as endorsing it.** `pendingOpenInEditSession` has to be disarmed somewhere (see the PARITY
-    /// marker above), which makes two deferred writes rather than one, and there were two ways to place them:
+    /// paragraphs above as endorsing it.** `pendingOpenInEditSession` has to be disarmed somewhere — the flag is
+    /// `public private(set)` and `consumePendingOpenInEditSession()` is the only call that clears it — which makes
+    /// two deferred writes rather than one, and there were two ways to place them:
     ///
     /// * **One inline write + two in the single existing hop.** This is literally the "same three split
     ///   one-and-two" the measurement above records as CLEAN. It is the arrangement with evidence behind it, and it
@@ -338,6 +330,7 @@ private struct ImportedScoreOpener: ViewModifier {
             viewModel.pendingScoreToOpen = nil
         }
         Task { @MainActor in
+            // Consumed and dropped: the Mac has no edit mode to start in — every score window is editable.
             _ = viewModel.consumePendingOpenInEditSession()
         }
     }

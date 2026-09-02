@@ -13,7 +13,7 @@ struct MacEditingKeyMap: View {
     /// One bare key, with the command it fires. A row can contribute more than one (design §6's `⌫ / ⌦`), and
     /// unwrapping the key here keeps a force-unwrap — or a fallback that would collide with the transport's Space —
     /// out of the body.
-    private struct Binding: Identifiable {
+    private struct KeyBinding: Identifiable {
         let command: MacEditingCommand
         let key: KeyEquivalent
         var id: String {
@@ -21,9 +21,9 @@ struct MacEditingKeyMap: View {
         }
     }
 
-    private var bindings: [Binding] {
+    private var bindings: [KeyBinding] {
         MacEditingCommands.all.flatMap { command in
-            command.bareKeys.map { Binding(command: command, key: $0) }
+            command.bareKeys.map { KeyBinding(command: command, key: $0) }
         }
     }
 

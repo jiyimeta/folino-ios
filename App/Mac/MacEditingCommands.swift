@@ -208,6 +208,7 @@ enum MacEditingCommands {
             .init(
                 "notes.duration.\(name)", "mac.menu.notes.duration.\(name)",
                 menu: .notes, submenu: .duration, key: KeyEquivalent(digit),
+                isEnabled: { $0.editor.hasEditTarget },
             ) { target in
                 // With something selected the digit re-times it; with only a caret it arms the next note.
                 if target.editor.selectedItem != nil {

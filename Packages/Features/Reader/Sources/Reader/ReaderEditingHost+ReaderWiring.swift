@@ -7,8 +7,8 @@ import Domain
 
 extension ReaderViewModel {
     /// Wires the revert half of the editing seam onto `host`, from the same `.task` block that fills its other
-    /// providers (`sourceScoreProvider`, `hiddenStavesProvider`, …). Split into its own file — rather than inlined
-    /// there — to keep `ReaderRootScreen`'s primary declaration under SwiftLint's `type_body_length` budget.
+    /// providers (`sourceScoreProvider`, `hiddenStavesProvider`, …). Lives here, rather than on `ReaderRootScreen`
+    /// or `MacReaderRootScreen` directly, because the wiring is platform-neutral and both screens install it.
     func wireRevertReload(host: ReaderEditingHost) {
         // The Editor cannot see the ink; only "anchored to the notation" counts, not ink pinned to a PDF page, which
         // a revert of the notation never touches.
@@ -46,8 +46,8 @@ extension ReaderViewModel {
     }
 
     /// Wires the part-remap half of the editing seam onto `host`, from the same `.task` block that fills its other
-    /// providers. Split into its own file — rather than inlined there — for the same reason `wireRevertReload` is:
-    /// to keep `ReaderRootScreen`'s primary declaration under SwiftLint's `type_body_length` budget.
+    /// providers. Lives here for the same reason `wireRevertReload` does: the wiring is platform-neutral and both
+    /// `ReaderRootScreen` and `MacReaderRootScreen` install it.
     ///
     /// Three halves now. Both part-indexed writers — the preferences row and the annotation layer — are taught to hold
     /// while the host says a migration is unsettled; the drain is wired so whatever was already in the air lands

@@ -58,7 +58,7 @@ public struct EditorDiscardButton: View {
         .accessibilityLabel(Text("editor.discard.action", bundle: .module))
         .destructiveConfirmationPopover(
             isPresented: $viewModel.isConfirmingDiscard,
-            message: String(localized: "editor.discard.confirm.message", bundle: .module),
+            message: viewModel.discardConfirmationMessage,
             actionTitle: Text("editor.discard.confirm.action", bundle: .module),
         ) {
             Task {

@@ -1,7 +1,7 @@
 // swiftlint:disable file_length
 // MacReaderRootScreen composes the score/PDF content, the transport bar, and the always-open note-editing lifecycle
-// seam (`ReaderEditingHost`, design §1/§2); that breadth puts it just over the file_length budget, the same way it
-// does for its iOS sibling.
+// seam (`ReaderEditingHost`, design §1/§2); that breadth puts it just over the file_length budget. The budget holds
+// until `MacScoreContentView` moves to its own file, a Ⅳb/Ⅳc follow-up.
 
 // PARITY(macos): the Mac reading surface's chrome — this screen renders the score in all three display modes, shows
 //   an imported PDF and committed ink, plays them from a transport bar, and edits them from the menu bar and the
@@ -300,6 +300,7 @@ public struct MacReaderRootScreen: View {
         host.isEditing = false
         host.selection = .none
         host.caretItem = nil
+        host.resetExitRequest()
     }
 }
 

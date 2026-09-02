@@ -46,6 +46,13 @@ struct MacEditingCommandsTests {
         #expect(Set(pairs).count == pairs.count)
     }
 
+    /// Design §6: MuseScore's `N` (note-input mode toggle) is deliberately unbound — folino's editing model is
+    /// caret & pad, with no mode to toggle. A bound `N` would be bound to something a MuseScore hand does not expect.
+    @Test func `no bare key is N`() {
+        let keys = MacEditingCommands.all.flatMap(\.bareKeys).map(\.character)
+        #expect(!keys.contains("n"))
+    }
+
     @Test func `every menu has at least one command and every command is in a menu`() {
         for menu in MacEditingMenu.allCases {
             #expect(!MacEditingCommands.commands(in: menu).isEmpty, "\(menu)")
