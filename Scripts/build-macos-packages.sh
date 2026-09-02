@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
 # Builds every folino package that is expected to compile for macOS, in dependency order.
 #
-# Reader and Features/Library are both deliberately absent, for the same reason: neither compiles
-# as a macOS product yet, and both are deferred to sub-project IIIb of
-# docs/superpowers/specs/2026-08-31-macos-app-design.md. Reader's UIKit scroll host and PencilKit
-# canvas have no macOS implementation. Library's EditMode-driven selection is woven into view
-# signatures rather than call sites, so there is no signature to gate behind.
+# Features/Library joined this gate in sub-project IIIb of
+# docs/superpowers/specs/2026-08-31-macos-app-design.md: its `EditMode`-driven bulk-selection chrome
+# (the Select/Cancel toolbar button, the BulkActionBar safe-area inset, row-tap-toggles-selection) was
+# forked behind `#if os(iOS)` and rebuilt on a platform-neutral `isSelecting: Bool`, so there is now a
+# signature to gate behind. `List(selection:)` already multi-selects natively on macOS via ⌘/⇧-click.
 #
-# Library DOES declare a `.macOS(.v15)` platform in its manifest — but only as a build floor for
-# FolinoLibraryJNI's Android cross-compile graph, whose host tests build on macOS. That declaration
-# is not evidence the package belongs in this gate.
+# Library's `.macOS(.v15)` platform declaration also serves double duty as the build floor for
+# FolinoLibraryJNI's Android cross-compile graph, whose host tests build on macOS — do not remove it
+# even though the package now belongs in this gate for its own sake too.
+#
+# Reader compiled for macOS as of sub-project IIIa; IIIb built the Mac reading surface on top of it
+# (`Screens/Mac/` — `MacReaderRootScreen`, all three display modes on `MagnifyingScoreScrollView`,
+# imported PDFs, read-only ink, and a transport bar). This gate compiles all of that, so a break in
+# it fails here. The iOS UIKit scroll host, its PencilKit canvas, and the iOS layout-mode screens
+# stay behind `#if os(iOS)`; what is still owed to macOS is tracked by the `PARITY(macos)` markers on
+# those files, not by this comment.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -18,10 +25,12 @@ PACKAGES=(
   Packages/Utility
   Packages/Domain
   Packages/ScoreUI
+  Packages/Features/Library
   Packages/Infrastructure
   Packages/Features/ImportExport
   Packages/Features/Settings
   Packages/Features/Editor
+  Packages/Features/Reader
 )
 
 failed=()

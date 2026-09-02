@@ -1,4 +1,9 @@
-#if DEBUG
+// PARITY(macos): previews of `VerticalScoreContainer` — nothing, deliberately. A preview is a development aid for
+//   the container it previews, and that container is iOS-only; the Mac's vertical mode is a different view with a
+//   different subtree, so previewing it would mean writing new previews, not un-gating these. The marker exists so
+//   the `#if` is explained where it sits.
+
+#if DEBUG && os(iOS)
 import Domain
 import SheetMusicCore
 import SwiftUI

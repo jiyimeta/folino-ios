@@ -224,7 +224,7 @@ extension View {
     /// value. Not `fileprivate`: shared with `PlaybackInspectorScreen`, the other Reader screen using this overload.
     @ViewBuilder
     func verticalRowInsetCompat(_ length: CGFloat) -> some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             listRowInsets(.vertical, length)
         } else {
             self

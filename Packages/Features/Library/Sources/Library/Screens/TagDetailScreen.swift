@@ -6,6 +6,8 @@ struct TagDetailScreen: View {
     let tag: Tag
     let library: LibraryViewModel
     let onOpen: (ScoreItem) -> Void
+    /// **macOS only**, in effect — see `ScoreListView.onOpenInNewWindow`.
+    let onOpenInNewWindow: (ScoreItem) -> Void
     let onEditTags: (ScoreItem) -> Void
     let onAddToPlaylist: (ScoreItem) -> Void
     let onTagDeleted: () -> Void
@@ -16,6 +18,7 @@ struct TagDetailScreen: View {
         tag: Tag,
         library: LibraryViewModel,
         onOpen: @escaping (ScoreItem) -> Void,
+        onOpenInNewWindow: @escaping (ScoreItem) -> Void,
         onEditTags: @escaping (ScoreItem) -> Void,
         onAddToPlaylist: @escaping (ScoreItem) -> Void,
         onTagDeleted: @escaping () -> Void,
@@ -23,6 +26,7 @@ struct TagDetailScreen: View {
         self.tag = tag
         self.library = library
         self.onOpen = onOpen
+        self.onOpenInNewWindow = onOpenInNewWindow
         self.onEditTags = onEditTags
         self.onAddToPlaylist = onAddToPlaylist
         self.onTagDeleted = onTagDeleted
@@ -43,6 +47,7 @@ struct TagDetailScreen: View {
                 viewModel: listVM,
                 library: library,
                 onOpen: onOpen,
+                onOpenInNewWindow: onOpenInNewWindow,
                 onEditTags: onEditTags,
                 onAddToPlaylist: onAddToPlaylist,
             )

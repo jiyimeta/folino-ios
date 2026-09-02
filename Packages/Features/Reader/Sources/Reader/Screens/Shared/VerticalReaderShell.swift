@@ -1,3 +1,8 @@
+// PARITY(macos): one vertical shell for score and PDF — the Mac's vertical SCORE reader is built on
+//   `MagnifyingScoreScrollView` and needs nothing from this shell. Its other caller does: an imported PDF has no
+//   vertical mode on the Mac at all, so what this shell shares is half-missing there. See `VerticalPDFContainer`.
+
+#if os(iOS)
 import SwiftUI
 
 /// Base zoom captured at a vertical pinch's `.began`, so the commit math resolves against the gesture's starting scale.
@@ -128,3 +133,4 @@ struct VerticalReaderShell<Content: View>: View {
         }
     }
 }
+#endif

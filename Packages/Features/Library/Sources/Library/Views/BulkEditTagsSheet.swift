@@ -23,16 +23,21 @@ struct BulkEditTagsSheet: View {
                 defaultValue: "Tags for \(selectionCount) scores",
                 bundle: .module,
             )))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar { toolbarItems }
         }
+        .listSheetSizeCompat()
     }
 
     private var tagsSection: some View {
         Section {
             ForEach(allTags) { tag in
                 Button {
-                    if checked.contains(tag.id) { checked.remove(tag.id) } else { checked.insert(tag.id) }
+                    if checked.contains(tag.id) {
+                        checked.remove(tag.id)
+                    } else {
+                        checked.insert(tag.id)
+                    }
                 } label: {
                     HStack {
                         Image(systemName: checked.contains(tag.id) ? "checkmark.circle.fill" : "circle")
@@ -58,10 +63,14 @@ struct BulkEditTagsSheet: View {
 
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
+        ToolbarItem(placement: .cancellationAction) {
             Button { dismiss() } label: { L10n.Common.cancel }
         }
-        ToolbarItem(placement: .topBarTrailing) {
+        // Stays on the compat helper: `.confirmationAction` renders this Done semibold on iOS, where it is
+        // regular today — 1362 pixels, all inside the button, measured against this file's preview (Task 16).
+        // Fewer than the 1492 the other sheets measured because this Done is disabled in the preview's state.
+        // See `PlatformViewCompat`.
+        ToolbarItem(placement: .topBarTrailingCompat) {
             Button { onCommit(checked) } label: { L10n.Common.done }
                 .disabled(checked.isEmpty)
         }

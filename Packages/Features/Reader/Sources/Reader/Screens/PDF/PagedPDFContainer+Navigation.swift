@@ -1,3 +1,7 @@
+// PARITY(macos): page navigation over an imported PDF — cursor-follow and the explicit page jumps for a paged PDF.
+//   The Mac has no paged PDF mode to navigate; this arrives with the container itself. See `PagedPDFContainer`.
+
+#if os(iOS)
 import SwiftUI
 
 // MARK: - Page-index navigation (taps)
@@ -181,3 +185,4 @@ extension PagedPDFContainer {
         reseedLiveCanvasForPageTurn(viewport: lastViewport)
     }
 }
+#endif

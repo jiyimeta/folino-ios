@@ -1,3 +1,11 @@
+// PARITY(macos): the annotation canvas this host installs — the host itself is settled: the Mac reader is built on
+//   `MagnifyingScoreScrollView` (`NSScrollView` + `NSHostingView`, zoom on `.magnification`), a sibling of this
+//   wrapper rather than a port. What has no Mac counterpart is what this host installs INSIDE its scroll view —
+//   the viewport-sized `PKCanvasView` of `AnnotationOverlaySpec`, whose whole reason for living here is that
+//   UIKit's responder chain then hands the canvas its touches. macOS ships no `PKCanvasView`, so Ⅴ has to answer
+//   both halves at once: an ink surface, and a way to place it in an `NSScrollView` that keeps registering.
+
+#if os(iOS)
 import SwiftUI
 import UIKit
 
@@ -15,7 +23,9 @@ enum ScoreScrollCommand: Equatable {
     }
 
     var isAnimated: Bool {
-        if case .animated = self { return true }
+        if case .animated = self {
+            return true
+        }
         return false
     }
 }
@@ -190,7 +200,9 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
             // function to derive the residual it eases, so the host and the commit can never disagree on the edge.
             let size = expectedContentSize()
             let clampedPoint = ReaderPinchCommit.clampScrollTarget(
-                command.point, contentSize: size, bounds: uiView.bounds.size, inset: uiView.contentInset,
+                command.point, contentSize: size, bounds: uiView.bounds.size,
+                insetLeft: uiView.contentInset.left, insetRight: uiView.contentInset.right,
+                insetTop: uiView.contentInset.top, insetBottom: uiView.contentInset.bottom,
             ).clamped
             // Apply offset synchronously so the new offset paints in the same frame as the new `viewportZoom`. The flag
             // suppresses the resulting `scrollViewDidScroll` from mutating `parent.contentOffset` mid-update (which
@@ -354,3 +366,4 @@ struct ScoreScrollHost<Content: View>: UIViewRepresentable {
         }
     }
 }
+#endif

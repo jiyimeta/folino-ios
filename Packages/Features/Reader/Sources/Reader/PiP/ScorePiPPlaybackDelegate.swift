@@ -1,3 +1,8 @@
+// PARITY(macos): PiP playback delegate — nothing, deliberately. It implements
+//   `AVPictureInPictureSampleBufferPlaybackDelegate`, an iOS/tvOS-only protocol, for a coordinator the Mac reader
+//   never arms. See the marker on `ScorePiPCoordinator.swift` for why PiP as a whole is not owed here.
+
+#if os(iOS)
 import AVFoundation
 import AVKit
 import CoreMedia
@@ -64,3 +69,4 @@ final class ScorePiPPlaybackDelegate: NSObject, AVPictureInPictureSampleBufferPl
         }
     }
 }
+#endif

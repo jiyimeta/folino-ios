@@ -38,7 +38,9 @@ struct SeekRegion: View {
     /// maps the engine's full-score cursor (`playbackFraction`) — NOT the filtered display cursor, whose re-stamped
     /// staff address would resolve `seconds(at:)` against the wrong staff under hidden staves.
     private var displayFraction: Double {
-        if isScrubbing { return scrubFraction }
+        if isScrubbing {
+            return scrubFraction
+        }
         return playbackSession.playbackFraction
     }
 
@@ -91,7 +93,11 @@ struct SeekRegion: View {
 
     /// Formats a non-negative second count as `mm:ss`, widening to `h:mm:ss` once it reaches an hour. Minutes are
     /// zero-padded only when an hours field precedes them, matching the usual transport readout.
-    private static func formatTime(_ seconds: Double) -> String {
+    ///
+    /// Internal rather than private so `MacTransportBar`'s readout reads the same clock: the Mac transport shares
+    /// none of this view's chrome, but a position readout that formats differently per platform would be a gratuitous
+    /// difference in the one thing both surfaces state literally.
+    static func formatTime(_ seconds: Double) -> String {
         let total = Int(seconds.rounded())
         let hours = total / 3600
         let minutes = (total % 3600) / 60

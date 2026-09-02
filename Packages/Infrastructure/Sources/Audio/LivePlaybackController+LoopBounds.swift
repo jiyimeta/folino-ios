@@ -1,6 +1,3 @@
-// PARITY(macos): loop-bounds mapping — depends on the gated LivePlaybackController; ports once that type does.
-
-#if os(iOS)
 import Domain
 import Foundation
 import SheetMusicAudio
@@ -132,4 +129,3 @@ extension LivePlaybackController {
         ))
     }
 }
-#endif

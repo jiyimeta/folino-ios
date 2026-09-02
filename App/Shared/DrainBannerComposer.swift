@@ -5,7 +5,11 @@ import ImportExport
 enum DrainBannerComposer {
     static func message(for result: DrainResult) -> String? {
         let nonDuplicateSkipped = result.skipped.filter {
-            if case .duplicate = $0.reason { false } else { true }
+            if case .duplicate = $0.reason {
+                false
+            } else {
+                true
+            }
         }
         if result.imported.isEmpty {
             if let dup = result.skipped.first, case let .duplicate(_, title) = dup.reason {

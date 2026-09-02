@@ -1,3 +1,9 @@
+// PARITY(macos): AVKit picture-in-picture — sample-buffer-based PiP (`AVPictureInPictureSampleBufferPlaybackDelegate`)
+//   is an iOS/tvOS mechanism with no macOS equivalent. `MacReaderRootScreen` mounts no PiP host and, on a platform
+//   whose windows already float and resize freely, has little reason to grow one; until it does (if ever),
+//   `ReaderPiPSession.isSupported` reports `false` on macOS and this whole coordinator is unused.
+
+#if os(iOS)
 import AVFoundation
 import AVKit
 import CoreMedia
@@ -64,7 +70,9 @@ final class ScorePiPCoordinator: NSObject {
     /// it has already seen without triggering the AVKit "Expect this to only be set once" warning and a follow-up
     /// crash.
     func attach(displayLayer: AVSampleBufferDisplayLayer) {
-        if self.displayLayer === displayLayer, pipController != nil { return }
+        if self.displayLayer === displayLayer, pipController != nil {
+            return
+        }
         self.displayLayer = displayLayer
         let source = AVPictureInPictureController.ContentSource(
             sampleBufferDisplayLayer: displayLayer,
@@ -331,3 +339,4 @@ extension ScorePiPCoordinator: AVPictureInPictureControllerDelegate {
         // via the same path as a user dismiss (didStop fires anyway in practice).
     }
 }
+#endif

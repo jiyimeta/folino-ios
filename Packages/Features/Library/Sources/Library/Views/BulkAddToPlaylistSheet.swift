@@ -23,9 +23,10 @@ struct BulkAddToPlaylistSheet: View {
                 defaultValue: "Add \(selectionCount) scores to playlist",
                 bundle: .module,
             )))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar { cancelToolbarItem }
         }
+        .listSheetSizeCompat()
     }
 
     private var playlistsSection: some View {
@@ -62,7 +63,12 @@ struct BulkAddToPlaylistSheet: View {
 
     @ToolbarContentBuilder
     private var cancelToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        // Stays on the compat helper even though this is semantically a cancellation: iOS resolves
+        // `.cancellationAction` to the LEADING slot, and this sheet's Cancel is deliberately trailing — it is
+        // the only bar button, and every other Library sheet puts its single dismiss button there. Migrating
+        // moved the button across the bar and dragged the title with it — 17430 pixels, measured against this
+        // file's preview (Task 16). See `PlatformViewCompat`.
+        ToolbarItem(placement: .topBarTrailingCompat) {
             Button { dismiss() } label: { L10n.Common.cancel }
         }
     }

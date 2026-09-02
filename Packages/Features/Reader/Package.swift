@@ -121,7 +121,7 @@ if isAndroid {
 let package = Package(
     name: "Reader",
     defaultLocalization: "en",
-    platforms: [.iOS(.v18)],
+    platforms: [.iOS(.v18), .macOS(.v15)],
     products: products,
     dependencies: packageDependencies,
     targets: targets,

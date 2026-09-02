@@ -1,3 +1,8 @@
+// PARITY(macos): PiP display-layer host — nothing, deliberately. It hosts `ScorePiPCoordinator`'s layer, and only
+//   `ReaderRootScreen` mounts it, guarded on `ReaderPiPSession.isSupported`, which is `false` on macOS. See the
+//   marker on `ScorePiPCoordinator.swift` for why PiP as a whole is not owed here.
+
+#if os(iOS)
 import AVFoundation
 import SwiftUI
 import UIKit
@@ -32,3 +37,4 @@ final class ScorePiPContainerView: UIView {
         fatalError("init(coder:) is not supported")
     }
 }
+#endif

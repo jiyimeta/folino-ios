@@ -1,3 +1,8 @@
+// PARITY(macos): horizontal mode's note-editing subtree — the Mac's equivalent is `MacHorizontalScoreStrip`, which
+//   draws the same staves and the same committed ink but hosts no editing chrome. The selection overlay and tap
+//   routing here are the half of `HorizontalScoreContainer`'s debt that lives at this layer; Ⅳ closes it.
+
+#if os(iOS)
 import SheetMusicUI
 import SwiftUI
 
@@ -88,3 +93,4 @@ struct HorizontalZoomedSurface: View {
             }
     }
 }
+#endif

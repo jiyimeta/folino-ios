@@ -46,14 +46,18 @@ struct EditTagsSheet: View {
                 defaultValue: "Tags for \"\(scoreTitle)\"",
                 bundle: .module,
             )))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar { doneToolbar }
         }
+        .listSheetSizeCompat()
     }
 
     @ToolbarContentBuilder
     private var doneToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        // Stays on the compat helper: `.confirmationAction` renders this Done semibold on iOS, where it is
+        // regular today — 1492 pixels, all inside the button, measured against this file's preview (Task 16).
+        // See `PlatformViewCompat`.
+        ToolbarItem(placement: .topBarTrailingCompat) {
             Button { dismiss() } label: { L10n.Common.done }
         }
     }
@@ -80,7 +84,11 @@ struct EditTagsSheet: View {
                 assignedTagIDs: assigned,
                 allTags: tags,
                 onToggle: { tag in
-                    if assigned.contains(tag.id) { assigned.remove(tag.id) } else { assigned.insert(tag.id) }
+                    if assigned.contains(tag.id) {
+                        assigned.remove(tag.id)
+                    } else {
+                        assigned.insert(tag.id)
+                    }
                 },
                 onCreate: { _ in },
             )

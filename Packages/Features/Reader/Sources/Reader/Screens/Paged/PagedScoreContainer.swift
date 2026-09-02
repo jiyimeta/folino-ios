@@ -2,6 +2,13 @@
 // PagedScoreContainer hosts the page-band layout / pagination / pinch pipeline plus the annotation overlay and
 // cursor-follow plumbing for the paged Reader; its breadth keeps it just over the file_length budget.
 
+// PARITY(macos): page mode's turning and live overlays — the Mac draws page mode in `MacPagedScoreContainer`, as a
+//   scrolling deck of fixed A4 sheets, so every page is reachable and the mode itself is not owed. Three things
+//   here are: a page-turn affordance of any kind (this container's tap zones and swipe are touch idioms, but the
+//   Mac deck offers no ⌘-key, menu or button equivalent either, and no go-to-page), the live PencilKit annotation
+//   canvas (Ⅴ), and the note-editing seam (Ⅳ). Zoom is settled, not owed; see `PinchState`.
+
+#if os(iOS)
 import Domain
 import PencilKit
 import SheetMusicCore
@@ -119,7 +126,7 @@ struct PagedScoreContainer: View {
     /// Per-viewport horizontal gutter: `phoneContentPadding` on iPhone, a tap-zone-clearing margin on iPad.
     static func horizontalContentPadding(viewportWidth: CGFloat) -> CGFloat {
         ReaderScoreLayout.scoreHorizontalInset(
-            viewportWidth: viewportWidth, phoneDefault: phoneContentPadding,
+            viewportWidth: viewportWidth, phoneDefault: phoneContentPadding, isPad: ReaderScoreLayout.isPad,
         )
     }
 
@@ -318,7 +325,8 @@ struct PagedScoreContainer: View {
         )
         let contentSize = CGSize(width: paddedBounds.width * r.targetZoom, height: paddedBounds.height * r.targetZoom)
         let (clamped, residual) = ReaderPinchCommit.clampScrollTarget(
-            r.rawScrollTarget, contentSize: contentSize, bounds: paddedBounds, inset: .zero,
+            r.rawScrollTarget, contentSize: contentSize, bounds: paddedBounds,
+            insetLeft: 0, insetRight: 0, insetTop: 0, insetBottom: 0,
         )
 
         if r.isBounceBack {
@@ -532,3 +540,4 @@ struct PagedScoreContainer: View {
         }
     }
 }
+#endif

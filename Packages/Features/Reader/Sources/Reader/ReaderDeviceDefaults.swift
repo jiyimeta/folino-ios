@@ -1,4 +1,6 @@
+#if os(iOS)
 import UIKit
+#endif
 
 /// What an untouched (`nil`) per-score Reader preference resolves to on this device.
 ///
@@ -22,6 +24,10 @@ enum ReaderDeviceDefaults {
         isTablet
     }
 
+    // The two properties below read the idiom from `UIDevice`, so they exist on iOS only. macOS has no idiom to ask:
+    // `MacReaderRootScreen` calls the two portable functions above directly with `isTablet: true`, because a Mac
+    // window is a large screen and wants the same generous pair an iPad gets.
+    #if os(iOS)
     private static var isTablet: Bool {
         UIDevice.current.userInterfaceIdiom == .pad
     }
@@ -33,4 +39,5 @@ enum ReaderDeviceDefaults {
     static var honorLayoutBreaks: Bool {
         honorLayoutBreaks(isTablet: isTablet)
     }
+    #endif
 }

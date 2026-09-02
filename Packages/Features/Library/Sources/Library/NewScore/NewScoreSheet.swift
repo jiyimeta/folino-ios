@@ -66,9 +66,14 @@ struct NewScoreSheet: View {
             // environment, not from each row's, so a section-scoped write renders no affordances at all
             // (verified in the preview). Nothing else in this form declares `onMove` / `onDelete`, so nothing
             // else gains an affordance from it.
-            .environment(\.editMode, .constant(.active))
+            //
+            // macOS gets neither affordance from this — it has no edit mode — but reordering is believed to still
+            // work there, because `.onMove` alone makes a row draggable on a macOS `List` (measured, Task 15 — the
+            // drag half; the on-screen drop is not yet hand-verified, see the marker on that helper). Deleting an
+            // instrument is what the Mac is definitely left without; that gap carries the marker on this helper.
+            .activeEditModeCompat()
             .navigationTitle(Text("library.newScore.title", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar { toolbarContent }
         }
         .sheet(item: $picker) { picker in
@@ -201,7 +206,7 @@ struct NewScoreSheet: View {
         LabeledContent {
             TextField(value: clamping(value, to: range), format: .number) { label }
                 .labelsHidden()
-                .keyboardType(.numberPad)
+                .numberPadKeyboardCompat()
                 .multilineTextAlignment(.trailing)
                 .focused($isEditingNumber)
         } label: {

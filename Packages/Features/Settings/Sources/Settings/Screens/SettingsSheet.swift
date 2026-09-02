@@ -48,16 +48,9 @@ public struct SettingsSheet<LicenseContent: View>: View {
             .feedbackMailPresentation(isPresented: $isFeedbackMailPresented)
             .navigationTitle(Text("settings.title", bundle: .module))
             .inlineNavigationTitleCompat()
-            .toolbar { doneToolbar }
+            .doneToolbarCompat { dismiss() }
         }
         .onAppear { analytics.logScreen(.settings) }
-    }
-
-    @ToolbarContentBuilder
-    private var doneToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailingCompat) {
-            Button { dismiss() } label: { L10n.Common.done }
-        }
     }
 }
 

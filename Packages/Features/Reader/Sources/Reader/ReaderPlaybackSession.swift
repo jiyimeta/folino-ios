@@ -319,7 +319,7 @@ final class ReaderPlaybackSession {
         if case .downloaded = provider.downloadState {
             return
         }
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             soundfontDownloadTask = Task { @MainActor [weak self] in
                 let stream = Observations { provider.downloadState }
                 for await state in stream {

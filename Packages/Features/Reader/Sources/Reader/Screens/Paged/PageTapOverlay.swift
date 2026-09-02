@@ -1,3 +1,9 @@
+// PARITY(macos): a page-turn affordance on the Mac — these edge tap zones are a touch idiom and should NOT be
+//   ported: a pointer has no reason to divide the page into thirds. What the Mac deck owes is the capability, in
+//   its own idiom — page keys / a View-menu Next & Previous Page pair driving `goToPage`, which the deck does not
+//   have yet either. See `PagedScoreContainer+PageNavigation`.
+
+#if os(iOS)
 import SwiftUI
 
 /// Identifies the four page-navigation slices in `TapOverlay` so each one can render the right icon / label combo
@@ -119,7 +125,9 @@ private struct PageTapZone: View {
                     let loc = value.location
                     let inside = loc.x >= bounds.minX && loc.x <= bounds.maxX
                         && loc.y >= bounds.minY && loc.y <= bounds.maxY
-                    if inside { action() }
+                    if inside {
+                        action()
+                    }
                 },
         )
         .onChange(of: isPressed) { _, new in onPressChange(new) }
@@ -200,7 +208,9 @@ struct TapOverlay: View {
     var body: some View {
         // iPad narrows each column to a compact fixed width so the score's edge notes (inset by a matching margin in
         // `PagedScoreContainer`) clear the zone and stay tap-to-seek; iPhone keeps the original 12 % column.
-        let baseColumnWidth = ReaderScoreLayout.pageTapZoneWidth(viewportWidth: viewport.width)
+        let baseColumnWidth = ReaderScoreLayout.pageTapZoneWidth(
+            viewportWidth: viewport.width, isPad: ReaderScoreLayout.isPad,
+        )
         let leadingColumnWidth = baseColumnWidth + leadingExtra
         let trailingColumnWidth = baseColumnWidth + trailingExtra
         let middleWidth = viewport.width - baseColumnWidth * 2
@@ -297,7 +307,9 @@ struct TapOverlay: View {
     /// to "any zone pressed". A long press or a finger-roll between zones does not refire.
     private func updatePressed(_ kind: PageTapZoneKind, pressed: Bool) {
         if pressed {
-            if pressedKinds.isEmpty { onAnyZoneTouchDown() }
+            if pressedKinds.isEmpty {
+                onAnyZoneTouchDown()
+            }
             pressedKinds.insert(kind)
         } else {
             pressedKinds.remove(kind)
@@ -378,3 +390,4 @@ private struct TapZonePreviewHost: View {
         }
     }
 }
+#endif

@@ -148,7 +148,13 @@ The defect in MuseScore 4 is that "selection" (an editing concept) was made to c
 
 Verified: MuseScore 4 hard-codes one score per window. `ProjectActionsController::openProject` step 4 (`src/project/internal/projectactionscontroller.cpp:257-267`) calls `multiwindowsProvider()->openNewWindow(args)` whenever the current window already holds a project. There is no preference. MuseScore 3 had a tab bar (`v3.6.2:mscore/scoretab.cpp`).
 
-**folino's answer:** standard macOS window tabbing. One window = library sidebar (collapsible) + score tabs. `⌘T`, tab-drag-out, and the merge/move-tab commands all come from the system for free.
+**folino's answer:** standard macOS window tabbing. `⌘T`, tab-drag-out, and the merge/move-tab commands come from the system.
+
+> **Revised 2026-09-01** by `2026-09-01-macos-library-window-redesign-design.md`. This section originally read "One
+> window = library sidebar (collapsible) + score tabs". The library sidebar is gone from the score window: a window is
+> a score, or it is the library browser, and the two are different scenes. See that document's §2.1 and §2.4 — which
+> also record that "come from the system for free" was an unchecked assumption, and what the app has to do to make
+> open-as-tab its own default rather than an accident of a System Settings preference.
 
 ### 5.4 The audio engine does not follow a system output-route change
 

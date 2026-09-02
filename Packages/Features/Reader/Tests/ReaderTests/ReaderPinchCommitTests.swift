@@ -68,7 +68,10 @@ struct ReaderPinchCommitTests {
         bounds: CGSize,
         inset: UIEdgeInsets = .zero,
     ) -> (clamped: CGPoint, residual: CGPoint) {
-        ReaderPinchCommit.clampScrollTarget(raw, contentSize: content, bounds: bounds, inset: inset)
+        ReaderPinchCommit.clampScrollTarget(
+            raw, contentSize: content, bounds: bounds,
+            insetLeft: inset.left, insetRight: inset.right, insetTop: inset.top, insetBottom: inset.bottom,
+        )
     }
 
     @Test func `in-range target is unchanged with zero residual`() {

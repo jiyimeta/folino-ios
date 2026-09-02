@@ -1,3 +1,8 @@
+// PARITY(macos): page mode's note-editing subtree — the Mac's equivalent is `MacPageDeck`, which draws the same
+//   engraved page and the same committed ink but hosts no editing chrome. The selection overlay and tap routing
+//   here are the half of `PagedScoreContainer`'s debt that lives at this layer; Ⅳ closes it.
+
+#if os(iOS)
 import Domain
 import SheetMusicCore
 import SheetMusicLayout
@@ -225,3 +230,4 @@ struct PagedZoomedSurface: View {
         PagedPageGeometry.pageStartY(forPage: index, pages: pages, doc: doc)
     }
 }
+#endif

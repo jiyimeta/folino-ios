@@ -150,6 +150,74 @@
         }
       }
     },
+    "library.browser.empty.hint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose File ▸ Import… (⇧⌘I), or drag score files onto this window."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メニューバーの「ファイル」▸「読み込む…」（⇧⌘I）を選ぶか、楽譜ファイルをこのウインドウにドラッグしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "메뉴 막대에서 파일 ▸ 가져오기…(⇧⌘I)를 선택하거나, 악보 파일을 이 창으로 끌어다 놓으세요."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在菜单栏选择“文件”▸“导入…”（⇧⌘I），或将乐谱文件拖到此窗口。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在選單列選擇「檔案」▸「匯入…」（⇧⌘I），或將樂譜檔案拖到此視窗。"
+          }
+        }
+      }
+    },
+    "library.browser.noSource" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a source"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "表示する項目を選んでください"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "표시할 항목을 선택하세요"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请选择要显示的项目"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請選擇要顯示的項目"
+          }
+        }
+      }
+    },
     "library.error.fallback.audioEngineFailed" : {
       "localizations" : {
         "en" : {
@@ -1611,6 +1679,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新增樂譜"
+          }
+        }
+      }
+    },
+    "library.open.newWindow" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open in New Window"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新しいウインドウで開く"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "새 윈도우에서 열기"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在新窗口中打开"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在新視窗中開啟"
           }
         }
       }

@@ -6,6 +6,8 @@ struct PlaylistDetailView: View {
     let playlistName: String
     let items: [ScoreItem]
     let onOpen: (ScoreItem) -> Void
+    /// **macOS only**, in effect — see `ScoreListView.onOpenInNewWindow`.
+    let onOpenInNewWindow: (ScoreItem) -> Void
     let onMove: (IndexSet, Int) -> Void
     let onRemoveFromPlaylist: (ScoreItem) -> Void
     let onRename: (String) -> Void
@@ -19,7 +21,7 @@ struct PlaylistDetailView: View {
     let allBulkFavorited: Bool
     let onBulkDelete: () -> Void
 
-    @State private var editMode: EditMode = .inactive
+    @State private var isSelecting = false
 
     var body: some View {
         Group {
@@ -34,12 +36,20 @@ struct PlaylistDetailView: View {
                     Text("library.playlist.empty.hint", bundle: .module)
                 }
             } else {
+                // PARITY(macos): bulk-selection chrome — iOS needs an explicit Select mode because a touch list
+                //   cannot distinguish a tap-to-open from a tap-to-select. macOS needs no mode: `List(selection:)`
+                //   multi-selects with ⌘/⇧-click, the same bulk actions come from a context menu on the selection,
+                //   and ⌫ deletes it. That works ONLY because the row carries no tap gesture there — any SwiftUI
+                //   tap gesture leaves the selection permanently EMPTY, which silently made the context menu and ⌫
+                //   unreachable for two tasks before it was measured. Opening is its own action now, never a side
+                //   effect of selecting a row — see `RowOpenAffordance` for the measurement and for both halves of
+                //   the per-platform decision. Still open: the menu bar (Ⅳ).
                 List(selection: $selectedIDs) {
                     ForEach(items) { item in
                         ScoreRow(scoreItem: item)
                             .contentShape(Rectangle())
-                            .onTapGesture {
-                                if isEditing {
+                            .rowTapToOpenCompat {
+                                if isSelecting {
                                     toggleSelection(item.id)
                                 } else {
                                     onOpen(item)
@@ -48,24 +58,30 @@ struct PlaylistDetailView: View {
                             .tag(item.id)
                             // No `role: .destructive` — see `LibraryRootScreen.sectionRow`.
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button {
-                                    onRemoveFromPlaylist(item)
-                                } label: {
-                                    Label {
-                                        Text("library.playlist.removeScore.action", bundle: .module)
-                                    } icon: {
-                                        Image(systemName: "minus.circle")
-                                    }
-                                }
-                                .tint(.red)
+                                removeFromPlaylistButton(for: item)
                             }
+                            .macContextMenuCompat { effectiveRowContextMenu(for: item) }
                     }
+                    // Drag-reorder, and on macOS too: `.onMove` alone makes a row draggable there — no edit mode,
+                    // no handle. Measured in Task 15 (a `List` row vends a `com.apple.SwiftUI.listReorder`
+                    // pasteboard writer carrying `{"indexes":[…]}` only when the `ForEach` declares `.onMove`),
+                    // which is why this screen ships no Mac-specific reorder affordance.
+                    //
+                    // The DRAG half is what was measured. SwiftUI gates the DROP on a live `NSDraggingSession`,
+                    // which no in-process harness can construct, so the on-screen drop is still unverified by hand.
+                    // If a Mac row picks up but will not drop, this is where the affordance goes.
                     .onMove(perform: onMove)
+                }
+                .macScoreOpenAffordance(selectedIDs, in: items, onOpen: onOpen, onOpenInNewWindow: onOpenInNewWindow)
+                .deleteCommandCompat {
+                    guard !selectedIDs.isEmpty else { return }
+                    onBulkDelete()
                 }
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            if editMode.isEditing {
+        .bulkActionBarInsetCompat {
+            #if os(iOS)
+            if isSelecting {
                 BulkActionBar(
                     selectionCount: selectedIDs.count,
                     availableShareFormats: availableShareFormats,
@@ -77,22 +93,24 @@ struct PlaylistDetailView: View {
                     onDelete: onBulkDelete,
                 )
             }
+            #endif
         }
         .navigationTitle(playlistName)
-        .environment(\.editMode, $editMode)
+        .bulkSelectionEditModeCompat(isSelecting: isSelecting)
         .toolbar {
+            #if os(iOS)
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     withAnimation {
-                        if editMode.isEditing {
-                            editMode = .inactive
+                        if isSelecting {
+                            isSelecting = false
                             selectedIDs = []
                         } else {
-                            editMode = .active
+                            isSelecting = true
                         }
                     }
                 } label: {
-                    if editMode.isEditing {
+                    if isSelecting {
                         L10n.Common.cancel
                             .transition(.identity)
                     } else {
@@ -101,6 +119,7 @@ struct PlaylistDetailView: View {
                     }
                 }
             }
+            #endif
         }
         .manageEntityToolbar(
             entityName: playlistName,
@@ -110,9 +129,70 @@ struct PlaylistDetailView: View {
         )
     }
 
-    private var isEditing: Bool {
-        editMode.isEditing
+    /// The row's one action, in both the shapes this screen offers it: iOS's trailing swipe and (macOS) the row's
+    /// context menu. One builder so the two cannot drift.
+    private func removeFromPlaylistButton(for item: ScoreItem) -> some View {
+        Button {
+            onRemoveFromPlaylist(item)
+        } label: {
+            Label {
+                Text("library.playlist.removeScore.action", bundle: .module)
+            } icon: {
+                Image(systemName: "minus.circle")
+            }
+        }
+        .tint(.red)
     }
+
+    /// The row's own Remove action, unless this row is part of a multi-item selection — right-clicking anywhere
+    /// inside a ⌘/⇧-click selection then offers the bulk actions instead, exactly as `ScoreListView` does. Built on
+    /// every platform because `macContextMenuCompat`'s builder is still type-checked on iOS; only macOS renders it.
+    ///
+    /// On macOS, Open / Open in New Window are prepended in the single-row branch too — this row has no tap gesture
+    /// and no pre-existing "Open" menu item, so both live here; see `macScoreOpenAffordance`'s doc comment for why
+    /// they belong in the row's own menu and not in a second one.
+    @ViewBuilder
+    private func effectiveRowContextMenu(for item: ScoreItem) -> some View {
+        #if os(macOS)
+        if selectedIDs.contains(item.id), selectedIDs.count > 1 {
+            bulkActionsContextMenuItems(
+                availableShareFormats: availableShareFormats,
+                onShare: onBulkShare,
+                onAddToPlaylist: onBulkAddToPlaylist,
+                onEditTags: onBulkEditTags,
+                allFavorited: allBulkFavorited,
+                onFavorite: onBulkFavorite,
+                onDelete: onBulkDelete,
+            )
+        } else {
+            openRowContextMenuContent(for: item)
+            Divider()
+            removeFromPlaylistButton(for: item)
+        }
+        #else
+        removeFromPlaylistButton(for: item)
+        #endif
+    }
+
+    #if os(macOS)
+    @ViewBuilder
+    private func openRowContextMenuContent(for item: ScoreItem) -> some View {
+        Button { onOpen(item) } label: {
+            Label {
+                L10n.Common.open
+            } icon: {
+                Image(systemName: "music.note")
+            }
+        }
+        Button { onOpenInNewWindow(item) } label: {
+            Label {
+                Text("library.open.newWindow", bundle: .module)
+            } icon: {
+                Image(systemName: "macwindow")
+            }
+        }
+    }
+    #endif
 
     private func toggleSelection(_ id: ScoreItemID) {
         if selectedIDs.contains(id) {
@@ -155,6 +235,7 @@ private struct PlaylistDetailViewPreviewHost: View {
                 playlistName: playlistName,
                 items: items,
                 onOpen: { _ in },
+                onOpenInNewWindow: { _ in },
                 onMove: { _, _ in },
                 onRemoveFromPlaylist: { (_: ScoreItem) in },
                 onRename: { _ in },
