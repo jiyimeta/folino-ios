@@ -23,6 +23,9 @@ struct MacShellView: View {
     /// a score window has to publish its own, and it has to be the same view model the browser is watching.
     let libraryVM: LibraryViewModel
     @Environment(\.openWindow) private var openWindow
+    /// §2.9.4's other half: a score window with no score closes itself. `dismiss()` in the root view of a window
+    /// scene closes that window.
+    @Environment(\.dismiss) private var dismiss
 
     /// The one adapter this view reads itself, unwrapped once in `init` (see the guard there for why it is
     /// guaranteed non-nil) rather than at every use site: `openScoreItem` resolves the window's id against it. The
@@ -115,16 +118,24 @@ struct MacShellView: View {
                     }
                 }
         } else {
-            // No score chosen yet — or the window's `scoreID` names a row the library holds neither live nor in the
-            // trash (permanently deleted, or a restored window value that outlived its score). Both read as an empty
-            // window. A soft-deleted score is NOT this case; see `openScoreItem`.
-            ContentUnavailableView {
-                Label {
-                    Text("app.detail.empty.title")
-                } icon: {
-                    Image(systemName: "music.note")
+            // §2.9.4 — a score window never shows an empty state. This is reached when the window's `scoreID` names
+            // a row the library holds neither live nor in the trash (permanently deleted, or a restored window value
+            // that outlived its score), and when a window is minted with no value at all. The old
+            // `ContentUnavailableView` here carried no toolbar, so it was not merely empty — it was a window with no
+            // way out but ⌘W.
+            //
+            // **There is no race with startup.** `FolinoMacApp` builds `MacShellView` only once `bootstrap.isReady`
+            // is true, and `AppBootstrap.finishStartup` awaits `repository.refresh()` before setting it — so the
+            // rows are loaded by the time `openScoreItem` is asked, and a `nil` here means genuinely absent.
+            //
+            // Ordering: the library first, then the close. Closing first would leave the app windowless for a turn,
+            // and `showLibraryIfNoScoreWindowsRemain` would summon the library anyway — the same window, from a
+            // second route. One route, one summons.
+            Color.clear
+                .task {
+                    openWindow(id: MacWindowID.library)
+                    dismiss()
                 }
-            }
         }
     }
 
