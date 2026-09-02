@@ -4,6 +4,9 @@ import Foundation
 import ReaderAnnotationCore
 import SheetMusicCore
 import UtilityCore
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// `AnnotatedPDFRendering` for iOS. Composes the three halves of the feature: `EngravedExportLayout` reconstructs the
 /// pages the exporter will produce, `AnnotatedExportPlanner` decides which stored drawing lands where, and
@@ -18,8 +21,10 @@ public struct ReaderAnnotatedPDFRenderer: AnnotatedPDFRendering {
     /// - Parameters:
     ///   - pdfRenderer: the plain engraving-to-PDF path — the same renderer the unannotated `.pdf` share uses, so
     ///     the annotated export's pages are the pages the plain export would have produced.
-    ///   - analytics: where `annotated_export_drifted` is logged when `driftReason` trips. Defaults to a no-op so
-    ///     tests and other callers that don't care about the signal need not supply one.
+    ///   - analytics: where `annotated_export_drifted` is logged when `driftReason` trips, and
+    ///     `annotated_export_ak_encode_failed` when the composer could not build Apple's editable ink payload for
+    ///     some of the stamped strokes. Defaults to a no-op so tests and other callers that don't care about the
+    ///     signals need not supply one.
     public init(pdfRenderer: any ScorePDFRenderer, analytics: any Analytics = NoopAnalytics()) {
         self.pdfRenderer = pdfRenderer
         self.analytics = analytics
@@ -29,26 +34,42 @@ public struct ReaderAnnotatedPDFRenderer: AnnotatedPDFRendering {
         score: Score, title: String, drawings: [DrawingAnchor],
     ) async throws -> Data {
         let basePDF = try await pdfRenderer.renderPDF(score: score, title: title)
-        let placements = await MainActor.run { () -> [InkPlacement] in
+        let (placements, screenScale) = await MainActor.run { () -> ([InkPlacement], CGFloat?) in
             let layout = EngravedExportLayout.resolve(
                 score: score, options: EngravedExportLayout.exportOptions(title: title),
             )
             if let reason = driftReason(basePDF: basePDF, layout: layout) {
                 analytics.log(.annotatedExportDrifted(reason: reason))
-                return []
+                return ([], nil)
             }
-            return AnnotatedExportPlanner.planEngraved(
+            let placements = AnnotatedExportPlanner.planEngraved(
                 drawings: drawings,
                 resolver: LayoutDocumentAnchorResolver(document: layout.document),
                 pages: layout.pages,
             )
+            // Page points per on-screen document unit: the engraving's staff size over the reader's. The reader's
+            // per-score staff-size override is not reachable from here (the share service hands over score and
+            // drawings, not the item's preferences), so this is the device default the reader resolves an untouched
+            // score to; a score the user re-sized on screen exports its pens at the width the default size shows.
+            // A Mac window takes the iPad pair, as `MacReaderRootScreen` does.
+            #if os(iOS)
+            let screenStaffSize = ReaderDeviceDefaults.staffSize
+            #else
+            let screenStaffSize = ReaderDeviceDefaults.staffSize(isTablet: true)
+            #endif
+            let screenScale = layout.staffSize / CGFloat(screenStaffSize)
+            return (placements, screenScale)
         }
         guard !placements.isEmpty else { return basePDF }
-        return try await MainActor.run {
+        let result = try await MainActor.run {
             try AnnotatedPDFComposer.compose(
-                basePDF: basePDF, drawings: drawings, placements: placements,
+                basePDF: basePDF, drawings: drawings, placements: placements, screenScale: screenScale,
             )
         }
+        if result.akEncodeFailures > 0 {
+            analytics.log(.annotatedExportAKEncodeFailed(count: result.akEncodeFailures))
+        }
+        return result.data
     }
 
     public func renderAnnotatedOriginalPDF(basePDF: Data, drawings: [DrawingAnchor]) async throws -> Data {
@@ -64,11 +85,19 @@ public struct ReaderAnnotatedPDFRenderer: AnnotatedPDFRendering {
         }
         let placements = AnnotatedExportPlanner.planPaged(drawings: drawings, pageFrames: frames)
         guard !placements.isEmpty else { return basePDF }
-        return try await MainActor.run {
-            try AnnotatedPDFComposer.compose(
-                basePDF: basePDF, drawings: drawings, placements: placements,
+        let result = try await MainActor.run {
+            // The reader shows an original PDF page fitted to the screen's width, so one on-screen document unit
+            // is `pageWidth / screenWidth` page points. An approximation of the reader's actual fit (insets, split
+            // view) that is right to within a few percent on a phone, which is where the width difference shows.
+            let screenScale = Self.originalPageScreenScale(pageWidth: frames.first?.width ?? 0)
+            return try AnnotatedPDFComposer.compose(
+                basePDF: basePDF, drawings: drawings, placements: placements, screenScale: screenScale,
             )
         }
+        if result.akEncodeFailures > 0 {
+            analytics.log(.annotatedExportAKEncodeFailed(count: result.akEncodeFailures))
+        }
+        return result.data
     }
 
     /// The drift guard. `EngravedExportLayout` mirrors five lines of `PDFExporter.export`; if a swift-sheet-music
@@ -83,6 +112,19 @@ public struct ReaderAnnotatedPDFRenderer: AnnotatedPDFRendering {
     /// This cannot catch a swift-sheet-music change that reflows systems *within* an unchanged page count and page
     /// size (e.g. a shift in `availableWidth`) — that gap is a spec-level limitation, recorded there rather than
     /// solved here.
+    /// Page points per on-screen document unit for an original PDF page the reader fits to the screen's width. `nil`
+    /// where there is no screen to fit to, which leaves the exported sizes unscaled.
+    @MainActor
+    private static func originalPageScreenScale(pageWidth: CGFloat) -> CGFloat? {
+        #if canImport(UIKit)
+        let screenWidth = UIScreen.main.bounds.width
+        guard pageWidth > 0, screenWidth > 0 else { return nil }
+        return pageWidth / screenWidth
+        #else
+        return nil
+        #endif
+    }
+
     private func driftReason(basePDF: Data, layout: EngravedExportLayout.Resolved) -> String? {
         guard let provider = CGDataProvider(data: basePDF as CFData), let document = CGPDFDocument(provider) else {
             return "unreadable_base_pdf"

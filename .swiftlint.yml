@@ -71,6 +71,9 @@ included:
 excluded:
   - "**/.build"
   - "**/.swiftpm"
+  # Throwaway analysis scripts for the ink-format investigation. They are run by hand with `xcrun swift`,
+  # never built into anything, and holding them to product lint rules buys nothing.
+  - "docs/engineering/crdt-ink-format/tools"
 
 line_length:
   warning: 120

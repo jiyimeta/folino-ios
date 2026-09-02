@@ -1,0 +1,21 @@
+name: PKProbe
+options:
+  bundleIdPrefix: com.KeyNumber
+  deploymentTarget:
+    iOS: "18.0"
+targets:
+  PKProbe:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    info:
+      path: Info.plist
+      properties:
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.KeyNumber.pkprobe
+        CODE_SIGNING_ALLOWED: "NO"
+        SWIFT_VERSION: "5"
