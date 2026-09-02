@@ -29,7 +29,7 @@ extension ReaderViewModel {
     ///    sub-models, so replaying them after a failed re-read persists the pre-migration addresses those models are
     ///    still holding, straight over the row the Editor has just migrated — with the map consumed, so nothing ever
     ///    retries. A failed re-read therefore discards the queue instead, the same policy the no-score bail in
-    ///    `ReaderRootScreen.wirePartRemapReload` applies for the same reason. The hold still comes down either way:
+    ///    `ReaderViewModel.wirePartRemapReload` applies for the same reason. The hold still comes down either way:
     ///    leaving it up would strand it, which is the failure mode the release ordering was fixed to avoid.
     ///
     /// `authoredHiddenStaves` must come from the POST-edit score (the editing host's `editedScore`), not from

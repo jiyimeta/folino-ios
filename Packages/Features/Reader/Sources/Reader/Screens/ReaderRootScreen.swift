@@ -404,11 +404,11 @@ public struct ReaderRootScreen: View {
                 ReaderHintCoordinator.shared.markUsed(.staffVisibility)
                 Task { await viewModel?.layoutModel.toggleStaff(address) }
             }
-            // Split out (`ReaderRootScreen+RevertWiring.swift`) to keep this closure — and the struct's primary
+            // Split out (`ReaderEditingHost+ReaderWiring.swift`) to keep this closure — and the struct's primary
             // declaration — under SwiftLint's body-length budgets.
             if let editingHost {
-                wireRevertReload(host: editingHost, viewModel: viewModel)
-                wirePartRemapReload(host: editingHost, viewModel: viewModel)
+                viewModel.wireRevertReload(host: editingHost)
+                viewModel.wirePartRemapReload(host: editingHost)
             }
             viewModel.playbackSession.startCursorProvider = { [weak editingHost] in
                 guard let host = editingHost, host.isEditing,
