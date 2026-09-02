@@ -2,48 +2,106 @@ import AppKit
 import Domain
 import SwiftUI
 
-/// A zero-size probe that opts its own window into AppKit's native tab bar: a `tabbingIdentifier` shared by every
-/// score window, and `tabbingMode = .preferred` so macOS offers tabbing outside full screen too. Place one instance
-/// somewhere inside a score window's content — being a view in that window's tree is the handle, exactly as
-/// `MacScrollViewAppearanceProbe` (`Reader/Screens/Mac/MacScrollViewAppearance.swift`) and `EffectiveWindowWidthProbe`
-/// reach their own AppKit state; there is no SwiftUI-side property to read back.
+/// A zero-size probe that makes its window a *score window* in the shell's eyes: it joins `MacScoreWindowRegistry`,
+/// it opts into AppKit's native tab bar, and it is what tabs a newly opened score onto the score window that is
+/// already up. Place one instance somewhere inside a score window's content — being a view in that window's tree is
+/// the handle, exactly as `MacScrollViewAppearanceProbe` (`Reader/Screens/Mac/MacScrollViewAppearance.swift`) and
+/// `EffectiveWindowWidthProbe` reach their own AppKit state; there is no SwiftUI-side property to read back.
 ///
-/// **`.preferred` only asks; it does not decide.** Whether a newly opened window actually lands as a tab is governed
-/// by the System Settings "Prefer tabs when opening documents" preference, whose default is *In Full Screen Only* —
-/// at that default, `openWindow(value:)` still opens a standalone window even with this assist in place. This assist
-/// is what raises `tabbingMode` from the automatic default to `.preferred`, which is the most a window can ask for;
-/// it cannot override the user's system-wide choice, and this task cannot verify the outcome — it needs a human
-/// opening two scores to see whether they tab. See the QA sheet.
+/// **`tabbingMode = .preferred` was measured to be not enough, which is why `addTabbedWindow` is here.** `.preferred`
+/// only *asks*; whether a newly opened window actually lands as a tab is governed by the System Settings "Prefer tabs
+/// when opening documents" preference, whose default is *In Full Screen Only*. The user measured on 2026-09-02 that
+/// a second score opened as a separate window **even with the first in full screen**, and found no setting to change
+/// — so the ask is not being honored and the app has to place the tab itself (design §2.9.3). `addTabbedWindow(_:
+/// ordered:)` is that placement, and it does not consult the preference.
 struct MacWindowTabAssist: NSViewRepresentable {
+    @Environment(\.openWindow) private var openWindow
+
     func makeNSView(context _: Context) -> NSView {
-        MacWindowTabProbe()
+        MacScoreWindowProbe()
     }
 
-    func updateNSView(_: NSView, context _: Context) {}
+    /// Refreshes the registry's way back to the library on every body pass of every score window.
+    ///
+    /// **This is not a SwiftUI state write.** It assigns a closure to a stored property of a plain class, which
+    /// invalidates no view and schedules no update — the same reasoning `MacImportedScoreClaim` records, and the
+    /// same reason it is safe inside `updateNSView`. It is here rather than in `makeNSView` so the captured
+    /// `OpenWindowAction` is always the current one; the moment it is needed is §2.9.5's, one turn after the last
+    /// score window's last update, and this is the freshest action the app has at that instant.
+    func updateNSView(_: NSView, context _: Context) {
+        MacScoreWindowRegistry.shared.showLibrary = { openWindow(id: MacWindowID.library) }
+    }
 }
 
-/// The probe behind `MacWindowTabAssist`. Writes `tabbingIdentifier` / `tabbingMode` once per window, deferred and
-/// latched exactly as `MacScrollViewAppearanceProbe.apply` is — see that file's doc comment for the measurement this
-/// inherits: writing AppKit window state from inside `updateNSView` re-enters the navigation observer in the same
-/// frame and faults `NavigationRequestObserver tried to update multiple times per frame` (2 faults in 7 launches
-/// with an immediate write, 0 in 6 without). `viewDidMoveToWindow` runs outside `updateNSView`'s own pass,
-/// but the write still has to hop to the next main-queue turn to stay clear of whatever SwiftUI update placed this
-/// view in its window in the first place, so it takes the same `DispatchQueue.main.async` detour. `applied` is the
-/// same idempotence guard: a re-entrant `viewDidMoveToWindow` (this view briefly leaving and rejoining the same
-/// window) must not queue the write twice.
-private final class MacWindowTabProbe: NSView {
-    /// Shared by every score window, so macOS treats them as one tab group instead of leaving each to its own —
-    /// the whole point of this assist.
+/// The probe behind `MacWindowTabAssist`.
+///
+/// **Every AppKit window write hops one main-queue turn, and that is measured, not stylistic.** It is inherited from
+/// `MacScrollViewAppearanceProbe.apply` — see that file's doc comment: writing AppKit window state from inside
+/// `updateNSView` re-enters the navigation observer in the same frame and faults `NavigationRequestObserver tried to
+/// update multiple times per frame` (2 faults in 7 launches with an immediate write, 0 in 6 without).
+/// `viewDidMoveToWindow` runs outside `updateNSView`'s own pass, but the write still has to clear whatever SwiftUI
+/// update placed this view in its window, so it takes the same `DispatchQueue.main.async` detour. `applied` is the
+/// idempotence guard: a re-entrant `viewDidMoveToWindow` (this view briefly leaving and rejoining the same window)
+/// must not queue the work twice.
+private final class MacScoreWindowProbe: NSView {
+    /// Shared by every score window, so macOS treats them as one tab group instead of leaving each to its own.
     static let tabbingIdentifier = NSWindow.TabbingIdentifier("com.KeyNumber.Folino.score")
     private var applied = false
+    private var closeObserver: NSObjectProtocol?
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         guard let window, !applied else { return }
         applied = true
+        observeClose(of: window)
+        // The whole AppKit side, one turn later — see the type's doc comment.
         DispatchQueue.main.async { [weak window] in
-            window?.tabbingIdentifier = Self.tabbingIdentifier
-            window?.tabbingMode = .preferred
+            guard let window else { return }
+            window.tabbingIdentifier = Self.tabbingIdentifier
+            window.tabbingMode = .preferred
+            Self.joinExistingScoreWindow(window)
+            MacScoreWindowRegistry.shared.register(window)
+        }
+    }
+
+    /// §2.9.3 — a second score becomes a tab of the score window already on screen, not a window of its own.
+    ///
+    /// `tabGroup == nil` is the guard against doing it twice: if the system's own preference already tabbed this
+    /// window (the "In Full Screen Only" default, with the host in full screen), it arrives with a tab group and
+    /// `addTabbedWindow` would only shuffle it. `makeKeyAndOrderFront` after the move is what leaves the *new* score
+    /// selected — `addTabbedWindow(_:ordered: .above)` places the tab but does not promise it is the active one.
+    private static func joinExistingScoreWindow(_ window: NSWindow) {
+        guard window.tabGroup == nil,
+              let host = MacScoreWindowRegistry.shared.tabHost(
+                  excluding: window, frontToBack: NSApp.orderedWindows,
+              )
+        else { return }
+        host.addTabbedWindow(window, ordered: .above)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    /// §2.9.5 — the last score window closing puts the library on screen.
+    ///
+    /// `willCloseNotification` rather than `viewDidMoveToWindow(nil)` or a SwiftUI `onDisappear`: those fire for view
+    /// tree churn as well as for a closing window, and the decision here has to be exactly "this window closed". The
+    /// notification arrives on the main queue and the whole registry is `@MainActor`, so `assumeIsolated` is stating
+    /// a fact rather than making a promise.
+    private func observeClose(of window: NSWindow) {
+        closeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: window, queue: .main,
+        ) { notification in
+            guard let closing = notification.object as? NSWindow else { return }
+            MainActor.assumeIsolated {
+                let registry = MacScoreWindowRegistry.shared
+                registry.unregister(closing)
+                registry.showLibraryIfNoScoreWindowsRemain()
+            }
+        }
+    }
+
+    isolated deinit {
+        if let closeObserver {
+            NotificationCenter.default.removeObserver(closeObserver)
         }
     }
 }
