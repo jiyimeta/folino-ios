@@ -89,7 +89,7 @@ extension EditorViewModel {
     /// Bridges the session's own stacks to the system UndoManager so three-finger swipe gestures work. Each mutation
     /// registers one undo action; performing it re-registers the redo symmetrically. The session remains the source
     /// of truth — the UndoManager holds only trampolines.
-    func registerSystemUndo(with manager: UndoManager?) {
+    public func registerSystemUndo(with manager: UndoManager?) {
         guard let manager else { return }
         manager.registerUndo(withTarget: self) { vm in
             vm.undo()
