@@ -1,8 +1,6 @@
-// PARITY(macos): vertical reader extras — the Mac container renders and scrolls the score, magnifies it, and draws
-//   committed ink. Two things from the iOS `VerticalScoreContainer`'s UIKit-hosted subtree have no Mac equivalent
-//   yet: the live annotation canvas and the note-editing overlay. PencilKit ships no `PKCanvasView` on macOS at
-//   all, so annotation input needs a drawing surface of its own. Zoom is NOT in that list — it lives on
-//   `NSScrollView.magnification` here, which is why `PinchState` has nothing left to port.
+// PARITY(macos): vertical mode's live annotation canvas — the Mac container renders, scrolls, magnifies and edits
+//   the score; what it still lacks against the iOS `VerticalScoreContainer` is the live PencilKit canvas, and
+//   PencilKit ships no `PKCanvasView` on macOS at all (Ⅴ).
 
 #if os(macOS)
 import Domain
@@ -42,7 +40,14 @@ struct MacVerticalScoreContainer: View {
     /// Transpose offset in semitones. Only used to invalidate the layout cache via `MacScoreLayoutKey` — the score
     /// passed in is already transposed.
     let transposeSemitones: Int
+    /// Which edit `score` is while note editing, 0 otherwise. Keyed on INSTEAD of `editingHost.editGeneration` — see
+    /// `ReaderEditingDisplay.version`.
+    var editingScoreVersion = 0
     let viewModel: ReaderViewModel
+    /// The note-editing seam. `nil` keeps this container byte-identical to the read-only reader (previews, tests).
+    /// With a host, clicks route to `editingHost.onTap`, the rebuilt `LayoutDocument` is published to
+    /// `editingHost.document` for hit-testing, and the surface tints the selection and draws the caret.
+    var editingHost: ReaderEditingHost?
 
     /// Layout output — observable, not `@State`; see `ScoreLayoutState` for why an async relayout stored in `@State`
     /// does not re-run the body that reads it.
@@ -76,6 +81,7 @@ struct MacVerticalScoreContainer: View {
         return ScrollView(.vertical) {
             MacVerticalScoreSurface(
                 viewModel: viewModel,
+                editingHost: editingHost,
                 document: layoutState.document,
                 score: score,
                 viewport: viewport,
@@ -133,6 +139,7 @@ struct MacVerticalScoreContainer: View {
             showInvisibleElements: showInvisibleElements,
             showAllMeasureNumbers: showAllMeasureNumbers,
             transposeSemitones: transposeSemitones,
+            editingScoreVersion: editingScoreVersion,
         )
     }
 
@@ -159,6 +166,7 @@ struct MacVerticalScoreContainer: View {
         )
         guard !Task.isCancelled else { return }
         layoutState.document = newDoc
+        editingHost?.document = newDoc
         projectInk(into: newDoc)
     }
 
@@ -221,6 +229,7 @@ struct MacVerticalScoreContainer: View {
 /// forwards the cursor, and `ScoreView` is the only thing that has to redraw when it moves.
 struct MacVerticalScoreSurface: View {
     let viewModel: ReaderViewModel
+    let editingHost: ReaderEditingHost?
     let document: LayoutDocument?
     let score: Score
     let viewport: CGSize
@@ -259,6 +268,7 @@ struct MacVerticalScoreSurface: View {
                     height: (doc.size.height + verticalPadding * 2) * zoom,
                     alignment: .topLeading,
                 )
+                .background(editingDeselectCatcher(host: editingHost))
                 .background(
                     MacScrollViewAppearance(appearance: .aqua)
                         .frame(width: 0, height: 0)
@@ -275,6 +285,10 @@ struct MacVerticalScoreSurface: View {
         ZStack(alignment: .topLeading) {
             ScoreView(
                 document: doc, score: score, options: scoreOptions,
+                // `displaySelection`, not `selection`: the editor addresses the unfiltered score, this document is
+                // laid out from the staff-filtered one. See `ReaderEditingHost.displayItem(for:)`.
+                selection: editingHost?.isEditing == true ? (editingHost?.displaySelection ?? .none) : .none,
+                voiceColors: ReaderEditingPresentation.voiceColors,
                 playbackCursor: playbackCursor, playbackCursorColor: .accentColor.opacity(0.6),
             )
             .gesture(tapSeekGesture(document: doc))
@@ -300,6 +314,12 @@ struct MacVerticalScoreSurface: View {
                     end: viewModel.repeatModel.pendingRepeatB,
                 )
             }
+
+            // Last in the stack — over `ScoreView`, which paints itself opaque white. The caret blends
+            // (`EditingSelectionOverlay`), it does not sit on top by z-order.
+            if let host = editingHost, host.isEditing {
+                EditingSelectionOverlay(host: host, score: score, document: doc)
+            }
         }
         .coordinateSpace(name: Self.coordinateSpace)
     }
@@ -321,14 +341,18 @@ struct MacVerticalScoreSurface: View {
         )
     }
 
-    /// Click-to-seek. With no playback controller wired on the Mac yet this still moves the displayed cursor —
-    /// `ReaderPlaybackSession.setManualCursor` guards every `controller` call — so the click reads as a caret move
-    /// rather than doing nothing at all.
+    /// Click: a selection while editing, a seek otherwise — the same rule as the iOS `VerticalZoomedSurface`.
+    /// `wantsScoreTaps` hands the click back to the transport while it is running, so a click during playback seeks.
     private func tapSeekGesture(document: LayoutDocument) -> some Gesture {
         SpatialTapGesture(coordinateSpace: .named(Self.coordinateSpace))
             .onEnded { value in
+                if let host = editingHost, host.wantsScoreTaps {
+                    host.onTap(value.location)
+                    return
+                }
                 guard let cursor = nearestCursor(at: value.location, in: document) else { return }
                 viewModel.playbackSession.setManualCursor(cursor)
+                editingHost?.rememberTappedItem(cursor)
             }
     }
 }
