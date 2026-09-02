@@ -17,7 +17,6 @@ import UtilityUI
 public struct MacLibraryBrowser: View {
     let viewModel: LibraryViewModel
     let onOpenScore: (ScoreItem) -> Void
-    let onOpenScoreInNewWindow: (ScoreItem) -> Void
     let onOpenInPlaylist: (ScoreItem, PlaylistID) -> Void
 
     @State private var selection: LibrarySource? = .recents
@@ -43,12 +42,10 @@ public struct MacLibraryBrowser: View {
     public init(
         viewModel: LibraryViewModel,
         onOpenScore: @escaping (ScoreItem) -> Void,
-        onOpenScoreInNewWindow: @escaping (ScoreItem) -> Void,
         onOpenInPlaylist: @escaping (ScoreItem, PlaylistID) -> Void,
     ) {
         self.viewModel = viewModel
         self.onOpenScore = onOpenScore
-        self.onOpenScoreInNewWindow = onOpenScoreInNewWindow
         self.onOpenInPlaylist = onOpenInPlaylist
         _recentsListViewModel = State(wrappedValue: ScoreListViewModel(
             source: .recents, repository: viewModel.repository, analytics: viewModel.analytics,
@@ -191,11 +188,10 @@ public struct MacLibraryBrowser: View {
         }
     }
 
-    /// The selected source's screen. Every case is one of the existing leaf screens (Task 2 already gave each of
-    /// them the `onOpenInNewWindow` closure this window needs), except `.recents`: there is no `AllScoresScreen`-like
-    /// wrapper over `ScoreListViewModel.Source.recents` yet, so this builds `ScoreListScreen` directly on
-    /// `recentsListViewModel` instead. `.tag` / `.playlist` are keyed by `.id(_:)` because the switch's branch
-    /// position alone does not change when only the associated `TagID` / `PlaylistID` changes, and without it
+    /// The selected source's screen. Every case is one of the existing leaf screens, except `.recents`: there is no
+    /// `AllScoresScreen`-like wrapper over `ScoreListViewModel.Source.recents` yet, so this builds `ScoreListScreen`
+    /// directly on `recentsListViewModel` instead. `.tag` / `.playlist` are keyed by `.id(_:)` because the switch's
+    /// branch position alone does not change when only the associated `TagID` / `PlaylistID` changes, and without it
     /// SwiftUI would reuse the previous screen's `@State`-held `ScoreListViewModel` — pointed at the old tag/playlist
     /// — instead of building a fresh one for the new selection.
     @ViewBuilder
@@ -206,7 +202,6 @@ public struct MacLibraryBrowser: View {
                 viewModel: recentsListViewModel,
                 library: viewModel,
                 onOpen: onOpenScore,
-                onOpenInNewWindow: onOpenScoreInNewWindow,
                 onEditTags: { editTagsTarget = $0 },
                 onAddToPlaylist: { addToPlaylistTarget = $0 },
             )
@@ -215,7 +210,6 @@ public struct MacLibraryBrowser: View {
             AllScoresScreen(
                 library: viewModel,
                 onOpen: onOpenScore,
-                onOpenInNewWindow: onOpenScoreInNewWindow,
                 onEditTags: { editTagsTarget = $0 },
                 onAddToPlaylist: { addToPlaylistTarget = $0 },
             )
@@ -223,7 +217,6 @@ public struct MacLibraryBrowser: View {
             FavoritesScreen(
                 library: viewModel,
                 onOpen: onOpenScore,
-                onOpenInNewWindow: onOpenScoreInNewWindow,
                 onEditTags: { editTagsTarget = $0 },
                 onAddToPlaylist: { addToPlaylistTarget = $0 },
             )
@@ -245,7 +238,6 @@ public struct MacLibraryBrowser: View {
                     tag: tag,
                     library: viewModel,
                     onOpen: onOpenScore,
-                    onOpenInNewWindow: onOpenScoreInNewWindow,
                     onEditTags: { editTagsTarget = $0 },
                     onAddToPlaylist: { addToPlaylistTarget = $0 },
                     onTagDeleted: { selection = .allScores },
@@ -255,7 +247,7 @@ public struct MacLibraryBrowser: View {
                 notFound(titleKey: "library.tag.notFound", systemImage: "tag.slash")
             }
         case .recentlyDeleted:
-            RecentlyDeletedScreen(library: viewModel, onOpen: onOpenScore, onOpenInNewWindow: onOpenScoreInNewWindow)
+            RecentlyDeletedScreen(library: viewModel, onOpen: onOpenScore)
         case nil:
             ContentUnavailableView {
                 Label {
@@ -290,7 +282,6 @@ private func isImportableScoreURL(_ url: URL) -> Bool {
     MacLibraryBrowser(
         viewModel: previewMacLibrarySidebarViewModel(),
         onOpenScore: { _ in },
-        onOpenScoreInNewWindow: { _ in },
         onOpenInPlaylist: { _, _ in },
     )
     .frame(width: 1000, height: 640)
@@ -306,7 +297,6 @@ private func isImportableScoreURL(_ url: URL) -> Bool {
     return MacLibraryBrowser(
         viewModel: previewMacLibrarySidebarViewModel(repository: repository),
         onOpenScore: { _ in },
-        onOpenScoreInNewWindow: { _ in },
         onOpenInPlaylist: { _, _ in },
     )
     .frame(width: 1000, height: 640)

@@ -4,8 +4,6 @@ import SwiftUI
 struct FavoritesScreen: View {
     let library: LibraryViewModel
     let onOpen: (ScoreItem) -> Void
-    /// **macOS only**, in effect — see `ScoreListView.onOpenInNewWindow`.
-    let onOpenInNewWindow: (ScoreItem) -> Void
     let onEditTags: (ScoreItem) -> Void
     let onAddToPlaylist: (ScoreItem) -> Void
 
@@ -14,13 +12,11 @@ struct FavoritesScreen: View {
     init(
         library: LibraryViewModel,
         onOpen: @escaping (ScoreItem) -> Void,
-        onOpenInNewWindow: @escaping (ScoreItem) -> Void,
         onEditTags: @escaping (ScoreItem) -> Void,
         onAddToPlaylist: @escaping (ScoreItem) -> Void,
     ) {
         self.library = library
         self.onOpen = onOpen
-        self.onOpenInNewWindow = onOpenInNewWindow
         self.onEditTags = onEditTags
         self.onAddToPlaylist = onAddToPlaylist
         _listVM = State(
@@ -35,7 +31,6 @@ struct FavoritesScreen: View {
             viewModel: listVM,
             library: library,
             onOpen: onOpen,
-            onOpenInNewWindow: onOpenInNewWindow,
             onEditTags: onEditTags,
             onAddToPlaylist: onAddToPlaylist,
         )

@@ -7,15 +7,15 @@ import Settings
 import SwiftUI
 import UtilityCore
 
-/// The value that identifies one of `FolinoMacApp`'s score windows, and what `WindowGroup(for:)` dedupes on. `scoreID`
-/// alone isn't enough: `WindowGroup(for:)` reuses (refocuses) an existing window that already presents an equal
-/// value rather than opening a second one, so `openWindow(value:)` with a bare `ScoreItem.ID` would make
-/// `MacCommands`'s "Open in New Window" a no-op whenever the score is already showing in the frontmost window.
-/// `tabInstance` exists purely to make every fresh "Open in New Window" invocation compare unequal to every window
-/// already open, guaranteeing a new window every time — it plays no other role and is never read back.
+/// The value that identifies one of `FolinoMacApp`'s score windows, and what `WindowGroup(for:)` dedupes on.
+///
+/// **The score id, and nothing else — deliberately.** `WindowGroup(for:)` refocuses an existing window whose
+/// presented value equals the one passed to `openWindow(value:)`, so opening a score that is already open brings its
+/// window (or tab) forward instead of minting a second one. That is MuseScore 4's rule (`ProjectActionsController::
+/// openProject` step 3, `activateWindowWithProject`) and the design's (`2026-09-02-macos-edit-session-design.md` §3):
+/// with the score always editable, a second window on the same score would be a second editor of one file.
 struct MacWindowScore: Hashable, Codable {
     var scoreID: ScoreItem.ID
-    var tabInstance = UUID()
 }
 
 /// The ids `openWindow(id:)` addresses. There is exactly one, because there is exactly one kind of window that is not
@@ -212,13 +212,7 @@ private struct MacLibraryWindowContent: View {
     var body: some View {
         MacLibraryBrowser(
             viewModel: viewModel,
-            // `onOpenScore` and `onOpenScoreInNewWindow` have identical bodies today, and that is not an oversight:
-            // opening a score is always `openWindow(value:)`, and whether the new window lands as a *tab* of the
-            // existing score windows or as a standalone one is decided by AppKit, from the tabbing identity
-            // `MacWindowTabAssist` gives every score window and the user's "Prefer tabs" system setting. Neither call
-            // site can force it. They stay two closures so the distinction has a home the day the app can act on it.
             onOpenScore: { item in openWindow(value: MacWindowScore(scoreID: item.id)) },
-            onOpenScoreInNewWindow: { item in openWindow(value: MacWindowScore(scoreID: item.id)) },
             // PARITY(macos): playlist context in the reader — the `PlaylistID` is dropped here because
             //   `MacWindowScore` carries a score id and nothing else, so `MacReaderRootScreen` opens the score
             //   standalone and the playlist's continuation control and end-of-score auto-advance are unreachable.

@@ -74,11 +74,19 @@ Fact 3 falls out: clicking never opens, so it never restamps `lastOpenedAt`, so 
 
 ### 2.3 Opening never consumes a window
 
+> **Revised 2026-09-02** by `2026-09-02-macos-edit-session-design.md` §3. Open in New Window and ⌥-double-click are
+> withdrawn: with the score always editable, a second window on the same score would be a second editor of one
+> file. `MacWindowScore` is the score id alone, and opening an already-open score brings its window forward
+> (MuseScore 4's rule). The default open path — a tab of the frontmost score window — is unchanged.
+
 The default: the score lands as a **new tab of the frontmost score window**, or a new standalone window when none exists. ⌥-double-click and a context-menu item give **Open in New Window**.
 
 The browser **stays open and recedes** behind the newly keyed score window — deliberately unlike Keynote's panel, which closes, because folino's browser is also the organize surface. ⌘W dismisses it.
 
 ### 2.4 Several scores at once
+
+> **Revised 2026-09-02:** "several scores at once" still holds; "the same score several times" does not — see
+> §2.3's note. A split view of one score inside one window is the replacement, scheduled after Ⅳc.
 
 **"Window = one score" and "MuseScore's tab strip" are the same shape, not a trade-off.** macOS merges same-group windows into native window tabs; that *is* MuseScore 3's tab strip, supplied by the system — plus tear-off (drag a tab out) for genuine side-by-side, which an in-window tab strip cannot do, and which is exactly the two-scores-visible arrangement copy/paste wants.
 

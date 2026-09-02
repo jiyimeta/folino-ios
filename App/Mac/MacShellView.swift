@@ -33,8 +33,7 @@ struct MacShellView: View {
     private let metadataReader: any ScoreMetadataReading
     private let annotationCoordinator: AnnotationSaveCoordinator
 
-    /// The score this window is showing, read out of the window's identity value. That value also carries a
-    /// `tabInstance` nothing here reads — see `MacWindowScore`'s doc comment for the deduplication it exists for.
+    /// The score this window is showing, read out of the window's identity value.
     private var scoreID: ScoreItem.ID? {
         window?.scoreID
     }
@@ -73,7 +72,6 @@ struct MacShellView: View {
             // `ImportedScoreOpener`. The browser installs the same watcher; `MacImportedScoreClaim` is what stops
             // them from opening the score twice.
             .opensImportedScores(from: libraryVM)
-            .focusedCurrentScoreID(scoreID)
     }
 
     /// File ▸ Import while THIS window is key — and the reason it is not just `await libraryVM.startImport(from:)`.
@@ -164,8 +162,8 @@ struct MacShellView: View {
     /// `.id(item.id)`, and a title edit does not change the id.
     ///
     /// **`deletedScoreItems` is searched too, and that fallback is load-bearing.** `scoreItems` excludes soft-deleted
-    /// rows, so a live-rows-only lookup made every Open path in Recently Deleted — the row menu's Open and Open in
-    /// New Window, Return, and double-click — mint a permanently empty window: the id resolved to nothing, and the
+    /// rows, so a live-rows-only lookup made every Open path in Recently Deleted — the row menu's Open, Return, and
+    /// double-click — mint a permanently empty window: the id resolved to nothing, and the
     /// empty branch below carries no toolbar, so not even the library button was there to get back with. iOS opens a
     /// deleted score fine (`App/iOS/AppShellView.swift`'s `onOpenScore` is handed the `ScoreItem` itself, never an
     /// id to re-resolve), and behavior matches iOS; the Mac carries an id because a window's identity has to be
@@ -176,19 +174,5 @@ struct MacShellView: View {
         guard let scoreID else { return nil }
         return repository.scoreItems.first { $0.id == scoreID }
             ?? repository.deletedScoreItems.first { $0.id == scoreID }
-    }
-}
-
-extension View {
-    /// Publishes `id` as this window's focused score, for `MacCommands`'s File ▸ Open in New Window to read via
-    /// `@FocusedValue`. Omitted entirely (rather than published as `nil`) when there is no open score, which is
-    /// exactly what leaves `@FocusedValue` reading `nil` and the menu command disabled.
-    @ViewBuilder
-    fileprivate func focusedCurrentScoreID(_ id: ScoreItem.ID?) -> some View {
-        if let id {
-            focusedSceneValue(\.macCurrentScoreID, id)
-        } else {
-            self
-        }
     }
 }
