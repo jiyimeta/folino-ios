@@ -174,12 +174,13 @@ On iOS the two marks are kept apart — selecting a note puts the playhead away 
 playhead and a selection on the same note read as one confused mark. On the Mac the resolution is the opposite
 one: **the selection *is* the playhead while the transport is stopped.**
 
-- `onSelectionMade` on the Mac calls `playbackSession.setManualCursor(.item(displayID))` for the selected item, so
-  Space plays from the selected note. This is the MuseScore 3 / 4 behavior a user expects on a keyboard.
-- While stopped, the surfaces draw the selection tint and the caret only; `playbackCursor` is passed as `nil`.
-  While playing or scrubbing, the playback cursor is drawn as today and the selection tint stays (editing keys are
-  inert during playback anyway, per `EditorViewModel.isPlaybackActive`). `MacScoreContentView` makes that choice
-  once, where the cursors are read, so the per-tick boundary the Mac reader already keeps is unchanged.
+- The mechanism is the one iOS already has, installed by the Mac screen's `.task` exactly as `ReaderRootScreen`
+  installs it: `onSelectionMade` puts the displayed cursor away (`playbackSession.hideDisplayedCursor()`), and
+  `playbackSession.startCursorProvider` answers the selected item, so Space plays from the selected note. This is
+  the MuseScore 3 / 4 behavior a user expects on a keyboard.
+- While stopped, the surfaces therefore draw the selection tint and the caret only. While playing or scrubbing, the
+  playback cursor is drawn as today and the selection tint stays (editing keys are inert during playback anyway,
+  per `EditorViewModel.isPlaybackActive`).
 - Esc deselects (MuseScore). A click on paper deselects (§4.1). Deselecting does not move the playhead.
 
 ### 4.3 The caret
@@ -223,10 +224,12 @@ Drum staves: when the caret is on a drum staff, the letters bound in the current
 `caretColumn` to decide; the Notes menu shows the pitch commands disabled on a drum staff. The pad itself, with its
 notation previews and the layout editor, is Ⅳc.
 
-**Sheets are still sheets.** The signature, rehearsal-mark, add-measures and instruments sheets compile on macOS
-today and are presented from the menu command through a `@State` on `MacEditableReaderScreen`. They get the
-semantic `cancellationAction` / `confirmationAction` placements so Esc and Return work; that is the per-screen
-migration the shell spec deferred to "M6", applied here to the four sheets Ⅳa exposes.
+**Sheets are still sheets.** The signature, rehearsal-mark, add-measures, drum-layout and instruments sheets compile
+on macOS today and are presented from the menu command through the view model's presentation flags, installed once
+by a public `editorSheets(viewModel:)` modifier the Editor package gains. All of them already place their buttons
+with the semantic `cancellationAction` / `confirmationAction` placements (measured: every `ToolbarItem` in
+`Packages/Features/Editor/Sources/Editor/Views/*Sheet.swift`), so Esc and Return work on the Mac without the
+per-screen migration the shell spec deferred to "M6".
 
 ### 5.2 Undo / redo
 
