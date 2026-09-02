@@ -23,6 +23,10 @@ private typealias PlatformBezierPath = NSBezierPath
 private typealias PlatformColor = NSColor
 #endif
 
+// PARITY(android): erasable ink in exported PDFs — the AKAnnotationV2 payload is a PencilKit drawing archive
+//   (`PKDrawing.dataRepresentation()`), which only PencilKit can write. Android has no PDF export to call it
+//   from either; it would need both an export path and a writer for PencilKit's archive container.
+
 /// Stamps annotation ink onto a base PDF's pages as PDF ink annotations and returns the new document's bytes.
 ///
 /// Each placed stroke becomes its own `PDFAnnotation` of subtype `.ink`, added to its destination page. The base
@@ -38,15 +42,38 @@ private typealias PlatformColor = NSColor
 /// `PKDrawing.transform(using:)` — the same geometry APIs the on-screen ink layer already relies on — is a
 /// different, deterministic code path with no rasterizer involved, so it sidesteps the bug rather than working
 /// around it. The visible cost is pressure taper and marker blending, which a single-width vector stroke
-/// approximates rather than reproduces; monoline (a constant-width tool) is exact.
+/// approximates rather than reproduces.
 ///
-/// Nothing private is written alongside. An earlier revision carried the placed stroke's
-/// `PKDrawing.dataRepresentation()` under Apple's own `/PPK` key, in the hope that Apple's markup tools would
-/// adopt folino's ink as an editable PencilKit drawing. They do not: swapping only the `/PPK` container inside
-/// one of Apple's own annotated PDFs showed its markup needs a private `crdt` container that no public PencilKit
-/// route emits — `dataRepresentation()` produces a `wrd`-prefixed one — and imitating every other field Books
-/// writes changed nothing. So the blob was inert here and cost roughly 21 KB per page, and it is gone. The
-/// decoding of that container is a separate investigation; see `docs/engineering/crdt-ink-format/`.
+/// Each annotation also carries Apple's own `/AAPL:AKExtras` → `AAPL:AKAnnotationV2` archive, which is what makes
+/// the mark ERASABLE in Apple's markup rather than merely visible. The drawing inside it is the placed stroke's
+/// `PKDrawing.dataRepresentation()`, in the archive's canvas space — the same bytes Books writes into that slot,
+/// so AnnotationKit re-creates the editable drawing with `PKDrawing(data:)` and nothing about the stroke encoding
+/// is synthesized. An earlier revision hand-built the older gzip-wrapped protobuf form from the neutral `InkStroke`
+/// and guessed the drawing's bounding box from the point extent; a marker's rendered extent is not that, and the
+/// mark landed tens of points off. `PKDrawing.bounds` is what AnnotationKit recomputes, so it is what the archive
+/// rectangle and the annotation's `/Rect` derive from. See `docs/engineering/crdt-ink-format/`.
+///
+/// PencilKit renders a stroke wider or narrower than its point `size` depending on the ink — a pen of size `s`
+/// draws `2s − 4` wide in its own units, a marker `s / 2` (`PencilKitInkWidth`). That constant term is why the
+/// export re-solves point sizes for the archive's canvas against the reader's on-screen scale (`canvasDrawing`),
+/// and the appearance stream's line width follows the same formula so a PDF viewer that draws the vector shows
+/// the same thickness Apple's markup does.
+///
+/// The key is set on each annotation as it is built, and the document is serialized once. An earlier revision
+/// attached the payloads on a SECOND pass — serialize, reparse the bytes, match each payload to an annotation by
+/// its recorded position in the page's `/Annots` order, serialize again — because the key appeared not to survive
+/// `dataRepresentation()` when set on a freshly created annotation. That measurement was an artifact of a broken
+/// iOS 27.0 simulator runtime, where `PDFAnnotation.add(_:)` itself fails (`Cannot save value for annotation key:
+/// /InkList. Invalid type.`) and the failure cascades into AnnotationKit adopting the annotation and overwriting
+/// the key. On a working runtime the value survives byte-for-byte, and one-pass and two-pass output were measured
+/// equivalent — same key sets, same `AKExtras` archive bytes, same `/InkList`, same vector `/AP`, pixel-identical
+/// rendering. If this symptom ever reappears on some later OS, it is the runtime that wants checking first, not
+/// this code.
+///
+/// Attaching the payload is strictly best-effort: a stroke whose archive cannot be built or set is written
+/// exactly as it was before the payload existed — an `/Ink` annotation with folino's own vector appearance — so
+/// the worst case is the behavior that already shipped. The count of such strokes travels back out of `compose`
+/// so the renderer can log it.
 ///
 /// The annotations are deliberately NOT locked (`/F` keeps PDFKit's default rather than Books' Print + Locked +
 /// LockedContents). folino wants other editors to be able to select and delete these marks; Books locks its own
@@ -58,39 +85,65 @@ enum AnnotatedPDFComposer {
     ///     unchanged; only new ink annotations are added.
     ///   - drawings: the stored anchors the placements index into.
     ///   - placements: from `AnnotatedExportPlanner`, in page-local coordinates (points, origin top-left, y down).
-    /// - Returns: the composed document's bytes.
+    ///   - screenScale: how many page points one of the reader's on-screen document units is worth — the engraving's
+    ///     staff size over the on-screen one. PencilKit's stroke width has a constant term in content units
+    ///     (`PencilKitInkWidth`), so a stroke the reader drew in document units and the archive draws in canvas
+    ///     units come out different widths unless the point sizes are re-solved for the canvas; this is the scale
+    ///     that re-solving needs. `nil` writes the sizes unscaled, and the mark renders as PencilKit would draw it
+    ///     at page scale.
+    /// - Returns: the composed document's bytes, and how many of the stamped annotations went out without an
+    ///   `AKAnnotationV2` payload. The composer is a stateless `enum` with no analytics of its own, so the count
+    ///   travels back to `ReaderAnnotatedPDFRenderer` — which holds one — rather than the composer reaching
+    ///   sideways for a dependency.
     /// - Throws: `DomainError.scoreWriteFailed` when `basePDF` cannot be read as a PDF, or when the composed
     ///   document cannot be re-serialized.
     static func compose(
         basePDF: Data,
         drawings: [DrawingAnchor],
         placements: [InkPlacement],
-    ) throws -> Data {
+        screenScale: CGFloat? = nil,
+    ) throws -> (data: Data, akEncodeFailures: Int) {
         guard let document = PDFDocument(data: basePDF) else {
             throw DomainError.scoreWriteFailed(reason: "annotated export: base PDF is unreadable")
         }
 
+        var akEncodeFailures = 0
         for placement in placements {
             guard placement.pageIndex >= 0, placement.pageIndex < document.pageCount,
                   let page = document.page(at: placement.pageIndex),
-                  let annotation = makeAnnotation(for: placement, drawings: drawings, page: page)
+                  let composed = makeAnnotation(
+                      for: placement, drawings: drawings, page: page, screenScale: screenScale,
+                  )
             else { continue }
-            page.addAnnotation(annotation)
+            if !composed.hasAKPayload {
+                akEncodeFailures += 1
+            }
+            page.addAnnotation(composed.annotation)
         }
 
         guard let data = document.dataRepresentation() else {
             throw DomainError.scoreWriteFailed(reason: "annotated export: could not serialize the composed PDF")
         }
-        return data
+        return (data, akEncodeFailures)
+    }
+
+    /// One stamped annotation, and whether Apple's editable payload could be built and set on it. A placement
+    /// that produces no annotation at all is not counted as a payload failure — nothing was exported for it to
+    /// be missing from.
+    private struct ComposedAnnotation {
+        let annotation: PDFAnnotation
+        let hasAKPayload: Bool
     }
 
     /// Decodes the placed drawing, bakes the placement's transform into its points (page-local, top-left origin,
     /// y-down — see `InkStrokePencilKitBridge.bakingTransformIntoPoints`), and builds one `.ink` annotation from the
-    /// result. `nil` when the drawing index is out of range, the stored bytes don't decode, or the placed geometry
-    /// collapses to nothing (clipped fully off the page).
+    /// result. Also encodes and attaches Apple's `AKAnnotationV2` payload to that same annotation before returning
+    /// it, so the whole annotation — vector appearance and editable payload alike — is produced in one pass. `nil`
+    /// when the drawing index is out of range, the stored bytes don't decode, or the placed geometry collapses to
+    /// nothing (clipped fully off the page).
     private static func makeAnnotation(
-        for placement: InkPlacement, drawings: [DrawingAnchor], page: PDFPage,
-    ) -> PDFAnnotation? {
+        for placement: InkPlacement, drawings: [DrawingAnchor], page: PDFPage, screenScale: CGFloat?,
+    ) -> ComposedAnnotation? {
         guard placement.drawingIndex >= 0, placement.drawingIndex < drawings.count,
               var stored = InkStrokePencilKitBridge.decodeStoredDrawing(
                   drawings[placement.drawingIndex].encodedDrawing,
@@ -107,25 +160,31 @@ enum AnnotatedPDFComposer {
 
         let pageSize = page.bounds(for: .mediaBox).size
 
-        // `PKDrawing.bounds` already encloses the rendered ink (stroke width included), same as the raster
-        // composition this replaced; pad by a point for anti-aliasing slack and clip to the page.
-        let pageLocalBounds = placed.bounds.insetBy(dx: -1, dy: -1)
-            .intersection(CGRect(origin: .zero, size: pageSize))
-        guard pageLocalBounds.width > 0, pageLocalBounds.height > 0 else { return nil }
+        // The same drawing in the archive's canvas space. Its `bounds` are the one box the archive rectangle and the
+        // annotation's /Rect derive from: AnnotationKit recomputes the same bounds from the same drawing and places
+        // the mark by them, so any other box moves the ink. Note the rectangle is deliberately NOT clipped to the
+        // page — an intersection would move it out from under the drawing. The page height read here is the REAL
+        // media box, never a nominal paper size — folino's own exports measure 595.4458 x 841.6944, and A4's
+        // nominal 841.8898 against that is already enough drift to lose the annotation.
+        let canvasDrawing = canvasDrawing(of: placed, screenScale: screenScale)
+        let canvasBounds = canvasDrawing.bounds
+        guard !canvasBounds.isNull, !canvasBounds.isEmpty else { return nil }
 
-        // Annotation space is the page's own space with a bottom-left origin; `pageLocalBounds`, like every
-        // placement, is page-local with a top-left origin and y down — flip the rect, not the points.
-        let annotationBounds = CGRect(
-            x: pageLocalBounds.minX, y: pageSize.height - pageLocalBounds.maxY,
-            width: pageLocalBounds.width, height: pageLocalBounds.height,
+        let archiveRect = AKInkGeometry.archiveRect(canvasBounds: canvasBounds, pageHeight: pageSize.height)
+        guard archiveRect.intersects(CGRect(origin: .zero, size: pageSize)) else { return nil }
+        let annotationBounds = AKInkGeometry.annotationRect(archiveRect)
+
+        // `PDFAnnotation.border.lineWidth` is a single width for the whole stroke; the median point size (not the
+        // mean) is the more faithful representative for a tapered stroke, where a few very thin or very thick
+        // samples — the stroke's own start/end, a pressure spike — would otherwise pull a single width away from
+        // what most of the stroke actually looks like. The width is what PencilKit will draw for that size in the
+        // archive's canvas, scaled onto the page, so the vector and Apple's markup show the same thickness.
+        let canvasSizes = canvasDrawing.strokes.flatMap { $0.path.map { CGFloat($0.size.width) } }
+        let canvasSize = median(of: canvasSizes) ?? 1
+        let lineWidth = max(
+            0.25,
+            PencilKitInkWidth.renderedWidth(ink: firstStroke.ink.inkType, size: canvasSize) / AKInkGeometry.canvasScale,
         )
-
-        // `PDFAnnotation.border.lineWidth` is a single width for the whole stroke; the median across every point
-        // (not the mean) is the more faithful representative for a tapered stroke, where a few very thin or very
-        // thick samples — the stroke's own start/end, a pressure spike — would otherwise pull a single width away
-        // from what most of the stroke actually looks like.
-        let widths = placed.strokes.flatMap { $0.path.map { CGFloat($0.size.width) } }
-        let lineWidth = median(of: widths) ?? CGFloat(firstStroke.path.first?.size.width ?? 1)
 
         /// A path handed to `PDFAnnotation.add(_:)` is in the ANNOTATION's own space, not the page's: PDFKit adds
         /// `bounds.origin` back when it writes `/InkList`, and generates an appearance stream whose BBox is
@@ -155,7 +214,81 @@ enum AnnotatedPDFComposer {
         let border = PDFBorder()
         border.lineWidth = lineWidth
         annotation.border = border
-        return annotation
+
+        // Apple's editable payload goes on the annotation right here, before it is ever added to a page, and the
+        // document is serialized once. See the type's own documentation for the two-pass revision this replaced.
+        let payload = akPayload(for: canvasDrawing, archiveRect: archiveRect, pageSize: pageSize)
+        // `setValue(_:forAnnotationKey:)` returns `false` when PDFKit rejects the value outright (the SDK logs
+        // "-[PDFAnnotation setValue:forAnnotationKey:] failed" in that case), so its result — not just whether a
+        // payload was built — decides `hasAKPayload`. This is a partial guard, not a regression detector: it would
+        // NOT have caught the iOS 27.0 case documented above, where `add(_:)` itself failed and AnnotationKit
+        // overwrote the key later at serialization, so `setValue` here still returned `true`. What it closes is the
+        // narrower gap between this call and its documented contract — one class of silent failure becomes a
+        // counted one, no more.
+        let attached = payload.map {
+            annotation.setValue(
+                ["AAPL:AKAnnotationV2": $0.base64EncodedString()],
+                forAnnotationKey: PDFAnnotationKey(rawValue: "AAPL:AKExtras"),
+            )
+        } ?? false
+        return ComposedAnnotation(annotation: annotation, hasAKPayload: attached)
+    }
+
+    /// The Apple ink payload for one placed drawing, or nil if the archive cannot be built.
+    ///
+    /// Failure here must never fail an export. A stroke without a payload is written exactly as it was before this
+    /// existed — an `/Ink` annotation with a vector appearance — so the worst case is the behavior that shipped.
+    ///
+    /// The drawing's identifiers are PencilKit's own, freshly generated for every drawing it archives, so no two
+    /// annotations can share them. That matters: AnnotationKit names a drawing by the identifiers inside its
+    /// payload rather than by the annotation holding it, and two annotations sharing them are one drawing — an
+    /// eraser stroke on one deletes the other, on whatever page it happens to be.
+    private static func akPayload(for canvasDrawing: PKDrawing, archiveRect: CGRect, pageSize: CGSize) -> Data? {
+        try? AKInkArchive.archive(
+            drawing: canvasDrawing.dataRepresentation(), archiveRect: archiveRect,
+            drawingSize: AKInkGeometry.drawingSize(pageSize: pageSize), uuid: UUID(),
+        )
+    }
+
+    /// The placed drawing in the archive's canvas space: page points times the canvas scale, transform baked in.
+    ///
+    /// Point sizes are not simply scaled along. PencilKit's rendered width has a constant term in content units
+    /// (`PencilKitInkWidth`), so a size that drew a certain width in the reader's document units draws a different
+    /// width in canvas units. With `screenScale` (page points per document unit) known, each point's size is
+    /// re-solved: the width the reader showed, in page points, is what the size must render to in the canvas —
+    /// `renderedWidth` in document units, converted, then `size(forRenderedWidth:)` in canvas units. Without it the
+    /// sizes scale with the geometry and the width comes out as PencilKit would draw the stroke at page scale.
+    static func canvasDrawing(of placed: PKDrawing, screenScale: CGFloat?) -> PKDrawing {
+        let k = AKInkGeometry.canvasScale
+        return PKDrawing(strokes: placed.strokes.map { stroke in
+            let ink = stroke.ink.inkType
+            let points = stroke.path.map { p in
+                let canvasSize: CGSize
+                if let r = screenScale, r > 0 {
+                    let onScreen = PencilKitInkWidth.renderedWidth(ink: ink, size: p.size.width / r) * r
+                    let width = PencilKitInkWidth.size(forRenderedWidth: onScreen * k, ink: ink)
+                    let aspect = p.size.width > 0 ? p.size.height / p.size.width : 1
+                    canvasSize = CGSize(width: width, height: width * aspect)
+                } else {
+                    canvasSize = CGSize(width: p.size.width * k, height: p.size.height * k)
+                }
+                return PKStrokePoint(
+                    location: CGPoint(x: p.location.x * k, y: p.location.y * k),
+                    timeOffset: p.timeOffset, size: canvasSize,
+                    opacity: p.opacity, force: p.force, azimuth: p.azimuth, altitude: p.altitude,
+                )
+            }
+            return PKStroke(
+                ink: stroke.ink,
+                path: PKStrokePath(controlPoints: points, creationDate: stroke.path.creationDate),
+                transform: .identity,
+                mask: stroke.mask.map { mask in
+                    var scale = CGAffineTransform(scaleX: k, y: k)
+                    let path = mask.cgPath.copy(using: &scale) ?? mask.cgPath
+                    return PlatformBezierPath(cgPath: path)
+                },
+            )
+        })
     }
 
     /// The annotation's color, folding the stroke's PencilKit opacity — a per-point translucency multiplier
