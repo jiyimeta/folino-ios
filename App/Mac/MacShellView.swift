@@ -99,7 +99,7 @@ struct MacShellView: View {
             // `id(item.id)` so switching the window to another score builds a fresh `MacEditableReaderScreen` — and
             // with it a fresh `ReaderViewModel`, `ReaderEditingHost` and `EditorViewModel`, each created once per
             // screen instance in a `@State`.
-            MacEditableReaderScreen(item: item, bootstrap: bootstrap, libraryVM: libraryVM)
+            MacEditableReaderScreen(item: item, bootstrap: bootstrap)
                 .id(item.id)
                 .toolbar {
                     ToolbarItem(placement: .navigation) {

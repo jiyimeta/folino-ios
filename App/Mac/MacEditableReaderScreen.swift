@@ -1,6 +1,5 @@
 import Domain
 import Editor
-import Library
 import Reader
 import SwiftUI
 import UtilityCore
@@ -45,10 +44,6 @@ extension FocusedValues {
 struct MacEditableReaderScreen: View {
     let item: ScoreItem
     let bootstrap: AppBootstrap
-    /// The process's one `LibraryViewModel`, taken so this screen owns the whole composition of a score window.
-    /// Nothing inside it reads the view model yet — the window's File ▸ Import publication lives one level up, in
-    /// `MacShellView`, because that is the level a window's focused scene values belong to.
-    let libraryVM: LibraryViewModel
 
     @State private var editingHost: ReaderEditingHost
     @State private var editorViewModel: EditorViewModel
@@ -56,6 +51,9 @@ struct MacEditableReaderScreen: View {
     /// and the same object — see `MacEditingTarget`.
     @State private var editingTarget: MacEditingTarget
     @State private var isWired = false
+    /// `true` once this window has opened an edit session at least once. Read only by `onDisappear`'s fallback
+    /// unregister — see the comment there.
+    @State private var didOpenSession = false
     @State private var isConfirmingDiscard = false
     @State private var isConfirmingRevert = false
     /// The window's undo manager, which is what SwiftUI's own Edit ▸ Undo / Redo items drive (design §5.2). The
@@ -72,10 +70,9 @@ struct MacEditableReaderScreen: View {
     private let annotationCoordinator: AnnotationSaveCoordinator
     private let analytics: any Analytics
 
-    init(item: ScoreItem, bootstrap: AppBootstrap, libraryVM: LibraryViewModel) {
+    init(item: ScoreItem, bootstrap: AppBootstrap) {
         self.item = item
         self.bootstrap = bootstrap
-        self.libraryVM = libraryVM
         // Non-nil for the same reason `MacShellView.init`'s are: this screen is only ever built from that view's
         // `content`, which `FolinoMacApp` only reaches once `bootstrap.isReady` is true, and `AppBootstrap.start()`
         // populates every adapter synchronously before flipping that flag.
@@ -145,7 +142,14 @@ struct MacEditableReaderScreen: View {
             titleVisibility: .visible,
         ) {
             Button(role: .destructive) {
-                Task { await editorViewModel.discardSessionEdits() }
+                Task {
+                    await editorViewModel.discardSessionEdits()
+                    // The session survives the discard (it is unwound, not closed), so nothing else takes the
+                    // trampolines down — and every one of them would now undo an edit that no longer exists.
+                    // Revert To ▸ Original does not need this: its reload ends the session and opens a new one,
+                    // which the `isEditing` handler below already re-arms from scratch.
+                    undoManager?.removeAllActions(withTarget: editorViewModel)
+                }
             } label: {
                 Text("mac.revert.lastOpened.action")
             }
@@ -171,28 +175,53 @@ struct MacEditableReaderScreen: View {
             wireOnce()
             // Registration is idempotent and lives OUTSIDE `wireOnce`'s one-shot guard deliberately: a window that
             // disappears and reappears (AppKit tabbing moves a window between tab groups) runs `onDisappear`, which
-            // unregisters. If the re-register rode the guard, that window would be gone from the registry for good
-            // and ⌘Q's flush would skip its pending autosave.
+            // may unregister. If the re-register rode the guard, that window would be gone from the registry for
+            // good and ⌘Q's flush would skip its pending autosave.
             MacEditorRegistry.shared.register(editorViewModel, for: item.id)
-            // An adopted history is undoable the moment the session opens, but the system UndoManager only learns
-            // about edits when a trampoline is registered — and that happens per NEWLY applied edit. Arm one
-            // initial trampoline when the session already has history; `registerSystemUndo`'s symmetric
-            // re-registration handles everything after. The Mac needs this more than iOS does: there is no undo
-            // button here at all, so an unarmed manager means Edit ▸ Undo is simply dead on a reopened score.
-            if editorViewModel.canUndo {
-                editorViewModel.registerSystemUndo(with: undoManager)
-            }
         }
         // The Reader owns the transport; the Editor only needs to know whether it is running. Mirrored here
         // because neither feature imports the other.
         .onChange(of: editingHost.isPlaying, initial: true) { _, isPlaying in
             editorViewModel.isPlaybackActive = isPlaying
         }
+        // The SESSION boundary, which on the Mac is not the screen's boundary. The iOS chrome can arm the undo
+        // bridge in its own `onAppear` because that chrome mounts only once `beginSession` has already run; this
+        // screen mounts BEFORE the session opens (`MacReaderRootScreen.task` → `beginEditingIfLoaded`), so arming
+        // on appear would read `canUndo` on a view model with no session and arm nothing at all — leaving
+        // Edit ▸ Undo dead on a reopened score whose retained history is undoable from the first frame.
+        //
+        // `isEditing` is set true immediately before `onBeginEditing`, and `beginSession` runs synchronously
+        // inside it, so by the time SwiftUI delivers this change the adopted session is in place. The false edge
+        // is the symmetric teardown: a revert (which closes and reopens the session on this same view model) and
+        // the window's close both go through it, so no trampoline outlives the session that registered it.
+        .onChange(of: editingHost.isEditing, initial: true) { _, editing in
+            if editing {
+                didOpenSession = true
+                // Re-registration matters here, not just in `onAppear`: Revert To ▸ Original ends the session and
+                // opens a new one, and the ended session's flush unregisters.
+                MacEditorRegistry.shared.register(editorViewModel, for: item.id)
+                // An adopted history is undoable the moment the session opens, but the system UndoManager only
+                // learns about edits when a trampoline is registered — and that happens per NEWLY applied edit.
+                // Arm one initial trampoline when the session already has history; `registerSystemUndo`'s
+                // symmetric re-registration handles everything after. The Mac needs this more than iOS does:
+                // there is no undo button here at all.
+                if editorViewModel.canUndo {
+                    editorViewModel.registerSystemUndo(with: undoManager)
+                }
+            } else {
+                undoManager?.removeAllActions(withTarget: editorViewModel)
+            }
+        }
         // The system Undo / Redo items drive the session through the same trampolines the iOS chrome registers,
         // re-registered only on a genuinely NEW edit — see `EditorViewModel.appliedEditCount`. NOT on undo /
         // redo, which also bump `generation`: re-registering there would double up with `registerSystemUndo`'s own
         // symmetric re-registration and drift the system stack from the session's real depth.
-        .onChange(of: editorViewModel.appliedEditCount) { _, _ in
+        //
+        // Guarded on a RISE, not on any change: `beginSession` resets the count to 0, so a session that opens
+        // after N edits (a revert's reload, or adopting a retained history) publishes N → 0 and would otherwise
+        // register a trampoline for an edit that is not there. The `isEditing` handler above owns that case.
+        .onChange(of: editorViewModel.appliedEditCount) { oldValue, newValue in
+            guard newValue > oldValue else { return }
             editorViewModel.registerSystemUndo(with: undoManager)
         }
         // ⌘Z is the one editing path with no control to grey out, so it is closed while the transport runs: the
@@ -206,8 +235,17 @@ struct MacEditableReaderScreen: View {
                 editorViewModel.registerSystemUndo(with: undoManager)
             }
         }
+        // The registry entry normally comes off at the END of `endSession`'s flush (`wireOnce`), not here. This is
+        // only the fallback for a window that never opened a session at all — a PDF-only row, or one whose load
+        // failed — where `onEndEditing` never fires and the entry would otherwise outlive the window forever.
+        //
+        // `didOpenSession` rather than `!editingHost.isEditing`: the Reader clears `isEditing` synchronously inside
+        // its own `onDisappear`, before this one runs, so reading it here cannot tell "no session was ever opened"
+        // from "the session just closed and its flush is still in flight" — and unregistering in the second case is
+        // exactly the quit-time race this whole change exists to close.
         .onDisappear {
-            MacEditorRegistry.shared.unregister(for: item.id)
+            guard !didOpenSession else { return }
+            MacEditorRegistry.shared.unregister(editorViewModel, for: item.id)
         }
     }
 
@@ -218,6 +256,23 @@ struct MacEditableReaderScreen: View {
         guard !isWired else { return }
         isWired = true
         wireEditingSeam(host: editingHost, viewModel: editorViewModel, repository: repository, analytics: analytics)
+        // Mac-only override of the shared seam's `onEndEditing`, which is a fire-and-forget `Task { await
+        // vm.endSession() }`. iOS can leave it at that — the view model outlives the session there. Here the entry
+        // in `MacEditorRegistry` is what `applicationShouldTerminate` iterates, and it must stay up until this
+        // session's flush has actually landed: unregistering any earlier (at `onDisappear`, as this screen used to)
+        // lets a ⌘Q issued right after a window close reply "terminate now" over an in-flight save.
+        let vm = editorViewModel
+        let id = item.id
+        editingHost.onEndEditing = { [weak vm, weak host = editingHost] in
+            guard let vm else { return }
+            Task {
+                await vm.endSession()
+                // A revert closes the session and reopens it on this same view model; if editing has resumed by
+                // the time this flush lands, the entry belongs to the NEW session and must stay.
+                guard host?.isEditing != true else { return }
+                MacEditorRegistry.shared.unregister(vm, for: id)
+            }
+        }
         // Bindings, not `self`: a closure that captured this view whole would capture `_editingTarget`'s own State
         // box with it, and the target — which holds the closure — would then keep itself, the editor and the host
         // alive for the life of the process. Every closed score window would leak its session.
