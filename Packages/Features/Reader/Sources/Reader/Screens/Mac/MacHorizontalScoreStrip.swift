@@ -86,6 +86,12 @@ struct MacHorizontalScoreStrip: View {
 
     /// Click-to-seek, in the document's own space.
     ///
+    /// **The reported location is divided by the magnification first, and without that nothing below is in document
+    /// space at all.** SwiftUI hands a hosted gesture its location already multiplied by the enclosing scroll view's
+    /// magnification — see `MacScoreMagnification.documentPoint(fromHosted:magnification:)`, which carries the
+    /// measurement. The strip already mirrors the live magnification for its sticky pane, so the divisor is the value
+    /// the pane is scaled by at that instant, which is the only one that can agree with what the reader clicked.
+    ///
     /// **Clicks that land under the sticky pane are rejected, and that is a correctness rule rather than a polish
     /// one.** The pane is `allowsHitTesting(false)` — deliberately, so it can never swallow a scroll — which means a
     /// click on it falls straight through to the music it is covering, and that music is by definition scrolled
@@ -102,12 +108,15 @@ struct MacHorizontalScoreStrip: View {
     private func tapSeekGesture(document: LayoutDocument) -> some Gesture {
         SpatialTapGesture(coordinateSpace: .named(Self.coordinateSpace))
             .onEnded { value in
-                guard !isUnderStickyPane(documentX: value.location.x, document: document) else { return }
+                let point = MacScoreMagnification.documentPoint(
+                    fromHosted: value.location, magnification: viewportState.magnification,
+                )
+                guard !isUnderStickyPane(documentX: point.x, document: document) else { return }
                 if let host = editingHost, host.wantsScoreTaps {
-                    host.onTap(value.location)
+                    host.onTap(point)
                     return
                 }
-                guard let cursor = nearestCursor(at: value.location, in: document) else { return }
+                guard let cursor = nearestCursor(at: point, in: document) else { return }
                 viewModel.playbackSession.setManualCursor(cursor)
                 editingHost?.rememberTappedItem(cursor)
             }

@@ -156,6 +156,12 @@ struct MacPagedScoreContainer: View {
     @State private var relayoutEngine = ScoreRelayoutEngine()
     @State private var cursorState = MacPageDeckCursorState()
     @State private var magnification: CGFloat = 1.0
+    /// The magnification, mirrored out of AppKit for the deck's click handler — SwiftUI reports a hosted click in
+    /// magnified units, and `MacPageScoreLayer` divides it back out. `tracksScroll: false`: nothing here is drawn
+    /// outside the scroll view, so the deck takes the magnification mirror and none of the per-frame scroll traffic.
+    /// This is deliberately not the `magnification` state above — the deck lives in an `NSHostingView` whose root view
+    /// is replaced only on a generation bump, so a value handed down would be stale by the reader's first zoom.
+    @State private var viewportState = MacScoreViewportState()
     /// Fit-to-window is applied once, when the first engraving lands. A later window resize deliberately does not
     /// refit: a document viewer that re-zooms itself while the user drags the window edge is fighting them.
     @State private var hasSeededMagnification = false
@@ -177,6 +183,7 @@ struct MacPagedScoreContainer: View {
             magnification: $magnification,
             contentGeneration: layoutGeneration,
             scrollRequest: scrollRequest,
+            viewportState: viewportState,
         ) {
             MacPageDeck(
                 viewModel: viewModel,
@@ -186,6 +193,7 @@ struct MacPagedScoreContainer: View {
                 score: score,
                 scoreOptions: scoreOptions,
                 pageSize: sheet,
+                viewportState: viewportState,
                 editingHost: editingHost,
             )
         }

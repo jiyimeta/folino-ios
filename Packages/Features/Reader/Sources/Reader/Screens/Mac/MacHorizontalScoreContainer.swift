@@ -59,7 +59,7 @@ struct MacHorizontalScoreContainer: View {
     @State private var relayoutEngine = ScoreRelayoutEngine()
     /// Live scroll offset and magnification, mirrored out of AppKit so the sticky pane can track the score it sits
     /// over. See `MacScoreViewportState` — this is the one container that asks for it.
-    @State private var viewportState = MacScoreViewportState()
+    @State private var viewportState = MacScoreViewportState(tracksScroll: true)
     /// The control channel for magnification: external writes in (the fit seed), the settled value out. The live
     /// value during a pinch is `viewportState.magnification`.
     @State private var magnification: CGFloat = 1.0
