@@ -201,14 +201,16 @@ struct AnnotatedPDFComposerTests {
         // conversion must reverse that order AND preserve the separation exactly: the mark's box must sit 200 points
         // ABOVE the anchor's. Both strokes are the same width, so `PKDrawing.bounds` inflates each by the same
         // amount and the centers' separation is padding-independent — which is what lets this pin the flip's sign
-        // and its unit scale numerically rather than settling for an ordering check.
+        // and its unit scale numerically rather than settling for an ordering check. `PKDrawing.bounds` is
+        // integral in canvas units, so each box can round outward by up to a canvas unit (0.75pt) on either edge;
+        // the tolerance covers that and nothing more.
         let topBounds = try Self.soleAnnotationBounds(drawing: Self.asymmetricFixture()[0])
         let bottomBounds = try Self.soleAnnotationBounds(drawing: Self.asymmetricFixture()[1])
 
         let separation = CGFloat(Self.anchorPageLocalY - Self.markPageLocalY)
         #expect(
-            abs((topBounds.midY - bottomBounds.midY) - separation) < 0.01,
-            "expected the flip to put the mark exactly 200 points above the anchor in bottom-left page space",
+            abs((topBounds.midY - bottomBounds.midY) - separation) < 1,
+            "expected the flip to put the mark 200 points above the anchor in bottom-left page space",
         )
         #expect(
             topBounds.minY > bottomBounds.maxY,
@@ -345,7 +347,11 @@ struct AnnotatedPDFComposerTests {
         let document = try #require(PDFDocument(data: out))
         let annotation = try #require(document.page(at: 0)?.annotations.first)
         let lineWidth = try #require(annotation.border?.lineWidth)
-        #expect(abs(lineWidth - 2) < 0.01, "expected the median (2), not the mean (~34.3) or the first sample (1)")
+        // The width goes through the pen's size-to-width curve, so compare against the curve applied to the
+        // median size (2), not to the mean (~34.3) or the first sample (1).
+        let expected = AnnotatedPDFComposer.appearanceLineWidth(ink: .pen, size: 2)
+        #expect(abs(lineWidth - expected) < 0.01, "expected the median (2) through the pen curve")
+        #expect(abs(lineWidth - AnnotatedPDFComposer.appearanceLineWidth(ink: .pen, size: 34.3)) > 1)
     }
 
     @Test

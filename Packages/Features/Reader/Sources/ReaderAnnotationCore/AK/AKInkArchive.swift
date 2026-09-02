@@ -10,11 +10,18 @@ import CoreGraphics
 /// absent from the iOS SDK, so it cannot be instantiated. The archive format is public, though: a shim class
 /// encodes the same keys, and `setClassName` makes the archive claim Apple's name for it.
 ///
+/// The `drawing` it carries is a PencilKit drawing archive — the bytes `PKDrawing.dataRepresentation()` returns,
+/// verbatim. That is what Books on iPadOS 26 writes into this slot, and AnnotationKit re-creates the editable
+/// drawing from it with `PKDrawing(data:)`. An earlier revision synthesized the older gzip-wrapped protobuf form
+/// instead; the PencilKit archive replaced it because PencilKit itself writes and reads it, so nothing about the
+/// stroke encoding is guessed any more. `docs/engineering/crdt-ink-format/README.md` has the history.
+///
 /// Writing the plist by hand does not work. `PropertyListSerialization` keeps a `["CF$UID": n]` dictionary as
 /// an ordinary dictionary — it never becomes a binary-plist UID — so the result is not a keyed archive at all.
 ///
 /// The scalars that are not geometry are carried verbatim from a real sample. `originalModelBaseScaleFactor`
-/// in particular is not the canvas-to-page ratio and its role is unexplained; it is copied, not computed.
+/// in particular is not the canvas-to-page ratio; on device, 0.0 and 1.0 render identically to the copied value,
+/// so it is inert and stays copied rather than computed.
 public enum AKInkArchive {
     // Encodes the keys Apple's object carries. Named for what it is: this is not AnnotationKit's class, it
     // just serializes to the same shape. The name it archives under is set on the archiver, deliberately not
@@ -72,17 +79,23 @@ public enum AKInkArchive {
 
     enum ArchiveError: Error { case malformedArchive }
 
+    /// - Parameters:
+    ///   - drawing: `PKDrawing.dataRepresentation()` of the drawing, whose points live in the canvas space that
+    ///     `drawingSize` describes. Stored as-is; AnnotationKit reads it back with `PKDrawing(data:)`.
+    ///   - archiveRect: the drawing's bounds mapped into page space, y up. Must agree with the annotation's
+    ///     `/Rect` (grown one point) to well under a tenth of a point or the whole annotation is discarded.
+    ///   - drawingSize: the canvas the drawing's coordinates are in, i.e. the page size times the canvas scale.
     public static func archive(
-        payload: Data, archiveRect: CGRect, drawingSize: CGSize, uuid: UUID, deflater: Deflating,
+        drawing: Data, archiveRect: CGRect, drawingSize: CGSize, uuid: UUID,
     ) throws -> Data {
-        let shim = try Shim(
+        let shim = Shim(
             rectangle: [
                 "X": archiveRect.minX, "Y": archiveRect.minY,
                 "Width": archiveRect.width, "Height": archiveRect.height,
             ],
             drawingSize: ["Width": drawingSize.width, "Height": drawingSize.height],
             uuid: uuid.uuidString,
-            drawing: GzipWriter.gzip(payload, using: deflater),
+            drawing: drawing,
         )
 
         let archiver = NSKeyedArchiver(requiringSecureCoding: false)

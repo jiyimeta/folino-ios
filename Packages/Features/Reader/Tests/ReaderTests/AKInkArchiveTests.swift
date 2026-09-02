@@ -1,6 +1,5 @@
 import CoreGraphics
 import Foundation
-@testable import Reader
 @testable import ReaderAnnotationCore
 import Testing
 
@@ -33,8 +32,8 @@ struct AKInkArchiveTests {
     @Test
     func `it is a keyed archive of AKInkAnnotation2`() throws {
         let data = try AKInkArchive.archive(
-            payload: Data([1, 2, 3]), archiveRect: CGRect(x: 1, y: 2, width: 3, height: 4),
-            drawingSize: CGSize(width: 100, height: 200), uuid: UUID(), deflater: AppleDeflater(),
+            drawing: Data([1, 2, 3]), archiveRect: CGRect(x: 1, y: 2, width: 3, height: 4),
+            drawingSize: CGSize(width: 100, height: 200), uuid: UUID(),
         )
         let p = try plist(data)
         #expect(p["$archiver"] as? String == "NSKeyedArchiver")
@@ -50,9 +49,9 @@ struct AKInkArchiveTests {
             width: 228.1608072916667, height: 8.254427322907077,
         )
         let data = try AKInkArchive.archive(
-            payload: Data([1, 2, 3]), archiveRect: rect,
+            drawing: Data([1, 2, 3]), archiveRect: rect,
             drawingSize: CGSize(width: 792.7741935483871, height: 1122.0645161290322),
-            uuid: UUID(), deflater: AppleDeflater(),
+            uuid: UUID(),
         )
         let root = try plist(data)
         let objects = try #require(root["$objects"] as? [Any])
@@ -84,14 +83,17 @@ struct AKInkArchiveTests {
         #expect(try abs(#require(values["Height"]) - rect.height) < 1e-12)
     }
 
+    /// The drawing is PencilKit's own archive and goes in untouched: no gzip, no re-encoding. Books writes the
+    /// `wrd` container straight into this slot, and AnnotationKit reads it back with `PKDrawing(data:)`.
     @Test
-    func `the drawing is stored gzipped`() throws {
+    func `the drawing is stored verbatim`() throws {
+        let drawing = Data([0x77, 0x72, 0x64, 0xF0, 0x01, 0x00, 0x08, 0x00] + [UInt8](repeating: 7, count: 400))
         let data = try AKInkArchive.archive(
-            payload: Data(repeating: 7, count: 400), archiveRect: .zero,
-            drawingSize: CGSize(width: 100, height: 200), uuid: UUID(), deflater: AppleDeflater(),
+            drawing: drawing, archiveRect: .zero,
+            drawingSize: CGSize(width: 100, height: 200), uuid: UUID(),
         )
         let objects = try #require(try plist(data)["$objects"] as? [Any])
-        let blobs = objects.compactMap { $0 as? Data }.filter { $0.prefix(3) == Data([0x1F, 0x8B, 0x08]) }
-        #expect(blobs.count == 1)
+        let blobs = objects.compactMap { $0 as? Data }
+        #expect(blobs == [drawing])
     }
 }
