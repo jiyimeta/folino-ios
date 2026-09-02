@@ -51,7 +51,13 @@ public struct ReaderAnnotatedPDFRenderer: AnnotatedPDFRendering {
             // per-score staff-size override is not reachable from here (the share service hands over score and
             // drawings, not the item's preferences), so this is the device default the reader resolves an untouched
             // score to; a score the user re-sized on screen exports its pens at the width the default size shows.
-            let screenScale = layout.staffSize / CGFloat(ReaderDeviceDefaults.staffSize)
+            // A Mac window takes the iPad pair, as `MacReaderRootScreen` does.
+            #if os(iOS)
+            let screenStaffSize = ReaderDeviceDefaults.staffSize
+            #else
+            let screenStaffSize = ReaderDeviceDefaults.staffSize(isTablet: true)
+            #endif
+            let screenScale = layout.staffSize / CGFloat(screenStaffSize)
             return (placements, screenScale)
         }
         guard !placements.isEmpty else { return basePDF }
