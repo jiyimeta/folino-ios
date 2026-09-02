@@ -541,9 +541,10 @@ Identifiers are free, so *identical apart from the identifiers* is the compariso
 *Identical including them* is not a comparison. `tools/checkids.py` now fails a round whose variants share an
 identifier, which is the same rule production code has to follow.
 
-## The key needs two serialization passes (2026-09-02)
+## The key "needs" two serialization passes — RETRACTED (2026-09-02)
 
-Everything above was measured with command-line tools that opened a PDF, set the key and saved. Inside the app
+**This whole section is an artifact of a broken iOS 27.0 simulator runtime.** Read it as history; the
+retraction at the end is the current fact. Everything above was measured with command-line tools that opened a PDF, set the key and saved. Inside the app
 — and inside the Reader test bundle, which is where this surfaced — the same three lines silently lose the
 payload. `/AAPL:AKExtras` set on a `PDFAnnotation` that PDFKit created THIS session does not survive
 `dataRepresentation()`.
@@ -565,10 +566,55 @@ key wholesale. `write(to:)` behaves identically; it is the same serializer.
 **Setting the key on an annotation parsed back from serialized bytes is not adopted.** Stamp the annotations,
 serialize, reopen the result, set `/AAPL:AKExtras` on the parsed annotations, serialize again: the value is
 written verbatim (1788 base64 chars, exactly what went in), and the synthesized trio is replaced rather than
-merged. That is what `AnnotatedPDFComposer` now does, mapping payload to annotation by position in the page's
-`/Annots` order — the composer only appends, so the index recorded before `addAnnotation` names the same
-annotation on the way back in.
+merged. So `AnnotatedPDFComposer` was written to do exactly that, mapping payload to annotation by position in
+the page's `/Annots` order.
 
-One more trap on the read side: PDFKit does **not** enumerate `/AAPL:AKExtras` in `annotationKeyValues` for an
-annotation parsed from a file, though `value(forAnnotationKey:)` returns it. A test written the obvious way
-reports the key missing from a document that demonstrably contains it.
+**Retraction.** Every measurement above was taken on an **iOS 27.0** simulator runtime, where
+`PDFAnnotation.add(_:)` itself fails silently — `Cannot save value for annotation key: /InkList. Invalid
+type.` — and that failure is what cascades into AnnotationKit adopting the annotation and overwriting the key.
+Re-measured on `OS=26.5`:
+
+- a single pass works: the value survives `dataRepresentation()` byte-for-byte, a two-payload control shows
+  each annotation reading back its own distinct marker, and no identity trio appears;
+- one-pass and two-pass output are equivalent — same annotation key sets, same `AKExtras` archive bytes, same
+  `/InkList`, same vector `/AP` path-operator counts, pixel-identical rendering, same annotation order and
+  `/Rect`, same translucency. The only difference is an inert `/ExtGState` (`CA 1.0`) plus a `gs` operator the
+  ONE-pass output carries for opaque strokes: extra, invisible, ~135 bytes.
+
+The second pass was therefore removed, along with the position-based payload-to-annotation mapping. The
+composer sets `/AAPL:AKExtras` on each annotation as it builds it and serializes once. If this symptom ever
+reappears, check the runtime for the `/InkList` error before touching the composer.
+
+One more trap on the read side, which is real and outlived the retraction: PDFKit does **not** enumerate
+`/AAPL:AKExtras` in `annotationKeyValues` for an annotation parsed from a file, though
+`value(forAnnotationKey:)` returns it. A test written the obvious way reports the key missing from a document
+that demonstrably contains it.
+
+## What AKAnnotationV2 costs: selection in macOS Preview (2026-09-02)
+
+Measured on one file with one variable removed, then checked against Apple's own output:
+
+| file | Preview selection |
+| --- | --- |
+| our export with `/AAPL:AKExtras` | **no** — neither normal nor markup mode |
+| the same file, `AKExtras` stripped (`tools/stripakextras.swift`) | yes, both modes |
+| Apple Books, `/Stamp` + `/PPK` (the old `crdt` form) | yes |
+| Apple Books, `/Square` + `AKAnnotationV2` (what we replicate) | **no** |
+
+So this is not a defect in what we write. **Apple's own `AKAnnotationV2` annotations are not selectable in Preview
+either**, and the subtype is not what Preview keys off — Apple uses `/Square` there and it makes no difference.
+An annotation carrying this payload is claimed by Preview's markup layer and stops being an object the arrow
+tool can pick up.
+
+The old `crdt` form is the only one measured to have both, and it is unreachable: `PKDrawing` cannot produce
+that container and AnnotationKit is a private framework. So with the format that is actually available, Pencil
+erasing on iOS and object selection in Preview do not coexist.
+
+One thing our choice keeps that Apple's does not: the annotation stays `/Ink` with a real `/InkList`, so an
+editor that does not special-case `AKExtras` still sees a pen mark rather than a rectangle. Preview is
+unusual precisely because it *does* recognise the key. This is reasoning from the file's structure, not a
+measurement — no third-party editor has been tested.
+
+**This falsified the spec's original "there is nothing to trade away".** There is: object selection in
+Preview, in exchange for erasing with a Pencil on iOS. `docs/superpowers/specs/2026-09-01-erasable-ink-export-design.md`
+now records that trade, and which side it takes.
