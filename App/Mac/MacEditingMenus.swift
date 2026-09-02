@@ -56,7 +56,12 @@ private struct MacEditingMenuItem: View {
     var body: some View {
         let enabled = target.map(command.isEnabled) ?? false
         Button {
-            if let target {
+            // `isEnabled` is asked again here, not just for `.disabled` above — the same rule, and for the same
+            // reason, as `MacEditingKeyMap`: a disabled control is a rendering fact and the guard is a correctness
+            // one. `.disabled` holds only if this `Commands` body is re-evaluated when the `@Observable` editor's
+            // `isPlaybackActive` flips, which is unverified for a menu bar, and §6.2 is not a claim to leave
+            // resting on that.
+            if let target, command.isEnabled(target) {
                 command.perform(target)
             }
         } label: {
