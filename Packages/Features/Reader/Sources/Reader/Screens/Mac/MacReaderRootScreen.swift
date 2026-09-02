@@ -115,6 +115,7 @@ public struct MacReaderRootScreen: View {
                 showInvisibleElements: showInvisibleElements,
                 showAllMeasureNumbers: showAllMeasureNumbers,
                 autoFollowEnabled: autoFollowEnabled,
+                editingHost: nil,
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             MacTransportBar(viewModel: viewModel)
@@ -204,6 +205,43 @@ struct MacScoreContentView: View {
     let showAllMeasureNumbers: Bool
     let autoFollowEnabled: Bool
 
+    /// The note-editing seam, or `nil` for a read-only reader. Mirrors the iOS `ScoreContentView`: whether the
+    /// reader is editing changes only the containers' INPUTS — which score, and whether the element-renumbering
+    /// display transforms apply — never which container is mounted, so the laid-out document survives an edit.
+    let editingHost: ReaderEditingHost?
+
+    /// Non-nil while editing: the edited score with the survivable transforms applied (`ReaderEditingDisplay`).
+    private var editingScore: Score? {
+        ReaderEditingDisplay.score(
+            host: editingHost,
+            clefOverrides: viewModel.layoutModel.staffClefOverrides,
+            hiddenStaves: viewModel.layoutModel.hiddenStaves,
+        )
+    }
+
+    private var editingScoreVersion: Int {
+        ReaderEditingDisplay.version(host: editingHost)
+    }
+
+    /// The score the containers render: the editing score while editing, the display-transformed one otherwise.
+    private var renderedScore: Score? {
+        editingScore ?? viewModel.visibleScore
+    }
+
+    private var isEditing: Bool {
+        editingScore != nil
+    }
+
+    /// Multi-measure-rest collapse renumbers elements within a staff, which no staff remap can undo — off while
+    /// editing, exactly as on iOS.
+    private var effectiveCollapseMultiMeasureRests: Bool {
+        isEditing ? false : collapseMultiMeasureRests
+    }
+
+    private var effectiveTransposeSemitones: Int {
+        isEditing ? 0 : viewModel.transposeModel.effectiveSemitones
+    }
+
     var body: some View {
         // The original PDF wins over whatever the load state holds — the same condition `ScoreContentView` branches
         // on, and it is a display-source question, not a load-state one: for an item folino read OUT of a PDF both
@@ -222,7 +260,7 @@ struct MacScoreContentView: View {
         case .loading:
             ProgressView().controlSize(.large)
         case .loaded:
-            if let score = viewModel.visibleScore {
+            if let score = renderedScore {
                 scoreContainer(score: score)
             } else {
                 ProgressView().controlSize(.large)
@@ -257,42 +295,48 @@ struct MacScoreContentView: View {
                 score: score,
                 staffSize: viewModel.layoutModel.effectiveStaffSize,
                 honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
-                collapseMultiMeasureRests: collapseMultiMeasureRests,
+                collapseMultiMeasureRests: effectiveCollapseMultiMeasureRests,
                 showInvisibleElements: showInvisibleElements,
                 showAllMeasureNumbers: showAllMeasureNumbers,
                 playbackCursor: viewModel.playbackSession.displayCursor,
                 pageAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
                 autoFollowEnabled: autoFollowEnabled,
-                transposeSemitones: viewModel.transposeModel.effectiveSemitones,
+                transposeSemitones: effectiveTransposeSemitones,
+                editingScoreVersion: editingScoreVersion,
                 viewModel: viewModel,
+                editingHost: editingHost,
             )
         case .horizontal:
             MacHorizontalScoreContainer(
                 score: score,
                 staffSize: viewModel.layoutModel.effectiveStaffSize,
                 honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
-                collapseMultiMeasureRests: collapseMultiMeasureRests,
+                collapseMultiMeasureRests: effectiveCollapseMultiMeasureRests,
                 showInvisibleElements: showInvisibleElements,
                 showAllMeasureNumbers: showAllMeasureNumbers,
                 playbackCursor: viewModel.playbackSession.displayCursor,
                 scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
                 autoFollowEnabled: autoFollowEnabled,
-                transposeSemitones: viewModel.transposeModel.effectiveSemitones,
+                transposeSemitones: effectiveTransposeSemitones,
+                editingScoreVersion: editingScoreVersion,
                 viewModel: viewModel,
+                editingHost: editingHost,
             )
         case .vertical:
             MacVerticalScoreContainer(
                 score: score,
                 staffSize: viewModel.layoutModel.effectiveStaffSize,
                 honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
-                collapseMultiMeasureRests: collapseMultiMeasureRests,
+                collapseMultiMeasureRests: effectiveCollapseMultiMeasureRests,
                 showInvisibleElements: showInvisibleElements,
                 showAllMeasureNumbers: showAllMeasureNumbers,
                 playbackCursor: viewModel.playbackSession.displayCursor,
                 scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
                 autoFollowEnabled: autoFollowEnabled,
-                transposeSemitones: viewModel.transposeModel.effectiveSemitones,
+                transposeSemitones: effectiveTransposeSemitones,
+                editingScoreVersion: editingScoreVersion,
                 viewModel: viewModel,
+                editingHost: editingHost,
             )
         }
     }
