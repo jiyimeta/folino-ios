@@ -24,14 +24,19 @@ Build **Debug** for everything here — none of it plays audio. (Playback QA nee
 | 12 | Open a score. In the library (⌘O), permanently delete that same score from Recently Deleted, then look at the score window. | The score window **closes itself** and the library is on screen. No `ContentUnavailableView`, no toolbar-less window. |
 | 13 | Open a score, ⌘Q. | The app quits. **No library window flashes up on the way out.** |
 | 14 | Open score A. From the library open score B. From the library open A again. | A's existing tab comes forward; there is no second tab or window for A (§2.3 revision — this must not have regressed). |
+| 15 | Open score A, then open score B from the library (B becomes a tab). Close **A's** tab. Then close B. | Closing A does **nothing** — a score is still open. Closing B puts the **library** on screen. This is the one unmeasured lifetime dependency in the branch: if the library does not appear, the stored `showLibrary` belonged to a window that has closed. Section D's last entry is the remedy. |
+| 16 | With a score already open, File ▸ New Window (⌘N). | The valueless window closes itself. It must **not** flicker in as a tab of the score window, and must not steal its focus — the score window stays key throughout, tab bar unchanged. |
+| 17 | Quit with a score open, relaunch. | A score window comes back. The library, if it presents at all, presents **over** it rather than beside it. If a restored window names a score deleted while the app was closed, that window closes itself cleanly — no stray tab, no empty window left behind. |
+| 18 | With the library **already** open behind a score window, ⌘W the score window. | The existing library window simply comes forward. No second library window, no visible close-and-reopen. |
+| 19 | With two tabs, drag one out into its own window (§2.4's promised tear-off), then ⌘W the torn-off one. | The survivor is still registered: ⌘W on **it** then shows the library. A tear-off must not lose a window's registration. |
 
 ## Section B — what this slice deliberately did not change
 
 | # | Steps | Expected |
 | --- | --- | --- |
-| 15 | With the library up, File ▸ Import (⇧⌘I) a new file. | The score opens in a window. **The library stays open behind it** — import is not one of §2.9.1's three named open paths. Confirm this is the behavior you want; the alternative is a one-line change in `ImportedScoreOpener`. |
-| 16 | With the library up, use `+` ▸ New Score. | Same as 15. |
-| 17 | With a score window key and the library closed, ⇧⌘I a file already in the library. | The library is summoned and presents the duplicate prompt (`MacShellView.importAction`, unchanged). |
+| 20 | With the library up, File ▸ Import (⇧⌘I) a new file. | The score opens in a window. **The library stays open behind it** — import is not one of §2.9.1's three named open paths. Confirm this is the behavior you want; the alternative is a one-line change in `ImportedScoreOpener`. |
+| 21 | With the library up, use `+` ▸ New Score. | Same as 20. |
+| 22 | With a score window key and the library closed, ⇧⌘I a file already in the library. | The library is summoned and presents the duplicate prompt (`MacShellView.importAction`, unchanged). |
 
 ## Section C — the fault check (re-measured, per spec §5.3)
 
@@ -68,10 +73,13 @@ state, the filter is wrong, not the app.
   next thing to try is collapsing the open and the close into ONE deferred `Task { @MainActor in }` — that is
   the "one inline write + two in the single existing hop" arrangement `ImportedScoreOpener`'s doc comment
   records as measured CLEAN.
+- **15 fails: closing the last tab leaves nothing on screen.** The stored `showLibrary` is the cause — it held the
+  `OpenWindowAction` of a score window that has since closed. The remedy is a third installer: `MacCommands` holds an
+  app-scoped `openWindow` that can never belong to a score window.
 
 ## Section E — what to decide at merge
 
-1. **Import and the new-score wizard do not close the library** (Section B, 15-16). §2.9.1 names double-click,
+1. **Import and the new-score wizard do not close the library** (Section B, 20-21). §2.9.1 names double-click,
    Return and the row's Open item; import routes through `ImportedScoreOpener`, whose handler runs inside a
    SwiftUI update and whose write count is the one measured hazard in that file. Left alone deliberately.
    If you want import to close the library too, it is one deferred write in `openImportedScore` — say so and
