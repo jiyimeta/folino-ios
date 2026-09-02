@@ -1,5 +1,8 @@
 import Domain
-import Editor
+
+// `@testable` for `PreviewEditorFactory`, which is internal to the Editor package: the repo rule is never to widen
+// access for a test.
+@testable import Editor
 @testable import folino
 import Testing
 
@@ -13,9 +16,10 @@ struct MacEditorRegistryTests {
     @Test func `register then unregister leaves nothing`() {
         let registry = MacEditorRegistry()
         let id = ScoreItemID()
-        registry.register(makeEditor(), for: id)
+        let editor = makeEditor()
+        registry.register(editor, for: id)
         #expect(registry.editors.count == 1)
-        registry.unregister(for: id)
+        registry.unregister(editor, for: id)
         #expect(registry.editors.isEmpty)
     }
 
@@ -27,6 +31,21 @@ struct MacEditorRegistryTests {
         registry.register(second, for: id)
         #expect(registry.editors.count == 1)
         #expect(registry.editors.first === second)
+    }
+
+    /// The whole reason `unregister` is identity-checked. A window's entry comes off only once its `endSession`
+    /// flush has landed, and by then the same score may already have been reopened in a new window: the late
+    /// unregister must not take the live editor down with it, or ⌘Q would skip its pending autosave.
+    @Test func `unregistering a superseded editor leaves the live entry standing`() {
+        let registry = MacEditorRegistry()
+        let id = ScoreItemID()
+        let closing = makeEditor()
+        let reopened = makeEditor()
+        registry.register(closing, for: id)
+        registry.register(reopened, for: id)
+        registry.unregister(closing, for: id)
+        #expect(registry.editors.count == 1)
+        #expect(registry.editors.first === reopened)
     }
 
     /// The brief's third test ("flushAll returns even when an editor never finishes") needs an editor whose flush

@@ -22,7 +22,12 @@ final class MacEditorRegistry {
         byScore[id] = editor
     }
 
-    func unregister(for id: ScoreItem.ID) {
+    /// Removes `editor`'s entry — and only `editor`'s. Identity-checked because unregistering is the LAST step of a
+    /// window's teardown (it waits for `endSession`'s flush, see `MacEditableReaderScreen`), so by the time it runs
+    /// the same score may already have been reopened in a new window and registered its own editor under this id. A
+    /// plain `byScore[id] = nil` would drop that live editor, and ⌘Q would then skip its pending autosave.
+    func unregister(_ editor: EditorViewModel, for id: ScoreItem.ID) {
+        guard byScore[id] === editor else { return }
         byScore[id] = nil
     }
 
@@ -62,12 +67,16 @@ extension MacEditorRegistry {
         let gate = ResumeOnce()
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             gate.arm(continuation)
-            Task { @MainActor in
-                await operation()
+            let timer = Task { @MainActor in
+                try? await Task.sleep(for: timeout)
                 gate.resume()
             }
             Task { @MainActor in
-                try? await Task.sleep(for: timeout)
+                await operation()
+                // Cancelled, not just outrun: nothing else holds this timer, so without the cancel every won race
+                // leaves a task asleep for the whole timeout — at quit that is a live task outliving the flush it
+                // was bounding, and in the tests it is a hung-around sleep per case.
+                timer.cancel()
                 gate.resume()
             }
         }
