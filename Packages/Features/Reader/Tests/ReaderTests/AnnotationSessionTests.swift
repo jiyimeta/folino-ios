@@ -116,7 +116,7 @@ struct AnnotationSessionTests {
         #expect(vm.annotationReseedTicket == ticket + 1)
     }
 
-    @Test func `entering a session starts the canvas state fresh`() {
+    @Test func `entering a session starts with no changes but keeps the undo history`() {
         let vm = Self.makeVM()
         vm.annotationCanvasSession.hasChanges = true
         vm.annotationCanvasSession.canUndo = true
@@ -124,6 +124,30 @@ struct AnnotationSessionTests {
         vm.beginAnnotationSession()
 
         #expect(!vm.annotationCanvasSession.hasChanges)
+        // Undo outlives the session, as the editing session's does: leaving and coming back has to leave it where
+        // it was.
+        #expect(vm.annotationCanvasSession.canUndo)
+    }
+
+    @Test func `discarding and clearing end the undo history, finishing keeps it`() {
+        let vm = Self.makeVM()
+        vm.annotationDrawings = Self.strokes(1)
+        vm.beginAnnotationSession()
+        vm.annotationCanvasSession.histories[0] = AnnotationPageHistory(current: Data([0]))
+        vm.annotationCanvasSession.canUndo = true
+        vm.finishAnnotationSession()
+        #expect(!vm.annotationCanvasSession.histories.isEmpty)
+        #expect(vm.annotationCanvasSession.canUndo)
+
+        vm.beginAnnotationSession()
+        vm.annotationCanvasSession.hasChanges = true
+        vm.discardAnnotationSession()
+        #expect(vm.annotationCanvasSession.histories.isEmpty)
         #expect(!vm.annotationCanvasSession.canUndo)
+
+        vm.annotationCanvasSession.histories[0] = AnnotationPageHistory(current: Data([0]))
+        vm.beginAnnotationSession()
+        vm.clearAllAnnotations()
+        #expect(vm.annotationCanvasSession.histories.isEmpty)
     }
 }

@@ -73,6 +73,9 @@ extension ReaderViewModel {
     /// same way a capture would.
     private func replaceAnnotationLayer(with drawings: [DrawingAnchor]) {
         annotationDrawingsDidChange(drawings)
+        // The snapshots describe ink this replacement just threw away; like the editing session's ✕ and revert,
+        // these two end the score's retained history.
+        annotationCanvasSession.clearHistory()
         annotationReseedTicket += 1
     }
 }

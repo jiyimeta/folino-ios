@@ -283,7 +283,11 @@ struct PagedScoreContainer: View {
             followCursor(.item(item))
         }
         .onChange(of: pageState.pageIndex) { _, _ in reprojectCurrentPage(viewport: viewport) }
-        .onChange(of: document) { _, _ in reprojectCurrentPage(viewport: viewport) }
+        .onChange(of: document) { _, _ in
+            // A reflow moves every anchor's projection; the canvas's undo snapshots describe the old geometry.
+            viewModel.annotationCanvasSession.clearHistory()
+            reprojectCurrentPage(viewport: viewport)
+        }
         // See `VerticalScoreContainer`: the part-index re-seed is the one path on which the model, not the canvas,
         // is the thing that moved.
         .onChange(of: viewModel.annotationReseedTicket) { _, _ in reprojectCurrentPage(viewport: viewport) }
@@ -378,6 +382,7 @@ struct PagedScoreContainer: View {
             isAnnotating: viewModel.isAnnotating,
             isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
             canvasSession: viewModel.annotationCanvasSession,
+            historyKey: pageState.pageIndex,
             displayDrawing: projectedAnnotations,
             onChange: { drawing in
                 // Capture ONLY while annotating: leaving annotation empties the live canvas, and that programmatic
@@ -462,7 +467,7 @@ struct PagedScoreContainer: View {
     func reseedLiveCanvasForPageTurn(viewport: CGSize) {
         let drawing = projectedDrawing(viewport: viewport)
         projectedAnnotations = drawing
-        annotationHandle.reseedForPageTurn(drawing)
+        annotationHandle.reseedForPageTurn(drawing, historyKey: pageState.pageIndex)
     }
 
     var scoreOptions: ScoreViewOptions {

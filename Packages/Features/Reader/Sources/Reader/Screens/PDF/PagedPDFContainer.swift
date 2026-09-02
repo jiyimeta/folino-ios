@@ -231,6 +231,7 @@ struct PagedPDFContainer: View {
             isAnnotating: viewModel.isAnnotating,
             isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
             canvasSession: viewModel.annotationCanvasSession,
+            historyKey: pageState.pageIndex,
             displayDrawing: projectedAnnotations,
             onChange: { drawing in
                 // Capture ONLY while annotating. Leaving annotation empties the live canvas (static layers take over),
@@ -298,7 +299,7 @@ struct PagedPDFContainer: View {
     func reseedLiveCanvasForPageTurn(viewport: CGSize) {
         let drawing = projectedDrawing(viewport: viewport)
         projectedAnnotations = drawing
-        annotationHandle.reseedForPageTurn(drawing)
+        annotationHandle.reseedForPageTurn(drawing, historyKey: pageState.pageIndex)
     }
 
     private func commitPinch(
