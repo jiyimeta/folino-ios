@@ -262,6 +262,10 @@ struct AnnotatedPDFComposerAKTests {
         #expect(page.annotations.contains { $0.type == "Text" }, "the base document's own annotation must survive")
         let ink = page.annotations.filter { $0.type == "Ink" }
         #expect(ink.count == 2)
+        #expect(
+            page.annotations.filter { $0.type != "Ink" }.allSatisfy { Self.akPayloadString(of: $0) == nil },
+            "the base document's own annotation must not pick up a payload meant for the ink marks",
+        )
 
         // Distinct, non-nil payloads are not enough: two payloads SWAPPED between the two annotations would
         // satisfy that and still be rejected in silence by Apple's markup, because each annotation's /Rect would

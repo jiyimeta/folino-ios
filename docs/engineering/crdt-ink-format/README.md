@@ -1,8 +1,8 @@
 # Apple's `crdt` ink container — reverse-engineering notes
 
 Research branch. **Nothing here ships**; the goal is to learn whether folino can write the payload Apple's own
-markup recognizes, so that ink exported by folino can be erased with the PencilKit eraser in Files, Books and
-Preview on any device.
+markup recognizes, so that ink exported by folino can be erased with the PencilKit eraser in Files and Books
+on any device. (For macOS Preview specifically, see "What AKAnnotationV2 costs" below.)
 
 Split out of `worktree-annotated-pdf-export` so the export feature — which is finished and works without any of
 this — is not held up by an open-ended investigation.
@@ -544,10 +544,12 @@ identifier, which is the same rule production code has to follow.
 ## The key "needs" two serialization passes — RETRACTED (2026-09-02)
 
 **This whole section is an artifact of a broken iOS 27.0 simulator runtime.** Read it as history; the
-retraction at the end is the current fact. Everything above was measured with command-line tools that opened a PDF, set the key and saved. Inside the app
-— and inside the Reader test bundle, which is where this surfaced — the same three lines silently lose the
-payload. `/AAPL:AKExtras` set on a `PDFAnnotation` that PDFKit created THIS session does not survive
-`dataRepresentation()`.
+retraction at the end is the current fact.
+
+Everything in the sections above this one was measured with command-line tools that opened a PDF, set the
+key and saved. Inside the app — and inside the Reader test bundle, which is where this surfaced — the same
+three lines silently lose the payload. `/AAPL:AKExtras` set on a `PDFAnnotation` that PDFKit created THIS
+session does not survive `dataRepresentation()`.
 
 The control is what makes it unambiguous. Serializing an `/Ink` annotation with **nothing set on it at all**
 still produces an `/AAPL:AKExtras` in the output, holding AnnotationKit's own trio:

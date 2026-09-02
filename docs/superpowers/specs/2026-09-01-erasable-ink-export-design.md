@@ -1,8 +1,9 @@
 # Erasable ink in the annotated PDF export — design
 
 2026-09-01. Makes the ink in folino's annotated PDF export editable by Apple's own markup — erased with the
-PencilKit eraser, selected, moved — in Files, Books and Preview, on any device, by writing Apple's
-`AKAnnotationV2` payload alongside the `/Ink` annotation the export already produces.
+PencilKit eraser, selected, moved — in Files and Books, on any device, by writing Apple's `AKAnnotationV2`
+payload alongside the `/Ink` annotation the export already produces. (For macOS Preview specifically, see
+"What the payload does cost" below.)
 
 The format was reverse-engineered on this branch. The measurements, the tools and the false turns are in
 `docs/engineering/crdt-ink-format/README.md`; this document assumes them and does not repeat the derivation.

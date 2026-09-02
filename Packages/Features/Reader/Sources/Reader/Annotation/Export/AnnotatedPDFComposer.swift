@@ -62,10 +62,10 @@ private typealias PlatformColor = NSColor
 /// rendering. If this symptom ever reappears on some later OS, it is the runtime that wants checking first, not
 /// this code.
 ///
-/// Attaching it is strictly best-effort: a stroke whose payload cannot be built (a pixel-erased stroke carrying a
-/// `mask`, an archive failure) is written exactly as it was before the payload existed — an `/Ink` annotation with
-/// folino's own vector appearance — so the worst case is the behavior that already shipped. The count of such
-/// strokes travels back out of `compose` so the renderer can log it.
+/// Attaching the payload is strictly best-effort: a stroke whose payload cannot be built (a pixel-erased stroke
+/// carrying a `mask`, an archive failure) is written exactly as it was before the payload existed — an `/Ink`
+/// annotation with folino's own vector appearance — so the worst case is the behavior that already shipped. The
+/// count of such strokes travels back out of `compose` so the renderer can log it.
 ///
 /// The annotations are deliberately NOT locked (`/F` keeps PDFKit's default rather than Books' Print + Locked +
 /// LockedContents). folino wants other editors to be able to select and delete these marks; Books locks its own
@@ -120,8 +120,10 @@ enum AnnotatedPDFComposer {
 
     /// Decodes the placed drawing, bakes the placement's transform into its points (page-local, top-left origin,
     /// y-down — see `InkStrokePencilKitBridge.bakingTransformIntoPoints`), and builds one `.ink` annotation from the
-    /// result. `nil` when the drawing index is out of range, the stored bytes don't decode, or the placed geometry
-    /// collapses to nothing (clipped fully off the page).
+    /// result. Also encodes and attaches Apple's `AKAnnotationV2` payload to that same annotation before returning
+    /// it, so the whole annotation — vector appearance and editable payload alike — is produced in one pass. `nil`
+    /// when the drawing index is out of range, the stored bytes don't decode, or the placed geometry collapses to
+    /// nothing (clipped fully off the page).
     private static func makeAnnotation(
         for placement: InkPlacement, drawings: [DrawingAnchor], page: PDFPage,
     ) -> ComposedAnnotation? {
@@ -199,13 +201,20 @@ enum AnnotatedPDFComposer {
         let payload = inkStroke.flatMap {
             akPayload(for: $0, inkBox: inkBox, archiveRect: archiveRect, pageSize: pageSize)
         }
-        if let payload {
+        // `setValue(_:forAnnotationKey:)` returns `false` when PDFKit rejects the value outright (the SDK logs
+        // "-[PDFAnnotation setValue:forAnnotationKey:] failed" in that case), so its result — not just whether a
+        // payload was built — decides `hasAKPayload`. This is a partial guard, not a regression detector: it would
+        // NOT have caught the iOS 27.0 case documented above, where `add(_:)` itself failed and AnnotationKit
+        // overwrote the key later at serialization, so `setValue` here still returned `true`. What it closes is the
+        // narrower gap between this call and its documented contract — one class of silent failure becomes a
+        // counted one, no more.
+        let attached = payload.map {
             annotation.setValue(
-                ["AAPL:AKAnnotationV2": payload.base64EncodedString()],
+                ["AAPL:AKAnnotationV2": $0.base64EncodedString()],
                 forAnnotationKey: PDFAnnotationKey(rawValue: "AAPL:AKExtras"),
             )
-        }
-        return ComposedAnnotation(annotation: annotation, hasAKPayload: payload != nil)
+        } ?? false
+        return ComposedAnnotation(annotation: annotation, hasAKPayload: attached)
     }
 
     /// The placed stroke as neutral geometry, for the Apple ink payload.
