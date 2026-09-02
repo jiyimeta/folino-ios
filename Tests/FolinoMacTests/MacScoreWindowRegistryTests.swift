@@ -74,6 +74,46 @@ struct MacScoreWindowRegistryTests {
         #expect(registry.tabHost(excluding: newcomer, frontToBack: [newcomer]) === offscreen)
     }
 
+    /// The whole justification for `WeakWindow` is that a window AppKit deallocates drops out of the registry on its
+    /// own, without an `unregister` — the backstop for a window that goes away without a `willClose`. A strong array
+    /// would keep the window, its SwiftUI tree and its `EditorViewModel` alive for the life of the process and this
+    /// would still read as non-empty.
+    @Test func `a deallocated window drops out of the registry`() {
+        let registry = MacScoreWindowRegistry()
+        autoreleasepool {
+            let window = makeWindow()
+            registry.register(window)
+            #expect(!registry.isEmpty)
+        }
+        #expect(registry.isEmpty)
+    }
+
+    /// `register` prunes emptied boxes before appending, so a registry that outlives several windows does not grow a
+    /// tail of dead entries.
+    @Test func `registering prunes boxes whose window is gone`() {
+        let registry = MacScoreWindowRegistry()
+        autoreleasepool {
+            let gone = makeWindow()
+            registry.register(gone)
+        }
+        let live = makeWindow()
+        registry.register(live)
+        #expect(registry.windows.count == 1)
+        #expect(registry.windows.first === live)
+    }
+
+    /// The `registered.first` fallback — for a host AppKit omits from `orderedWindows` — has to exclude the newcomer
+    /// by identity too, or a window that registered before asking would be told to tab onto itself.
+    @Test func `the fallback host is never the newcomer itself`() {
+        let registry = MacScoreWindowRegistry()
+        let other = makeWindow()
+        let newcomer = makeWindow()
+        registry.register(newcomer)
+        registry.register(other)
+        // Neither is in the ordered list — both minimized, or on another Space — so only the fallback can answer.
+        #expect(registry.tabHost(excluding: newcomer, frontToBack: []) === other)
+    }
+
     @Test func `the library is shown when the last score window goes`() {
         let registry = MacScoreWindowRegistry()
         var shown = 0
