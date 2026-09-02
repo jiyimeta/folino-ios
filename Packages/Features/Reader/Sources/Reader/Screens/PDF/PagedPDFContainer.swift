@@ -2,6 +2,12 @@
 // PagedPDFContainer mirrors PagedScoreContainer's page-band pagination / pinch / annotation-overlay plumbing for
 // paged PDF viewing; the parallel structure keeps it just over the file_length budget.
 
+// PARITY(macos): paged layout for an imported PDF — `MacOriginalPDFView` shows an imported PDF in one continuous
+//   layout only, with the playback cursor and committed ink over it. There is no paged mode for a PDF on the Mac,
+//   so `ReaderLayoutMode` silently means nothing while an original is on screen there. What macOS needs is a Mac
+//   page deck for PDF pages — `MacPageDeck` is the shape, over `PDFPage` rather than an engraved system.
+
+#if os(iOS)
 import Domain
 import PDFKit
 import PencilKit
@@ -184,7 +190,9 @@ struct PagedPDFContainer: View {
         .ignoresSafeArea()
         .onChange(of: pageState.pageIndex) { _, _ in reprojectCurrentPage(viewport: viewport) }
         .onChange(of: viewModel.annotationDrawings) { _, _ in
-            if !viewModel.isAnnotating { reprojectCurrentPage(viewport: viewport) }
+            if !viewModel.isAnnotating {
+                reprojectCurrentPage(viewport: viewport)
+            }
         }
         // Entering/leaving annotation hands the current page off between its static layer and the live canvas.
         .onChange(of: viewModel.isAnnotating) { _, _ in reprojectCurrentPage(viewport: viewport) }
@@ -318,7 +326,8 @@ struct PagedPDFContainer: View {
         )
         let contentSize = CGSize(width: paddedBounds.width * r.targetZoom, height: paddedBounds.height * r.targetZoom)
         let (clamped, residual) = ReaderPinchCommit.clampScrollTarget(
-            r.rawScrollTarget, contentSize: contentSize, bounds: paddedBounds, inset: .zero,
+            r.rawScrollTarget, contentSize: contentSize, bounds: paddedBounds,
+            insetLeft: 0, insetRight: 0, insetTop: 0, insetBottom: 0,
         )
 
         if r.isBounceBack {
@@ -442,3 +451,4 @@ struct PagedPDFContainer: View {
         }
     }
 }
+#endif

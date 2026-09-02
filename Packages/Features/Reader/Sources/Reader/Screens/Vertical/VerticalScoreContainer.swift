@@ -2,6 +2,12 @@
 // VerticalScoreContainer hosts the UIKit-backed scroll / pinch / zoom pipeline plus the layout, fit-to-width, and
 // auto-scroll plumbing for the vertical Reader; its breadth keeps it just over the file_length budget.
 
+// PARITY(macos): vertical mode's live overlays — the Mac draws and scrolls vertical mode in its own
+//   `MacVerticalScoreContainer`, so the mode itself is not owed. What this container still has that its Mac sibling
+//   does not: the live PencilKit annotation canvas it hands to the scroll host (Ⅴ — macOS ships no `PKCanvasView`
+//   at all) and the note-editing overlay in its zoomed subtree (Ⅳ). Zoom is settled, not owed; see `PinchState`.
+
+#if os(iOS)
 import Domain
 import PencilKit
 import SheetMusicCore
@@ -122,7 +128,9 @@ struct VerticalScoreContainer: View {
     /// Horizontal inset applied to the score on iPad (0 on iPhone) so Vertical mode matches Page mode's score width
     /// and keeps comfortable margins off the bezel. See `ReaderScoreLayout`.
     private func scoreInset(viewportWidth: CGFloat) -> CGFloat {
-        ReaderScoreLayout.scoreHorizontalInset(viewportWidth: viewportWidth, phoneDefault: 0)
+        ReaderScoreLayout.scoreHorizontalInset(
+            viewportWidth: viewportWidth, phoneDefault: 0, isPad: ReaderScoreLayout.isPad,
+        )
     }
 
     var body: some View {
@@ -560,3 +568,4 @@ struct VerticalScoreContainer: View {
         }
     }
 }
+#endif

@@ -1,7 +1,11 @@
 import CoreText
 import SheetMusicLayoutApple
 import SwiftUI
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Draws a tempo marking's beat note (a SMuFL "Individual notes" glyph string from `Tempo.beatGlyph`, e.g. a quarter
 /// or a dotted quarter) sized to its own ink — not the Bravura font's line box, which is ~1 em tall and would leave the
@@ -26,9 +30,14 @@ struct TempoBeatGlyph: View {
         Canvas { context, size in
             context.withCGContext { cg in
                 let font = CTFontCreateWithName(BravuraFont.familyName as CFString, fontSize, nil)
+                #if os(iOS)
+                let glyphColor: Any = UIColor(color)
+                #else
+                let glyphColor: Any = NSColor(color)
+                #endif
                 let line = CTLineCreateWithAttributedString(NSAttributedString(
                     string: glyph,
-                    attributes: [.font: font, .foregroundColor: UIColor(color)],
+                    attributes: [.font: font, .foregroundColor: glyphColor],
                 ) as CFAttributedString)
                 // CoreText draws baseline-up; flip into the Canvas's top-left space, then offset so the glyph's ink
                 // rect maps exactly onto the canvas (which is sized to that ink), filling it with no slack.

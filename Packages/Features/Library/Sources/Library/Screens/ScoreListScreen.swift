@@ -7,11 +7,15 @@ struct ScoreListScreen: View {
     @Bindable var viewModel: ScoreListViewModel
     let library: LibraryViewModel
     let onOpen: (ScoreItem) -> Void
+    /// **macOS only**, in effect — see `ScoreListView.onOpenInNewWindow`. `MacLibraryBrowser` passes a real
+    /// `openWindow(value:)` closure; the iOS callers pass the same one they pass to `onOpen`, because iOS has no
+    /// second window to open into.
+    let onOpenInNewWindow: (ScoreItem) -> Void
     let onEditTags: (ScoreItem) -> Void
     let onAddToPlaylist: (ScoreItem) -> Void
 
     @State private var editInfoTarget: ScoreItem?
-    @State private var editMode: EditMode = .inactive
+    @State private var isSelecting = false
     @State private var selectedIDs: Set<ScoreItemID> = []
     @State private var bulkSheet: BulkSheet?
 
@@ -62,11 +66,12 @@ struct ScoreListScreen: View {
             isManualOrderActive: viewModel.isManualOrderActive,
             showsManualOrderOption: isPlaylistSource,
             onTap: openScore,
+            onOpenInNewWindow: onOpenInNewWindow,
             onToggleFavorite: { item in Task { await library.toggleFavorite(item) } },
             onConfirmDelete: { item in Task { await library.delete(item) } },
             onSelectSort: { viewModel.selectSort($0) },
             onSelectManualOrder: { viewModel.selectManualOrder() },
-            editMode: $editMode,
+            isSelecting: $isSelecting,
             selectedIDs: $selectedIDs,
             bulkContext: bulkContext,
             availableShareFormats: bulkAvailableShareFormats,
@@ -110,17 +115,22 @@ struct ScoreListScreen: View {
     }
 
     private var openSource: AnalyticsSource {
-        if !viewModel.searchQuery.isEmpty { return .searchResult }
+        if !viewModel.searchQuery.isEmpty {
+            return .searchResult
+        }
         switch viewModel.source {
         case .all: return .libraryAll
         case .favorites: return .favorites
         case .taggedWith: return .tag
         case .playlist: return .playlist
+        case .recents: return .recentlyOpened
         }
     }
 
     private var isPlaylistSource: Bool {
-        if case .playlist = viewModel.source { return true }
+        if case .playlist = viewModel.source {
+            return true
+        }
         return false
     }
 
@@ -157,6 +167,6 @@ struct ScoreListScreen: View {
 
     private func exitSelectionMode() {
         selectedIDs = []
-        editMode = .inactive
+        isSelecting = false
     }
 }

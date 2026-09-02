@@ -113,12 +113,12 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
 
     @ToolbarContentBuilder
     private var importToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) { addMenu }
+        ToolbarItem(placement: .topBarTrailingCompat) { addMenu }
     }
 
     @ToolbarContentBuilder
     private var leadingToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) { leadingToolbarItem() }
+        ToolbarItem(placement: .topBarLeadingCompat) { leadingToolbarItem() }
     }
 
     private var addMenu: some View {
@@ -217,11 +217,13 @@ public struct LibraryRootScreen<LicenseContent: View, ReaderContent: View, Leadi
     }
 }
 
-enum ScoreFileTypes {
+/// `public` so the App composition root's Mac import panel / drop target can share this exact list rather than
+/// keeping its own copy — a Feature's declared type table is exactly what a composition root may consume.
+public enum ScoreFileTypes {
     /// Each specific UTI comes from whichever app on the device owns the extension's registration; parent fallbacks
     /// (`.xml`, `.zip`, `.midi`) cover cloud providers that hand us generic UTIs and devices where a sibling app's UTI
     /// doesn't conform to ours. `LiveScoreFileImporter.prepareImport` rejects unsupported files by filename extension.
-    static let allowed: [UTType] = {
+    public static let allowed: [UTType] = {
         let specific = ["mscx", "mscz", "musicxml", "mxl"]
             .compactMap { UTType(filenameExtension: $0) }
         return specific + [.xml, .zip, .midi, .pdf]

@@ -3,11 +3,29 @@ import ImportExportAppGroup
 
 /// Resolves on-disk locations the app uses. Centralized so AppBootstrap and any future migrations agree on layout.
 enum AppPaths {
+    // PARITY(macos): document root — this is the pre-sandbox location (`~/Library/Application Support/folino/`),
+    //   not the App Sandbox container. Sub-project Ⅷ moves it into the sandbox with a security-scoped bookmark;
+    //   Application Support is already where that container's equivalent maps, so nothing here has to move twice
+    //   in spirit.
+    /// Root of the app's document storage: `~/Documents` on iOS (sandboxed), `~/Library/Application Support/folino/`
+    /// on macOS (this app is not yet sandboxed there, so `.documentDirectory` would resolve to the user's real
+    /// `~/Documents` — the wrong place for app-managed data to live, and to be recursively cleaned by
+    /// `AppBootstrap.prepareDirectories()` on every launch).
     static var documentsRoot: URL {
+        #if os(iOS)
         guard let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
             fatalError("Documents directory unavailable — sandbox is broken")
         }
         return url
+        #else
+        guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        else {
+            fatalError("Application Support directory unavailable")
+        }
+        let url = base.appending(path: "folino")
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+        #endif
     }
 
     static var scoresDirectory: URL {

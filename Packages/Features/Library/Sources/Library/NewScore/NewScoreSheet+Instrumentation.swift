@@ -158,13 +158,14 @@ extension NewScoreSheet {
                 replacing ? "library.newScore.chooseInstruments" : "library.newScore.addInstrument",
                 bundle: .module,
             ))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { picker = nil } label: { L10n.Common.cancel }
                 }
             }
         }
+        .listSheetSizeCompat()
     }
 
     /// Pick an existing score to copy the instrumentation from. Soft-deleted rows are already out of
@@ -190,13 +191,14 @@ extension NewScoreSheet {
                 }
             }
             .navigationTitle(Text("library.newScore.chooseSourceScore", bundle: .module))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitleCompat()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { picker = nil } label: { L10n.Common.cancel }
                 }
             }
         }
+        .listSheetSizeCompat()
     }
 
     /// Dismisses the picker BEFORE awaiting the parse: a load failure lands on `viewModel.currentError`, and the

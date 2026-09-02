@@ -1,3 +1,11 @@
+// PARITY(macos): revert-reload wiring — `MacReaderRootScreen.task` does not install it, so a revert-to-original
+//   performed while a score is open on the Mac would leave the reader showing the pre-revert engraving over a
+//   still-running engine. The reload ordering (`releaseEngine()` → `scoreItem` → `pdfPlayback = .idle` → `load()`)
+//   is platform-neutral and sits in a `ReaderRootScreen` extension only because iOS wires it from that screen's
+//   `.task`; the Mac screen should LIFT it into its own `.task`, not re-author it. Reachable once Ⅳ gives the Mac
+//   the score-info chrome that offers Revert.
+
+#if os(iOS)
 import Domain
 
 extension ReaderRootScreen {
@@ -9,7 +17,11 @@ extension ReaderRootScreen {
         // a revert of the notation never touches.
         host.hasMusicalAnnotationsProvider = { [weak viewModel] in
             viewModel?.annotationDrawings.contains { drawing in
-                if case .musical = drawing.kind { true } else { false }
+                if case .musical = drawing.kind {
+                    true
+                } else {
+                    false
+                }
             } ?? false
         }
         host.requestReloadAfterRevert = { [weak viewModel, weak host] item in
@@ -36,3 +48,4 @@ extension ReaderRootScreen {
         }
     }
 }
+#endif

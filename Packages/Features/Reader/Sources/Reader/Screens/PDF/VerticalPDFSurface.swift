@@ -1,3 +1,8 @@
+// PARITY(macos): the stacked page rendering behind a vertical PDF — this is what a Mac vertical PDF mode would
+//   have to grow (see `VerticalPDFContainer`), and it is not a port: the inter-page ground here is
+//   `Color(.secondarySystemBackground)`, an iOS-only dynamic color, where the Mac's desk is `MacReaderGround`.
+
+#if os(iOS)
 import Domain
 import PDFKit
 import ReaderAnnotationCore
@@ -129,3 +134,4 @@ struct VerticalPDFSurface: View {
         }
     }
 }
+#endif

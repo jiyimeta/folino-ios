@@ -1,626 +1,898 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "app.bootstrap.error.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino couldn't start"
+  "sourceLanguage": "en",
+  "strings": {
+    "app.bootstrap.error.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "folino couldn't start"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino を起動できませんでした"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "folino を起動できませんでした"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino를 시작할 수 없습니다"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "folino를 시작할 수 없습니다"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法启动 folino"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法启动 folino"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法啟動 folino"
-          }
-        }
-      }
-    },
-    "app.detail.empty.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Select a score"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "楽譜を選択してください"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "악보를 선택하세요"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请选择一份乐谱"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請選擇一份樂譜"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法啟動 folino"
           }
         }
       }
     },
-    "app.import.loading.label" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Opening…"
+    "app.detail.empty.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a score"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "開いています…"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "楽譜を選択してください"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "여는 중…"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "악보를 선택하세요"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在打开…"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择一份乐谱"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在開啟…"
-          }
-        }
-      }
-    },
-    "app.review.preprompt.message" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Would you mind taking a moment to leave a review on the App Store?"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "App Store でレビューを書いていただけますか？"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "App Store에 리뷰를 남겨 주시겠어요?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可以在 App Store 上为我们写一条评论吗？"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可以在 App Store 上為我們留下評論嗎？"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請選擇一份樂譜"
           }
         }
       }
     },
-    "app.review.preprompt.notNow" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not Now"
+    "app.import.loading.label": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opening…"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "後で"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開いています…"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "나중에"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "여는 중…"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "稍后"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在打开…"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "稍後"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在開啟…"
           }
         }
       }
     },
-    "app.review.preprompt.rate" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rate folino"
+    "app.review.preprompt.message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Would you mind taking a moment to leave a review on the App Store?"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino を評価する"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App Store でレビューを書いていただけますか？"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino 평가하기"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App Store에 리뷰를 남겨 주시겠어요?"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "为 folino 评分"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可以在 App Store 上为我们写一条评论吗？"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "為 folino 評分"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可以在 App Store 上為我們留下評論嗎？"
           }
         }
       }
     },
-    "app.review.preprompt.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enjoying folino?"
+    "app.review.preprompt.notNow": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not Now"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino はいかがですか？"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "後で"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "folino는 어떠신가요?"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "나중에"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "您觉得 folino 怎么样？"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "稍后"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "您覺得 folino 如何？"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "稍後"
           }
         }
       }
     },
-    "app.share.duplicate.keepBoth" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keep Both"
+    "app.review.preprompt.rate": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rate folino"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "両方残す"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "folino を評価する"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "둘 다 유지"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "folino 평가하기"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "都保留"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "为 folino 评分"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "都保留"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "為 folino 評分"
           }
         }
       }
     },
-    "app.share.duplicate.message" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "\"%@\" is already imported. What do you want to do?"
+    "app.review.preprompt.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enjoying folino?"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "「%@」は既に取り込み済みです。どうしますか？"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "folino はいかがですか？"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "'%@'은(는) 이미 가져왔습니다. 어떻게 하시겠습니까?"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "folino는 어떠신가요?"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "「%@」已经导入。要如何处理？"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "您觉得 folino 怎么样？"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "「%@」已經匯入。要如何處理？"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "您覺得 folino 如何？"
           }
         }
       }
     },
-    "app.share.duplicate.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Already in Your Library"
+    "app.share.duplicate.keepBoth": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep Both"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ライブラリに既に存在します"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "両方残す"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "라이브러리에 이미 존재합니다"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "둘 다 유지"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "资料库中已存在"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "都保留"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "資料庫中已存在"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "都保留"
           }
         }
       }
     },
-    "app.toolbar.settings.label" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Settings"
+    "app.share.duplicate.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\"%@\" is already imported. What do you want to do?"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "設定"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」は既に取り込み済みです。どうしますか？"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "설정"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "'%@'은(는) 이미 가져왔습니다. 어떻게 하시겠습니까?"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "设置"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」已经导入。要如何处理？"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "設定"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」已經匯入。要如何處理？"
           }
         }
       }
     },
-    "domain.error.audioEngineFailed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Audio engine error: %@"
+    "app.share.duplicate.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already in Your Library"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "オーディオエンジンエラー: %@"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライブラリに既に存在します"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "오디오 엔진 오류: %@"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "라이브러리에 이미 존재합니다"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "音频引擎错误：%@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "资料库中已存在"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "音訊引擎錯誤：%@"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "資料庫中已存在"
           }
         }
       }
     },
-    "domain.error.persistenceFailed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Library save failed: %@"
+    "app.toolbar.settings.label": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ライブラリの保存に失敗しました: %@"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "라이브러리 저장에 실패했습니다: %@"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "保存资料库失败：%@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "儲存資料庫失敗：%@"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定"
           }
         }
       }
     },
-    "domain.error.scoreFileNotFound" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Score file not found: %@"
+    "domain.error.audioEngineFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio engine error: %@"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "楽譜ファイルが見つかりません: %@"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オーディオエンジンエラー: %@"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "악보 파일을 찾을 수 없습니다: %@"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오디오 엔진 오류: %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "找不到乐谱文件：%@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音频引擎错误：%@"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "找不到樂譜檔案：%@"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音訊引擎錯誤：%@"
           }
         }
       }
     },
-    "domain.error.scoreParseFailed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Could not parse score file: %@"
+    "domain.error.persistenceFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Library save failed: %@"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "楽譜ファイルを読み取れませんでした: %@"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライブラリの保存に失敗しました: %@"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "악보 파일을 읽을 수 없습니다: %@"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "라이브러리 저장에 실패했습니다: %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法读取乐谱文件：%@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存资料库失败：%@"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法讀取樂譜檔案：%@"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "儲存資料庫失敗：%@"
           }
         }
       }
     },
-    "domain.error.scoreWriteFailed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Could not write score file: %@"
+    "domain.error.scoreFileNotFound": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Score file not found: %@"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "楽譜ファイルを書き込めませんでした: %@"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "楽譜ファイルが見つかりません: %@"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "악보 파일을 쓸 수 없습니다: %@"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "악보 파일을 찾을 수 없습니다: %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法写入乐谱文件：%@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到乐谱文件：%@"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法寫入樂譜檔案：%@"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到樂譜檔案：%@"
           }
         }
       }
     },
-    "domain.error.syncFailed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sync failed: %@"
+    "domain.error.scoreParseFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not parse score file: %@"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同期に失敗しました: %@"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "楽譜ファイルを読み取れませんでした: %@"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "동기화에 실패했습니다: %@"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "악보 파일을 읽을 수 없습니다: %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同步失败：%@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取乐谱文件：%@"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同步失敗：%@"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法讀取樂譜檔案：%@"
           }
         }
       }
     },
-    "domain.error.unsupportedFormat" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unsupported file format: %@"
+    "domain.error.scoreWriteFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not write score file: %@"
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未対応のファイル形式です: %@"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "楽譜ファイルを書き込めませんでした: %@"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "지원하지 않는 파일 형식입니다: %@"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "악보 파일을 쓸 수 없습니다: %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不支持的文件格式：%@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法写入乐谱文件：%@"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不支援的檔案格式：%@"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法寫入樂譜檔案：%@"
+          }
+        }
+      }
+    },
+    "domain.error.syncFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync failed: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同期に失敗しました: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "동기화에 실패했습니다: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同步失败：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同步失敗：%@"
+          }
+        }
+      }
+    },
+    "domain.error.unsupportedFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsupported file format: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未対応のファイル形式です: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지원하지 않는 파일 형식입니다: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持的文件格式：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支援的檔案格式：%@"
+          }
+        }
+      }
+    },
+    "mac.menu.displayMode": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display Mode"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "表示モード"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "표시 모드"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示模式"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顯示模式"
+          }
+        }
+      }
+    },
+    "mac.menu.displayMode.horizontal": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Horizontal Scroll"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "横スクロール"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "가로 스크롤"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "水平滚动"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "水平捲動"
+          }
+        }
+      }
+    },
+    "mac.menu.displayMode.page": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Page"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ページ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "페이지"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "页面"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "頁面"
+          }
+        }
+      }
+    },
+    "mac.menu.displayMode.vertical": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vertical Scroll"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "縦スクロール"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "세로 스크롤"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "垂直滚动"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "垂直捲動"
+          }
+        }
+      }
+    },
+    "mac.menu.import": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み込む…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "가져오기…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入…"
+          }
+        }
+      }
+    },
+    "mac.menu.openInNewWindow": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in New Window"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新しいウインドウで開く"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새 윈도우에서 열기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在新窗口中打开"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在新視窗中開啟"
+          }
+        }
+      }
+    },
+    "mac.menu.showLibrary": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開く…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "열기…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟…"
+          }
+        }
+      }
+    },
+    "mac.toolbar.showLibrary": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開く…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "열기…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟…"
           }
         }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

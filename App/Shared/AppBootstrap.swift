@@ -4,7 +4,6 @@ import CrashReporting
 import Domain
 import Foundation
 import ImportExport
-import ImportExportAppGroup
 import Observation
 import Persistence
 import Reader
@@ -16,6 +15,20 @@ import UtilityCore
 /// neutral InkStroke format, this is set and the migration is skipped on subsequent launches.
 private enum AnnotationMigrationKey {
     static let neutralFormatMigrated = "annotation.neutralFormatMigrated.v1"
+}
+
+/// What the app's audio and sharing adapters amount to, handed back by `AudioStackFactory`.
+///
+/// `playbackController` is typed through the `Domain.PlaybackController` protocol rather than the concrete
+/// `LivePlaybackController`, and stays optional. Both platforms now build a real one — `LivePlaybackController` is no
+/// longer iOS-gated — so the optionality is no longer a macOS gap; it is what every consumer already takes
+/// (`EditableReaderScreen.init(playbackController:)`), and what a test or a preview passes `nil` for.
+struct AudioStack {
+    let museScoreGeneralProvider: LiveMuseScoreGeneralProvider
+    let soundfontResolver: GMSoundfontResolver
+    let shareService: LiveScoreShareService
+    let metadataReader: LiveScoreMetadataReader
+    let playbackController: (any PlaybackController)?
 }
 
 @MainActor
@@ -42,7 +55,9 @@ final class AppBootstrap {
     private(set) var gateway: LiveScoreFileGateway?
     private(set) var originalStore: LiveScoreOriginalStore?
     private(set) var importer: LiveScoreFileImporter?
-    private(set) var playbackController: LivePlaybackController?
+    /// Typed through `Domain.PlaybackController`, not the concrete `LivePlaybackController` — see `AudioStack`'s
+    /// doc comment for why.
+    private(set) var playbackController: (any PlaybackController)?
     /// Stateless PDF → playable-score parser (ssm OMR). Always available on Apple, no async setup, so
     /// it's a plain constant rather than a slot filled during `start()`.
     let pdfPlaybackParser = LivePDFPlaybackParser()
@@ -61,7 +76,8 @@ final class AppBootstrap {
     private(set) var metadataReader: LiveScoreMetadataReader?
     private(set) var incomingShareCoordinator: IncomingShareCoordinator?
     /// Drains cross-app score hand-offs (`folino://open-score`) staged by a sibling app in the shared App Group.
-    /// `nil` when that container is unavailable, in which case the route degrades to doing nothing.
+    /// `nil` when `SharedContainerTasks` declines to build one — on iOS because the container is unavailable, on
+    /// macOS always — in which case the route degrades to doing nothing.
     private(set) var incomingScoreCoordinator: IncomingScoreCoordinator?
     private(set) var crashReporter: (any CrashReporter)?
     private(set) var analytics: (any Analytics)?
@@ -85,19 +101,25 @@ final class AppBootstrap {
         didStart = true
         let crashEnabled = UserDefaults.standard
             .object(forKey: PrivacySettingsKey.crashReportingEnabled) as? Bool ?? true
+        // PARITY(macos): Firebase registration — FirebaseAnalytics ships a macOS slice and Crashlytics is a source
+        //   target, so neither is a platform blocker. What is missing is a console registration for a Mac app
+        //   sharing com.KeyNumber.Folino, its own GoogleService-Info.plist, and a decision on attaching the
+        //   upload-symbols post-build script (project.yml:110). Until then the Mac composes the no-ops.
+        #if os(iOS)
         crashReporter = FirebaseCrashReporter.configure(collectionEnabled: crashEnabled)
         configureAnalytics()
+        #else
+        crashReporter = NoopCrashReporter()
+        analytics = NoopAnalytics()
+        #endif
         // Before any Reader / Settings view reads the key, so the first launch after the update already sees PiP on.
         PictureInPictureOptOutMigration.apply(to: .standard)
         do {
             try prepareDirectories()
             cleanupLegacySoundfontCacheIfNeeded()
-            reconcileSoundfontToSharedContainerIfNeeded()
-            stampSharedCapabilities()
-            let appGroupContainer = AppGroupPaths.container()
-            let writer: PlaylistsIndexWriter? = appGroupContainer.map {
-                PlaylistsIndexWriter(appGroupContainer: $0)
-            }
+            SharedContainerTasks.reconcileSoundfontToSharedContainer()
+            SharedContainerTasks.stampCapabilities(appVersion: AppVersion.current.description)
+            let writer = SharedContainerTasks.playlistsIndexWriter()
             let database = try AppDatabase(databaseURL: AppPaths.databaseURL)
             let annotationStore = LiveAnnotationStore(database: database)
             let repository = LiveScoreLibraryRepository(
@@ -115,17 +137,13 @@ final class AppBootstrap {
                 scoresDirectory: AppPaths.scoresDirectory,
                 pdfConversion: pdfScoreConversion,
             )
-            let shareCoordinator: IncomingShareCoordinator? = appGroupContainer.map { container in
-                IncomingShareCoordinator(
-                    importer: importer,
-                    repository: repository,
-                    appGroupContainer: container,
-                    clock: SystemClock(),
-                    duplicateResolver: shareDuplicateResolver,
-                    analytics: analytics ?? NoopAnalytics(),
-                    crashReporter: crashReporter ?? NoopCrashReporter(),
-                )
-            }
+            let shareCoordinator = SharedContainerTasks.makeIncomingShareCoordinator(
+                importer: importer,
+                repository: repository,
+                duplicateResolver: shareDuplicateResolver,
+                analytics: analytics ?? NoopAnalytics(),
+                crashReporter: crashReporter ?? NoopCrashReporter(),
+            )
 
             incomingScoreCoordinator = makeIncomingScoreCoordinator(importer: importer)
 
@@ -178,50 +196,21 @@ final class AppBootstrap {
     }
 
     private func installAudioStack(gateway: LiveScoreFileGateway, annotationStore: LiveAnnotationStore) {
-        let reclaimer = SharedSoundfontReclaimer(
-            soundfontsDirectory: AppPaths.soundfontsDirectory,
-            soundfontFileName: SoundfontPreset.highQuality.fileName,
-            minimumValidByteSize: Self.soundfontMinimumValidByteSize,
-            ownBundleId: Bundle.main.bundleIdentifier ?? "com.KeyNumber.Folino",
-            ownDisplayName: (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
-                ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String) ?? "folino",
-            siblings: Self.soundfontSiblings,
-            installedChecker: UIKitInstalledAppChecker(),
-        )
-        let provider = LiveMuseScoreGeneralProvider(
-            targetDirectory: AppPaths.soundfontsDirectory, reclaimer: reclaimer,
-        )
-        museScoreGeneralProvider = provider
-        let resolver = GMSoundfontResolver(provider: provider)
-        soundfontResolver = resolver
-        let clickProvider = BundledMetronomeClickProvider()
-        let audioExporter = LiveScoreAudioExporter(
-            soundfontResolver: resolver,
-            metronomeClickProvider: clickProvider,
-            metronomeEnabled: {
-                UserDefaults.standard.bool(forKey: ReaderGlobalSettingsKey.metronomeEnabled)
-            },
-        )
-        shareService = LiveScoreShareService(
+        let stack = AudioStackFactory.make(
+            gateway: gateway,
             scoresDirectory: AppPaths.scoresDirectory,
             shareTempDirectory: AppPaths.shareTempDirectory,
-            gateway: gateway,
-            audioExporter: audioExporter,
-            pdfRenderer: CoreGraphicsPDFRenderer(),
             annotatedPDFRenderer: ReaderAnnotatedPDFRenderer(
                 pdfRenderer: CoreGraphicsPDFRenderer(), analytics: analytics ?? NoopAnalytics(),
             ),
             annotationStore: annotationStore,
         )
-        metadataReader = LiveScoreMetadataReader(
-            gateway: gateway,
-            scoresDirectory: AppPaths.scoresDirectory,
-        )
-        playbackController = LivePlaybackController(
-            soundfontResolver: resolver,
-            metronomeClickProvider: clickProvider,
-        )
-        provider.reconcileSharedSoundfontMarkersAtLaunch()
+        museScoreGeneralProvider = stack.museScoreGeneralProvider
+        soundfontResolver = stack.soundfontResolver
+        shareService = stack.shareService
+        metadataReader = stack.metadataReader
+        playbackController = stack.playbackController
+        stack.museScoreGeneralProvider.reconcileSharedSoundfontMarkersAtLaunch()
     }
 
     /// One-shot cleanup of the pre-GM per-patch SF2 cache. Old versions stored split-bank soundfonts at
@@ -286,15 +275,14 @@ final class AppBootstrap {
         }
     }
 
-    /// Move-then-dedup the high-quality SoundFont into the shared App Group container before the provider is built.
-    /// No-op when the container is unavailable (resolvers degrade to the legacy private path).
-    private func reconcileSoundfontToSharedContainerIfNeeded() {
-        guard let shared = AppPaths.sharedSoundfontsDirectory else { return }
-        SoundfontContainerMigration().reconcile(
-            fileName: SoundfontPreset.highQuality.fileName,
-            sharedDirectory: shared,
-            legacyDirectory: AppPaths.legacySoundfontsDirectory,
-            minimumValidByteSize: Self.soundfontMinimumValidByteSize,
+    /// The cross-app `folino://open-score` drain, over whichever adapters the bootstrap has by then. A thin binding of
+    /// the seam's factory to `self`; the decision of whether such a coordinator exists at all belongs to
+    /// `SharedContainerTasks`, which declines outright on macOS.
+    private func makeIncomingScoreCoordinator(importer: any ScoreFileImporter) -> IncomingScoreCoordinator? {
+        SharedContainerTasks.makeIncomingScoreCoordinator(
+            importer: importer,
+            analytics: analytics ?? NoopAnalytics(),
+            crashReporter: crashReporter ?? NoopCrashReporter(),
         )
     }
 
