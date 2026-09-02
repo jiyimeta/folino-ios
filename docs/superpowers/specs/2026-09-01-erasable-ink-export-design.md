@@ -33,8 +33,22 @@ rendered on screen. Any change to the export's menu, file naming or formats — 
 bytes, not an option to the UI.
 
 **Explicitly unchanged.** The annotation stays subtype `/Ink`. Apple writes `/Square`, and the export could
-have followed, but `/Ink` is the correct annotation for a pen mark and the one other PDF tools treat as one.
-Measured on device: the payload is honoured on `/Ink`, so there is nothing to trade away.
+have followed, but `/Ink` is the correct annotation for a pen mark, and it is what an editor that does not
+special-case `AKExtras` falls back to reading: a real `/InkList` describing a stroke, rather than a rectangle.
+(That last part is reasoning from the file's structure — no third-party editor has been tested.) The payload
+is honoured on `/Ink`, so keeping the subtype costs nothing.
+
+**What the payload does cost: object selection in macOS Preview.** An annotation carrying `/AAPL:AKExtras` is
+claimed by Preview's markup layer and stops being an object the arrow tool can pick up, in normal and markup
+mode alike. This is inherent to the format, not to our encoding — Apple's own `/Square` + `AKAnnotationV2`
+output behaves identically, the same file with `AKExtras` stripped selects fine, and the subtype is not what
+Preview keys off. The one form measured to have both properties is Books' old `/Stamp` + `/PPK` `crdt`
+container, which is unreachable: `PKDrawing` cannot produce it and AnnotationKit is private. The measurement
+table is in `docs/engineering/crdt-ink-format/README.md` § "What AKAnnotationV2 costs".
+
+So Pencil erasing on iOS and object selection in Preview do not coexist in any reachable form, and this export
+chooses erasing. Annotating a score on an iPad with a Pencil — and rubbing a mark out again — is what the
+feature is for; picking a mark up with a mouse pointer in Preview is not.
 
 ## The rule the encoder must satisfy
 
@@ -93,17 +107,36 @@ New files, all in that target:
 | `ProtobufWriter.swift` | minimal length-delimited/varint/fixed writer — no dependency |
 | `GzipWriter.swift` | gzip framing (header, CRC32, ISIZE) over a `Deflating` seam |
 
-`AnnotatedPDFComposer` gains a payload encode per stroke and a second serialization pass to attach it — not
-just one call and one annotation key. `/AAPL:AKExtras` set on an annotation PDFKit just created does not
-survive `dataRepresentation()`: AnnotationKit adopts every freshly built annotation on the way out and
-rewrites that key with its own identity trio, even when nothing set it at all. So the composer serializes the
-stamped document once, reparses the bytes, locates each annotation by page index + its position in that
-page's `/Annots` order (recorded before the first serialize, in a `PayloadSlot`), confirms it by an identity
-check against the recorded bounds (`minX`/`minY`/`width`/`height`, each within a tolerance — a plain bounds
-check on the array is not enough, since a dropped or reordered annotation would shift every index below the
-gap onto the wrong mark), attaches the payload there, and serializes again. `compose`'s return type changes
-from `Data` to `(data: Data, akEncodeFailures: Int)`, so the count of marks that went out without an
-`AKAnnotationV2` payload — a silent loss of editability, not of the mark itself — travels back to the caller.
+`AnnotatedPDFComposer` gains a payload encode per stroke, and one call and one annotation key to attach it:
+each annotation gets `/AAPL:AKExtras` set to `["AAPL:AKAnnotationV2": base64]` as it is built, before it is
+added to its page, and the document is serialized once. `compose`'s return type changes from `Data` to
+`(data: Data, akEncodeFailures: Int)`, so the count of marks that went out without an `AKAnnotationV2`
+payload — a silent loss of editability, not of the mark itself — travels back to the caller.
+
+**History — the two-pass design, and why it is gone.** An intermediate revision attached the payloads on a
+second serialization pass: stamp and serialize, reparse the bytes, locate each annotation by page index plus
+its recorded position in that page's `/Annots` order (a `PayloadSlot`), confirm it with an identity check
+against the recorded bounds, attach the payload there, and serialize again. That existed because of one
+measurement — that `/AAPL:AKExtras` set on an annotation PDFKit had just created did not survive
+`dataRepresentation()`, apparently because AnnotationKit adopted every freshly built annotation on the way out
+and rewrote the key with its own `AKIdentityHash` / `AKPDFAnnotationDictionary` / `AKAnnotationObject` trio.
+
+That measurement was an artifact of a broken **iOS 27.0 simulator runtime**, where `PDFAnnotation.add(_:)`
+itself fails silently (`Cannot save value for annotation key: /InkList. Invalid type.`) and the failure
+cascades into the adoption described above. Two probes on `OS=26.5` settled it: a single pass works, with the
+value surviving byte-for-byte and a two-payload control confirming each annotation reads back its own distinct
+marker and no identity trio appears; and one-pass and two-pass outputs are equivalent — identical annotation
+key sets, identical `AKExtras` archive bytes, identical `/InkList`, identical vector `/AP` path-operator
+counts, pixel-identical rendering, identical annotation order and `/Rect`, and the same translucency. The only
+difference is an inert `/ExtGState` (`CA 1.0`) plus a `gs` operator the one-pass output carries for opaque
+strokes — extra, invisible, about 135 bytes.
+
+So the second pass bought nothing while costing a full extra document serialization on the main thread, plus a
+position-based payload-to-annotation mapping whose failure mode is a payload landing on somebody else's mark —
+which, because AnnotationKit names a drawing by the identifiers inside the payload, would mean an eraser
+stroke deleting a mark the user never drew. It was removed. If this symptom ever resurfaces on a later OS, the
+runtime is what wants checking first; do not reintroduce the two-pass flow without re-measuring on a known-good
+runtime.
 
 ### The payload
 

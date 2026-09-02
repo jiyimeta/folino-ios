@@ -51,8 +51,16 @@ private typealias PlatformColor = NSColor
 /// emits. `AKAnnotationV2` is the container AnnotationKit actually reads, and `AKInkPayloadEncoder` /
 /// `AKInkArchive` write it from the neutral `InkStroke` geometry. See `docs/engineering/crdt-ink-format/`.
 ///
-/// Attaching that key needs two serialization passes rather than one — see `attachingAKPayloads`, which is where
-/// the measurement behind that lives.
+/// The key is set on each annotation as it is built, and the document is serialized once. An earlier revision
+/// attached the payloads on a SECOND pass — serialize, reparse the bytes, match each payload to an annotation by
+/// its recorded position in the page's `/Annots` order, serialize again — because the key appeared not to survive
+/// `dataRepresentation()` when set on a freshly created annotation. That measurement was an artifact of a broken
+/// iOS 27.0 simulator runtime, where `PDFAnnotation.add(_:)` itself fails (`Cannot save value for annotation key:
+/// /InkList. Invalid type.`) and the failure cascades into AnnotationKit adopting the annotation and overwriting
+/// the key. On a working runtime the value survives byte-for-byte, and one-pass and two-pass output were measured
+/// equivalent — same key sets, same `AKExtras` archive bytes, same `/InkList`, same vector `/AP`, pixel-identical
+/// rendering. If this symptom ever reappears on some later OS, it is the runtime that wants checking first, not
+/// this code.
 ///
 /// Attaching it is strictly best-effort: a stroke whose payload cannot be built (a pixel-erased stroke carrying a
 /// `mask`, an archive failure) is written exactly as it was before the payload existed — an `/Ink` annotation with
@@ -85,112 +93,29 @@ enum AnnotatedPDFComposer {
         }
 
         var akEncodeFailures = 0
-        var slots: [PayloadSlot] = []
         for placement in placements {
             guard placement.pageIndex >= 0, placement.pageIndex < document.pageCount,
                   let page = document.page(at: placement.pageIndex),
                   let composed = makeAnnotation(for: placement, drawings: drawings, page: page)
             else { continue }
-            let indexOnPage = page.annotations.count
-            page.addAnnotation(composed.annotation)
-            guard let payload = composed.akPayload else {
+            if !composed.hasAKPayload {
                 akEncodeFailures += 1
-                continue
             }
-            slots.append(PayloadSlot(
-                pageIndex: placement.pageIndex, annotationIndex: indexOnPage,
-                expectedBounds: composed.annotation.bounds,
-                base64: payload.base64EncodedString(),
-            ))
+            page.addAnnotation(composed.annotation)
         }
 
-        guard let stamped = document.dataRepresentation() else {
+        guard let data = document.dataRepresentation() else {
             throw DomainError.scoreWriteFailed(reason: "annotated export: could not serialize the composed PDF")
         }
-        guard !slots.isEmpty else { return (stamped, akEncodeFailures) }
-
-        guard let attached = attachingAKPayloads(to: stamped, slots: slots) else {
-            // The marks themselves are already in `stamped`; only their editability is lost, which is exactly
-            // what the failure count means.
-            return (stamped, akEncodeFailures + slots.count)
-        }
-        return (attached.data, akEncodeFailures + attached.unplaced)
+        return (data, akEncodeFailures)
     }
 
-    /// Where one annotation's payload has to land once the document has been serialized: the page it is on, its
-    /// position in that page's `/Annots` order, and the bounds it had going in. PDFKit preserves that order
-    /// across a serialize/parse round trip, and the composer only ever APPENDS to a page, so the index recorded
-    /// before `addAnnotation` names the same annotation on the way back in.
-    ///
-    /// `expectedBounds` is what turns that from an assumption into a checked one. Should PDFKit ever drop or
-    /// reorder an annotation on some document neither the composer nor its tests construct, every index below
-    /// the gap shifts and a payload would land on one of the BASE document's own annotations — which, because
-    /// AnnotationKit names a drawing by the identifiers inside the payload, means an eraser stroke deleting a
-    /// mark the user never drew. That failure is invisible from the outside, so it is checked rather than
-    /// reasoned about.
-    private struct PayloadSlot {
-        let pageIndex: Int
-        let annotationIndex: Int
-        let expectedBounds: CGRect
-        let base64: String
-    }
-
-    /// The second serialization pass, and the reason there is one.
-    ///
-    /// `/AAPL:AKExtras` set on an annotation PDFKit created THIS session does not survive `dataRepresentation()`.
-    /// AnnotationKit adopts every freshly built annotation on the way out and rewrites that key with its own
-    /// `AKIdentityHash` / `AKPDFAnnotationDictionary` / `AKAnnotationObject` trio — measured to happen even when
-    /// nothing set the key at all, so it is adoption rather than a reaction to our value, and whatever was there
-    /// is simply gone. Setting the key on an annotation PARSED BACK from the serialized bytes is not adopted:
-    /// the value is written verbatim and the synthesized trio is replaced.
-    ///
-    /// Hence: stamp and serialize, reopen, attach, serialize again. The cost is one extra parse and write of the
-    /// document; the alternative is splicing the key into the PDF bytes by hand, which means owning an object and
-    /// xref writer to stay correct on documents PDFKit chooses to compress.
-    ///
-    /// `nil` when the round trip cannot be completed, leaving the caller with the already-stamped bytes.
-    /// Otherwise the new bytes and how many payloads found no annotation to sit on — a slot that cannot be
-    /// placed is a silent loss of editability, so it is counted rather than skipped quietly.
-    private static func attachingAKPayloads(
-        to stamped: Data, slots: [PayloadSlot],
-    ) -> (data: Data, unplaced: Int)? {
-        guard let document = PDFDocument(data: stamped) else { return nil }
-        var unplaced = 0
-        for slot in slots {
-            guard let page = document.page(at: slot.pageIndex),
-                  slot.annotationIndex < page.annotations.count
-            else {
-                unplaced += 1
-                continue
-            }
-            // Identity, not just a bounds check on the array: the annotation at this index has to be the ink
-            // annotation that was put there. `/Rect` is carried through PDF as decimal text, so it is compared
-            // with a tolerance rather than for equality.
-            let target = page.annotations[slot.annotationIndex]
-            guard target.type == "Ink",
-                  abs(target.bounds.minX - slot.expectedBounds.minX) < 0.01,
-                  abs(target.bounds.minY - slot.expectedBounds.minY) < 0.01,
-                  abs(target.bounds.width - slot.expectedBounds.width) < 0.01,
-                  abs(target.bounds.height - slot.expectedBounds.height) < 0.01
-            else {
-                unplaced += 1
-                continue
-            }
-            target.setValue(
-                ["AAPL:AKAnnotationV2": slot.base64],
-                forAnnotationKey: PDFAnnotationKey(rawValue: "AAPL:AKExtras"),
-            )
-        }
-        guard let data = document.dataRepresentation() else { return nil }
-        return (data, unplaced)
-    }
-
-    /// One stamped annotation, plus Apple's editable payload for it when one could be built. A placement that
-    /// produces no annotation at all is not counted as a payload failure — nothing was exported for it to be
-    /// missing from.
+    /// One stamped annotation, and whether Apple's editable payload could be built and set on it. A placement
+    /// that produces no annotation at all is not counted as a payload failure — nothing was exported for it to
+    /// be missing from.
     private struct ComposedAnnotation {
         let annotation: PDFAnnotation
-        let akPayload: Data?
+        let hasAKPayload: Bool
     }
 
     /// Decodes the placed drawing, bakes the placement's transform into its points (page-local, top-left origin,
@@ -269,14 +194,18 @@ enum AnnotatedPDFComposer {
         border.lineWidth = lineWidth
         annotation.border = border
 
-        // The payload is not attached here: setting `/AAPL:AKExtras` on an annotation this session created does
-        // not survive serialization. `attachingAKPayloads` explains why and does it on the way back in.
-        return ComposedAnnotation(
-            annotation: annotation,
-            akPayload: inkStroke.flatMap {
-                akPayload(for: $0, inkBox: inkBox, archiveRect: archiveRect, pageSize: pageSize)
-            },
-        )
+        // Apple's editable payload goes on the annotation right here, before it is ever added to a page, and the
+        // document is serialized once. See the type's own documentation for the two-pass revision this replaced.
+        let payload = inkStroke.flatMap {
+            akPayload(for: $0, inkBox: inkBox, archiveRect: archiveRect, pageSize: pageSize)
+        }
+        if let payload {
+            annotation.setValue(
+                ["AAPL:AKAnnotationV2": payload.base64EncodedString()],
+                forAnnotationKey: PDFAnnotationKey(rawValue: "AAPL:AKExtras"),
+            )
+        }
+        return ComposedAnnotation(annotation: annotation, hasAKPayload: payload != nil)
     }
 
     /// The placed stroke as neutral geometry, for the Apple ink payload.

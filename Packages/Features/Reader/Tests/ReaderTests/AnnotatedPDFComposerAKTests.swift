@@ -232,11 +232,15 @@ struct AnnotatedPDFComposerAKTests {
         #expect(result.akEncodeFailures == 1)
     }
 
-    /// The payload is attached on a second pass, by each annotation's position in its page's `/Annots` order. A
-    /// page that already carried annotations of its own is where that mapping can slip: get the offset wrong and
-    /// the payload lands on somebody else's annotation, or on nothing.
+    /// Every ink mark carries ITS OWN payload — the archive's `rectangle` matches the geometry of the annotation
+    /// holding it — on a page that already carried annotations of its own.
+    ///
+    /// The base document's existing annotations are what make this worth asserting: they are the case where a
+    /// payload could plausibly end up on the wrong mark, and where the base document's own annotations could be
+    /// disturbed. This is a property of the exported bytes, not of any particular attachment mechanism, so it
+    /// outlived the two-pass revision that first motivated it.
     @Test
-    func `payloads land on the right annotation when the page already had some`() throws {
+    func `each ink annotation carries its own payload when the page already had annotations`() throws {
         let plain = try #require(PDFDocument(data: Self.onePagePDF(size: CGSize(width: 595, height: 842))))
         let plainPage = try #require(plain.page(at: 0))
         let existing = PDFAnnotation(
