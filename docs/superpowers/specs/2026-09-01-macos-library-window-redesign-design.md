@@ -123,6 +123,36 @@ The clipboard format and paste semantics belong to sub-projects Ⅰ and Ⅳ. The
 
 A `Window` scene's restoration behavior is runtime-unverified. macOS 15's `defaultLaunchBehavior` / `restorationBehavior` scene modifiers exist to steer exactly this. Target behavior: a fresh launch with nothing restored presents the browser; restored score windows present without the browser unless it was open at quit. **Fallback if the modifiers do not cooperate: the browser always presents at launch** — dumb, but sound.
 
+### 2.9 Revised 2026-09-02 — the library is a chooser, and a score window is never empty
+
+Decided by the user after the first hands-on session with Ⅳa (`2026-09-02-macos-edit-session-design.md`). This
+section supersedes §2.3's "the browser stays open and recedes" and refines §2.7 / §2.8. The behavior is Keynote's and
+Logic's: the library is the thing you pick from, not a second workspace.
+
+1. **Opening a score closes the library.** Double-click / Return / the row's Open item open the score window and
+   the library window closes in the same gesture.
+2. **Show Library presents the library over the score window.** The toolbar button and ⌘O bring the library up in
+   front of the score window on the same Space — including when the score window is full screen, where it must not
+   switch Spaces. (A plain `Window` scene may open in its own Space from full screen; the implementation has to
+   measure this and, if so, present the library as a panel / floating window over the full-screen score.)
+3. **Another score opened from the library becomes a new tab of the existing score window.** The original score
+   window stays; the new score lands as a tab in it (the library closes, per 1). Open-as-tab is therefore the
+   app's own default and must work: the user measured on 2026-09-02 that a new score opened as a **separate
+   window even with the score window in full screen**, and found no "prefer tabs" setting to change — so
+   `MacWindowTabAssist` as built is not doing this and the implementation must drive `NSWindow.tabbingMode =
+   .preferred` / `addTabbedWindow(_:ordered:)` itself and verify by hand.
+4. **A score window never shows an empty state.** If the window's score is gone (permanently deleted, restoration
+   named a row that no longer exists), the window closes and the library is shown instead of the empty
+   `ContentUnavailableView` `MacShellView` draws today.
+5. **Closing the last score window shows the library.** No score open means the library is on screen (also the
+   §2.8 launch rule, restated).
+
+What this does NOT change: one window per score (`2026-09-02-macos-edit-session-design.md` §3), playback takeover
+and global display mode (§2.5), the browser as the organize surface (its bulk actions and sources).
+
+Scheduling: a follow-on slice on the Ⅳa branch or immediately after it — it touches `App/Mac` only
+(`FolinoMacApp`, `MacShellView`, `MacWindowTabAssist`, the library window's open closures).
+
 ---
 
 ## 3. Multi-selection and bulk actions
