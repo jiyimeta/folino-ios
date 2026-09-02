@@ -9,8 +9,8 @@
 //   `MacTransportBar`. Half of what is here is iOS physics that should never cross (the self-drawn top strip and
 //   its cutout tier, the status-bar handoff, `hostingAppearance(.light)`, the idle timer, the PiP host, pop-gesture
 //   restoration). What macOS is genuinely still owed is the rest of the chrome: the inspectors, the share /
-//   annotate / edit controls, the score ⇄ original-PDF switch, the coach marks (`ReaderHintBubble`), and the two
-//   wirings this screen's `.task` performs (`+PartRemapWiring`, `+RevertWiring`).
+//   annotate / edit controls, the score ⇄ original-PDF switch, the coach marks (`ReaderHintBubble`), and calling
+//   `ReaderViewModel.wireRevertReload(host:)` / `wirePartRemapReload(host:)` from its own `.task`.
 
 #if os(iOS)
 import Domain
