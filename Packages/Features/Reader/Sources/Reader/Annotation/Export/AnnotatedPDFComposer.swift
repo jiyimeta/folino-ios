@@ -54,9 +54,10 @@ private typealias PlatformColor = NSColor
 /// rectangle and the annotation's `/Rect` derive from. See `docs/engineering/crdt-ink-format/`.
 ///
 /// PencilKit renders a stroke wider or narrower than its point `size` depending on the ink — a pen of size `s`
-/// draws `2s − 4` wide in canvas units, a marker `s / 2` — and the appearance stream's line width follows the same
-/// formulas so a PDF viewer that draws the vector shows the same thickness Apple's markup does. The measurements
-/// are in `appearanceLineWidth`.
+/// draws `2s − 4` wide in its own units, a marker `s / 2` (`PencilKitInkWidth`). That constant term is why the
+/// export re-solves point sizes for the archive's canvas against the reader's on-screen scale (`canvasDrawing`),
+/// and the appearance stream's line width follows the same formula so a PDF viewer that draws the vector shows
+/// the same thickness Apple's markup does.
 ///
 /// The key is set on each annotation as it is built, and the document is serialized once. An earlier revision
 /// attached the payloads on a SECOND pass — serialize, reparse the bytes, match each payload to an annotation by
@@ -84,6 +85,12 @@ enum AnnotatedPDFComposer {
     ///     unchanged; only new ink annotations are added.
     ///   - drawings: the stored anchors the placements index into.
     ///   - placements: from `AnnotatedExportPlanner`, in page-local coordinates (points, origin top-left, y down).
+    ///   - screenScale: how many page points one of the reader's on-screen document units is worth — the engraving's
+    ///     staff size over the on-screen one. PencilKit's stroke width has a constant term in content units
+    ///     (`PencilKitInkWidth`), so a stroke the reader drew in document units and the archive draws in canvas
+    ///     units come out different widths unless the point sizes are re-solved for the canvas; this is the scale
+    ///     that re-solving needs. `nil` writes the sizes unscaled, and the mark renders as PencilKit would draw it
+    ///     at page scale.
     /// - Returns: the composed document's bytes, and how many of the stamped annotations went out without an
     ///   `AKAnnotationV2` payload. The composer is a stateless `enum` with no analytics of its own, so the count
     ///   travels back to `ReaderAnnotatedPDFRenderer` — which holds one — rather than the composer reaching
@@ -94,6 +101,7 @@ enum AnnotatedPDFComposer {
         basePDF: Data,
         drawings: [DrawingAnchor],
         placements: [InkPlacement],
+        screenScale: CGFloat? = nil,
     ) throws -> (data: Data, akEncodeFailures: Int) {
         guard let document = PDFDocument(data: basePDF) else {
             throw DomainError.scoreWriteFailed(reason: "annotated export: base PDF is unreadable")
@@ -103,7 +111,9 @@ enum AnnotatedPDFComposer {
         for placement in placements {
             guard placement.pageIndex >= 0, placement.pageIndex < document.pageCount,
                   let page = document.page(at: placement.pageIndex),
-                  let composed = makeAnnotation(for: placement, drawings: drawings, page: page)
+                  let composed = makeAnnotation(
+                      for: placement, drawings: drawings, page: page, screenScale: screenScale,
+                  )
             else { continue }
             if !composed.hasAKPayload {
                 akEncodeFailures += 1
@@ -132,7 +142,7 @@ enum AnnotatedPDFComposer {
     /// when the drawing index is out of range, the stored bytes don't decode, or the placed geometry collapses to
     /// nothing (clipped fully off the page).
     private static func makeAnnotation(
-        for placement: InkPlacement, drawings: [DrawingAnchor], page: PDFPage,
+        for placement: InkPlacement, drawings: [DrawingAnchor], page: PDFPage, screenScale: CGFloat?,
     ) -> ComposedAnnotation? {
         guard placement.drawingIndex >= 0, placement.drawingIndex < drawings.count,
               var stored = InkStrokePencilKitBridge.decodeStoredDrawing(
@@ -150,19 +160,13 @@ enum AnnotatedPDFComposer {
 
         let pageSize = page.bounds(for: .mediaBox).size
 
-        // The same drawing in the archive's canvas space — page points times the canvas scale, sizes included, so
-        // the stroke keeps its proportions when AnnotationKit maps the canvas back onto the page. Its `bounds` are
-        // the one box the archive rectangle and the annotation's /Rect derive from: AnnotationKit recomputes the
-        // same bounds from the same drawing and places the mark by them, so any other box moves the ink. Note the
-        // rectangle is deliberately NOT clipped to the page — an intersection would move it out from under the
-        // drawing. The page height read here is the REAL media box, never a nominal paper size — folino's own
-        // exports measure 595.4458 x 841.6944, and A4's nominal 841.8898 against that is already enough drift to
-        // lose the annotation.
-        var canvas = placed
-        canvas.transform(using: CGAffineTransform(
-            scaleX: AKInkGeometry.canvasScale, y: AKInkGeometry.canvasScale,
-        ))
-        let canvasDrawing = InkStrokePencilKitBridge.bakingTransformIntoPoints(canvas)
+        // The same drawing in the archive's canvas space. Its `bounds` are the one box the archive rectangle and the
+        // annotation's /Rect derive from: AnnotationKit recomputes the same bounds from the same drawing and places
+        // the mark by them, so any other box moves the ink. Note the rectangle is deliberately NOT clipped to the
+        // page — an intersection would move it out from under the drawing. The page height read here is the REAL
+        // media box, never a nominal paper size — folino's own exports measure 595.4458 x 841.6944, and A4's
+        // nominal 841.8898 against that is already enough drift to lose the annotation.
+        let canvasDrawing = canvasDrawing(of: placed, screenScale: screenScale)
         let canvasBounds = canvasDrawing.bounds
         guard !canvasBounds.isNull, !canvasBounds.isEmpty else { return nil }
 
@@ -173,11 +177,14 @@ enum AnnotatedPDFComposer {
         // `PDFAnnotation.border.lineWidth` is a single width for the whole stroke; the median point size (not the
         // mean) is the more faithful representative for a tapered stroke, where a few very thin or very thick
         // samples — the stroke's own start/end, a pressure spike — would otherwise pull a single width away from
-        // what most of the stroke actually looks like. It then goes through the ink's own size-to-width curve so
-        // the vector and PencilKit agree.
-        let sizes = placed.strokes.flatMap { $0.path.map { CGFloat($0.size.width) } }
-        let size = median(of: sizes) ?? CGFloat(firstStroke.path.first?.size.width ?? 1)
-        let lineWidth = appearanceLineWidth(ink: firstStroke.ink.inkType, size: size)
+        // what most of the stroke actually looks like. The width is what PencilKit will draw for that size in the
+        // archive's canvas, scaled onto the page, so the vector and Apple's markup show the same thickness.
+        let canvasSizes = canvasDrawing.strokes.flatMap { $0.path.map { CGFloat($0.size.width) } }
+        let canvasSize = median(of: canvasSizes) ?? 1
+        let lineWidth = max(
+            0.25,
+            PencilKitInkWidth.renderedWidth(ink: firstStroke.ink.inkType, size: canvasSize) / AKInkGeometry.canvasScale,
+        )
 
         /// A path handed to `PDFAnnotation.add(_:)` is in the ANNOTATION's own space, not the page's: PDFKit adds
         /// `bounds.origin` back when it writes `/InkList`, and generates an appearance stream whose BBox is
@@ -243,29 +250,45 @@ enum AnnotatedPDFComposer {
         )
     }
 
-    /// The line width, in page points, that reproduces PencilKit's rendering of a stroke of point `size` (page
-    /// points) once the archive's canvas scale is accounted for.
+    /// The placed drawing in the archive's canvas space: page points times the canvas scale, transform baked in.
     ///
-    /// PencilKit draws each ink at a width that is a fixed function of the point size, measured on the live
-    /// `PKCanvasView` in the simulator and identical in `PKDrawing.image(from:scale:)` (`docs/engineering/
-    /// crdt-ink-format/tools/PKProbe`): pen and monoline `2s − 4`, pencil about `2s − 1`, marker `s / 2`, fountain
-    /// pen about `s / 2 − 0.7`, watercolor `1.7s`, crayon `1.85s` — all in the drawing's own units, at any zoom.
-    /// Apple's markup renders the archived drawing in canvas units and scales the result onto the page, so the
-    /// constant terms shrink by the canvas scale while the proportional ones are unchanged; the same arithmetic
-    /// here keeps the vector appearance and the PencilKit rendering the same thickness. `force` plays no part:
-    /// every ink measured identical at 0, 0.5 and 1.
-    static func appearanceLineWidth(ink: PKInkingTool.InkType, size: CGFloat) -> CGFloat {
-        let q = 1 / AKInkGeometry.canvasScale // page points per canvas unit
-        let width: CGFloat = switch ink {
-        case .pen, .monoline: 2 * size - 4 * q
-        case .pencil: 2 * size - 1 * q
-        case .marker: size / 2
-        case .fountainPen: size / 2 - 0.7 * q
-        case .watercolor: 1.7 * size
-        case .crayon: 1.85 * size
-        @unknown default: size
-        }
-        return max(0.25, width)
+    /// Point sizes are not simply scaled along. PencilKit's rendered width has a constant term in content units
+    /// (`PencilKitInkWidth`), so a size that drew a certain width in the reader's document units draws a different
+    /// width in canvas units. With `screenScale` (page points per document unit) known, each point's size is
+    /// re-solved: the width the reader showed, in page points, is what the size must render to in the canvas —
+    /// `renderedWidth` in document units, converted, then `size(forRenderedWidth:)` in canvas units. Without it the
+    /// sizes scale with the geometry and the width comes out as PencilKit would draw the stroke at page scale.
+    static func canvasDrawing(of placed: PKDrawing, screenScale: CGFloat?) -> PKDrawing {
+        let k = AKInkGeometry.canvasScale
+        return PKDrawing(strokes: placed.strokes.map { stroke in
+            let ink = stroke.ink.inkType
+            let points = stroke.path.map { p in
+                let canvasSize: CGSize
+                if let r = screenScale, r > 0 {
+                    let onScreen = PencilKitInkWidth.renderedWidth(ink: ink, size: p.size.width / r) * r
+                    let width = PencilKitInkWidth.size(forRenderedWidth: onScreen * k, ink: ink)
+                    let aspect = p.size.width > 0 ? p.size.height / p.size.width : 1
+                    canvasSize = CGSize(width: width, height: width * aspect)
+                } else {
+                    canvasSize = CGSize(width: p.size.width * k, height: p.size.height * k)
+                }
+                return PKStrokePoint(
+                    location: CGPoint(x: p.location.x * k, y: p.location.y * k),
+                    timeOffset: p.timeOffset, size: canvasSize,
+                    opacity: p.opacity, force: p.force, azimuth: p.azimuth, altitude: p.altitude,
+                )
+            }
+            return PKStroke(
+                ink: stroke.ink,
+                path: PKStrokePath(controlPoints: points, creationDate: stroke.path.creationDate),
+                transform: .identity,
+                mask: stroke.mask.map { mask in
+                    var scale = CGAffineTransform(scaleX: k, y: k)
+                    let path = mask.cgPath.copy(using: &scale) ?? mask.cgPath
+                    return PlatformBezierPath(cgPath: path)
+                },
+            )
+        })
     }
 
     /// The annotation's color, folding the stroke's PencilKit opacity — a per-point translucency multiplier

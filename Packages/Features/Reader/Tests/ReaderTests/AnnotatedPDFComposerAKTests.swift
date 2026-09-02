@@ -153,15 +153,47 @@ struct AnnotatedPDFComposerAKTests {
         #expect(abs(first.size.width - 3 * k) < 0.01)
     }
 
-    /// The vector appearance and PencilKit must show the same thickness, so the border width follows PencilKit's
-    /// size-to-width curve for the ink rather than the raw point size.
+    /// The vector appearance and PencilKit must show the same thickness, so the border width is what PencilKit
+    /// draws for the archived size in canvas units, scaled onto the page — not the raw point size.
     @Test
-    func `the appearance line width follows PencilKit's curve for the ink`() {
-        let q = 1 / AKInkGeometry.canvasScale
-        #expect(abs(AnnotatedPDFComposer.appearanceLineWidth(ink: .pen, size: 5.25) - (10.5 - 4 * q)) < 0.001)
-        #expect(abs(AnnotatedPDFComposer.appearanceLineWidth(ink: .monoline, size: 7) - (14 - 4 * q)) < 0.001)
-        #expect(abs(AnnotatedPDFComposer.appearanceLineWidth(ink: .marker, size: 22.7) - 11.35) < 0.001)
-        #expect(AnnotatedPDFComposer.appearanceLineWidth(ink: .pen, size: 1) == 0.25, "never a zero-width line")
+    func `the appearance line width is what PencilKit draws for the archived size`() throws {
+        let k = AKInkGeometry.canvasScale
+        for (tool, width, expected) in [
+            (InkStroke.Tool.pen, Float(5.25), PencilKitInkWidth.renderedWidth(ink: .pen, size: 5.25 * k) / k),
+            (InkStroke.Tool.marker, Float(22), PencilKitInkWidth.renderedWidth(ink: .marker, size: 22 * k) / k),
+        ] {
+            let result = try AnnotatedPDFComposer.compose(
+                basePDF: Self.onePagePDF(size: CGSize(width: 595, height: 842)),
+                drawings: [Self.drawing(tool: tool, width: width)], placements: [Self.placement],
+            )
+            let page = try #require(PDFDocument(data: result.data)?.page(at: 0))
+            let lineWidth = try #require(page.annotations.first?.border?.lineWidth)
+            #expect(abs(lineWidth - expected) < 0.01, "\(tool)")
+        }
+    }
+
+    /// With the reader's on-screen scale known, the archived point sizes are re-solved so that Apple's markup draws
+    /// the width the reader showed: a pen the reader drew `2s − 4` wide in document units of `screenScale` page
+    /// points each renders that many page points from the canvas, and the vector appearance says the same.
+    @Test
+    func `sizes are re-solved against the on-screen scale so the pen keeps its on-screen width`() throws {
+        let k = AKInkGeometry.canvasScale
+        let screenScale: CGFloat = 1.65 // an iPhone: the engraving's staff size over the reader's default
+        let onScreen = PencilKitInkWidth.renderedWidth(ink: .pen, size: 5.25 / screenScale) * screenScale
+        let result = try AnnotatedPDFComposer.compose(
+            basePDF: Self.onePagePDF(size: CGSize(width: 595, height: 842)),
+            drawings: [Self.drawing(width: 5.25)], placements: [Self.placement], screenScale: screenScale,
+        )
+        let page = try #require(PDFDocument(data: result.data)?.page(at: 0))
+        let annotation = try #require(page.annotations.first)
+        let lineWidth = try #require(annotation.border?.lineWidth)
+        #expect(abs(lineWidth - onScreen) < 0.01)
+
+        let base64 = try #require(Self.akPayloadString(of: annotation))
+        let stroke = try #require(PKDrawing(data: Self.archiveDrawing(base64: base64)).strokes.first)
+        let size = try #require(stroke.path.first?.size.width)
+        #expect(abs(PencilKitInkWidth.renderedWidth(ink: .pen, size: size) / k - onScreen) < 0.01)
+        #expect(size < 5.25 * k, "thinner than the unscaled size, which is what looked too thick on device")
     }
 
     // MARK: Reading the archive back

@@ -347,11 +347,12 @@ struct AnnotatedPDFComposerTests {
         let document = try #require(PDFDocument(data: out))
         let annotation = try #require(document.page(at: 0)?.annotations.first)
         let lineWidth = try #require(annotation.border?.lineWidth)
-        // The width goes through the pen's size-to-width curve, so compare against the curve applied to the
-        // median size (2), not to the mean (~34.3) or the first sample (1).
-        let expected = AnnotatedPDFComposer.appearanceLineWidth(ink: .pen, size: 2)
+        // The width is what PencilKit draws for the archived size (the median, 2, in canvas units) scaled onto the
+        // page — compare against that, not against the mean (~34.3) or the first sample (1).
+        let k = AKInkGeometry.canvasScale
+        let expected = max(0.25, PencilKitInkWidth.renderedWidth(ink: .pen, size: 2 * k) / k)
         #expect(abs(lineWidth - expected) < 0.01, "expected the median (2) through the pen curve")
-        #expect(abs(lineWidth - AnnotatedPDFComposer.appearanceLineWidth(ink: .pen, size: 34.3)) > 1)
+        #expect(abs(lineWidth - PencilKitInkWidth.renderedWidth(ink: .pen, size: 34.3 * k) / k) > 1)
     }
 
     @Test

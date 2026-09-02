@@ -693,11 +693,15 @@ own `PKCanvasView` draws in the score's document units — on an iPhone about 1.
 stroke shows `2w − 6.8`, and on an iPad, whose document is wider than the page, thicker than the PDF. Every
 measurement on device fit this to a fraction of a point once the canvas scale was accounted for.
 
-Decision (2026-09-02): the export does **not** compensate for the exporting device's document scale — the
-on-screen look is itself device-dependent, and matching it would need the reader's live layout inside the
-export path. What the export does do is make its own two renderings agree: the appearance stream's line width
-now goes through the same curve (`AnnotatedPDFComposer.appearanceLineWidth`), so Preview and Files show the
-same thickness, where before the marker's vector was twice PencilKit's band.
+Decision (2026-09-02, revised the same evening after the uncompensated export came out at 7.5pt on the phone):
+the export **does** reproduce the on-screen width. `AnnotatedPDFComposer.canvasDrawing` takes the page points
+per on-screen document unit — the engraving's staff size over the reader's device-default staff size (12 on a
+phone, 14 on an iPad), or page width over screen width for an original PDF — works out the width the reader
+drew each point at (`PencilKitInkWidth.renderedWidth` in document units), and solves the canvas size that
+renders it (`PencilKitInkWidth.size(forRenderedWidth:)`). The appearance stream's line width is the same
+number, so Preview and Files agree, where before the marker's vector was twice PencilKit's band. A per-score
+staff-size override is not reachable from the export path (the share service hands over score and drawings,
+not the item's preferences) and is not honored; closing that needs the Domain protocol to carry it.
 
 ## Tools added in this round
 
