@@ -11,54 +11,6 @@ import SheetMusicLayout
 import SheetMusicUI
 import SwiftUI
 
-/// Paper geometry for the Mac's page deck.
-///
-/// **The page is a fixed sheet, not the window.** iOS paginates to the viewport, because a phone or an iPad shows one
-/// page at a time and the page may as well be the screen. The Mac shows a deck of sheets that the user magnifies, so
-/// the sheet has to have a size of its own that does not move when the window is resized — otherwise every resize
-/// re-paginates the score and the page the reader was looking at is a different page afterwards.
-///
-/// A4 at 72 dpi is that size: it is the paper the engraving would be printed on, and it makes the deck's proportions
-/// the proportions of the printed score.
-enum MacPageDeckMetrics {
-    /// A4 in points (210 x 297 mm at 72 dpi).
-    static let paperSize = CGSize(width: 595.28, height: 841.89)
-    /// Half an inch of paper margin on every side, the printed-score convention.
-    static let margin: CGFloat = 36
-    /// Gap between two sheets in the deck.
-    static let pageGap: CGFloat = 24
-    /// Breathing room between the deck and the scroll view's edges.
-    static let deckPadding: CGFloat = 24
-
-    /// The printable area inside one sheet: what the score is engraved into and what pagination measures against.
-    static var contentSize: CGSize {
-        CGSize(width: paperSize.width - margin * 2, height: paperSize.height - margin * 2)
-    }
-
-    /// The drawn sheet size for a document of the given engraved width. Honoring the engraver's authored breaks can
-    /// leave `doc.size.width` wider than the width it was engraved for; widening the sheet rather than clipping keeps
-    /// every notehead on the paper.
-    static func pageSize(forDocumentWidth width: CGFloat) -> CGSize {
-        CGSize(width: max(paperSize.width, width + margin * 2), height: paperSize.height)
-    }
-
-    /// Origin of page `index` in the deck's own (unmagnified) coordinate space — the space a scroll-to-visible
-    /// rectangle has to be expressed in.
-    static func pageOrigin(index: Int, pageSize: CGSize) -> CGPoint {
-        CGPoint(x: deckPadding + CGFloat(index) * (pageSize.width + pageGap), y: deckPadding)
-    }
-
-    /// Magnification that fits one whole sheet in the window, clamped to what the scroll view allows and never
-    /// enlarging past 1.0 — a small score should open at actual size, not blown up to fill the window.
-    static func fitMagnification(pageSize: CGSize, viewport: CGSize) -> CGFloat {
-        let availableWidth = viewport.width - deckPadding * 2
-        let availableHeight = viewport.height - deckPadding * 2
-        guard pageSize.width > 0, pageSize.height > 0, availableWidth > 0, availableHeight > 0 else { return 1 }
-        let fit = min(availableWidth / pageSize.width, availableHeight / pageSize.height, 1.0)
-        return MacScoreMagnification.clamped(fit)
-    }
-}
-
 /// One sheet's cursor. The observable a single page leaf reads, and the smallest thing a playback tick can invalidate.
 @MainActor
 @Observable
@@ -156,12 +108,6 @@ struct MacPagedScoreContainer: View {
     @State private var relayoutEngine = ScoreRelayoutEngine()
     @State private var cursorState = MacPageDeckCursorState()
     @State private var magnification: CGFloat = 1.0
-    /// The magnification, mirrored out of AppKit for the deck's click handler — SwiftUI reports a hosted click in
-    /// magnified units, and `MacPageScoreLayer` divides it back out. `tracksScroll: false`: nothing here is drawn
-    /// outside the scroll view, so the deck takes the magnification mirror and none of the per-frame scroll traffic.
-    /// This is deliberately not the `magnification` state above — the deck lives in an `NSHostingView` whose root view
-    /// is replaced only on a generation bump, so a value handed down would be stale by the reader's first zoom.
-    @State private var viewportState = MacScoreViewportState()
     /// Fit-to-window is applied once, when the first engraving lands. A later window resize deliberately does not
     /// refit: a document viewer that re-zooms itself while the user drags the window edge is fighting them.
     @State private var hasSeededMagnification = false
@@ -183,7 +129,7 @@ struct MacPagedScoreContainer: View {
             magnification: $magnification,
             contentGeneration: layoutGeneration,
             scrollRequest: scrollRequest,
-            viewportState: viewportState,
+            onClick: handleClick,
         ) {
             MacPageDeck(
                 viewModel: viewModel,
@@ -193,7 +139,6 @@ struct MacPagedScoreContainer: View {
                 score: score,
                 scoreOptions: scoreOptions,
                 pageSize: sheet,
-                viewportState: viewportState,
                 editingHost: editingHost,
             )
         }
@@ -226,6 +171,47 @@ struct MacPagedScoreContainer: View {
             ) else { return }
             scrollToPage(containing: pageAnchorCursor ?? playbackCursor)
         }
+    }
+
+    /// Click-to-seek, or a selection while editing.
+    ///
+    /// **The click arrives from AppKit, in the deck's own unmagnified coordinates**, because SwiftUI's hit-testing
+    /// inside a magnified `NSScrollView` delivers the event to the wrong sheet entirely — `MacScoreClickMapping`
+    /// carries the measurement, and `MagnifyingScoreScrollView.onClick` is the channel. Everything after the mapping
+    /// is the routing the SwiftUI gesture used to do, unchanged.
+    ///
+    /// Resolving against the page's OWN sub-document rather than the whole score is what keeps a click on the blank
+    /// run-out below a sheet's last system on that sheet, instead of seeking to the next one — the guard the old
+    /// gesture stated as a `pageStartY…pageEndY` band check, now implied by the mapping having returned this page.
+    private func handleClick(_ hostedPoint: CGPoint) {
+        guard let doc = layoutState.document, !layoutState.pages.isEmpty, let sheet = pageSize else { return }
+        let hit = MacScoreClickMapping.deckClick(
+            hostedPoint: hostedPoint, pageSize: sheet, pageCount: layoutState.pages.count,
+        )
+        readerLogClick("deck hosted=\(hostedPoint) hit=\(hit)")
+        guard case let .page(index, contentPoint) = hit else {
+            // The desk, the gap, a paper margin: not a seek. While editing it clears the selection, which is what the
+            // SwiftUI `editingDeselectCatcher` did for the card before clicks moved to AppKit.
+            if let host = editingHost, host.isEditing {
+                host.onTapOutsideScore()
+            }
+            return
+        }
+        let pageStartY = PagedPageGeometry.pageStartY(forPage: index, pages: layoutState.pages, doc: doc)
+        let documentPoint = CGPoint(x: contentPoint.x, y: contentPoint.y + pageStartY)
+        if let host = editingHost, host.wantsScoreTaps {
+            readerLogClick("deck page=\(index) doc=\(documentPoint) -> editing onTap")
+            host.onTap(documentPoint)
+            return
+        }
+        let pageDoc = MacPageDeck.pageDocument(forPage: index, pages: layoutState.pages, in: doc)
+        guard let cursor = nearestCursor(at: documentPoint, in: pageDoc) else {
+            readerLogClick("deck page=\(index) doc=\(documentPoint) -> no cursor")
+            return
+        }
+        readerLogClick("deck page=\(index) doc=\(documentPoint) -> \(cursor)")
+        viewModel.playbackSession.setManualCursor(cursor)
+        editingHost?.rememberTappedItem(cursor)
     }
 
     /// The drawn sheet size, or `nil` until the first engraving lands.

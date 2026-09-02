@@ -54,12 +54,14 @@ struct MacHorizontalScoreContainer: View {
     /// `editingHost.document` for hit-testing, and the surface tints the selection and draws the caret.
     var editingHost: ReaderEditingHost?
 
-    @State private var state = MacHorizontalScoreState()
+    /// Not private: the click routing lives in MacHorizontalScoreContainer+Click.swift, split out under SwiftLint's
+    /// file-length ceiling, and the sticky-pane guard there reads both of these.
+    @State var state = MacHorizontalScoreState()
     /// Off-main engraver holding this surface's incremental `LayoutCache`; see `ScoreRelayoutEngine`.
     @State private var relayoutEngine = ScoreRelayoutEngine()
     /// Live scroll offset and magnification, mirrored out of AppKit so the sticky pane can track the score it sits
     /// over. See `MacScoreViewportState` — this is the one container that asks for it.
-    @State private var viewportState = MacScoreViewportState(tracksScroll: true)
+    @State var viewportState = MacScoreViewportState()
     /// The control channel for magnification: external writes in (the fit seed), the settled value out. The live
     /// value during a pinch is `viewportState.magnification`.
     @State private var magnification: CGFloat = 1.0
@@ -84,6 +86,7 @@ struct MacHorizontalScoreContainer: View {
                 contentGeneration: layoutGeneration,
                 scrollRequest: scrollRequest,
                 viewportState: viewportState,
+                onClick: handleClick,
             ) {
                 MacHorizontalScoreStrip(
                     viewModel: viewModel,
@@ -91,7 +94,6 @@ struct MacHorizontalScoreContainer: View {
                     document: state.document,
                     score: score,
                     scoreOptions: scoreOptions,
-                    viewportState: viewportState,
                     editingHost: editingHost,
                 )
             }
