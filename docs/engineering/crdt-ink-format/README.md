@@ -620,3 +620,96 @@ measurement — no third-party editor has been tested.
 **This falsified the spec's original "there is nothing to trade away".** There is: object selection in
 Preview, in exchange for erasing with a Pencil on iOS. `docs/superpowers/specs/2026-09-01-erasable-ink-export-design.md`
 now records that trade, and which side it takes.
+
+---
+
+# The drawing is a PencilKit archive, and the hand-built protobuf is gone (2026-09-02)
+
+## What the device rounds showed first
+
+Three defects survived the first accepted export: the highlighter sat tens of points from where Preview drew
+it, it was drawn as a round pen rather than a chisel, and pens came out a different thickness. Fourteen
+one-variable device rounds (`tools/mk*variants.py`, applied with `tools/applyone.swift`) settled them:
+
+- **Geometry was never wrong.** The payload's points and the annotation's `/InkList` agree to four decimals
+  (`tools/comparegeometry.py`, `tools/dumpinklist.swift`); Preview draws the vector `/AP` PDFKit generates
+  from the same points. Files re-renders the payload with PencilKit from the moment it adopts it — the
+  thumbnail in the Files list is right, the opened document is not — so the disagreement is entirely on the
+  PencilKit side.
+- **The marker's identifier is `com.apple.ink.marker`** (a Files.app reference, hand-drawn by the user,
+  `tools/crdtpoints.py`). Files' extra ink fields for a marker (`"linear"`, colour × 0.15, colour × 0.85, a
+  −0.5 double) change nothing visible.
+- **The position error was the bounding box.** Our box was the point extent grown by half the width plus a
+  point. AnnotationKit recomputes `PKDrawing.bounds` from the drawing and places the mark by it, and a
+  marker's rendered extent is not the point extent plus half its width. With PencilKit's own bounds in the
+  payload the mark lands exactly (variant F). The azimuth/altitude slots were red herrings: rewriting them
+  moved the chisel and the mark, but only between two states, and never to the right one.
+- **The finger-drawn chisel is azimuth 0** (variant F1, judged exact by eye). Pencil-drawn strokes carry their
+  real azimuth, and the neutral `InkStroke` already stores it.
+
+## Books on iPadOS 26 writes `wrd`
+
+An iPad Books sample (`samples/books-ipad-wrd-pen-pen-marker.bin`) carries, in the archive's `drawing` slot,
+not gzip-wrapped protobuf but the bytes `PKDrawing.dataRepresentation()` returns — the `wrd` container. macOS
+PencilKit decodes it (`tools/pkdump.swift`) and produces it (`tools/mkwrd.swift`), so every field of the stroke
+encoding is PencilKit's own and nothing about it is synthesized any more. The decoded sample also settled the
+remaining slot meanings for the record: azimuth and altitude are `u16 / 65535 × π` (π/3 for the Pencil), a
+marker's size is `(w, w × 1.032)`, and the per-stroke box is `renderBounds`, integral.
+
+Two traps for anyone building PencilKit drawings on a Mac:
+
+- A plain command-line tool crashes in `PKDrawing` construction (`CFEqual(NULL)` on PencilKit's replicas queue)
+  because it has no bundle identifier. Wrap the binary in a minimal `.app` — `tools/PKProbe/Info.plist` is
+  enough — and it runs.
+- `swift file.swift` cannot JIT PDFKit or PencilKit; build with `swiftc -framework PDFKit` / `-framework
+  PencilKit` instead.
+
+`AnnotatedPDFComposer` now scales the placed `PKDrawing` into canvas units (points and sizes alike, transform
+baked in), stores `dataRepresentation()` as the drawing, and derives the archive rectangle and `/Rect` from
+`PKDrawing.bounds`. `AKInkPayloadEncoder`, `ProtobufWriter`, `GzipWriter` and the structural golden test are
+deleted. Pixel-erased strokes, which the neutral format could not express, now export with their mask intact
+because PencilKit's archive carries it. Verified on device: position, chisel, erase and select (F1, G4).
+
+## Thickness: PencilKit's width curves, and why the same stroke looks different in three places
+
+Measured on the live `PKCanvasView` in the simulator (`tools/PKProbe`, screenshots via `simctl io screenshot`,
+`tools/bands.py`; a unit test's window never reaches the simulator screen, hence a real app), and identical in
+`PKDrawing.image(from:scale:)` on iOS and macOS. Widths are in the drawing's own units and scale linearly with
+zoom (every row exactly doubled at zoom 2). `force` changes nothing for any ink.
+
+| ink | rendered width for point size `s` | measured at s = 4 / 8 / 16 |
+| --- | --- | --- |
+| pen, monoline | `2s − 4` | 4 / 12 / 28 |
+| pencil | ≈ `2s − 1` | 7.3 / 15 / 29 |
+| marker (azimuth 0, along the stroke) | `s / 2` | 2 / 4 / 8.3 |
+| fountain pen | ≈ `s / 2 − 0.7` | 1.3 / 3.3 / 7.3 |
+| watercolor | ≈ `1.7s` | 6.7 / 13.3 / 27.3 |
+| crayon | ≈ `1.85s` | 7.3 / 14.7 / 30.3 |
+
+The constant term is what made the same stroke look different everywhere: it is 4 *content units*, and the
+content unit differs by renderer. Apple's markup draws the archived drawing in canvas units (4/3 of a page
+point) and scales the result onto the page, so a pen of page-point size `w` shows `2w − 3` points; folino's
+own `PKCanvasView` draws in the score's document units — on an iPhone about 1.7 page points each — so the same
+stroke shows `2w − 6.8`, and on an iPad, whose document is wider than the page, thicker than the PDF. Every
+measurement on device fit this to a fraction of a point once the canvas scale was accounted for.
+
+Decision (2026-09-02): the export does **not** compensate for the exporting device's document scale — the
+on-screen look is itself device-dependent, and matching it would need the reader's live layout inside the
+export path. What the export does do is make its own two renderings agree: the appearance stream's line width
+now goes through the same curve (`AnnotatedPDFComposer.appearanceLineWidth`), so Preview and Files show the
+same thickness, where before the marker's vector was twice PencilKit's band.
+
+## Tools added in this round
+
+| tool | what it does |
+| --- | --- |
+| `dumpinklist.swift` | `/InkList`, `/Rect`, border width and colour of every ink annotation |
+| `apbody.swift`, `xobjimages.swift` | the `/AP` content stream, and the pixel size of any raster it draws |
+| `comparegeometry.py`, `padding.py` | payload points mapped to page space; bbox padding against the width |
+| `crdtpoints.py` | the bitmask-driven point layout of a `crdt` container (Files.app's form) |
+| `pkdump.swift`, `mkwrd.swift`, `pkrender.swift` | decode / build / render a PencilKit archive on macOS (run from `mkwrd.app`) |
+| `mkwrdarchive.py`, `exportpoints.py`, `setscale.py` | swap a PencilKit drawing into an archive; helpers |
+| `applyone.swift` | replace one annotation's archive (and `/Rect`, keeping `/InkList` in place) in a PDF |
+| `mk*variants.py`, `mkshiftvariant.py` | the one-variable device variants |
+| `measurewidth.swift`, `renderpage.swift`, `redwidth.py`, `bandbox.py`, `bands.py`, `linewidth.py`, `mklines.py` | thickness and position measurements on renders and screenshots |
+| `PKProbe/` | the simulator app that measures the live `PKCanvasView` (xcodegen; `-page A|B`, `-zoom n`) |
