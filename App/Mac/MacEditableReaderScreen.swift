@@ -162,31 +162,63 @@ struct MacEditableReaderScreen: View {
                 hasMusicalAnnotations: editingHost.hasMusicalAnnotationsProvider(),
             ))
         }
-        .onAppear { wireOnce() }
+        .onAppear {
+            wireOnce()
+            // Registration is idempotent and lives OUTSIDE `wireOnce`'s one-shot guard deliberately: a window that
+            // disappears and reappears (AppKit tabbing moves a window between tab groups) runs `onDisappear`, which
+            // unregisters. If the re-register rode the guard, that window would be gone from the registry for good
+            // and ⌘Q's flush would skip its pending autosave.
+            MacEditorRegistry.shared.register(editorViewModel, for: item.id)
+            // An adopted history is undoable the moment the session opens, but the system UndoManager only learns
+            // about edits when a trampoline is registered — and that happens per NEWLY applied edit. Arm one
+            // initial trampoline when the session already has history; `registerSystemUndo`'s symmetric
+            // re-registration handles everything after. The Mac needs this more than iOS does: there is no undo
+            // button here at all, so an unarmed manager means Edit ▸ Undo is simply dead on a reopened score.
+            if editorViewModel.canUndo {
+                editorViewModel.registerSystemUndo(with: undoManager)
+            }
+        }
         // The Reader owns the transport; the Editor only needs to know whether it is running. Mirrored here
         // because neither feature imports the other.
         .onChange(of: editingHost.isPlaying, initial: true) { _, isPlaying in
             editorViewModel.isPlaybackActive = isPlaying
         }
         // The system Undo / Redo items drive the session through the same trampolines the iOS chrome registers,
-        // re-registered only on a genuinely NEW edit — see `EditorViewModel.appliedEditCount`.
+        // re-registered only on a genuinely NEW edit — see `EditorViewModel.appliedEditCount`. NOT on undo /
+        // redo, which also bump `generation`: re-registering there would double up with `registerSystemUndo`'s own
+        // symmetric re-registration and drift the system stack from the session's real depth.
         .onChange(of: editorViewModel.appliedEditCount) { _, _ in
             editorViewModel.registerSystemUndo(with: undoManager)
+        }
+        // ⌘Z is the one editing path with no control to grey out, so it is closed while the transport runs: the
+        // trampolines come off, and one is armed again after. Without this an undo would rewrite the score under a
+        // cursor already reading from the pre-undo engine. Same guard the iOS chrome applies to the three-finger
+        // swipe, for the same reason.
+        .onChange(of: editorViewModel.isPlaybackActive) { _, isPlaying in
+            if isPlaying {
+                undoManager?.removeAllActions(withTarget: editorViewModel)
+            } else if editorViewModel.canUndo {
+                editorViewModel.registerSystemUndo(with: undoManager)
+            }
         }
         .onDisappear {
             MacEditorRegistry.shared.unregister(for: item.id)
         }
     }
 
-    /// Connects the host (Reader → App) to the view model (App → Editor) exactly once per instance, fills the
-    /// menus' target, and publishes the editor to the registry `MacAppDelegate`'s quit-time flush walks.
-    /// `.onAppear` can fire more than once (a transient removal and reinsertion), so this guards against re-wiring.
+    /// Connects the host (Reader → App) to the view model (App → Editor) exactly once per instance and fills the
+    /// menus' target. `.onAppear` can fire more than once (a transient removal and reinsertion), so this guards
+    /// against re-wiring; the registry registration next to the call site is deliberately not guarded.
     private func wireOnce() {
         guard !isWired else { return }
         isWired = true
         wireEditingSeam(host: editingHost, viewModel: editorViewModel, repository: repository, analytics: analytics)
-        editingTarget.confirmDiscard = { isConfirmingDiscard = true }
-        editingTarget.confirmRevert = { isConfirmingRevert = true }
-        MacEditorRegistry.shared.register(editorViewModel, for: item.id)
+        // Bindings, not `self`: a closure that captured this view whole would capture `_editingTarget`'s own State
+        // box with it, and the target — which holds the closure — would then keep itself, the editor and the host
+        // alive for the life of the process. Every closed score window would leak its session.
+        let discard = $isConfirmingDiscard
+        let revert = $isConfirmingRevert
+        editingTarget.confirmDiscard = { discard.wrappedValue = true }
+        editingTarget.confirmRevert = { revert.wrappedValue = true }
     }
 }
