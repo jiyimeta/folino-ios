@@ -89,7 +89,10 @@ struct EditorCrossSessionUndoTests {
         let vm = makeViewModel(store: store, directory: dir)
         // A previous run deposited under bytes this row no longer has (reverted / re-imported / restored since).
         store.retain(
-            ScoreEditSession(score: EditorFixtures.chordAtIndex1()),
+            RetainedEditSession(
+                session: ScoreEditSession(score: EditorFixtures.chordAtIndex1()),
+                undoableStepCount: 1,
+            ),
             for: vm.scoreItemID,
             contentHash: "not-the-row's-digest",
         )
@@ -353,6 +356,161 @@ struct EditorCrossSessionUndoTests {
         #expect(vm.isSessionActive) // the editor the user is looking at is still alive
         #expect(vm.session === reopened)
         #expect(store.retained.count == 1)
-        #expect(store.retained.first?.session === ending) // the ENDING session was deposited, not the live one
+        #expect(store.retained.first?.retained.session === ending) // the ENDING session, not the live one
+        // And with the ENDING session's depth: the count is captured before the flush, so the fresh session that
+        // opened during it cannot hand its own zero to the deposit.
+        #expect(store.retained.first?.retained.undoableStepCount == 1)
+    }
+
+    // MARK: - What a menu-driven host has to arm its undo bridge on
+
+    /// The fact the Mac screen's undo wiring is built on (`App/Mac/MacEditableReaderScreen.swift`): an adopted
+    /// history is undoable from the session's FIRST frame, while `appliedEditCount` — which `beginSession` resets to
+    /// zero — says nothing has been edited. So a host that arms the system `UndoManager` off the edit count alone
+    /// arms nothing on a reopened score, and Edit ▸ Undo stays dead until a new edit is made. The Mac arms on the
+    /// session boundary instead, and only re-registers when the count RISES.
+    @Test func `an adopted history is undoable while the applied edit count is back at zero`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let vm = makeViewModel(store: store, directory: dir)
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
+        let edited = try #require(vm.score)
+        #expect(vm.appliedEditCount > 0)
+        await vm.endSession()
+
+        vm.beginSession(score: edited)
+        #expect(vm.canUndo) // the retained history was adopted
+        #expect(vm.appliedEditCount == 0) // and the count that a per-edit trigger would watch went N → 0
+    }
+
+    // MARK: - How DEEP the adopted history is
+
+    /// `canUndo` is not enough for a host that arms one thing per undoable step. The Mac registers an `UndoManager`
+    /// trampoline for each — each ⌘Z consumes exactly one — so a session adopted with N steps that reported only
+    /// "yes, something" would offer exactly one undo of the N the user made before the window closed.
+    @Test func `an adopted session reports the whole retained depth, not one step of it`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let vm = makeViewModel(store: store, directory: dir)
+        let sessionOpen = try await seedTwoCommittedEdits(into: vm)
+        #expect(store.retained.first?.retained.undoableStepCount == 2) // deposited with its depth
+
+        vm.beginSession(score: sessionOpen)
+        #expect(vm.appliedEditCount == 0) // nothing has been applied IN this session…
+        #expect(vm.undoableStepCount == 2) // …and both retained steps are still there to take
+
+        vm.undo()
+        #expect(vm.undoableStepCount == 1)
+        vm.undo()
+        #expect(vm.undoableStepCount == 0)
+        #expect(!vm.canUndo)
+    }
+
+    @Test func `the depth counts this session's own edits and is deposited with them`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let vm = makeViewModel(store: store, directory: dir)
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        #expect(vm.undoableStepCount == 0) // a fresh session has nothing to undo
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
+        #expect(vm.undoableStepCount == 1)
+        let edited = try #require(vm.score)
+        await vm.endSession()
+        #expect(store.retained.first?.retained.undoableStepCount == 1)
+
+        // A second session on top of the adopted one: its own edit stacks onto the depth it inherited, and the
+        // deposit carries the total — which is what makes the count survive any number of open/close cycles.
+        vm.beginSession(score: edited)
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 2), pitch: 62, tpc: 16, duration: nil))
+        #expect(vm.undoableStepCount == 2)
+        await vm.endSession()
+        #expect(store.retained.first?.retained.undoableStepCount == 2)
+    }
+
+    // MARK: - One ⌘Z per step, which is a question about undo GROUPS
+
+    /// The bug the first fix left behind (QA, Release build): arming N trampolines in one run-loop turn puts all N
+    /// in the same `UndoManager` group — `groupsByEvent` is on by default — and a group is undone whole, so one ⌘Z
+    /// reverted the entire retained history at once. `UndoManager` is Foundation, so this needs no window: it is the
+    /// real manager, driven exactly as Edit ▸ Undo drives it.
+    @Test func `each retained step is its own undo group, so one undo takes exactly one step`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let vm = makeViewModel(store: store, directory: dir)
+        let sessionOpen = try await seedTwoCommittedEdits(into: vm)
+        vm.beginSession(score: sessionOpen)
+
+        let manager = UndoManager()
+        vm.registerSystemUndoForAdoptedHistory(with: manager)
+        #expect(manager.canUndo)
+
+        manager.undo()
+        #expect(vm.undoableStepCount == 1) // ONE step, not the whole history
+        #expect(manager.canUndo) // and the second step is still on the manager's stack
+        #expect(vm.score != EditorFixtures.fourQuarterRests())
+
+        manager.undo()
+        #expect(vm.undoableStepCount == 0)
+        #expect(vm.score == EditorFixtures.fourQuarterRests())
+        #expect(!manager.canUndo)
+    }
+
+    /// The trampoline's own half of the contract, on the real manager: undoing registers the redo, and redoing
+    /// registers the undo back.
+    @Test func `undoing a retained step leaves a redo that puts it back`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let vm = makeViewModel(store: store, directory: dir)
+        let sessionOpen = try await seedTwoCommittedEdits(into: vm)
+        vm.beginSession(score: sessionOpen)
+
+        let manager = UndoManager()
+        vm.registerSystemUndoForAdoptedHistory(with: manager)
+        manager.undo()
+        #expect(manager.canRedo)
+
+        manager.redo()
+        #expect(vm.score == sessionOpen)
+        #expect(vm.undoableStepCount == 2)
+        #expect(manager.canUndo)
+    }
+
+    @Test func `a session with nothing to undo arms nothing at all`() {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let vm = makeViewModel(store: store, directory: dir)
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+
+        let manager = UndoManager()
+        vm.registerSystemUndoForAdoptedHistory(with: manager)
+        #expect(!manager.canUndo)
+        // …and the manager is left as it was found, not stuck with automatic grouping turned off.
+        #expect(manager.groupsByEvent)
+        #expect(manager.groupingLevel == 0)
+    }
+
+    /// A discard rebuilds the session from the score it opened on, throwing the adopted stack away with it — so the
+    /// depth has to go back to zero, or the Mac would arm undos for steps that no longer exist.
+    @Test func `discarding a session leaves nothing to undo`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let vm = makeViewModel(store: store, directory: dir)
+        let sessionOpen = try await seedTwoCommittedEdits(into: vm)
+
+        vm.beginSession(score: sessionOpen)
+        vm.undo() // below this session's start, so the unwind has to rebuild rather than walk back
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 3), pitch: 64, tpc: 18, duration: nil))
+        await vm.discardSessionEdits()
+
+        #expect(vm.undoableStepCount == 0)
+        #expect(!vm.canUndo)
     }
 }

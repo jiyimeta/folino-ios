@@ -18,10 +18,6 @@ func libraryRootDestination(
         AllScoresScreen(
             library: viewModel,
             onOpen: onOpenScore,
-            // Mirrors `onOpen`, and stays that way: this whole file is the iOS root screen's push destinations,
-            // and iOS has no second window to open into. The Mac reaches these same leaf screens from
-            // `MacLibraryBrowser`, which passes a real `openWindow(value:)` closure here instead.
-            onOpenInNewWindow: onOpenScore,
             onEditTags: onEditTags,
             onAddToPlaylist: onAddToPlaylist,
         )
@@ -29,7 +25,6 @@ func libraryRootDestination(
         FavoritesScreen(
             library: viewModel,
             onOpen: onOpenScore,
-            onOpenInNewWindow: onOpenScore,
             onEditTags: onEditTags,
             onAddToPlaylist: onAddToPlaylist,
         )
@@ -46,7 +41,7 @@ func libraryRootDestination(
     case .playlists:
         PlaylistsListScreen(library: viewModel)
     case .recentlyDeleted:
-        RecentlyDeletedScreen(library: viewModel, onOpen: onOpenScore, onOpenInNewWindow: onOpenScore)
+        RecentlyDeletedScreen(library: viewModel, onOpen: onOpenScore)
     case let .playlistDetail(playlistID):
         playlistDetailDestination(playlistID: playlistID, viewModel: viewModel, onOpenInPlaylist: onOpenInPlaylist)
     }
@@ -67,7 +62,6 @@ private func tagDetailDestination(
             tag: tag,
             library: viewModel,
             onOpen: onOpenScore,
-            onOpenInNewWindow: onOpenScore,
             onEditTags: onEditTags,
             onAddToPlaylist: onAddToPlaylist,
             onTagDeleted: { /* NavigationStack pops automatically when destination renders 'Tag not found' */ },

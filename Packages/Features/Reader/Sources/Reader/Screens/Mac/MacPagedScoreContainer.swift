@@ -1,8 +1,8 @@
 // PARITY(macos): page-mode reader extras — the Mac deck draws every page with its committed ink and lets the scroll
-//   view magnify them, and nothing else. Three gaps against the iOS `PagedScoreContainer`: no page-turn affordance
-//   at all (its tap zones and swipe are touch idioms that should not be ported, but no key, menu item or button
-//   stands in for them yet — see `PageTapOverlay`), no live annotation canvas, and no note-editing seam. Zoom is
-//   not a gap: it lives on `NSScrollView.magnification` here, which is why the pinch-commit has no counterpart.
+//   view magnify them, and nothing else. Two gaps against the iOS `PagedScoreContainer`: no page-turn affordance at all
+//   (its tap zones and swipe are touch idioms that should not be ported, but no key, menu item or button stands in for
+//   them yet — see `PageTapOverlay`), and no live annotation canvas (Ⅴ). Zoom is not a gap: it lives on
+//   `NSScrollView.magnification` here, which is why the pinch-commit has no counterpart.
 
 #if os(macOS)
 import Domain
@@ -141,7 +141,14 @@ struct MacPagedScoreContainer: View {
     /// Transpose offset in semitones. Only used to invalidate the layout cache via `MacScoreLayoutKey` — the score
     /// passed in is already transposed.
     let transposeSemitones: Int
+    /// Which edit `score` is while note editing, 0 otherwise. Keyed on INSTEAD of `editingHost.editGeneration` — see
+    /// `ReaderEditingDisplay.version`.
+    var editingScoreVersion = 0
     let viewModel: ReaderViewModel
+    /// The note-editing seam. `nil` keeps this container byte-identical to the read-only reader (previews, tests).
+    /// With a host, clicks route to `editingHost.onTap`, the rebuilt `LayoutDocument` is published to
+    /// `editingHost.document` for hit-testing, and the surface tints the selection and draws the caret.
+    var editingHost: ReaderEditingHost?
 
     /// Layout output — observable, not `@State`; see `ScoreLayoutState`.
     @State private var layoutState = ScoreLayoutState()
@@ -149,6 +156,12 @@ struct MacPagedScoreContainer: View {
     @State private var relayoutEngine = ScoreRelayoutEngine()
     @State private var cursorState = MacPageDeckCursorState()
     @State private var magnification: CGFloat = 1.0
+    /// The magnification, mirrored out of AppKit for the deck's click handler — SwiftUI reports a hosted click in
+    /// magnified units, and `MacPageScoreLayer` divides it back out. `tracksScroll: false`: nothing here is drawn
+    /// outside the scroll view, so the deck takes the magnification mirror and none of the per-frame scroll traffic.
+    /// This is deliberately not the `magnification` state above — the deck lives in an `NSHostingView` whose root view
+    /// is replaced only on a generation bump, so a value handed down would be stale by the reader's first zoom.
+    @State private var viewportState = MacScoreViewportState()
     /// Fit-to-window is applied once, when the first engraving lands. A later window resize deliberately does not
     /// refit: a document viewer that re-zooms itself while the user drags the window edge is fighting them.
     @State private var hasSeededMagnification = false
@@ -170,6 +183,7 @@ struct MacPagedScoreContainer: View {
             magnification: $magnification,
             contentGeneration: layoutGeneration,
             scrollRequest: scrollRequest,
+            viewportState: viewportState,
         ) {
             MacPageDeck(
                 viewModel: viewModel,
@@ -179,6 +193,8 @@ struct MacPagedScoreContainer: View {
                 score: score,
                 scoreOptions: scoreOptions,
                 pageSize: sheet,
+                viewportState: viewportState,
+                editingHost: editingHost,
             )
         }
         // The desk the sheets lie on. `MagnifyingScoreScrollView` sets `drawsBackground = false`, so this is the one
@@ -247,6 +263,7 @@ struct MacPagedScoreContainer: View {
             showInvisibleElements: showInvisibleElements,
             showAllMeasureNumbers: showAllMeasureNumbers,
             transposeSemitones: transposeSemitones,
+            editingScoreVersion: editingScoreVersion,
         )
     }
 
@@ -264,6 +281,7 @@ struct MacPagedScoreContainer: View {
         )
         layoutState.document = newDoc
         layoutState.pages = newPages
+        editingHost?.document = newDoc
         // Slots first, then the generation bump: the deck's body reads the slots, so they have to exist for the page
         // count it is about to draw. Re-placing the cursor afterwards is what keeps it visible across a re-engrave —
         // `resize` drops the old slots, and nothing else would put it back.

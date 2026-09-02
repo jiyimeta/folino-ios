@@ -5,7 +5,7 @@
 // PARITY(macos): vertical mode's live overlays — the Mac draws and scrolls vertical mode in its own
 //   `MacVerticalScoreContainer`, so the mode itself is not owed. What this container still has that its Mac sibling
 //   does not: the live PencilKit annotation canvas it hands to the scroll host (Ⅴ — macOS ships no `PKCanvasView`
-//   at all) and the note-editing overlay in its zoomed subtree (Ⅳ). Zoom is settled, not owed; see `PinchState`.
+//   at all). Zoom is settled, not owed; see `PinchState`.
 
 #if os(iOS)
 import Domain

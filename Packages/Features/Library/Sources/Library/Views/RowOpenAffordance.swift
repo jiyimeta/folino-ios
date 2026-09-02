@@ -58,22 +58,10 @@ extension View {
     /// bulk actions once more than one row is selected. A *second*, List-level menu from
     /// `contextMenu(forSelectionType:)` on the same rows would fight that one for the same click — this is the same
     /// "two menus on one row" hazard the measurement above documents for gestures, just one level up the API. So this
-    /// helper's own `menu:` closure is empty on purpose, and Open / Open in New Window are built into each caller's
-    /// existing row menu instead, calling `onOpen` / `onOpenInNewWindow` directly. What this helper contributes is
-    /// `primaryAction:` (double-click) and Return; the caller-supplied-button path is whatever UI a later task hangs
-    /// off the same two closures — this file does not build one.
-    ///
-    /// **`onOpenInNewWindow` is not called from this helper, and that is the second unbuilt open affordance.** Spec
-    /// §2.3 gives opening two shapes: the default (a new tab of the frontmost score window, or a standalone window
-    /// when there is none) and **⌥-double-click for Open in New Window**. Only the default was built.
-    /// `contextMenu(forSelectionType:primaryAction:)` hands `primaryAction:` a selection and nothing else — no
-    /// modifier flags, no event — so the ⌥ half cannot be read at the one place a double-click arrives, and reading
-    /// `NSEvent.modifierFlags` at that moment would be guessing at whether the flag belongs to this click. The
-    /// parameter stays because it is live: every caller's own row `.contextMenu` builds an **Open in New Window**
-    /// item on it, which is the affordance the user actually has. Alongside the toolbar Open button the spec also
-    /// names and nothing built (`macScoreOpenAffordance`'s doc above, and the QA sheet), these are the two open
-    /// affordances the spec describes and this branch does not ship — both are on the QA sheet's known-deviation
-    /// note, and closing the ⌥ one means an open path that carries the modifier, not a change here.
+    /// helper's own `menu:` closure is empty on purpose, and Open is built into each caller's existing row menu
+    /// instead, calling `onOpen` directly. What this helper contributes is `primaryAction:` (double-click) and
+    /// Return; the caller-supplied-button path is whatever UI a later task hangs off the same closure — this file
+    /// does not build one.
     ///
     /// **What was actually verified here, and what was not.** `Scripts/build-macos-packages.sh` compiles this
     /// helper and every call site with `menu:` empty, so the "two menus" collision the paragraph above describes
@@ -87,12 +75,11 @@ extension View {
         _ selectedIDs: Set<ScoreItemID>,
         in items: [ScoreItem],
         onOpen: @escaping (ScoreItem) -> Void,
-        onOpenInNewWindow: @escaping (ScoreItem) -> Void,
     ) -> some View {
         #if os(macOS)
         contextMenu(forSelectionType: ScoreItemID.self) { _ in
             // Empty on purpose — see this function's doc comment. A populated menu here would compete with the
-            // caller's own per-row `.contextMenu` for the same rows; Open / Open in New Window live there instead.
+            // caller's own per-row `.contextMenu` for the same rows; Open lives there instead.
         } primaryAction: { ids in
             guard let item = macRowOpenAffordanceSingleItem(ids, in: items) else { return }
             onOpen(item)

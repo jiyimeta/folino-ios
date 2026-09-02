@@ -64,7 +64,7 @@ enum MacScoreEngraving {
 }
 
 /// Identity for the `.task(id:)` that re-engraves the score, shared by all three Mac containers. Mirrors the iOS
-/// containers' `TaskKey` minus the editing generation — the Mac reader has no edit session yet.
+/// containers' `TaskKey`, editing generation included.
 ///
 /// `width` is `nil` for the modes whose layout does not depend on the window: page engraves into a fixed A4 sheet
 /// and horizontal at the score's natural width, so a resize changes the magnification and nothing about the
@@ -78,6 +78,9 @@ struct MacScoreLayoutKey: Hashable {
     let showInvisibleElements: Bool
     let showAllMeasureNumbers: Bool
     let transposeSemitones: Int
+    /// Which edit the score is while note editing, 0 otherwise. Comes from `ReaderEditingDisplay.version`, beside the
+    /// score, never from the host directly — see that function's doc.
+    let editingScoreVersion: Int
 
     init(
         score: Score,
@@ -88,6 +91,7 @@ struct MacScoreLayoutKey: Hashable {
         showInvisibleElements: Bool,
         showAllMeasureNumbers: Bool,
         transposeSemitones: Int,
+        editingScoreVersion: Int = 0,
     ) {
         // `Score` is Equatable but not Hashable. Same cheap identity proxy the iOS containers use: structural shape
         // plus opening clefs, which is what makes a clef override re-trigger the task. The transpose is NOT folded
@@ -104,6 +108,7 @@ struct MacScoreLayoutKey: Hashable {
         self.showInvisibleElements = showInvisibleElements
         self.showAllMeasureNumbers = showAllMeasureNumbers
         self.transposeSemitones = transposeSemitones
+        self.editingScoreVersion = editingScoreVersion
     }
 }
 #endif

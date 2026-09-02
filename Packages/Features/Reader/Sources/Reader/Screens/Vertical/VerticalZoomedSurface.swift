@@ -1,6 +1,10 @@
 // PARITY(macos): vertical mode's note-editing overlay — this is the subtree `VerticalScoreContainer` hosts, and the
 //   `EditingSelectionOverlay` / tap-routing it carries is the half of that container's debt which lives at this
-//   layer. `MacVerticalScoreContainer` draws the same score without it, and Ⅳ is where it arrives.
+//   layer.
+//
+//   Revised 2026-09-02 during implementation: The Mac sibling (`MacVerticalScoreSurface`) carries the same
+//   selection tint, tap routing and caret. Not on the Mac, by design (`2026-09-02-macos-edit-session-design.md`
+//   §4.4): the floating pitch callout (`SelectionCalloutLayer`) — the keyboard is its replacement.
 
 #if os(iOS)
 import SheetMusicUI

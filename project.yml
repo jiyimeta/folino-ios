@@ -200,6 +200,7 @@ targets:
         products: [Persistence, CloudSync, Soundfonts, Audio, ScoreFiles, CrashReporting, Analytics]
       - package: Library
       - package: Reader
+      - package: Editor
       - package: ImportExport
         products: [ImportExport, ImportExportAppGroup]
       - package: Settings
@@ -243,6 +244,20 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         BUNDLE_LOADER: $(TEST_HOST)
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/folino.app/folino
+  FolinoMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: Tests/FolinoMacTests
+    dependencies:
+      - target: FolinoMac
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.KeyNumber.Folino.macTests
+        GENERATE_INFOPLIST_FILE: YES
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/folino.app/Contents/MacOS/folino
   FolinoScreenshot:
     type: application
     platform: iOS
@@ -379,8 +394,13 @@ schemes:
     build:
       targets:
         FolinoMac: all
+        FolinoMacTests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - FolinoMacTests
     profile:
       config: Release
     analyze:

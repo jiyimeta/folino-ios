@@ -16,7 +16,11 @@ extension EditorViewModel {
         // Keyed on the content hash, so a file that changed underneath us gets a fresh session rather than an undo
         // stack addressed to notes that have moved.
         let retained = historyStore.session(for: core.scoreItem.id, contentHash: core.scoreItem.contentHash)
-        let adopted = core.beginSession(score: score, adopting: retained)
+        let adopted = core.beginSession(
+            score: score,
+            adopting: retained?.session,
+            adoptedUndoStepCount: retained?.undoableStepCount ?? 0,
+        )
         core.activeVoice = activeVoice
         seedDrumPadLayout()
         // Opening a session is not an edit: match the counter first so `syncFromCore` neither announces a score nor
@@ -43,6 +47,10 @@ extension EditorViewModel {
         // Captured BEFORE the flush: that flush is a real file write the caller does not wait for, so by the time it
         // returns the user can already be in a new session — which must be neither deposited nor torn down.
         guard let ending = core.session else { return }
+        // Captured for the same reason, and at the same moment: the deposit below carries how deep this session's
+        // undo stack is, and after the flush the counters it is derived from may already describe a NEW session.
+        // Nothing can move the stack in between without dirtying the score, which `shouldRetain` refuses anyway.
+        let endingUndoStepCount = core.undoableStepCount
         await flushPendingSave()
         // Last chance at the part-index migration. A failed write inside `performSave` leaves the map unconsumed on
         // the deliberate assumption that a later save will retry it — but the score write itself succeeded, so
@@ -55,7 +63,13 @@ extension EditorViewModel {
             onPartIndicesRemapped(mapping)
         }
         if core.shouldRetain(ending) {
-            historyStore.retain(ending, for: core.scoreItem.id, contentHash: core.scoreItem.contentHash)
+            // The depth goes with it: the next entry has to arm one undo per step the adopted stack can still take,
+            // and by then this core — the only thing that was counting — is gone.
+            historyStore.retain(
+                RetainedEditSession(session: ending, undoableStepCount: endingUndoStepCount),
+                for: core.scoreItem.id,
+                contentHash: core.scoreItem.contentHash,
+            )
         }
         core.endSession(ifStillOn: ending)
         syncFromCore()
@@ -86,10 +100,51 @@ extension EditorViewModel {
         commitPartEdit()
     }
 
+    /// How many steps the live session can still undo — the whole stack, including what an adopted session brought
+    /// with it. `canUndo` is this asked as a yes/no.
+    ///
+    /// A host that arms something PER undoable step needs the number: macOS registers one `registerSystemUndo`
+    /// trampoline each when a session opens, because ⌘Z is the only undo that window has and one trampoline would
+    /// offer exactly one step of a retained history.
+    public var undoableStepCount: Int {
+        _ = generation
+        return core.undoableStepCount
+    }
+
+    /// Arms one trampoline per undoable step, EACH IN ITS OWN top-level undo group, so a retained history takes as
+    /// many ⌘Z presses as it has steps.
+    ///
+    /// The grouping is the entire point. `UndoManager.groupsByEvent` (on by default) folds every action registered
+    /// during one run-loop event into a single group, and a group is undone WHOLE — so the obvious loop of N
+    /// `registerSystemUndo` calls buys one ⌘Z that runs all N `undo()`s at once. Turning the flag off for the
+    /// duration is what makes each `begin` / `end` pair a top-level group of its own; with it left on, a manual
+    /// `beginUndoGrouping` merely NESTS inside the event's group and nothing changes.
+    ///
+    /// iOS never needs this: its chrome registers one trampoline per applied edit, each in its own event, so the
+    /// manager groups them one-per-step without being asked.
+    ///
+    /// Call only where the manager holds none of this view model's actions — a session that just opened, or playback
+    /// that just stripped them. An undo group already open around the call (`groupingLevel > 0`, from something else
+    /// registering earlier in the same event) would swallow these groups into it; that costs the per-step split, not
+    /// correctness, and no caller today registers anything before this runs.
+    public func registerSystemUndoForAdoptedHistory(with manager: UndoManager?) {
+        guard let manager else { return }
+        let steps = undoableStepCount
+        guard steps > 0 else { return }
+        let wasGroupingByEvent = manager.groupsByEvent
+        manager.groupsByEvent = false
+        for _ in 0 ..< steps {
+            manager.beginUndoGrouping()
+            registerSystemUndo(with: manager)
+            manager.endUndoGrouping()
+        }
+        manager.groupsByEvent = wasGroupingByEvent
+    }
+
     /// Bridges the session's own stacks to the system UndoManager so three-finger swipe gestures work. Each mutation
     /// registers one undo action; performing it re-registers the redo symmetrically. The session remains the source
     /// of truth — the UndoManager holds only trampolines.
-    func registerSystemUndo(with manager: UndoManager?) {
+    public func registerSystemUndo(with manager: UndoManager?) {
         guard let manager else { return }
         manager.registerUndo(withTarget: self) { vm in
             vm.undo()

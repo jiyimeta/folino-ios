@@ -74,11 +74,19 @@ Fact 3 falls out: clicking never opens, so it never restamps `lastOpenedAt`, so 
 
 ### 2.3 Opening never consumes a window
 
+> **Revised 2026-09-02** by `2026-09-02-macos-edit-session-design.md` §3. Open in New Window and ⌥-double-click are
+> withdrawn: with the score always editable, a second window on the same score would be a second editor of one
+> file. `MacWindowScore` is the score id alone, and opening an already-open score brings its window forward
+> (MuseScore 4's rule). The default open path — a tab of the frontmost score window — is unchanged.
+
 The default: the score lands as a **new tab of the frontmost score window**, or a new standalone window when none exists. ⌥-double-click and a context-menu item give **Open in New Window**.
 
 The browser **stays open and recedes** behind the newly keyed score window — deliberately unlike Keynote's panel, which closes, because folino's browser is also the organize surface. ⌘W dismisses it.
 
 ### 2.4 Several scores at once
+
+> **Revised 2026-09-02:** "several scores at once" still holds; "the same score several times" does not — see
+> §2.3's note. A split view of one score inside one window is the replacement, scheduled after Ⅳc.
 
 **"Window = one score" and "MuseScore's tab strip" are the same shape, not a trade-off.** macOS merges same-group windows into native window tabs; that *is* MuseScore 3's tab strip, supplied by the system — plus tear-off (drag a tab out) for genuine side-by-side, which an in-window tab strip cannot do, and which is exactly the two-scores-visible arrangement copy/paste wants.
 
@@ -114,6 +122,36 @@ The clipboard format and paste semantics belong to sub-projects Ⅰ and Ⅳ. The
 ### 2.8 Launch and restoration
 
 A `Window` scene's restoration behavior is runtime-unverified. macOS 15's `defaultLaunchBehavior` / `restorationBehavior` scene modifiers exist to steer exactly this. Target behavior: a fresh launch with nothing restored presents the browser; restored score windows present without the browser unless it was open at quit. **Fallback if the modifiers do not cooperate: the browser always presents at launch** — dumb, but sound.
+
+### 2.9 Revised 2026-09-02 — the library is a chooser, and a score window is never empty
+
+Decided by the user after the first hands-on session with Ⅳa (`2026-09-02-macos-edit-session-design.md`). This
+section supersedes §2.3's "the browser stays open and recedes" and refines §2.7 / §2.8. The behavior is Keynote's and
+Logic's: the library is the thing you pick from, not a second workspace.
+
+1. **Opening a score closes the library.** Double-click / Return / the row's Open item open the score window and
+   the library window closes in the same gesture.
+2. **Show Library presents the library over the score window.** The toolbar button and ⌘O bring the library up in
+   front of the score window on the same Space — including when the score window is full screen, where it must not
+   switch Spaces. (A plain `Window` scene may open in its own Space from full screen; the implementation has to
+   measure this and, if so, present the library as a panel / floating window over the full-screen score.)
+3. **Another score opened from the library becomes a new tab of the existing score window.** The original score
+   window stays; the new score lands as a tab in it (the library closes, per 1). Open-as-tab is therefore the
+   app's own default and must work: the user measured on 2026-09-02 that a new score opened as a **separate
+   window even with the score window in full screen**, and found no "prefer tabs" setting to change — so
+   `MacWindowTabAssist` as built is not doing this and the implementation must drive `NSWindow.tabbingMode =
+   .preferred` / `addTabbedWindow(_:ordered:)` itself and verify by hand.
+4. **A score window never shows an empty state.** If the window's score is gone (permanently deleted, restoration
+   named a row that no longer exists), the window closes and the library is shown instead of the empty
+   `ContentUnavailableView` `MacShellView` draws today.
+5. **Closing the last score window shows the library.** No score open means the library is on screen (also the
+   §2.8 launch rule, restated).
+
+What this does NOT change: one window per score (`2026-09-02-macos-edit-session-design.md` §3), playback takeover
+and global display mode (§2.5), the browser as the organize surface (its bulk actions and sources).
+
+Scheduling: a follow-on slice on the Ⅳa branch or immediately after it — it touches `App/Mac` only
+(`FolinoMacApp`, `MacShellView`, `MacWindowTabAssist`, the library window's open closures).
 
 ---
 
@@ -157,7 +195,7 @@ iOS keeps its explicit Select mode and bottom `BulkActionBar` unchanged — the 
 - `App/Mac/MacShellView.swift` — from split-view host to the score window's content: reader plus empty fallback. The adapter unwrapping and focused-value publishing survive; the sidebar/detail split, the selection count and the "N selected" view go. `LibraryViewModel` construction and the drop-target / import plumbing move to the browser window. Net smaller.
 - `RowOpenAffordance.swift` — `macSelectionOpensScore`, `macSingleSelectionOpensScore` and the `libraryBulkSelectionCount` focused value are deleted; the measurement table stays and gains the `primaryAction` row.
 - `ScoreListView.swift`, `PlaylistDetailView.swift` — the `macSelectionOpensScore` call sites become the new open affordance; the selection set, `effectiveRowMenu` and ⌫ are untouched.
-- `MacCommands.swift` — ⌘0 toggle-library becomes ⌘O show-library; "Open in New Tab" is reworked onto the tab assist and joined by "Open in New Window".
+- `MacCommands.swift` — ⌘0 toggle-library becomes ⌘O show-library; "Open in New Tab" is reworked onto the tab assist (§2.3's note: Open in New Window was withdrawn).
 
 **Untouched:** everything under `Reader/Screens/Mac/`, the audio work, `AppBootstrap`, import plumbing, and **all iOS code**. `LibraryRootScreen` and its push navigation remain the iOS shape; they keep compiling on macOS but are no longer instantiated there, and their now-dead macOS selection branch is stripped in a cleanup pass.
 

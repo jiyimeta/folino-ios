@@ -13,8 +13,6 @@ import UtilityUI
 struct RecentlyDeletedView: View {
     let items: [ScoreItem]
     let onTap: (ScoreItem) -> Void
-    /// **macOS only**, in effect — see `ScoreListView.onOpenInNewWindow`.
-    let onOpenInNewWindow: (ScoreItem) -> Void
     let onRestore: (ScoreItem) -> Void
     let onRequestPermanentDelete: (ScoreItem) -> Void
     @Binding var pendingPermanentDelete: ScoreItem?
@@ -40,7 +38,7 @@ struct RecentlyDeletedView: View {
                     .tag(item.id)
             }
         }
-        .macScoreOpenAffordance(selectedIDs, in: items, onOpen: onTap, onOpenInNewWindow: onOpenInNewWindow)
+        .macScoreOpenAffordance(selectedIDs, in: items, onOpen: onTap)
         .bulkSelectionEditModeCompat(isSelecting: isSelecting)
         .popoverCompat(isPresented: $isShowingBulkPermanentDeletePopover) {
             bulkPermanentDeletePopoverContent
@@ -136,9 +134,9 @@ struct RecentlyDeletedView: View {
     /// resolve a selection-vs-single-item context menu. A single selected row keeps the row's own menu, which is
     /// already the same two actions.
     ///
-    /// On macOS, Open / Open in New Window are prepended here too — this row has no tap gesture and no pre-existing
-    /// "Open" menu item to extend, so both come from this file rather than from a shared builder; see
-    /// `macScoreOpenAffordance`'s doc comment for why they live in the row's own menu and not in a second one.
+    /// On macOS, Open is prepended here too — this row has no tap gesture and no pre-existing "Open" menu item to
+    /// extend, so it comes from this file rather than from a shared builder; see `macScoreOpenAffordance`'s doc
+    /// comment for why it lives in the row's own menu and not in a second one.
     @ViewBuilder
     private func effectiveRowContextMenu(for item: ScoreItem) -> some View {
         #if os(macOS)
@@ -155,20 +153,12 @@ struct RecentlyDeletedView: View {
     }
 
     #if os(macOS)
-    @ViewBuilder
     private func openRowContextMenuContent(for item: ScoreItem) -> some View {
         Button { onTap(item) } label: {
             Label {
                 L10n.Common.open
             } icon: {
                 Image(systemName: "music.note")
-            }
-        }
-        Button { onOpenInNewWindow(item) } label: {
-            Label {
-                Text("library.open.newWindow", bundle: .module)
-            } icon: {
-                Image(systemName: "macwindow")
             }
         }
     }

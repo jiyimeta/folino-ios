@@ -58,7 +58,7 @@ public struct EditorDiscardButton: View {
         .accessibilityLabel(Text("editor.discard.action", bundle: .module))
         .destructiveConfirmationPopover(
             isPresented: $viewModel.isConfirmingDiscard,
-            message: String(localized: "editor.discard.confirm.message", bundle: .module),
+            message: viewModel.discardConfirmationMessage,
             actionTitle: Text("editor.discard.confirm.action", bundle: .module),
         ) {
             Task {
@@ -150,15 +150,7 @@ public struct EditorSessionEndButton: View {
     /// that predates originals being kept may be restoring an already-edited state, and ink anchored to the notation
     /// can move under it. `RevertPolicy` decides which apply.
     private var revertMessage: String {
-        let warnings = viewModel.revertWarnings(hasMusicalAnnotations: hasMusicalAnnotations)
-        var lines = [String(localized: "editor.revert.confirm.body", bundle: .module)]
-        if warnings.contains(.musicalAnnotationsMayShift) {
-            lines.append(String(localized: "editor.revert.confirm.inkMayShift", bundle: .module))
-        }
-        if warnings.contains(.originalMayNotBeImportTime) {
-            lines.append(String(localized: "editor.revert.confirm.mayNotBeImport", bundle: .module))
-        }
-        return lines.joined(separator: "\n\n")
+        viewModel.revertConfirmationMessage(hasMusicalAnnotations: hasMusicalAnnotations)
     }
 
     private var accessibilityKey: LocalizedStringKey {

@@ -1,6 +1,5 @@
-// PARITY(macos): horizontal mode's hosted subtree — the strip draws the staves and the committed ink and nothing
-//   over them. This is the layer where the live annotation canvas and the note-editing overlay would mount, as
-//   they do in the iOS `HorizontalZoomedSurface`; see `MacHorizontalScoreContainer`.
+// PARITY(macos): horizontal mode's live annotation canvas — the strip draws the staves, the committed ink, the
+//   selection and the caret; the live canvas the iOS `HorizontalZoomedSurface` mounts here is Ⅴ's.
 
 #if os(macOS)
 import Domain
@@ -24,6 +23,10 @@ struct MacHorizontalScoreStrip: View {
     /// SwiftUI's observation tracking, so touching it there registers no dependency and no scroll frame reaches the
     /// engraving through it.
     let viewportState: MacScoreViewportState
+    /// The note-editing seam. Read INSIDE `body` (never handed down as a value), because the strip is the
+    /// `NSHostingView`'s root and is rebuilt only when the container bumps `layoutGeneration` — a body read of this
+    /// `@Observable` object is what registers the dependency that redraws the strip when the selection moves.
+    let editingHost: ReaderEditingHost?
 
     /// The name the click-to-seek gesture reads its location in: the un-padded `ScoreView` frame, which is the
     /// `LayoutDocument`'s own coordinate space.
@@ -34,6 +37,10 @@ struct MacHorizontalScoreStrip: View {
             ZStack(alignment: .topLeading) {
                 ScoreView(
                     document: document, score: score, options: scoreOptions,
+                    // `displaySelection`, not `selection`: the editor addresses the unfiltered score, this document is
+                    // laid out from the staff-filtered one. See `ReaderEditingHost.displayItem(for:)`.
+                    selection: editingHost?.isEditing == true ? (editingHost?.displaySelection ?? .none) : .none,
+                    voiceColors: ReaderEditingPresentation.voiceColors,
                     // The only cursor read in the hosted tree, and the reason `state.cursor` exists.
                     playbackCursor: state.cursor, playbackCursorColor: .accentColor.opacity(0.6),
                 )
@@ -51,10 +58,17 @@ struct MacHorizontalScoreStrip: View {
                         end: viewModel.repeatModel.pendingRepeatB,
                     )
                 }
+
+                // Last in the stack — over `ScoreView`, which paints itself opaque white. The caret blends
+                // (`EditingSelectionOverlay`), it does not sit on top by z-order.
+                if let host = editingHost, host.isEditing {
+                    EditingSelectionOverlay(host: host, score: score, document: document)
+                }
             }
             .coordinateSpace(name: Self.coordinateSpace)
             .frame(width: document.size.width, height: document.size.height, alignment: .topLeading)
             .padding(MacHorizontalMetrics.contentInset)
+            .background(editingDeselectCatcher(host: editingHost))
             // The strip's paper runs edge to edge inside the scroll view, so AppKit's overlay scroller rides on white
             // and would vanish in dark appearance. Pinned on the scroll view itself, exactly as the vertical
             // container does it and for the same reason — see `MacScrollViewAppearance`.
@@ -72,6 +86,12 @@ struct MacHorizontalScoreStrip: View {
 
     /// Click-to-seek, in the document's own space.
     ///
+    /// **The reported location is divided by the magnification first, and without that nothing below is in document
+    /// space at all.** SwiftUI hands a hosted gesture its location already multiplied by the enclosing scroll view's
+    /// magnification — see `MacScoreMagnification.documentPoint(fromHosted:magnification:)`, which carries the
+    /// measurement. The strip already mirrors the live magnification for its sticky pane, so the divisor is the value
+    /// the pane is scaled by at that instant, which is the only one that can agree with what the reader clicked.
+    ///
     /// **Clicks that land under the sticky pane are rejected, and that is a correctness rule rather than a polish
     /// one.** The pane is `allowsHitTesting(false)` — deliberately, so it can never swallow a scroll — which means a
     /// click on it falls straight through to the music it is covering, and that music is by definition scrolled
@@ -83,12 +103,22 @@ struct MacHorizontalScoreStrip: View {
     /// pane displays, so the guard and the pane can never disagree about where the pane ends. This mirrors
     /// `MacPageScoreLayer`'s guard against clicks on the blank paper below a sheet's last system: a named coordinate
     /// space is wider than what the reader can act on, and the gesture is where that gets reconciled.
+    ///
+    /// While editing, a click that clears the pane is a selection, not a seek.
     private func tapSeekGesture(document: LayoutDocument) -> some Gesture {
         SpatialTapGesture(coordinateSpace: .named(Self.coordinateSpace))
             .onEnded { value in
-                guard !isUnderStickyPane(documentX: value.location.x, document: document) else { return }
-                guard let cursor = nearestCursor(at: value.location, in: document) else { return }
+                let point = MacScoreMagnification.documentPoint(
+                    fromHosted: value.location, magnification: viewportState.magnification,
+                )
+                guard !isUnderStickyPane(documentX: point.x, document: document) else { return }
+                if let host = editingHost, host.wantsScoreTaps {
+                    host.onTap(point)
+                    return
+                }
+                guard let cursor = nearestCursor(at: point, in: document) else { return }
                 viewModel.playbackSession.setManualCursor(cursor)
+                editingHost?.rememberTappedItem(cursor)
             }
     }
 

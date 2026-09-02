@@ -7,8 +7,6 @@ import UtilityUI
 struct RecentlyDeletedScreen: View {
     let library: LibraryViewModel
     let onOpen: (ScoreItem) -> Void
-    /// **macOS only**, in effect — see `ScoreListView.onOpenInNewWindow`.
-    let onOpenInNewWindow: (ScoreItem) -> Void
 
     @State private var viewModel: RecentlyDeletedViewModel
     @State private var isSelecting = false
@@ -19,11 +17,9 @@ struct RecentlyDeletedScreen: View {
     init(
         library: LibraryViewModel,
         onOpen: @escaping (ScoreItem) -> Void,
-        onOpenInNewWindow: @escaping (ScoreItem) -> Void,
     ) {
         self.library = library
         self.onOpen = onOpen
-        self.onOpenInNewWindow = onOpenInNewWindow
         _viewModel = State(wrappedValue: RecentlyDeletedViewModel(repository: library.repository))
     }
 
@@ -85,7 +81,6 @@ struct RecentlyDeletedScreen: View {
         RecentlyDeletedView(
             items: items,
             onTap: onOpen,
-            onOpenInNewWindow: onOpenInNewWindow,
             onRestore: { item in Task { await library.restore(item) } },
             onRequestPermanentDelete: { pendingPermanentDelete = $0 },
             pendingPermanentDelete: $pendingPermanentDelete,

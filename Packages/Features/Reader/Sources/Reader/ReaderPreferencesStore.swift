@@ -144,7 +144,7 @@ final class ReaderPreferencesStore {
     }
 
     /// Throws the held writes away without running them, for the one path that has no migrated row to re-run them
-    /// against — see `ReaderRootScreen.wirePartRemapReload`'s no-score bail. Keeping them would mean writing a
+    /// against — see `ReaderViewModel.wirePartRemapReload`'s no-score bail. Keeping them would mean writing a
     /// numbering nothing has reconciled; running them later against a score that has since been reloaded from disk
     /// would be worse still.
     func discardDeferredMutations() {

@@ -24,17 +24,12 @@ struct MacShellView: View {
     let libraryVM: LibraryViewModel
     @Environment(\.openWindow) private var openWindow
 
-    /// The adapters this window's reader needs, unwrapped once in `init` (see the guard there for why they are
-    /// guaranteed non-nil) rather than at every use site.
+    /// The one adapter this view reads itself, unwrapped once in `init` (see the guard there for why it is
+    /// guaranteed non-nil) rather than at every use site: `openScoreItem` resolves the window's id against it. The
+    /// reader's other adapters are `MacEditableReaderScreen`'s business now, and it unwraps them the same way.
     private let repository: any ScoreLibraryRepository
-    private let originalStore: any ScoreOriginalStore
-    private let gateway: any ScoreFileGateway
-    private let shareService: any ScoreShareService
-    private let metadataReader: any ScoreMetadataReading
-    private let annotationCoordinator: AnnotationSaveCoordinator
 
-    /// The score this window is showing, read out of the window's identity value. That value also carries a
-    /// `tabInstance` nothing here reads — see `MacWindowScore`'s doc comment for the deduplication it exists for.
+    /// The score this window is showing, read out of the window's identity value.
     private var scoreID: ScoreItem.ID? {
         window?.scoreID
     }
@@ -47,21 +42,10 @@ struct MacShellView: View {
         // `bootstrap.isReady` is true, and `AppBootstrap.start()` populates all of them synchronously before it
         // flips that flag (see the `Task { [weak self] in await self?.finishStartup(...) }` at the end of `start()`
         // — everything above that line already ran).
-        guard let repository = bootstrap.repository,
-              let gateway = bootstrap.gateway,
-              let originalStore = bootstrap.originalStore,
-              let shareService = bootstrap.shareService,
-              let metadataReader = bootstrap.metadataReader,
-              let annotationCoordinator = bootstrap.annotationCoordinator
-        else {
+        guard let repository = bootstrap.repository else {
             fatalError("MacShellView built before AppBootstrap finished starting")
         }
         self.repository = repository
-        self.originalStore = originalStore
-        self.gateway = gateway
-        self.shareService = shareService
-        self.metadataReader = metadataReader
-        self.annotationCoordinator = annotationCoordinator
     }
 
     var body: some View {
@@ -73,7 +57,6 @@ struct MacShellView: View {
             // `ImportedScoreOpener`. The browser installs the same watcher; `MacImportedScoreClaim` is what stops
             // them from opening the score twice.
             .opensImportedScores(from: libraryVM)
-            .focusedCurrentScoreID(scoreID)
     }
 
     /// File ▸ Import while THIS window is key — and the reason it is not just `await libraryVM.startImport(from:)`.
@@ -113,37 +96,24 @@ struct MacShellView: View {
     @ViewBuilder
     private var content: some View {
         if let item = openScoreItem {
-            // `id(item.id)` so switching the window to another score builds a fresh `MacReaderRootScreen` — and with
-            // it a fresh `ReaderViewModel`, which is created once per screen instance in a `@State`.
-            MacReaderRootScreen(
-                scoreItem: item,
-                repository: repository,
-                originalStore: originalStore,
-                gateway: gateway,
-                shareService: shareService,
-                metadataReader: metadataReader,
-                annotationCoordinator: annotationCoordinator,
-                scoresDirectory: AppPaths.scoresDirectory,
-                playbackController: bootstrap.playbackController,
-                // The same OMR parser the iOS shell passes. It is what gives an imported PDF its on-PDF cursor and
-                // click-to-seek; without it the document still reads, it just carries no musical positions.
-                pdfPlaybackParser: bootstrap.pdfPlaybackParser,
-                analytics: bootstrap.analytics ?? NoopAnalytics(),
-            )
-            .id(item.id)
-            .toolbar {
-                ToolbarItem(placement: .navigation) {
-                    Button {
-                        openWindow(id: MacWindowID.library)
-                    } label: {
-                        Label {
-                            Text("mac.toolbar.showLibrary")
-                        } icon: {
-                            Image(systemName: "square.grid.2x2")
+            // `id(item.id)` so switching the window to another score builds a fresh `MacEditableReaderScreen` — and
+            // with it a fresh `ReaderViewModel`, `ReaderEditingHost` and `EditorViewModel`, each created once per
+            // screen instance in a `@State`.
+            MacEditableReaderScreen(item: item, bootstrap: bootstrap)
+                .id(item.id)
+                .toolbar {
+                    ToolbarItem(placement: .navigation) {
+                        Button {
+                            openWindow(id: MacWindowID.library)
+                        } label: {
+                            Label {
+                                Text("mac.toolbar.showLibrary")
+                            } icon: {
+                                Image(systemName: "square.grid.2x2")
+                            }
                         }
                     }
                 }
-            }
         } else {
             // No score chosen yet — or the window's `scoreID` names a row the library holds neither live nor in the
             // trash (permanently deleted, or a restored window value that outlived its score). Both read as an empty
@@ -164,8 +134,8 @@ struct MacShellView: View {
     /// `.id(item.id)`, and a title edit does not change the id.
     ///
     /// **`deletedScoreItems` is searched too, and that fallback is load-bearing.** `scoreItems` excludes soft-deleted
-    /// rows, so a live-rows-only lookup made every Open path in Recently Deleted — the row menu's Open and Open in
-    /// New Window, Return, and double-click — mint a permanently empty window: the id resolved to nothing, and the
+    /// rows, so a live-rows-only lookup made every Open path in Recently Deleted — the row menu's Open, Return, and
+    /// double-click — mint a permanently empty window: the id resolved to nothing, and the
     /// empty branch below carries no toolbar, so not even the library button was there to get back with. iOS opens a
     /// deleted score fine (`App/iOS/AppShellView.swift`'s `onOpenScore` is handed the `ScoreItem` itself, never an
     /// id to re-resolve), and behavior matches iOS; the Mac carries an id because a window's identity has to be
@@ -176,19 +146,5 @@ struct MacShellView: View {
         guard let scoreID else { return nil }
         return repository.scoreItems.first { $0.id == scoreID }
             ?? repository.deletedScoreItems.first { $0.id == scoreID }
-    }
-}
-
-extension View {
-    /// Publishes `id` as this window's focused score, for `MacCommands`'s File ▸ Open in New Window to read via
-    /// `@FocusedValue`. Omitted entirely (rather than published as `nil`) when there is no open score, which is
-    /// exactly what leaves `@FocusedValue` reading `nil` and the menu command disabled.
-    @ViewBuilder
-    fileprivate func focusedCurrentScoreID(_ id: ScoreItem.ID?) -> some View {
-        if let id {
-            focusedSceneValue(\.macCurrentScoreID, id)
-        } else {
-            self
-        }
     }
 }

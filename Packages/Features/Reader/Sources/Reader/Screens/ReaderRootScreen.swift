@@ -9,8 +9,8 @@
 //   `MacTransportBar`. Half of what is here is iOS physics that should never cross (the self-drawn top strip and
 //   its cutout tier, the status-bar handoff, `hostingAppearance(.light)`, the idle timer, the PiP host, pop-gesture
 //   restoration). What macOS is genuinely still owed is the rest of the chrome: the inspectors, the share /
-//   annotate / edit controls, the score ⇄ original-PDF switch, the coach marks (`ReaderHintBubble`), and the two
-//   wirings this screen's `.task` performs (`+PartRemapWiring`, `+RevertWiring`).
+//   annotate / edit controls, the score ⇄ original-PDF switch, the coach marks (`ReaderHintBubble`), and calling
+//   `ReaderViewModel.wireRevertReload(host:)` / `wirePartRemapReload(host:)` from its own `.task`.
 
 #if os(iOS)
 import Domain
@@ -404,11 +404,11 @@ public struct ReaderRootScreen: View {
                 ReaderHintCoordinator.shared.markUsed(.staffVisibility)
                 Task { await viewModel?.layoutModel.toggleStaff(address) }
             }
-            // Split out (`ReaderRootScreen+RevertWiring.swift`) to keep this closure — and the struct's primary
+            // Split out (`ReaderEditingHost+ReaderWiring.swift`) to keep this closure — and the struct's primary
             // declaration — under SwiftLint's body-length budgets.
             if let editingHost {
-                wireRevertReload(host: editingHost, viewModel: viewModel)
-                wirePartRemapReload(host: editingHost, viewModel: viewModel)
+                viewModel.wireRevertReload(host: editingHost)
+                viewModel.wirePartRemapReload(host: editingHost)
             }
             viewModel.playbackSession.startCursorProvider = { [weak editingHost] in
                 guard let host = editingHost, host.isEditing,
@@ -745,11 +745,9 @@ public struct ReaderRootScreen: View {
     ///
     /// Computed here rather than in `ScoreContentView` so it's rebuilt per edit, not per playback tick.
     private var editingScore: Score? {
-        guard let host = editingHost, host.isEditing, let editScore = host.editedScore else { return nil }
-        return ReaderDisplayTransforms.display(
-            editScore,
+        ReaderEditingDisplay.score(
+            host: editingHost,
             clefOverrides: viewModel.layoutModel.staffClefOverrides,
-            transposeSemitones: 0,
             hiddenStaves: viewModel.layoutModel.hiddenStaves,
         )
     }
@@ -765,8 +763,7 @@ public struct ReaderRootScreen: View {
     /// when you type the next one", with the relayout finishing on time every time and quietly re-engraving the
     /// score as it was BEFORE the note was written.
     private var editingScoreVersion: Int {
-        guard let host = editingHost, host.isEditing else { return 0 }
-        return host.editGeneration
+        ReaderEditingDisplay.version(host: editingHost)
     }
 
     /// The score / PDF layer (or the screenshot override), inset for the top overlay + bottom transport. Extracted

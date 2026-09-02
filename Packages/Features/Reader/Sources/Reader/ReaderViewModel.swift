@@ -27,6 +27,16 @@ final class ReaderViewModel {
             }
             return nil
         }
+
+        /// Whether a parsed score is on screen. An `Equatable` projection of a state that isn't: the Mac reader
+        /// watches it with `onChange` to reopen the editing session after a revert's reload lands.
+        var isLoaded: Bool {
+            if case .loaded = self {
+                true
+            } else {
+                false
+            }
+        }
     }
 
     /// Always the same instance (set once at init); declared `var` only so `@Bindable` projections like

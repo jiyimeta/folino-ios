@@ -18,6 +18,13 @@ struct MacPageDeck: View {
     let score: Score
     let scoreOptions: ScoreViewOptions
     let pageSize: CGSize
+    /// The host scroll view's live magnification, forwarded to every sheet so a click can be divided back into
+    /// document space. Held by reference, not passed as a value, for the reason the cursor is: the deck is this
+    /// `NSHostingView`'s root view and is rebuilt only on a generation bump, so a zoom captured as a value here would
+    /// be the zoom the deck was built with. Read only inside a click handler, never in a body.
+    let viewportState: MacScoreViewportState
+    /// The note-editing seam, forwarded to every sheet. See `MacPagedScoreContainer.editingHost`.
+    let editingHost: ReaderEditingHost?
 
     var body: some View {
         if let doc = document, !pages.isEmpty {
@@ -40,6 +47,8 @@ struct MacPageDeck: View {
                         scoreOptions: scoreOptions,
                         pageSize: pageSize,
                         ink: ink,
+                        viewportState: viewportState,
+                        editingHost: editingHost,
                     )
                 }
             }
@@ -79,6 +88,10 @@ struct MacScorePage: View {
     /// The whole score's committed ink, already projected into document space by the deck. This sheet draws its own
     /// share of it — see `MacScoreInkOverlay`.
     let ink: PKDrawing
+    /// The host scroll view's live magnification. See `MacPageDeck.viewportState`.
+    let viewportState: MacScoreViewportState
+    /// The note-editing seam. See `MacPagedScoreContainer.editingHost`.
+    let editingHost: ReaderEditingHost?
 
     var body: some View {
         VStack(spacing: 6) {
@@ -107,12 +120,15 @@ struct MacScorePage: View {
             scoreOptions: scoreOptions,
             contentSize: content,
             ink: ink,
+            viewportState: viewportState,
+            editingHost: editingHost,
         )
         .frame(width: content.width, height: content.height, alignment: .topLeading)
         .clipped()
         .padding(MacPageDeckMetrics.margin)
         .frame(width: pageSize.width, height: pageSize.height, alignment: .topLeading)
         .background(MacReaderGround.paper)
+        .background(editingDeselectCatcher(host: editingHost))
         .overlay(Rectangle().stroke(Color.gray.opacity(0.35), lineWidth: 0.5))
         .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
     }
@@ -130,6 +146,12 @@ struct MacPageScoreLayer: View {
     let contentSize: CGSize
     /// The whole score's committed ink in document space; this layer draws the band the sheet shows.
     let ink: PKDrawing
+    /// The host scroll view's live magnification, read only inside the click handler. See `MacPageDeck.viewportState`.
+    let viewportState: MacScoreViewportState
+    /// The note-editing seam. Read INSIDE `body` (never handed down as a value), because this layer is inside the
+    /// deck's `NSHostingView` root and is rebuilt only when the container bumps `layoutGeneration` — a body read of
+    /// this `@Observable` object is what registers the dependency that redraws the sheet when the selection moves.
+    let editingHost: ReaderEditingHost?
 
     /// The name the click-to-seek gesture reads its location in: the full document's own coordinate space, which is
     /// what `nearestCursor` expects. The sheet is a window onto it, opened by the `-pageStartY` offset below.
@@ -139,6 +161,10 @@ struct MacPageScoreLayer: View {
         ZStack(alignment: .topLeading) {
             ScoreView(
                 document: pageDocument, score: score, options: scoreOptions,
+                // `displaySelection`, not `selection`: the editor addresses the unfiltered score, this document is
+                // laid out from the staff-filtered one. See `ReaderEditingHost.displayItem(for:)`.
+                selection: editingHost?.isEditing == true ? (editingHost?.displaySelection ?? .none) : .none,
+                voiceColors: ReaderEditingPresentation.voiceColors,
                 // The ONLY cursor read in the deck, and it is this sheet's own slot — `nil` on every sheet the cursor
                 // is not on. See `MacPageDeckCursorState` for why it is not one shared property.
                 playbackCursor: cursorSlot?.cursor, playbackCursorColor: .accentColor.opacity(0.6),
@@ -162,25 +188,50 @@ struct MacPageScoreLayer: View {
                     end: viewModel.repeatModel.pendingRepeatB,
                 )
             }
+
+            // Last in the stack — over `ScoreView`, which paints itself opaque white. The caret blends
+            // (`EditingSelectionOverlay`), it does not sit on top by z-order.
+            if let host = editingHost, host.isEditing {
+                EditingSelectionOverlay(host: host, score: score, document: pageDocument)
+            }
         }
         .coordinateSpace(name: Self.coordinateSpace)
         .frame(width: contentSize.width, height: pageDocument.size.height, alignment: .topLeading)
         .offset(y: -pageStartY)
     }
 
-    /// Click-to-seek. With no playback controller wired on the Mac yet this still moves the displayed cursor —
-    /// `ReaderPlaybackSession.setManualCursor` guards every `controller` call.
+    /// Click-to-seek, or a selection while editing. With no playback controller wired on the Mac yet this still
+    /// moves the displayed cursor — `ReaderPlaybackSession.setManualCursor` guards every `controller` call.
+    ///
+    /// `pageDocument` keeps the full document's `size` and the systems' document-space origins (see
+    /// `MacPageDeck.pageDocument(forPage:in:)`), so the point handed to `editingHost.onTap` is already in the space
+    /// `editingHitTest` expects — once the magnification has been divided out.
+    ///
+    /// **That division is not optional and it is not a rounding correction.** SwiftUI reports a hosted gesture's
+    /// location multiplied by the enclosing `NSScrollView`'s magnification, so at 2x every click resolved to a point
+    /// twice as far down and across the document as the one the reader aimed at — the deeper into the page, the
+    /// further off. See `MacScoreMagnification.documentPoint(fromHosted:magnification:)` for the measurement. The
+    /// page-band guard below has to use the converted point too, or a click on the second sheet at 2x would fail the
+    /// guard on the first sheet and pass it on a sheet the reader never touched.
     private func tapSeekGesture() -> some Gesture {
         SpatialTapGesture(coordinateSpace: .named(Self.coordinateSpace))
             .onEnded { value in
+                let point = MacScoreMagnification.documentPoint(
+                    fromHosted: value.location, magnification: viewportState.magnification,
+                )
                 // The named space spans the whole document, and `.clipped()` clips drawing but not hit testing — a
                 // click on the blank paper below this page's last system would otherwise resolve to a system on the
                 // next sheet and move the cursor somewhere the user did not click. Same guard the iOS paged surface
                 // states at length.
                 let pageEndY = pageStartY + contentSize.height
-                guard value.location.y >= pageStartY, value.location.y <= pageEndY else { return }
-                guard let cursor = nearestCursor(at: value.location, in: pageDocument) else { return }
+                guard point.y >= pageStartY, point.y <= pageEndY else { return }
+                if let host = editingHost, host.wantsScoreTaps {
+                    host.onTap(point)
+                    return
+                }
+                guard let cursor = nearestCursor(at: point, in: pageDocument) else { return }
                 viewModel.playbackSession.setManualCursor(cursor)
+                editingHost?.rememberTappedItem(cursor)
             }
     }
 }

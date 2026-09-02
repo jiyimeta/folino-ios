@@ -234,21 +234,21 @@ actor CaptureGate {
 /// call so tests can assert what the view model asked for. No LRU — the concrete owns that, in its own suite.
 @MainActor
 final class FakeScoreEditHistoryStore: ScoreEditHistoryStore {
-    private(set) var retained: [(id: ScoreItemID, contentHash: String, session: ScoreEditSession)] = []
+    private(set) var retained: [(id: ScoreItemID, contentHash: String, retained: RetainedEditSession)] = []
     private(set) var sessionRequests: [(id: ScoreItemID, contentHash: String)] = []
     private(set) var invalidatedIDs: [ScoreItemID] = []
 
-    func session(for id: ScoreItemID, contentHash: String) -> ScoreEditSession? {
+    func session(for id: ScoreItemID, contentHash: String) -> RetainedEditSession? {
         sessionRequests.append((id, contentHash))
         guard let index = retained.firstIndex(where: { $0.id == id }) else { return nil }
         let entry = retained.remove(at: index)
         guard entry.contentHash == contentHash else { return nil }
-        return entry.session
+        return entry.retained
     }
 
-    func retain(_ session: ScoreEditSession, for id: ScoreItemID, contentHash: String) {
-        retained.removeAll { $0.id == id }
-        retained.append((id, contentHash, session))
+    func retain(_ retained: RetainedEditSession, for id: ScoreItemID, contentHash: String) {
+        self.retained.removeAll { $0.id == id }
+        self.retained.append((id, contentHash, retained))
     }
 
     func invalidate(_ id: ScoreItemID) {

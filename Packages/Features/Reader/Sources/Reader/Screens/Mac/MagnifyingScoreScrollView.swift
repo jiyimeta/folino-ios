@@ -25,44 +25,37 @@ struct MacScoreScrollRequest: Equatable {
     let target: Target
 }
 
-/// The scroll view's live viewport, mirrored out of AppKit for a container that draws something OUTSIDE the scroll
-/// view which nonetheless has to track the content inside it.
+/// The scroll view's live viewport, mirrored out of AppKit for the hosted content and for anything drawn OUTSIDE the
+/// scroll view that nonetheless has to track what is inside it.
 ///
-/// **Only Horizontal mode needs this, and only because of its sticky leading pane.** That pane is a SwiftUI overlay
-/// sitting on top of the scroll view — it is not scrolled by AppKit — so it can only stay glued to the staves if it is
-/// told, every frame, where the content went and how big it is being drawn. Page and Vertical draw nothing over their
-/// scroll view and pass `nil`, which registers no observer at all: their bodies re-render exactly as often as they did
-/// before this existed.
+/// **Every magnifying container needs the `magnification`, because a click inside the hosting view arrives already
+/// multiplied by it** — see `MacScoreMagnification.documentPoint(fromHosted:magnification:)`. **Only Horizontal
+/// additionally needs `scroll`,** and only because of its sticky leading pane: that pane is a SwiftUI overlay sitting
+/// on top of the scroll view — it is not scrolled by AppKit — so it can only stay glued to the staves if it is told,
+/// every frame, where the content went. `tracksScroll` is what separates the two: a container that says no registers
+/// no clip-view observer at all, and its bodies re-render exactly as often as they did before this existed.
 ///
 /// `@Observable` rather than a `Binding` so the reads are per-property and per-view: the container reads `scroll` and
-/// `magnification` to place the pane, and the score strip inside the hosting view reads neither, so a scroll frame
-/// never reaches the engraving.
+/// `magnification` to place the pane, and the score strip inside the hosting view reads neither in `body` (its click
+/// handler runs outside observation tracking), so a scroll frame never reaches the engraving.
 @MainActor
 @Observable
 final class MacScoreViewportState {
+    /// Whether the host should mirror the clip view's origin as well as its magnification. `NSClipView` posts bounds
+    /// changes at scroll frame rate, and every one of them writes an observable — a cost only the sticky pane has a
+    /// use for.
+    @ObservationIgnored let tracksScroll: Bool
+
     /// The clip view's bounds origin, in the hosted content's own unmagnified coordinates. Passed through raw,
     /// including the brief negatives an elastic over-scroll produces — a pane that froze at the document edge while
-    /// the score bounced past it would visibly come unstuck.
+    /// the score bounced past it would visibly come unstuck. Always `.zero` when `tracksScroll` is false.
     var scroll: CGPoint = .zero
     /// The scroll view's magnification, tracked continuously — including mid-pinch, which `magnification`'s binding
     /// deliberately is not. See `MagnifyingScoreScrollView.magnification`.
     var magnification: CGFloat = 1
-}
 
-/// The magnification range the host allows, carried by the reference implementation. 0.25 is small enough to see a
-/// multi-page spread at once; 4.0 is where the engraving is being inspected rather than read. Non-generic so the
-/// container can clamp its own fit-to-window seed against the same numbers the scroll view enforces.
-enum MacScoreMagnification {
-    static let minimum: CGFloat = 0.25
-    static let maximum: CGFloat = 4.0
-
-    /// Bring a computed fit into the range the scroll view will accept.
-    ///
-    /// The two seeds that call this stay separate on purpose: the page deck fits a fixed sheet on BOTH axes inside a
-    /// deck-padded viewport, horizontal mode fits only the strip's HEIGHT inside an inset one. Only the clamp is
-    /// common, and folding two different fits into one function would take more arguments than it saves lines.
-    static func clamped(_ magnification: CGFloat) -> CGFloat {
-        min(max(magnification, minimum), maximum)
+    init(tracksScroll: Bool = false) {
+        self.tracksScroll = tracksScroll
     }
 }
 
@@ -94,8 +87,9 @@ struct MagnifyingScoreScrollView<Content: View>: NSViewRepresentable {
     let contentGeneration: Int
     /// Programmatic scroll target, or `nil` for none. See `MacScoreScrollRequest`.
     let scrollRequest: MacScoreScrollRequest?
-    /// Live viewport mirroring for a container that draws an overlay outside this scroll view, or `nil` for one that
-    /// does not. See `MacScoreViewportState` — passing `nil` registers no observers and no KVO.
+    /// Live viewport mirroring, or `nil` for a container that neither zooms nor draws over the scroll view. See
+    /// `MacScoreViewportState` — passing `nil` registers no observers and no KVO, and a state whose `tracksScroll` is
+    /// false registers no clip-view observer.
     var viewportState: MacScoreViewportState?
     @ViewBuilder let content: () -> Content
 
@@ -139,9 +133,10 @@ struct MagnifyingScoreScrollView<Content: View>: NSViewRepresentable {
             name: NSScrollView.willStartLiveMagnifyNotification,
             object: scrollView,
         )
-        // Only a container that asked for the live viewport pays for tracking it. `NSClipView` posts bounds changes at
-        // scroll frame rate, and every one of them writes an observable — a cost Page and Vertical have no use for.
-        if viewportState != nil {
+        // Only a container that asked for the scroll offset pays for tracking it. `NSClipView` posts bounds changes at
+        // scroll frame rate, and every one of them writes an observable — a cost only the sticky pane has a use for.
+        // The page deck holds a viewport state for its `magnification` alone and takes none of this.
+        if viewportState?.tracksScroll == true {
             let clipView = scrollView.contentView
             clipView.postsBoundsChangedNotifications = true
             NotificationCenter.default.addObserver(
@@ -180,6 +175,10 @@ struct MagnifyingScoreScrollView<Content: View>: NSViewRepresentable {
            abs(nsView.magnification - magnification) > 0.001
         {
             nsView.magnification = magnification
+            // An external write fires neither `didEndLiveMagnify` nor — without a clip-view observer — a bounds
+            // change, so this is the only chance to mirror it. It matters from the very first frame: the fit-to-window
+            // seed arrives this way, and until the mirror catches up every click would be divided by the wrong number.
+            coordinator.publishMagnification(magnification)
         }
         if let request = scrollRequest, coordinator.lastScrollToken != request.token {
             coordinator.lastScrollToken = request.token
@@ -260,13 +259,26 @@ final class MagnifyingScoreScrollCoordinator: NSObject {
         magnificationObservation = nil
         guard let scrollView = notification.object as? NSScrollView else { return }
         binding?.wrappedValue = scrollView.magnification
-        // Catch-up for a final bounds frame that landed on the gesture-end boundary.
+        // Catch-up for a final bounds frame that landed on the gesture-end boundary — and, for a container that
+        // tracks no bounds, the settled magnification its click handler will divide by.
         publish(clipView: scrollView.contentView, magnification: scrollView.magnification)
     }
 
     @objc func boundsDidChange(_ notification: Notification) {
         guard let clipView = notification.object as? NSClipView else { return }
         publish(clipView: clipView, magnification: clipView.enclosingScrollView?.magnification)
+    }
+
+    /// Mirror a magnification the scroll view was told to take, with no clip view involved. Same deferral rule as
+    /// `publish`, for the same reason.
+    func publishMagnification(_ magnification: CGFloat) {
+        guard !isApplyingUpdate else {
+            DispatchQueue.main.async { [weak self] in
+                self?.write(scroll: nil, magnification: magnification)
+            }
+            return
+        }
+        write(scroll: nil, magnification: magnification)
     }
 
     /// Mirror the clip view's origin (and, when known, the magnification) into the viewport observable — deferred
@@ -282,10 +294,15 @@ final class MagnifyingScoreScrollCoordinator: NSObject {
         write(scroll: origin, magnification: magnification)
     }
 
-    private func write(scroll: CGPoint, magnification: CGFloat?) {
+    /// Assignments are guarded on the value having moved: an `@Observable` property notifies on every write whether or
+    /// not it changed, and the two mirroring paths overlap (an external write reaches a scroll-tracking container
+    /// through the bounds change as well).
+    private func write(scroll: CGPoint?, magnification: CGFloat?) {
         guard let viewportState else { return }
-        viewportState.scroll = scroll
-        if let magnification {
+        if let scroll, viewportState.tracksScroll, viewportState.scroll != scroll {
+            viewportState.scroll = scroll
+        }
+        if let magnification, viewportState.magnification != magnification {
             viewportState.magnification = magnification
         }
     }

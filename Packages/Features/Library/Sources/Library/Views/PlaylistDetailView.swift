@@ -6,8 +6,6 @@ struct PlaylistDetailView: View {
     let playlistName: String
     let items: [ScoreItem]
     let onOpen: (ScoreItem) -> Void
-    /// **macOS only**, in effect — see `ScoreListView.onOpenInNewWindow`.
-    let onOpenInNewWindow: (ScoreItem) -> Void
     let onMove: (IndexSet, Int) -> Void
     let onRemoveFromPlaylist: (ScoreItem) -> Void
     let onRename: (String) -> Void
@@ -72,7 +70,7 @@ struct PlaylistDetailView: View {
                     // If a Mac row picks up but will not drop, this is where the affordance goes.
                     .onMove(perform: onMove)
                 }
-                .macScoreOpenAffordance(selectedIDs, in: items, onOpen: onOpen, onOpenInNewWindow: onOpenInNewWindow)
+                .macScoreOpenAffordance(selectedIDs, in: items, onOpen: onOpen)
                 .deleteCommandCompat {
                     guard !selectedIDs.isEmpty else { return }
                     onBulkDelete()
@@ -148,9 +146,9 @@ struct PlaylistDetailView: View {
     /// inside a ⌘/⇧-click selection then offers the bulk actions instead, exactly as `ScoreListView` does. Built on
     /// every platform because `macContextMenuCompat`'s builder is still type-checked on iOS; only macOS renders it.
     ///
-    /// On macOS, Open / Open in New Window are prepended in the single-row branch too — this row has no tap gesture
-    /// and no pre-existing "Open" menu item, so both live here; see `macScoreOpenAffordance`'s doc comment for why
-    /// they belong in the row's own menu and not in a second one.
+    /// On macOS, Open is prepended in the single-row branch too — this row has no tap gesture and no pre-existing
+    /// "Open" menu item, so it lives here; see `macScoreOpenAffordance`'s doc comment for why it belongs in the row's
+    /// own menu and not in a second one.
     @ViewBuilder
     private func effectiveRowContextMenu(for item: ScoreItem) -> some View {
         #if os(macOS)
@@ -175,20 +173,12 @@ struct PlaylistDetailView: View {
     }
 
     #if os(macOS)
-    @ViewBuilder
     private func openRowContextMenuContent(for item: ScoreItem) -> some View {
         Button { onOpen(item) } label: {
             Label {
                 L10n.Common.open
             } icon: {
                 Image(systemName: "music.note")
-            }
-        }
-        Button { onOpenInNewWindow(item) } label: {
-            Label {
-                Text("library.open.newWindow", bundle: .module)
-            } icon: {
-                Image(systemName: "macwindow")
             }
         }
     }
@@ -235,7 +225,6 @@ private struct PlaylistDetailViewPreviewHost: View {
                 playlistName: playlistName,
                 items: items,
                 onOpen: { _ in },
-                onOpenInNewWindow: { _ in },
                 onMove: { _, _ in },
                 onRemoveFromPlaylist: { (_: ScoreItem) in },
                 onRename: { _ in },

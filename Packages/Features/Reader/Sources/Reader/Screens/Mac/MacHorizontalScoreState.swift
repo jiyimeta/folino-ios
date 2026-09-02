@@ -1,6 +1,6 @@
 // PARITY(macos): horizontal mode's supporting state — these types carry only what the Mac strip needs today
-//   (geometry, the sticky pane's bracket, the fit-magnification seed). The annotation canvas and note-editing seam
-//   that horizontal mode still lacks would each add state here; see `MacHorizontalScoreContainer`.
+//   (geometry, the sticky pane's bracket, the fit-magnification seed). The annotation canvas that horizontal mode
+//   still lacks would add state here; see `MacHorizontalScoreContainer`.
 
 #if os(macOS)
 import Domain
