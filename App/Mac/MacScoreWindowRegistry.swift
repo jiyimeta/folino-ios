@@ -35,6 +35,9 @@ final class MacScoreWindowRegistry {
     /// Opens (or focuses) the library window. Installed by `MacWindowTabAssist`'s `updateNSView` from every score
     /// window, so it is refreshed on every body pass of every score window and is therefore at its freshest exactly
     /// when it is needed: the moment the last score window closes, microseconds after that window's last update.
+    /// `MacLibraryWindowPresentation` installs it too, from the library window itself — last-writer-wins across score
+    /// windows can otherwise leave this holding a closed window's action, and the library's own is the one installer
+    /// that cannot belong to a score window. See that file for the full reasoning.
     ///
     /// It is stored rather than reached for because the callers are AppKit — a `willClose` notification handler has
     /// no SwiftUI environment, and `openWindow` is the only thing that can create the single-instance `Window` scene

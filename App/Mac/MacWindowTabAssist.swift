@@ -14,11 +14,21 @@ import SwiftUI
 /// a second score opened as a separate window **even with the first in full screen**, and found no setting to change
 /// — so the ask is not being honored and the app has to place the tab itself (design §2.9.3). `addTabbedWindow(_:
 /// ordered:)` is that placement, and it does not consult the preference.
+///
+/// **`isScoreWindow` is why this is a parameter rather than a fact of placement.** `MacShellView` applies the assist
+/// to its whole body — outside the `if let item` fork — so a window with no score (⌘N, or a restored window naming a
+/// score that has since been deleted) hosts one of these too. Such a window must do *none* of this: registering it
+/// would tab it into the real score window's group and steal its focus a moment before it dismisses itself, so the
+/// user sees a tab flicker in and out and loses the score's focus with it. So the empty case opts out entirely
+/// rather than being placed elsewhere.
 struct MacWindowTabAssist: NSViewRepresentable {
+    /// False for a window with no score. See the type's doc comment: an empty window does nothing here at all.
+    let isScoreWindow: Bool
+
     @Environment(\.openWindow) private var openWindow
 
     func makeNSView(context _: Context) -> NSView {
-        MacScoreWindowProbe()
+        MacScoreWindowProbe(isScoreWindow: isScoreWindow)
     }
 
     /// Refreshes the registry's way back to the library on every body pass of every score window.
@@ -28,7 +38,11 @@ struct MacWindowTabAssist: NSViewRepresentable {
     /// same reason it is safe inside `updateNSView`. It is here rather than in `makeNSView` so the captured
     /// `OpenWindowAction` is always the current one; the moment it is needed is §2.9.5's, one turn after the last
     /// score window's last update, and this is the freshest action the app has at that instant.
+    ///
+    /// An empty window installs nothing: it is about to close itself, and the app's stored way back to the library
+    /// must not be an action captured by a window that will be gone a turn later.
     func updateNSView(_: NSView, context _: Context) {
+        guard isScoreWindow else { return }
         MacScoreWindowRegistry.shared.showLibrary = { openWindow(id: MacWindowID.library) }
     }
 }
@@ -46,21 +60,41 @@ struct MacWindowTabAssist: NSViewRepresentable {
 private final class MacScoreWindowProbe: NSView {
     /// Shared by every score window, so macOS treats them as one tab group instead of leaving each to its own.
     static let tabbingIdentifier = NSWindow.TabbingIdentifier("com.KeyNumber.Folino.score")
+
+    /// False for a window with no score — such a window does nothing here at all. See `MacWindowTabAssist`.
+    private let isScoreWindow: Bool
     private var applied = false
     private var closeObserver: NSObjectProtocol?
 
+    init(isScoreWindow: Bool) {
+        self.isScoreWindow = isScoreWindow
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("not used")
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        guard let window, !applied else { return }
+        guard isScoreWindow, let window, !applied else { return }
         applied = true
         observeClose(of: window)
-        // The whole AppKit side, one turn later — see the type's doc comment.
+        // Registration is bookkeeping, not an AppKit write — it touches no `NSWindow` state, so the measured
+        // `DispatchQueue.main.async` rule below (which is about window writes re-entering the navigation observer)
+        // does not cover it. It has to be SYNCHRONOUS with the close observer: deferred, a window closing inside the
+        // gap would unregister nothing and then be registered after it is already gone, with its observer token
+        // already consumed — a stale entry nothing can ever remove, so `isEmpty` lies for the rest of the session
+        // and §2.9.5 never fires again. `joinExistingScoreWindow` excludes the newcomer by identity, so registering
+        // first cannot make a window tab onto itself.
+        MacScoreWindowRegistry.shared.register(window)
+        // The AppKit window writes, one turn later — see the type's doc comment.
         DispatchQueue.main.async { [weak window] in
             guard let window else { return }
             window.tabbingIdentifier = Self.tabbingIdentifier
             window.tabbingMode = .preferred
             Self.joinExistingScoreWindow(window)
-            MacScoreWindowRegistry.shared.register(window)
         }
     }
 

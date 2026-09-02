@@ -54,7 +54,14 @@ struct MacShellView: View {
     var body: some View {
         content
             .frame(minWidth: 900, minHeight: 600)
-            .background(MacWindowTabAssist())
+            // Applied to the whole body, NOT inside `content`'s `if let item` branch, and that placement is
+            // deliberate: the probe owns the `willClose` observer that unregisters this window, so its lifetime has
+            // to equal the window's. Inside the fork, a score deleted while its window is open would tear the probe
+            // down — and with `isolated deinit`, quite possibly remove the observer — before the window actually
+            // closes, leaving a registered window nothing can ever unregister. `isScoreWindow` is what an empty
+            // window opts out with instead. Reading it once is sound: a window's score-ness never changes from
+            // empty to non-empty, because the window's value is fixed the moment `openWindow(value:)` mints it.
+            .background(MacWindowTabAssist(isScoreWindow: openScoreItem != nil))
             .focusedSceneValue(\.macLibraryImportAction, importAction)
             // A score window must open what its own File ▸ Import brought in, even with the browser closed — see
             // `ImportedScoreOpener`. The browser installs the same watcher; `MacImportedScoreClaim` is what stops
@@ -127,19 +134,24 @@ struct MacShellView: View {
             // **There is no race with startup.** `FolinoMacApp` builds `MacShellView` only once `bootstrap.isReady`
             // is true, and `AppBootstrap.finishStartup` awaits `repository.refresh()` before setting it — so the
             // rows are loaded by the time `openScoreItem` is asked, and a `nil` here means genuinely absent.
-            //
-            // Ordering: the library first, then the close. Closing first would leave the app windowless for a turn,
-            // and `showLibraryIfNoScoreWindowsRemain` would summon the library anyway — the same window, from a
-            // second route. One route, one summons.
             Color.clear
                 .task {
-                    openWindow(id: MacWindowID.library)
-                    // One write here, the close one main-actor hop later — the same shape
-                    // `MacLibraryWindowContent.openScore` uses, and for the same reason: two window-scene writes
-                    // made in one closure are what `ImportedScoreOpener.openImportedScore`'s measurements record as
-                    // faulting `NavigationRequestObserver`. `.task` most likely runs outside any update pass, but
-                    // that is an argument rather than a measurement, and the deferral costs one main-actor turn.
-                    // The library-before-close ordering the branch's comment argues for is unchanged.
+                    // Only when nothing else is showing a score. `MacScoreWindowRegistry` holds the live score
+                    // windows, and after F6's change an EMPTY window never registers — so `isEmpty` here means
+                    // "no other window is showing a score", which is exactly §2.9.5's condition. Summoning
+                    // unconditionally would throw the library over a live score window whenever restoration
+                    // minted a second window for a row that had been deleted.
+                    //
+                    // `openWindow` from this view's environment rather than the registry's stored `showLibrary`:
+                    // that stored action is nil until some score window has rendered, and a launch that restores
+                    // only an empty window is precisely the case where nothing has.
+                    if MacScoreWindowRegistry.shared.isEmpty {
+                        openWindow(id: MacWindowID.library)
+                    }
+                    // The close, one main-actor hop later — the same shape `MacLibraryWindowContent.openScore`
+                    // uses, and for the same reason: two window-scene writes made in one closure are what
+                    // `ImportedScoreOpener.openImportedScore`'s measurements record as faulting
+                    // `NavigationRequestObserver`.
                     Task { @MainActor in
                         dismiss()
                     }

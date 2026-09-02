@@ -18,4 +18,13 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         }
         return .terminateLater
     }
+
+    /// Best-effort undo of the flag above. `applicationShouldTerminate` can run for a quit the system then cancels
+    /// — an aborted logout or shutdown — and the flag would otherwise stay true for the life of the process, with
+    /// §2.9.5 silently dead: closing the last score window would leave nothing on screen. An app that is being
+    /// activated is an app that was not terminated, so this is the signal. It cannot fire between
+    /// `applicationShouldTerminate` and a real termination, because ⌘Q leaves the app active throughout.
+    func applicationDidBecomeActive(_: Notification) {
+        MainActor.assumeIsolated { MacScoreWindowRegistry.shared.isTerminating = false }
+    }
 }
