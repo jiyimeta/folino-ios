@@ -49,4 +49,22 @@ struct MacEditorRegistryTests {
         await registry.flushAll(timeout: .milliseconds(200))
         #expect(clock.now - start < .seconds(2))
     }
+
+    /// `raceAgainstTimeout` is the primitive `flushAll` builds on, and it is what actually exercises the "operation
+    /// never finishes" case the brief's third test wanted — directly, without needing a hang-producing editor.
+    @Test func `raceAgainstTimeout returns on the timeout when the operation never finishes`() async {
+        let clock = ContinuousClock()
+        let start = clock.now
+        await MacEditorRegistry.raceAgainstTimeout(.milliseconds(200)) {
+            try? await Task.sleep(for: .seconds(30))
+        }
+        #expect(clock.now - start < .seconds(2))
+    }
+
+    @Test func `raceAgainstTimeout returns promptly when the operation finishes immediately`() async {
+        let clock = ContinuousClock()
+        let start = clock.now
+        await MacEditorRegistry.raceAgainstTimeout(.seconds(5)) {}
+        #expect(clock.now - start < .seconds(1))
+    }
 }
