@@ -111,7 +111,10 @@ struct FolinoMacApp: App {
             }
             .task { startAppServices() }
         }
-        .commands { MacCommands() }
+        .commands {
+            MacCommands()
+            MacEditingMenus()
+        }
         // **Measured, on the first launch anyone was able to observe.** `.defaultLaunchBehavior(.presented)` on the
         // library `Window` below is not enough on its own: a `WindowGroup` is the default launch scene because it is
         // `body`'s first, and it won — the app came up showing one empty score window and no browser at all, which is

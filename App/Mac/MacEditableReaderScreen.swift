@@ -131,6 +131,11 @@ struct MacEditableReaderScreen: View {
             analytics: analytics,
         )
         .editorSheets(viewModel: editorViewModel)
+        // Bare-key delivery, shape B (the bench's provisional answer — see
+        // `docs/superpowers/plans/2026-09-02-macos-edit-session-bench.md`): the letters and digits are view-level
+        // `.keyboardShortcut`s inside this window's tree, so a focused text field in a sheet keeps the letter.
+        // Modifier-bearing shortcuts stay on the menu items, in `MacEditingMenus`.
+        .background(MacEditingKeyMap(target: editingTarget))
         // Scene-scoped, deliberately: a menu command must find the KEY WINDOW's editor whether or not the score
         // surface itself holds view focus.
         .focusedSceneValue(\.macEditingTarget, editingTarget)
