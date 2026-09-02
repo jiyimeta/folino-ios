@@ -134,7 +134,15 @@ struct MacShellView: View {
             Color.clear
                 .task {
                     openWindow(id: MacWindowID.library)
-                    dismiss()
+                    // One write here, the close one main-actor hop later — the same shape
+                    // `MacLibraryWindowContent.openScore` uses, and for the same reason: two window-scene writes
+                    // made in one closure are what `ImportedScoreOpener.openImportedScore`'s measurements record as
+                    // faulting `NavigationRequestObserver`. `.task` most likely runs outside any update pass, but
+                    // that is an argument rather than a measurement, and the deferral costs one main-actor turn.
+                    // The library-before-close ordering the branch's comment argues for is unchanged.
+                    Task { @MainActor in
+                        dismiss()
+                    }
                 }
         }
     }
