@@ -64,6 +64,16 @@ struct MacScoreWindowRegistryTests {
         #expect(registry.tabHost(excluding: newcomer, frontToBack: [newcomer]) == nil)
     }
 
+    /// `NSApp.orderedWindows` omits minimized windows and windows on other Spaces. A score window AppKit will not
+    /// list is still a legal tab host — tabbing onto it beats minting a standalone window the user did not ask for.
+    @Test func `a registered window absent from the ordered list is still a tab host`() {
+        let registry = MacScoreWindowRegistry()
+        let offscreen = makeWindow()
+        let newcomer = makeWindow()
+        registry.register(offscreen)
+        #expect(registry.tabHost(excluding: newcomer, frontToBack: [newcomer]) === offscreen)
+    }
+
     @Test func `the library is shown when the last score window goes`() {
         let registry = MacScoreWindowRegistry()
         var shown = 0
