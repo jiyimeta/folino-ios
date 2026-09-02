@@ -74,7 +74,8 @@ struct MacPageDeck: View {
     }
 }
 
-/// One sheet of paper: the white card, its edge, and the page number beneath it. Deliberately does NOT read the
+/// One sheet of paper: the white card and the page number beneath it — no edge and no shadow, by the user's call.
+/// Deliberately does NOT read the
 /// cursor — the leaf inside it does, so a playback tick redraws the engraving without re-laying-out the card.
 struct MacScorePage: View {
     let viewModel: ReaderViewModel
@@ -129,8 +130,6 @@ struct MacScorePage: View {
         .frame(width: pageSize.width, height: pageSize.height, alignment: .topLeading)
         .background(MacReaderGround.paper)
         .background(editingDeselectCatcher(host: editingHost))
-        .overlay(Rectangle().stroke(Color.gray.opacity(0.35), lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
     }
 }
 
