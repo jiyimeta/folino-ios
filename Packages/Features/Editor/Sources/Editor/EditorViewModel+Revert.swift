@@ -8,6 +8,21 @@ import Foundation
 /// run loop and a screen — outrunning the save already in flight, persisting the row the store handed back, and
 /// turning a failure into a message.
 extension EditorViewModel {
+    /// The confirmation a revert shows: the base wording plus whichever caveats this score earns (`RevertPolicy`).
+    /// On the view model rather than in a button because two hosts present it — the iOS session-end button as a
+    /// popover, the Mac's File ▸ Revert To ▸ Original as an alert — and the composition must not fork.
+    public func revertConfirmationMessage(hasMusicalAnnotations: Bool) -> String {
+        let warnings = revertWarnings(hasMusicalAnnotations: hasMusicalAnnotations)
+        var lines = [String(localized: "editor.revert.confirm.body", bundle: .module)]
+        if warnings.contains(.musicalAnnotationsMayShift) {
+            lines.append(String(localized: "editor.revert.confirm.inkMayShift", bundle: .module))
+        }
+        if warnings.contains(.originalMayNotBeImportTime) {
+            lines.append(String(localized: "editor.revert.confirm.mayNotBeImport", bundle: .module))
+        }
+        return lines.joined(separator: "\n\n")
+    }
+
     public func revertToOriginal() async {
         revertError = nil
         // Latched first, before any await: a save that starts while we are joining the one already in flight must

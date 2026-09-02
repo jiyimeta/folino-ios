@@ -175,13 +175,13 @@ public final class EditorViewModel {
 
     /// Drives the bulk add-measures sheet — the measure submenu's answer to "and now thirty more bars". On the view
     /// model for the same reason the others here are: the row that raises it lives inside a folding `Menu`.
-    var isAddMeasuresSheetPresented = false
+    public var isAddMeasuresSheetPresented = false
 
     /// Drives the rehearsal-mark sheet. On the view model for the same reason the signature flags are: the row that
     /// raises it folds into the overflow `Menu`, and a `@State` flag owned by a control that can disappear takes the
     /// open sheet with it. No refusal to clear on open, unlike those two — the sheet has no reachable refusal (see
     /// `EditorViewModel+RehearsalMarks.swift`).
-    var isRehearsalMarkSheetPresented = false
+    public var isRehearsalMarkSheetPresented = false
 
     /// Why the last signature apply was refused, or `nil` when it landed — or was the quiet no-op ssm reports as
     /// `.nothingToApply` (see `EditorViewModel+Signatures.swift`, which owns both the writes and that distinction).
