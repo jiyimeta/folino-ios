@@ -219,10 +219,23 @@ does not replace it.
 | **View** | Display Mode (existing). |
 | **Playback** | Play / Pause is the transport's own Space (measured in `MacTransportBar` — see its doc comment for why it is a button shortcut and not a menu item). Ⅳa adds nothing here. |
 
+> **Revised 2026-09-02 during implementation:** the Notes row's "Add interval ▸ 2nd–9th" describes an engine command
+> that does not exist — `DiatonicInterval` (`SheetMusicCore`) offers only `.third` and `.octave`, so the Chord ▸ Add
+> interval submenu has two rows (`MacEditingCommands.swift`'s `intervalCommands`) until sub-project Ⅰ / Ⅳd adds more.
+>
+> **Revised 2026-09-02 during implementation:** the Score menu's item is titled "Drum Keys…"
+> (`MacEditingCommands.swift`'s `score.drumLayout`), matching the Editor package's `editor.drum.layout.title`, not
+> "Drum Pad Layout…".
+
 Drum staves: when the caret is on a drum staff, the letters bound in the current `DrumPadLayout`
 (`DrumsetEntry.shortcut`) go to `pressDrumKey` instead of `inputPitch`. The table's `perform` reads the view model's
 `caretColumn` to decide; the Notes menu shows the pitch commands disabled on a drum staff. The pad itself, with its
 notation previews and the layout editor, is Ⅳc.
+
+> **Revised 2026-09-02 during implementation:** routing letters to `pressDrumKey` is deferred to Ⅳc — `DrumPadKey`
+> carries no shortcut and no `GMDrumset` entry defines one, so there is nothing to resolve a letter to today. Ⅳa
+> implements only the second half of this paragraph: on a drum staff the Notes ▸ Pitch rows are disabled
+> (`MacEditingCommands.swift`'s `pitchCommands`).
 
 **Sheets are still sheets.** The signature, rehearsal-mark, add-measures, drum-layout and instruments sheets compile
 on macOS today and are presented from the menu command through the view model's presentation flags, installed once
@@ -309,6 +322,10 @@ bench on `~/Developer/_test/MacTest` (the shell's own harness) that decides betw
 Either way the table in §5 is the single declaration; only the delivery differs. The bench measures (a) that a bare
 letter reaches a `TextField` in a sheet while a same-letter menu item exists, (b) that the same letter fires the
 command when the score has focus, (c) that `⌘Z` reaches the window's undo manager from both states.
+
+> **Revised 2026-09-02 during implementation:** delivery **B** (`onKeyPress` / `MacEditingKeyMap`) is the provisional
+> choice — the bench above is unmeasured. See `docs/superpowers/plans/2026-09-02-macos-edit-session-bench.md` for
+> what was actually built and what flipping to A would require.
 
 ### 6.2 Playback makes editing inert
 

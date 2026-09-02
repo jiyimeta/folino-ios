@@ -165,7 +165,7 @@ iOS keeps its explicit Select mode and bottom `BulkActionBar` unchanged — the 
 - `App/Mac/MacShellView.swift` — from split-view host to the score window's content: reader plus empty fallback. The adapter unwrapping and focused-value publishing survive; the sidebar/detail split, the selection count and the "N selected" view go. `LibraryViewModel` construction and the drop-target / import plumbing move to the browser window. Net smaller.
 - `RowOpenAffordance.swift` — `macSelectionOpensScore`, `macSingleSelectionOpensScore` and the `libraryBulkSelectionCount` focused value are deleted; the measurement table stays and gains the `primaryAction` row.
 - `ScoreListView.swift`, `PlaylistDetailView.swift` — the `macSelectionOpensScore` call sites become the new open affordance; the selection set, `effectiveRowMenu` and ⌫ are untouched.
-- `MacCommands.swift` — ⌘0 toggle-library becomes ⌘O show-library; "Open in New Tab" is reworked onto the tab assist and joined by "Open in New Window".
+- `MacCommands.swift` — ⌘0 toggle-library becomes ⌘O show-library; "Open in New Tab" is reworked onto the tab assist (§2.3's note: Open in New Window was withdrawn).
 
 **Untouched:** everything under `Reader/Screens/Mac/`, the audio work, `AppBootstrap`, import plumbing, and **all iOS code**. `LibraryRootScreen` and its push navigation remain the iOS shape; they keep compiling on macOS but are no longer instantiated there, and their now-dead macOS selection branch is stripped in a cleanup pass.
 
