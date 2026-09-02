@@ -133,11 +133,18 @@ public struct ReaderRootScreen: View {
     }
 
     /// The clock and the battery sit in exactly the two spots the cutout tier wants, so they're cleared only while
-    /// that tier is actually in use — editing, on a device that has one. On a device with no tier there is nothing to
-    /// clear and no reason to take the clock away. Hiding the status bar changes no height: the top inset belongs to
-    /// the cutout and the system keeps reserving it either way (`ReaderTopBarLayout`'s own doc comment).
+    /// that tier is actually in use — editing or annotating, on a device that has one. On a device with no tier there
+    /// is nothing to clear and no reason to take the clock away. Hiding the status bar changes no height: the top
+    /// inset belongs to the cutout and the system keeps reserving it either way (`ReaderTopBarLayout`'s own doc
+    /// comment).
     private var statusBarShouldHide: Bool {
-        isEditing && ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: topSafeAreaInset)
+        (isEditing || viewModel.isAnnotating) && hasCutoutTier
+    }
+
+    /// Whether this device, in this orientation, reserves enough at the top to put controls there — see
+    /// `ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset:)`.
+    private var hasCutoutTier: Bool {
+        ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: topSafeAreaInset)
     }
 
     /// Screenshot-capture mode (launch arg `-readerCaptureMode 1`): hides the top chrome and bottom transport so a real
@@ -277,19 +284,24 @@ public struct ReaderRootScreen: View {
         .safeAreaInset(edge: .top) { topBarContent }
         // The cutout tier flanks the display cutout; drawn only where one exists (see
         // `ReaderTopBarLayout.hasCutoutTier`) and only on the overlay so it contributes nothing to the score's inset
-        // — the system reserves that band regardless. Empty outside an edit session; while editing, filled with the
+        // — the system reserves that band regardless. Empty outside a session; while editing, filled with the
         // App-supplied `editingCutoutTier` content (完了 leading, revert trailing) — computed once per pass so both
-        // slots read the same value rather than invoking the builder twice.
+        // slots read the same value rather than invoking the builder twice — and while annotating, with the Reader's
+        // own pair in the same two spots (`AnnotationSessionEndButtons.swift`).
         .overlay(alignment: .top) {
-            if !isCaptureMode, ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: topSafeAreaInset) {
+            if !isCaptureMode, hasCutoutTier {
                 let editingCutoutContent = isEditing ? editingCutoutTier?(topBarEditingContext) : nil
                 ReaderCutoutTier(topSafeAreaInset: topSafeAreaInset) {
                     if let editingCutoutContent {
                         editingCutoutContent.leading
+                    } else if viewModel.isAnnotating {
+                        AnnotationDiscardButton(viewModel: viewModel, inCutoutBand: true)
                     }
                 } trailing: {
                     if let editingCutoutContent {
                         editingCutoutContent.trailing
+                    } else if viewModel.isAnnotating {
+                        AnnotationSessionEndButton(viewModel: viewModel, inCutoutBand: true)
                     }
                 }
                 .ignoresSafeArea(edges: .top)
@@ -567,6 +579,10 @@ public struct ReaderRootScreen: View {
                         onStartEditing: editingHost == nil ? nil : { startEditing() },
                         onBack: onBack,
                         onToggleSidebar: onToggleSidebar,
+                        hasCutoutTier: hasCutoutTier,
+                        // PencilKit's tool picker docks — and drops its own undo / redo — in a compact horizontal
+                        // size class; the strip supplies the pair there. See `annotationUndoRedoGroup`.
+                        showsAnnotationUndoRedo: horizontalSizeClass == .compact,
                     )
                 }
             }
@@ -579,7 +595,7 @@ public struct ReaderRootScreen: View {
     private var topBarEditingContext: ReaderEditingChromeContext {
         ReaderEditingChromeContext(
             bottomTransportClearance: bottomControlContentHeight,
-            hasCutoutTier: ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset: topSafeAreaInset),
+            hasCutoutTier: hasCutoutTier,
             // The display inspector stays reachable mid-edit — hiding a staff or switching a clef is part of
             // getting the score into a writable shape, and both transforms are edit-compatible. It carries its own
             // glass + shadow because the editor's row controls each carry theirs; the pairing has to match to read

@@ -210,6 +210,7 @@ struct VerticalPDFContainer: View {
         return AnnotationOverlaySpec(
             isAnnotating: viewModel.isAnnotating,
             isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
+            canvasSession: viewModel.annotationCanvasSession,
             displayDrawing: projectedAnnotations,
             onChange: { drawing in
                 // The canvas is the source of truth while drawing: keep the displayed projection equal to the live ink

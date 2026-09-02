@@ -4540,41 +4540,6 @@
         }
       }
     },
-    "editor.revert.action.short": {
-      "comment": "Label on the revert control in the editing strip. Short on purpose — it sits beside the display cutout, where the full 'Revert to Original' does not fit. The full wording stays as the control's accessibility label.",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Revert"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "元に戻す"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "되돌리기"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "恢复"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "還原"
-          }
-        }
-      }
-    },
     "editor.revert.confirm.action": {
       "localizations": {
         "en": {

@@ -230,6 +230,7 @@ struct PagedPDFContainer: View {
         AnnotationOverlaySpec(
             isAnnotating: viewModel.isAnnotating,
             isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
+            canvasSession: viewModel.annotationCanvasSession,
             displayDrawing: projectedAnnotations,
             onChange: { drawing in
                 // Capture ONLY while annotating. Leaving annotation empties the live canvas (static layers take over),

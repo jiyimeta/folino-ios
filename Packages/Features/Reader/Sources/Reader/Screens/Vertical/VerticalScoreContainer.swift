@@ -259,6 +259,7 @@ struct VerticalScoreContainer: View {
         AnnotationOverlaySpec(
             isAnnotating: viewModel.isAnnotating,
             isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
+            canvasSession: viewModel.annotationCanvasSession,
             displayDrawing: projectedAnnotations,
             onChange: { drawing in
                 guard let doc = document else { return }
