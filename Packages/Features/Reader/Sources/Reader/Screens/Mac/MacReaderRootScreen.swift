@@ -101,6 +101,29 @@ public struct MacReaderRootScreen: View {
         .macDisplayMode(storedRawValue: layoutModeRaw)
     }
 
+    /// The note-editing seam. Always `nil` for now — Task 9 turns this into an init parameter wired to a real
+    /// `ReaderEditingHost`. Held here (rather than in `MacScoreContentView`) so `editingScore` below is computed
+    /// once per this screen's body pass rather than once per read inside the content view.
+    private let editingHost: ReaderEditingHost? = nil
+
+    /// Non-nil only while note editing. The caller has already applied the transforms that rewrite values in place —
+    /// clef overrides and the written-pitch view — plus the hidden-staves filter, whose renumbering
+    /// `ReaderEditingHost` re-stamps. Raw in every other respect (no global transpose, no collapsed multi-measure
+    /// rests) so the element indices the Editor tracks stay valid.
+    private var editingScore: Score? {
+        ReaderEditingDisplay.score(
+            host: editingHost,
+            clefOverrides: viewModel.layoutModel.staffClefOverrides,
+            hiddenStaves: viewModel.layoutModel.hiddenStaves,
+        )
+    }
+
+    /// Which edit `editingScore` is. Travels WITH the score (see `MacReaderRootScreen.editingScoreVersion`) so a
+    /// container's relayout key can never advance ahead of the score it is keyed to.
+    private var editingScoreVersion: Int {
+        ReaderEditingDisplay.version(host: editingHost)
+    }
+
     public var body: some View {
         // Two children, and this body reads no playback state of its own: `MacScoreContentView` reads the cursors,
         // and the transport's seek region reads the position, each inside its own body. A tick therefore never
@@ -115,7 +138,9 @@ public struct MacReaderRootScreen: View {
                 showInvisibleElements: showInvisibleElements,
                 showAllMeasureNumbers: showAllMeasureNumbers,
                 autoFollowEnabled: autoFollowEnabled,
-                editingHost: nil,
+                editingScore: editingScore,
+                editingScoreVersion: editingScoreVersion,
+                editingHost: editingHost,
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             MacTransportBar(viewModel: viewModel)
@@ -205,23 +230,18 @@ struct MacScoreContentView: View {
     let showAllMeasureNumbers: Bool
     let autoFollowEnabled: Bool
 
+    /// Non-nil only while note editing. The caller has already applied the transforms that rewrite values in place —
+    /// clef overrides and the written-pitch view — plus the hidden-staves filter, whose renumbering
+    /// `ReaderEditingHost` re-stamps. Raw in every other respect (no global transpose, no collapsed multi-measure
+    /// rests) so the element indices the Editor tracks stay valid.
+    let editingScore: Score?
+    /// Which edit `editingScore` is. Travels WITH the score (see `MacReaderRootScreen.editingScoreVersion`) so a
+    /// container's relayout key can never advance ahead of the score it is keyed to.
+    let editingScoreVersion: Int
     /// The note-editing seam, or `nil` for a read-only reader. Mirrors the iOS `ScoreContentView`: whether the
     /// reader is editing changes only the containers' INPUTS — which score, and whether the element-renumbering
     /// display transforms apply — never which container is mounted, so the laid-out document survives an edit.
     let editingHost: ReaderEditingHost?
-
-    /// Non-nil while editing: the edited score with the survivable transforms applied (`ReaderEditingDisplay`).
-    private var editingScore: Score? {
-        ReaderEditingDisplay.score(
-            host: editingHost,
-            clefOverrides: viewModel.layoutModel.staffClefOverrides,
-            hiddenStaves: viewModel.layoutModel.hiddenStaves,
-        )
-    }
-
-    private var editingScoreVersion: Int {
-        ReaderEditingDisplay.version(host: editingHost)
-    }
 
     /// The score the containers render: the editing score while editing, the display-transformed one otherwise.
     private var renderedScore: Score? {
