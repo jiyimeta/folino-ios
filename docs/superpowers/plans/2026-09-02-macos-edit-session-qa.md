@@ -29,21 +29,35 @@ with what you saw. Items marked ★ are the ones no build gate can check.
 13. Open a score whose retained undo history exists (edit, close the window, reopen): ⌘Z is enabled immediately,
     before any new edit.
 14. Press Space, then ⌘Z while playing: nothing is undone; stop; ⌘Z works again.
+15. Select a note, press `+` (a SHIFTED bare key on most layouts). The tie toggles. This is the one bare key that
+    needs Shift, so it is the one that says whether shape-B delivery matches on the character or on the raw key. ★
+16. ⌘Z / ⇧⌘Z after each Revert To, one at a time:
+    - **Last Opened** → Edit ▸ Undo is disabled immediately afterwards, and ⌘Z re-applies nothing (the discarded
+      edits must not come back).
+    - **Original** → Edit ▸ Undo is disabled immediately afterwards, on the reloaded score, and ⌘Z re-applies
+      nothing. Then make one new edit: ⌘Z undoes exactly that edit and no more. ★
+17. Open two scores so they become TABS of one window (⌘T-style tabbing, or open the second while the first is
+    frontmost). Edit in the first tab, switch to the second, switch back. **The first tab's session must survive**:
+    ⌘Z still undoes the edit made before the switch, and the Notes menu is still enabled. If the session is gone,
+    `onDisappear` is firing on tab selection — record it as a finding, with which tab and which direction. ★
+18. Open the Notes menu with nothing selected (note the disabled rows), close it, click a note, open it again: the
+    rows that need a selection are now enabled. Enablement must refresh on the selection change, not only when the
+    menu is reopened from scratch after a rebuild. ★
 
 ## Section B — the three display modes
 
-15. View ▸ Display Mode ▸ Vertical / Horizontal / Page: in each, items 2–4 work, and the caret is drawn on the
+19. View ▸ Display Mode ▸ Vertical / Horizontal / Page: in each, items 2–4 work, and the caret is drawn on the
     correct staff. In Page mode a click on the blank paper below a page's last system deselects rather than
     selecting something on the next page.
 
 ## Section C — drums and instruments
 
-16. Open a score with a drum staff; click a note on it. The letters bound in the drum pad layout write drum notes;
+20. Open a score with a drum staff; click a note on it. The letters bound in the drum pad layout write drum notes;
     Notes ▸ Pitch items are disabled. Score ▸ Drum Keys… opens.
-17. Score ▸ Instruments…: add a part, reorder, toggle a staff's visibility. The score follows; hidden staves stay
+21. Score ▸ Instruments…: add a part, reorder, toggle a staff's visibility. The score follows; hidden staves stay
     hidden while editing.
 
 ## Section D — the bench's premise, in the real app ★
 
-18. With a note selected, focus the library window's search field (⌘O, click the field), type `a`. The letter
+22. With a note selected, focus the library window's search field (⌘O, click the field), type `a`. The letter
     lands in the search field; no note is written in the score window.

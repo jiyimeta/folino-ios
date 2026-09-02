@@ -82,6 +82,11 @@ screen builds none of them.
 | `noteInputPadFrame` / handle frame / pad-use counters | from the pad | never written; the coach marks that read them are iOS-only |
 | `onSelectionAnchorChanged` | drives the floating callout | wired to the view model but nothing draws a callout (§4.4) |
 
+> **Revised 2026-09-02 during implementation:** the `onEndEditing()` row has the ordering backwards. In
+> `MacReaderRootScreen.onDisappear` the call runs **before** the annotation flush, not after: `onEndEditing()` starts
+> the Editor's own flush, and the engine release that follows the annotation flush must not race a save that is still
+> reading the score. Engine-release ordering wins; the two flushes are independent.
+
 `MacReaderRootScreen` gains one parameter, `editingHost: ReaderEditingHost? = nil`. `nil` keeps today's read-only
 reader, which is what previews and the existing 508 Reader tests get. `MacShellView` always passes a host.
 
@@ -138,6 +143,16 @@ closed and reopened must not race its predecessor's `endSession` flush. A small 
 `App/Mac`, keyed by `ScoreItem.ID`, holds each open window's `EditorViewModel` from `onBeginEditing` to the end of
 `endSession`. `MacEditableReaderScreen` registers and unregisters; `applicationShouldTerminate` iterates. It is
 bookkeeping, not a shared-editor scheme: with dedup in place there is never more than one entry per score.
+
+> **Revised 2026-09-02 during implementation:** the registry covers **quit**, and only quit. An entry lives from the
+> window's appearance until that window's `endSession` flush has completed — `MacEditableReaderScreen` re-wraps the
+> shared seam's `onEndEditing` so the unregister happens after the `await`, and `MacEditorRegistry.unregister` is
+> identity-checked so a late unregister cannot take a reopened window's editor down with it. What is **not** covered
+> is the closed-and-reopened-window race this paragraph also claimed: the new window's session opens as soon as its
+> score loads, with no wait on the old window's flush, so two sessions on the same score can briefly overlap. That is
+> the same exposure iOS has (a fast 完了 → 音符入力 does it there), the Editor already tolerates it
+> (`EditorCrossSessionUndoTests`' overlapping-sessions cases), and closing it properly needs a per-score gate that is
+> out of scope for Ⅳa. Listed as a follow-up.
 
 ---
 
@@ -222,6 +237,11 @@ does not replace it.
 > **Revised 2026-09-02 during implementation:** the Notes row's "Add interval ▸ 2nd–9th" describes an engine command
 > that does not exist — `DiatonicInterval` (`SheetMusicCore`) offers only `.third` and `.octave`, so the Chord ▸ Add
 > interval submenu has two rows (`MacEditingCommands.swift`'s `intervalCommands`) until sub-project Ⅰ / Ⅳd adds more.
+>
+> **Revised 2026-09-02 during implementation:** the Measures row's "Insert measures before…" is not a menu row of its
+> own. `EditorAddMeasuresSheet` already offers both placements (at the end, and before the target bar) in one picker,
+> so "Add Measures…" raises it and the plural insert is that sheet's second placement. The singular
+> "Insert measure before" stays a row of its own (`MacEditingCommands.swift`'s `measures.insertBefore`).
 >
 > **Revised 2026-09-02 during implementation:** the Score menu's item is titled "Drum Keys…"
 > (`MacEditingCommands.swift`'s `score.drumLayout`), matching the Editor package's `editor.drum.layout.title`, not
@@ -355,6 +375,20 @@ does. `MacReaderRootScreen` sets `host.isPlaying` from the playback session, the
 - **Reader package (Swift Testing):** `ReaderEditingDisplay` — the edited-score derivation and version key give
   the same answers the iOS screen's private properties gave (one test each, against the existing fixtures);
   the Mac surfaces' cursor choice (`nil` while stopped with a selection, the cursor while playing).
+
+> **Revised 2026-09-02 during implementation:** two changes to this list.
+>
+> The Reader test for "the Mac surfaces' cursor choice" is not written, because the surfaces make no choice to test:
+> they draw whatever cursor the playback session publishes, and it is `onSelectionMade` →
+> `playbackSession.hideDisplayedCursor()` (`MacReaderRootScreen.wireEditingSeam`) that puts the cursor away when a
+> selection is made. There is no Mac-surface-owned rule left to pin.
+>
+> In its place, the **Editor package does get one new test** after all — not of the session lifecycle, but of the
+> fact the Mac's undo bridge is built on: after `beginSession` adopts a retained history, `canUndo` is already true
+> while `appliedEditCount` is back at `0`
+> (`EditorCrossSessionUndoTests.an adopted history is undoable while the applied edit count is back at zero`). Arming
+> the window's `UndoManager` off the edit count alone would leave Edit ▸ Undo dead on a reopened score, so this is
+> the invariant `MacEditableReaderScreen` reads when it arms on the session boundary instead.
 - **App target (`FolinoTests`, Swift Testing):** the command table — every row has a unique id, a title key that
   resolves, and `isEnabled` false during playback for every mutating row; the editor registry — register on begin,
   unregister after end, and `applicationShouldTerminate` flushes and replies; `MacWindowScore` equality is by
