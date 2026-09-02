@@ -796,31 +796,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Next Note"
+            "value": "Next Element"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "次の音符"
+            "value": "次の要素"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "다음 음표"
+            "value": "다음 요소"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "下一个音符"
+            "value": "下一个元素"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "下一個音符"
+            "value": "下一個元素"
           }
         }
       }
@@ -830,31 +830,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Previous Note"
+            "value": "Previous Element"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "前の音符"
+            "value": "前の要素"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "이전 음표"
+            "value": "이전 요소"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "上一个音符"
+            "value": "上一个元素"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "上一個音符"
+            "value": "上一個元素"
           }
         }
       }

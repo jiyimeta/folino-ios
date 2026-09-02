@@ -313,11 +313,23 @@ enum MacEditingCommands {
 
     /// "Add Measures…" raises `EditorAddMeasuresSheet`, which offers both placements — at the end and before the
     /// target bar — so design §5.1's "Insert measures before…" is that sheet and not a menu row of its own.
+    ///
+    /// Both rows want a session and nothing else — unlike the rest of the menu they need no caret, because appending
+    /// at the end addresses no measure. A window with no session at all (a PDF-only row, or one whose load failed)
+    /// still has an `EditorViewModel`, and `appendMeasure()` there is a no-op the menu should not offer.
     private static let measures: [MacEditingCommand] = [
-        .init("measures.append", "mac.menu.measures.append", menu: .measures) { $0.editor.appendMeasure() },
-        .init("measures.append.many", "mac.menu.measures.appendMany", menu: .measures) {
-            $0.editor.isAddMeasuresSheetPresented = true
-        },
+        .init(
+            "measures.append",
+            "mac.menu.measures.append",
+            menu: .measures,
+            isEnabled: { $0.editor.isSessionActive },
+        ) { $0.editor.appendMeasure() },
+        .init(
+            "measures.append.many",
+            "mac.menu.measures.appendMany",
+            menu: .measures,
+            isEnabled: { $0.editor.isSessionActive },
+        ) { $0.editor.isAddMeasuresSheetPresented = true },
         .init(
             "measures.insertBefore",
             "mac.menu.measures.insertBefore",
@@ -355,9 +367,13 @@ enum MacEditingCommands {
     // MARK: Score
 
     private static let score: [MacEditingCommand] = [
-        .init("score.instruments", "mac.menu.score.instruments", menu: .score, key: "i") {
-            $0.editor.isInstrumentsSheetPresented = true
-        },
+        .init(
+            "score.instruments",
+            "mac.menu.score.instruments",
+            menu: .score,
+            key: "i",
+            isEnabled: { $0.editor.isSessionActive },
+        ) { $0.editor.isInstrumentsSheetPresented = true },
         .init(
             "score.drumLayout",
             "mac.menu.score.drumLayout",
