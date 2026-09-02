@@ -79,7 +79,7 @@ struct ScoreListView<RowMenu: View>: View {
                 guard !selectedIDs.isEmpty else { return }
                 onBulkDelete()
             }
-            .safeAreaInset(edge: .bottom) {
+            .bulkActionBarInsetCompat {
                 #if os(iOS)
                 if isSelecting {
                     BulkActionBar(

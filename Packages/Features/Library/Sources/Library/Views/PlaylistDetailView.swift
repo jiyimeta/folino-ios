@@ -79,7 +79,7 @@ struct PlaylistDetailView: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom) {
+        .bulkActionBarInsetCompat {
             #if os(iOS)
             if isSelecting {
                 BulkActionBar(

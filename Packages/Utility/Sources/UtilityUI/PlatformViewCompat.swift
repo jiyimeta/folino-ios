@@ -129,6 +129,30 @@ extension View {
         #endif
     }
 
+    /// Attaches a bottom `safeAreaInset` on iOS only, for chrome that exists only there — a bulk-action bar, say.
+    ///
+    /// **Measured on macOS 26.4.1, and the reason this helper exists rather than an `#if` around the closure's
+    /// contents:** a `safeAreaInset(edge: .bottom)` whose content resolves to an `EmptyView` leaves a
+    /// `List(selection:)` beneath it **unable to select at all** — clicking a row highlights nothing, the selection
+    /// binding never changes, and `contextMenu(forSelectionType:primaryAction:)` never fires, so double-click is
+    /// dead too. Isolated in a standalone bench: the same list selects with the inset removed and stops the moment
+    /// an empty one is attached, with every other ingredient held constant.
+    ///
+    /// That is exactly the shape this codebase had. Three list screens wrote
+    /// `.safeAreaInset(edge: .bottom) { #if os(iOS) … #endif }`, which gates the *content* and not the *modifier*,
+    /// so every macOS build attached an empty inset and silently lost row selection. Gate the modifier.
+    ///
+    /// The closure is not evaluated on macOS at all, so a caller may keep its own `#if` inside for content that
+    /// cannot compile there.
+    @ViewBuilder
+    public func bulkActionBarInsetCompat(@ViewBuilder _ bar: () -> some View) -> some View {
+        #if os(iOS)
+        safeAreaInset(edge: .bottom) { bar() }
+        #else
+        self
+        #endif
+    }
+
     /// Mirrors a bulk-selection `isSelecting` flag into `\.editMode` on iOS, which drives a `List`'s row checkmarks
     /// and reorder/delete affordances; a no-op on macOS, which has no `EditMode` at all (the type itself is
     /// unavailable there) — `List(selection:)` already multi-selects natively with ⌘/⇧-click.

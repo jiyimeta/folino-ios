@@ -49,7 +49,7 @@ struct RecentlyDeletedView: View {
             guard !selectedIDs.isEmpty else { return }
             isShowingBulkPermanentDeletePopover = true
         }
-        .safeAreaInset(edge: .bottom) {
+        .bulkActionBarInsetCompat {
             #if os(iOS)
             if isSelecting {
                 RecentlyDeletedBulkActionBar(
