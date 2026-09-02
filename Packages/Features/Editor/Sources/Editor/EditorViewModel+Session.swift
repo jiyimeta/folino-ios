@@ -111,6 +111,36 @@ extension EditorViewModel {
         return core.undoableStepCount
     }
 
+    /// Arms one trampoline per undoable step, EACH IN ITS OWN top-level undo group, so a retained history takes as
+    /// many ⌘Z presses as it has steps.
+    ///
+    /// The grouping is the entire point. `UndoManager.groupsByEvent` (on by default) folds every action registered
+    /// during one run-loop event into a single group, and a group is undone WHOLE — so the obvious loop of N
+    /// `registerSystemUndo` calls buys one ⌘Z that runs all N `undo()`s at once. Turning the flag off for the
+    /// duration is what makes each `begin` / `end` pair a top-level group of its own; with it left on, a manual
+    /// `beginUndoGrouping` merely NESTS inside the event's group and nothing changes.
+    ///
+    /// iOS never needs this: its chrome registers one trampoline per applied edit, each in its own event, so the
+    /// manager groups them one-per-step without being asked.
+    ///
+    /// Call only where the manager holds none of this view model's actions — a session that just opened, or playback
+    /// that just stripped them. An undo group already open around the call (`groupingLevel > 0`, from something else
+    /// registering earlier in the same event) would swallow these groups into it; that costs the per-step split, not
+    /// correctness, and no caller today registers anything before this runs.
+    public func registerSystemUndoForAdoptedHistory(with manager: UndoManager?) {
+        guard let manager else { return }
+        let steps = undoableStepCount
+        guard steps > 0 else { return }
+        let wasGroupingByEvent = manager.groupsByEvent
+        manager.groupsByEvent = false
+        for _ in 0 ..< steps {
+            manager.beginUndoGrouping()
+            registerSystemUndo(with: manager)
+            manager.endUndoGrouping()
+        }
+        manager.groupsByEvent = wasGroupingByEvent
+    }
+
     /// Bridges the session's own stacks to the system UndoManager so three-finger swipe gestures work. Each mutation
     /// registers one undo action; performing it re-registers the redo symmetrically. The session remains the source
     /// of truth — the UndoManager holds only trampolines.
