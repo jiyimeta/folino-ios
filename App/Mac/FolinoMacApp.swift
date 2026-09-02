@@ -111,6 +111,15 @@ struct FolinoMacApp: App {
             .task { startAppServices() }
         }
         .commands { MacCommands() }
+        // **Measured, on the first launch anyone was able to observe.** `.defaultLaunchBehavior(.presented)` on the
+        // library `Window` below is not enough on its own: a `WindowGroup` is the default launch scene because it is
+        // `body`'s first, and it won — the app came up showing one empty score window and no browser at all, which is
+        // worse than the stray extra window that was predicted. That window has no toolbar either (the library button
+        // lives inside `MacShellView`'s `if let item` branch), so the only way back was ⌘O, undiscoverable.
+        //
+        // Suppressing the group does not stop `openWindow(value:)` from creating score windows; it only stops one
+        // being minted at launch with nothing to show.
+        .defaultLaunchBehavior(.suppressed)
 
         // `Text(verbatim:)` rather than a string key: `folino` is the brand, written lowercase wherever a user can
         // read it, and it is never translated — a `LocalizedStringKey` here would mint a catalog entry that must
