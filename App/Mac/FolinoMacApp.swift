@@ -75,6 +75,7 @@ enum MacImportedScoreClaim {
 /// for why the previous arrangement — one split-view window holding both — could not stay.
 @main
 struct FolinoMacApp: App {
+    @NSApplicationDelegateAdaptor(MacAppDelegate.self) private var appDelegate
     @State private var bootstrap = AppBootstrap()
     /// The process's one and only `LibraryViewModel`, shared by the browser window and by every score window's
     /// File ▸ Import.
