@@ -224,11 +224,13 @@ private struct MacLibraryWindowContent: View {
             //   `MacShellView.sidebar`, which no longer exists — the gap did not close, its call site did.)
             onOpenInPlaylist: { item, _ in openWindow(value: MacWindowScore(scoreID: item.id)) },
         )
-        // The browser has no file importer of its own, so File ▸ Import is the *only* import route while this window
-        // is key — and on a fresh launch with an empty library it is the only import route the app has at all.
-        // `@FocusedValue` follows scene focus, so a score window publishing this does nothing for the browser; the
-        // browser has to publish its own.
-        .focusedSceneValue(\.macLibraryImportAction) { url in await viewModel.startImport(from: url) }
+        // §2.9.2 — the library is summoned *over* the score window, on the same Space, full screen included.
+        .background(MacLibraryWindowPresentation())
+            // The browser has no file importer of its own, so File ▸ Import is the *only* import route while this
+            // window is key — and on a fresh launch with an empty library it is the only import route the app has
+            // at all. `@FocusedValue` follows scene focus, so a score window publishing this does nothing for the
+            // browser; the browser has to publish its own.
+            .focusedSceneValue(\.macLibraryImportAction) { url in await viewModel.startImport(from: url) }
             .opensImportedScores(from: viewModel)
     }
 }
