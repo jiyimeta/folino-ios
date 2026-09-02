@@ -246,9 +246,9 @@ public struct EditorPadView: View {
 /// test target's `@testable` fakes (not visible to this source target). Mirrors
 /// `Tests/EditorTests/Support/Fakes.swift` and Reader's `PreviewSupport.swift`; `internal` and `#if DEBUG`-guarded so
 /// it compiles into debug builds only and is stripped from release.
-public enum PreviewEditorFactory {
+enum PreviewEditorFactory {
     @MainActor
-    public static func makeViewModel(armedDuration: NoteDuration? = nil) -> EditorViewModel {
+    static func makeViewModel(armedDuration: NoteDuration? = nil) -> EditorViewModel {
         let viewModel = EditorViewModel(
             scoreItem: sampleItem,
             scoresDirectory: URL(filePath: "/tmp"),

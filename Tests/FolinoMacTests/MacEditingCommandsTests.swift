@@ -1,4 +1,6 @@
-import Editor
+// `@testable` for `PreviewEditorFactory`, which is internal to the Editor package: the repo rule is never to widen
+// access for a test.
+@testable import Editor
 @testable import folino
 import Foundation
 import Reader

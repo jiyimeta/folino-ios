@@ -355,4 +355,27 @@ struct EditorCrossSessionUndoTests {
         #expect(store.retained.count == 1)
         #expect(store.retained.first?.session === ending) // the ENDING session was deposited, not the live one
     }
+
+    // MARK: - What a menu-driven host has to arm its undo bridge on
+
+    /// The fact the Mac screen's undo wiring is built on (`App/Mac/MacEditableReaderScreen.swift`): an adopted
+    /// history is undoable from the session's FIRST frame, while `appliedEditCount` — which `beginSession` resets to
+    /// zero — says nothing has been edited. So a host that arms the system `UndoManager` off the edit count alone
+    /// arms nothing on a reopened score, and Edit ▸ Undo stays dead until a new edit is made. The Mac arms on the
+    /// session boundary instead, and only re-registers when the count RISES.
+    @Test func `an adopted history is undoable while the applied edit count is back at zero`() async throws {
+        let dir = makeTempScoresDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FakeScoreEditHistoryStore()
+        let vm = makeViewModel(store: store, directory: dir)
+        vm.beginSession(score: EditorFixtures.fourQuarterRests())
+        vm.apply(.inputNote(at: EditorFixtures.restID(element: 1), pitch: 60, tpc: 14, duration: nil))
+        let edited = try #require(vm.score)
+        #expect(vm.appliedEditCount > 0)
+        await vm.endSession()
+
+        vm.beginSession(score: edited)
+        #expect(vm.canUndo) // the retained history was adopted
+        #expect(vm.appliedEditCount == 0) // and the count that a per-edit trigger would watch went N → 0
+    }
 }
