@@ -27,7 +27,7 @@ with what you saw. Items marked ★ are the ones no build gate can check.
     paper — the score scrolls or nothing happens, but no note moves. (Under delivery B, bare arrow keys are
     window-wide; sheets are separate key windows and are not at risk.)
 13. Open a score whose retained undo history exists (edit, close the window, reopen): ⌘Z is enabled immediately,
-    before any new edit.
+    before any new edit — and with THREE prior edits, ⌘Z three times undoes all three. ★
 14. Press Space, then ⌘Z while playing: nothing is undone; stop; ⌘Z works again.
 15. Select a note, press `+` (a SHIFTED bare key on most layouts). The tie toggles. This is the one bare key that
     needs Shift, so it is the one that says whether shape-B delivery matches on the character or on the raw key. ★

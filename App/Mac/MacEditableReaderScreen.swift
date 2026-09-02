@@ -202,12 +202,12 @@ struct MacEditableReaderScreen: View {
                 MacEditorRegistry.shared.register(editorViewModel, for: item.id)
                 // An adopted history is undoable the moment the session opens, but the system UndoManager only
                 // learns about edits when a trampoline is registered — and that happens per NEWLY applied edit.
-                // Arm one initial trampoline when the session already has history; `registerSystemUndo`'s
-                // symmetric re-registration handles everything after. The Mac needs this more than iOS does:
+                // So the retained stack is armed here, ONE TRAMPOLINE PER STEP: each ⌘Z consumes exactly one and
+                // registers only a redo (a second undo registered from inside an undo operation would land on the
+                // redo stack, and one registered after it would wipe that stack), so a single trampoline would
+                // offer a single step of a history several edits deep. The Mac needs this more than iOS does:
                 // there is no undo button here at all.
-                if editorViewModel.canUndo {
-                    editorViewModel.registerSystemUndo(with: undoManager)
-                }
+                armSystemUndoForRetainedHistory()
             } else {
                 undoManager?.removeAllActions(withTarget: editorViewModel)
             }
@@ -231,8 +231,9 @@ struct MacEditableReaderScreen: View {
         .onChange(of: editorViewModel.isPlaybackActive) { _, isPlaying in
             if isPlaying {
                 undoManager?.removeAllActions(withTarget: editorViewModel)
-            } else if editorViewModel.canUndo {
-                editorViewModel.registerSystemUndo(with: undoManager)
+            } else {
+                // Everything came off, so everything goes back on — the whole stack, not one step of it.
+                armSystemUndoForRetainedHistory()
             }
         }
         // The registry entry normally comes off at the END of `endSession`'s flush (`wireOnce`), not here. This is
@@ -246,6 +247,18 @@ struct MacEditableReaderScreen: View {
         .onDisappear {
             guard !didOpenSession else { return }
             MacEditorRegistry.shared.unregister(editorViewModel, for: item.id)
+        }
+    }
+
+    /// Arms one `UndoManager` trampoline for every step the session can still undo, so Edit ▸ Undo reaches the whole
+    /// retained history rather than its last step.
+    ///
+    /// Called where the manager holds none of this view model's actions — a session that just opened, or playback
+    /// that just stripped them — never to top up a stack that already has some, which would double-count. A fresh
+    /// session counts zero and registers nothing.
+    private func armSystemUndoForRetainedHistory() {
+        for _ in 0 ..< editorViewModel.undoableStepCount {
+            editorViewModel.registerSystemUndo(with: undoManager)
         }
     }
 

@@ -20,7 +20,7 @@ final class ProcessScoreEditHistoryStore: ScoreEditHistoryStore {
     private struct Entry {
         let id: ScoreItemID
         let contentHash: String
-        let session: ScoreEditSession
+        let retained: RetainedEditSession
     }
 
     /// Most-recently deposited last.
@@ -50,19 +50,19 @@ final class ProcessScoreEditHistoryStore: ScoreEditHistoryStore {
         #endif
     }
 
-    func session(for id: ScoreItemID, contentHash: String) -> ScoreEditSession? {
+    func session(for id: ScoreItemID, contentHash: String) -> RetainedEditSession? {
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return nil }
         let entry = entries.remove(at: index)
         // A hash mismatch means the file was rewritten out-of-band since the deposit (revert, re-import, version
         // restore, PDF re-read): the history no longer relates to the bytes on disk, so the stale entry is dropped
         // rather than left to mislead a later asker.
         guard entry.contentHash == contentHash else { return nil }
-        return entry.session
+        return entry.retained
     }
 
-    func retain(_ session: ScoreEditSession, for id: ScoreItemID, contentHash: String) {
+    func retain(_ retained: RetainedEditSession, for id: ScoreItemID, contentHash: String) {
         entries.removeAll { $0.id == id }
-        entries.append(Entry(id: id, contentHash: contentHash, session: session))
+        entries.append(Entry(id: id, contentHash: contentHash, retained: retained))
         if entries.count > capacity {
             entries.removeFirst(entries.count - capacity)
         }
