@@ -200,6 +200,7 @@ targets:
         products: [Persistence, CloudSync, Soundfonts, Audio, ScoreFiles, CrashReporting, Analytics]
       - package: Library
       - package: Reader
+      - package: Editor
       - package: ImportExport
         products: [ImportExport, ImportExportAppGroup]
       - package: Settings
