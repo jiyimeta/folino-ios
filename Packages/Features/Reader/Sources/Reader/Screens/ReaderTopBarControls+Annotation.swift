@@ -144,51 +144,58 @@ extension ReaderTopBarControls {
 
 #if DEBUG
 @MainActor
-private func annotatingViewModel(hasInk: Bool = false, hasChanges: Bool = false) -> ReaderViewModel {
-    let viewModel = ReaderViewModel(
+private func previewViewModel() -> ReaderViewModel {
+    ReaderViewModel(
         scoreItem: PreviewFakeRepository.sampleItem,
         repository: PreviewFakeRepository(),
         gateway: PreviewFakeGateway(),
         scoresDirectory: URL(filePath: "/tmp"),
     )
+}
+
+/// Loads the score, then puts the view model into an annotation session in the given state. The ink has to be
+/// seeded AFTER `load()`: loading reads the annotation layer back from the (empty) preview store and would replace
+/// anything seeded before it.
+@MainActor
+private func beginAnnotating(_ viewModel: ReaderViewModel, hasInk: Bool = false, hasChanges: Bool = false) async {
+    await viewModel.load()
     if hasInk {
         viewModel.annotationDrawings = [DrawingAnchor(kind: .page(PageAnchor(pageIndex: 0)), encodedDrawing: Data())]
     }
     viewModel.beginAnnotationSession()
     viewModel.annotationCanvasSession.hasChanges = hasChanges
-    return viewModel
 }
 
 // The strip in every shape an annotation session takes. Top to bottom: a compact phone with no cutout tier (undo /
 // redo in the row, all three session-end states); the same at 320pt, where the clear-all pill has to fold into `⋯`;
 // and a cutout-tier device's row, where ✕ and the session-end control have moved up into the band.
 #Preview("Annotating") {
-    let unchanged = annotatingViewModel()
-    let clearAll = annotatingViewModel(hasInk: true)
-    let edited = annotatingViewModel(hasInk: true, hasChanges: true)
-    let folded = annotatingViewModel(hasInk: true)
-    let cutout = annotatingViewModel(hasInk: true, hasChanges: true)
+    let unchanged = previewViewModel()
+    let clearAll = previewViewModel()
+    let edited = previewViewModel()
+    let folded = previewViewModel()
+    let cutout = previewViewModel()
     return VStack(spacing: 24) {
         ReaderTopBar { ReaderTopBarControls(viewModel: unchanged, showsAnnotationUndoRedo: true) }
             .frame(width: 393)
             .border(.red)
-            .task { await unchanged.load() }
+            .task { await beginAnnotating(unchanged) }
         ReaderTopBar { ReaderTopBarControls(viewModel: clearAll, showsAnnotationUndoRedo: true) }
             .frame(width: 393)
             .border(.red)
-            .task { await clearAll.load() }
+            .task { await beginAnnotating(clearAll, hasInk: true) }
         ReaderTopBar { ReaderTopBarControls(viewModel: edited, showsAnnotationUndoRedo: true) }
             .frame(width: 393)
             .border(.red)
-            .task { await edited.load() }
+            .task { await beginAnnotating(edited, hasInk: true, hasChanges: true) }
         ReaderTopBar { ReaderTopBarControls(viewModel: folded, showsAnnotationUndoRedo: true) }
             .frame(width: 320)
             .border(.red)
-            .task { await folded.load() }
+            .task { await beginAnnotating(folded, hasInk: true) }
         ReaderTopBar { ReaderTopBarControls(viewModel: cutout, hasCutoutTier: true, showsAnnotationUndoRedo: true) }
             .frame(width: 393)
             .border(.red)
-            .task { await cutout.load() }
+            .task { await beginAnnotating(cutout, hasInk: true, hasChanges: true) }
     }
     .padding(.vertical, 40)
     .background(Color(white: 0.97))
