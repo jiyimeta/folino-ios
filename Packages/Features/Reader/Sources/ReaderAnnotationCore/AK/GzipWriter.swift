@@ -12,7 +12,7 @@ public protocol Deflating {
 public enum GzipWriter {
     public enum GzipError: Error { case deflateFailed }
 
-    public static func gzip(_ data: Data, using deflater: Deflating) throws -> Data {
+    static func gzip(_ data: Data, using deflater: Deflating) throws -> Data {
         // Magic, CM = 8 (deflate), no flags, mtime 0, XFL 0, OS 255 (unknown). A fixed mtime keeps the output
         // reproducible, which is what lets a golden test compare bytes at all.
         var out = Data([0x1F, 0x8B, 0x08, 0x00, 0, 0, 0, 0, 0x00, 0xFF])

@@ -228,14 +228,6 @@ struct AnnotatedPDFComposerTests {
             basePDF: base, drawings: Self.asymmetricFixture(), placements: Self.asymmetricPlacements(),
         ).data
 
-        // This test is currently failing, and there are two explanations that fit equally well: iOS PDFKit's
-        // annotation handling mangling what we write, or iOS PDFKit simply not drawing annotations into an
-        // offscreen CGContext inside a test process. Only a human opening the bytes in a real viewer separates
-        // them, so the composed document is dumped where one can be opened. Harmless if it fails.
-        let dump = URL(fileURLWithPath: "/tmp/annotated-render-check.pdf")
-        try? out.write(to: dump)
-        print("ANNOTATED-RENDER-CHECK: wrote \(out.count) bytes to \(dump.path)")
-
         // Dead-center on strokeMark, mapped straight across the page/PDF-space flip.
         let onTheInk = CGPoint(x: Self.sampleX, y: Self.markPageSpaceY)
         // Between the two strokes' boxes, under `sampleX` where only strokeMark ever puts ink: background unless the

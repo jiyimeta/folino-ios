@@ -89,11 +89,21 @@ New files, all in that target:
 | --- | --- |
 | `AKInkPayloadEncoder.swift` | `[InkStroke]` + geometry → the protobuf drawing payload |
 | `AKInkArchive.swift` | the `NSKeyedArchiver` object graph around it, as a binary plist |
-| `AKInkPlacement.swift` | the three-box arithmetic, given a page size and an ink box |
+| `AKInkGeometry.swift` | the three-box arithmetic, given a page size and an ink box |
 | `ProtobufWriter.swift` | minimal length-delimited/varint/fixed writer — no dependency |
 | `GzipWriter.swift` | gzip framing (header, CRC32, ISIZE) over a `Deflating` seam |
 
-`AnnotatedPDFComposer` gains one call and one annotation key. Nothing else in the export changes.
+`AnnotatedPDFComposer` gains a payload encode per stroke and a second serialization pass to attach it — not
+just one call and one annotation key. `/AAPL:AKExtras` set on an annotation PDFKit just created does not
+survive `dataRepresentation()`: AnnotationKit adopts every freshly built annotation on the way out and
+rewrites that key with its own identity trio, even when nothing set it at all. So the composer serializes the
+stamped document once, reparses the bytes, locates each annotation by page index + its position in that
+page's `/Annots` order (recorded before the first serialize, in a `PayloadSlot`), confirms it by an identity
+check against the recorded bounds (`minX`/`minY`/`width`/`height`, each within a tolerance — a plain bounds
+check on the array is not enough, since a dropped or reordered annotation would shift every index below the
+gap onto the wrong mark), attaches the payload there, and serializes again. `compose`'s return type changes
+from `Data` to `(data: Data, akEncodeFailures: Int)`, so the count of marks that went out without an
+`AKAnnotationV2` payload — a silent loss of editability, not of the mark itself — travels back to the caller.
 
 ### The payload
 
@@ -146,7 +156,12 @@ comes from one drawing, and it would make the eraser delete a mark on another pa
 when a probe generated identifiers deterministically for reproducibility; nothing else in the investigation
 would have caught it.
 
-`AnnotatedPDFComposer` asserts uniqueness across the whole composed document in debug builds.
+Uniqueness holds by construction — each payload's five identifiers are fresh `UUID()` values, and the odds of
+a collision make a runtime check pointless. `AnnotatedPDFComposer` does not assert it: an O(n) cross-check
+over every annotation in the composed document would cost real work for no coverage a `UUID()` doesn't
+already give. `AnnotatedPDFComposerAKTests` covers this with a test instead
+(`no two annotations in a document share an identifier`), generating identifiers across many strokes and
+confirming none repeat.
 
 ### Coordinate space
 

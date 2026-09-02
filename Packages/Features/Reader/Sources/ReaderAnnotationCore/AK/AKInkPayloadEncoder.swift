@@ -1,6 +1,9 @@
-import CoreGraphics
 import Domain
 import Foundation
+
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 /// Encodes one `InkStroke` as the drawing payload inside Apple's `AKAnnotationV2` archive.
 ///

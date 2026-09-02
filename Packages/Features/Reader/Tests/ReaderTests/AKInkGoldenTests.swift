@@ -73,16 +73,12 @@ struct AKInkGoldenTests {
         #expect(shape(ourPayload).map(\.0) == shape(apple).map(\.0))
         #expect(shape(ourPayload).map(\.1) == shape(apple).map(\.1))
 
-        for level in [2] {
-            let a = try #require(ProtobufReaderStub.field(level, in: apple))
-            let b = try #require(ProtobufReaderStub.field(level, in: ourPayload))
-            #expect(shape(b).map(\.0) == shape(a).map(\.0))
-            #expect(shape(b).map(\.1) == shape(a).map(\.1))
-        }
-
         let appleDrawing = try #require(ProtobufReaderStub.field(2, in: apple))
-        let appleStroke = try #require(ProtobufReaderStub.field(3, in: appleDrawing))
         let ourDrawing = try #require(ProtobufReaderStub.field(2, in: ourPayload))
+        #expect(shape(ourDrawing).map(\.0) == shape(appleDrawing).map(\.0))
+        #expect(shape(ourDrawing).map(\.1) == shape(appleDrawing).map(\.1))
+
+        let appleStroke = try #require(ProtobufReaderStub.field(3, in: appleDrawing))
         let ourStroke = try #require(ProtobufReaderStub.field(3, in: ourDrawing))
         // `.2` and `.3` each occur twice on the stroke. Emitting one of a repeated field is exactly the defect
         // this comparison exists to catch, so the counts are part of the assertion.
@@ -94,7 +90,7 @@ struct AKInkGoldenTests {
         #expect(shape(ourPoints).map(\.0) == shape(applePoints).map(\.0))
         #expect(shape(ourPoints).map(\.1) == shape(applePoints).map(\.1))
 
-        // Field 4 on the stroke is the ink submessage (colour, tool identifier, and one unexplained varint).
+        // Field 4 on the stroke is the ink submessage (color, tool identifier, and one unexplained varint).
         // It's only checked as one length-delimited blob at the stroke level above; this descends one level
         // further so a wire-type flip inside it — exactly the kind of defect this file exists to catch —
         // doesn't hide behind "it's still a valid length-delimited field."
@@ -102,6 +98,14 @@ struct AKInkGoldenTests {
         let ourInk = try #require(ProtobufReaderStub.field(4, in: ourStroke))
         #expect(shape(ourInk).map(\.0) == shape(appleInk).map(\.0))
         #expect(shape(ourInk).map(\.1) == shape(appleInk).map(\.1))
+
+        // Field 1 on the ink submessage is the RGBA quad. Descending one level further still catches a wire-type
+        // flip inside it that would otherwise hide behind "it's still a valid length-delimited field" at the ink
+        // level above.
+        let appleRGBA = try #require(ProtobufReaderStub.field(1, in: appleInk))
+        let ourRGBA = try #require(ProtobufReaderStub.field(1, in: ourInk))
+        #expect(shape(ourRGBA).map(\.0) == shape(appleRGBA).map(\.0))
+        #expect(shape(ourRGBA).map(\.1) == shape(appleRGBA).map(\.1))
     }
 
     @Test

@@ -1,5 +1,8 @@
-import CoreGraphics
 import Foundation
+
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 /// The `NSKeyedArchiver` archive Apple stores its ink annotation in.
 ///
@@ -13,16 +16,18 @@ import Foundation
 /// The scalars that are not geometry are carried verbatim from a real sample. `originalModelBaseScaleFactor`
 /// in particular is not the canvas-to-page ratio and its role is unexplained; it is copied, not computed.
 public enum AKInkArchive {
-    /// Encodes the keys Apple's object carries. Named for what it is: this is not AnnotationKit's class, it
-    /// just serializes to the same shape. The name it archives under is set on the archiver, deliberately not
-    /// with `@objc(AKInkAnnotation2)` — PDFKit may load the real AnnotationKit into this process, and
-    /// registering a duplicate Objective-C class name there is a hazard.
-    ///
-    /// A Swift nested type has no stable Objective-C runtime name of its own, though, and `NSCoding` archiving
-    /// requires one; `FolinoAKInkAnnotation2Shim` fills that requirement without colliding with anything
-    /// AnnotationKit owns. It is this class's own runtime identity, never written to the archive —
-    /// `setClassName` below is what makes the archive claim Apple's name instead.
+    // Encodes the keys Apple's object carries. Named for what it is: this is not AnnotationKit's class, it
+    // just serializes to the same shape. The name it archives under is set on the archiver, deliberately not
+    // with `@objc(AKInkAnnotation2)` — PDFKit may load the real AnnotationKit into this process, and
+    // registering a duplicate Objective-C class name there is a hazard.
+    //
+    // A Swift nested type has no stable Objective-C runtime name of its own, though, and `NSCoding` archiving
+    // requires one; `FolinoAKInkAnnotation2Shim` fills that requirement without colliding with anything
+    // AnnotationKit owns. It is this class's own runtime identity, never written to the archive —
+    // `setClassName` below is what makes the archive claim Apple's name instead.
+    #if canImport(ObjectiveC)
     @objc(FolinoAKInkAnnotation2Shim)
+    #endif
     private final class Shim: NSObject, NSCoding {
         let rectangle: NSMutableDictionary
         let drawingSize: NSMutableDictionary
@@ -72,7 +77,7 @@ public enum AKInkArchive {
     ) throws -> Data {
         let shim = try Shim(
             rectangle: [
-                "X": archiveRect.origin.x, "Y": archiveRect.origin.y,
+                "X": archiveRect.minX, "Y": archiveRect.minY,
                 "Width": archiveRect.width, "Height": archiveRect.height,
             ],
             drawingSize: ["Width": drawingSize.width, "Height": drawingSize.height],

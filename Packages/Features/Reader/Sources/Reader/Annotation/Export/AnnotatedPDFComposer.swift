@@ -169,7 +169,9 @@ enum AnnotatedPDFComposer {
             let target = page.annotations[slot.annotationIndex]
             guard target.type == "Ink",
                   abs(target.bounds.minX - slot.expectedBounds.minX) < 0.01,
-                  abs(target.bounds.minY - slot.expectedBounds.minY) < 0.01
+                  abs(target.bounds.minY - slot.expectedBounds.minY) < 0.01,
+                  abs(target.bounds.width - slot.expectedBounds.width) < 0.01,
+                  abs(target.bounds.height - slot.expectedBounds.height) < 0.01
             else {
                 unplaced += 1
                 continue
