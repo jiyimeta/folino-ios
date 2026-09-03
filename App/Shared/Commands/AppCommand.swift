@@ -134,15 +134,27 @@ struct AppCommand: Identifiable {
         self.modifiers = modifiers
         isMutating = mutating
         self.platforms = platforms
-        // A mutating command is disabled during playback before its own rule is consulted. Written as an `if`
-        // rather than a ternary because a closure literal in a ternary is not inferred `@Sendable`, and the table
-        // is a global constant, so every stored closure has to be.
+        // Two wrappers, applied outermost-first, so the cheapest refusal wins: a mutating row is dead while the
+        // transport runs (§6.2), and on iOS every row that needs an editor is dead outside an edit session —
+        // editing is a mode here, unlike the Mac (spec §3.2). A row with no editor at all (Display Mode, search)
+        // passes both guards.
+        let rule = isEnabled
+        let sessionGated: @MainActor @Sendable (AppCommandContext) -> Bool
+        #if os(macOS)
+        sessionGated = rule
+        #else
+        sessionGated = { context in
+            guard context.editor == nil || context.host?.isEditing == true else { return false }
+            return rule(context)
+        }
+        #endif
         if mutating {
-            self.isEnabled = { @Sendable @MainActor context in
-                context.editor?.isPlaybackActive != true && isEnabled(context)
+            self.isEnabled = { context in
+                guard context.editor?.isPlaybackActive != true else { return false }
+                return sessionGated(context)
             }
         } else {
-            self.isEnabled = isEnabled
+            self.isEnabled = sessionGated
         }
         self.perform = perform
     }

@@ -26,5 +26,11 @@ struct FolinoApp: App {
             }
             .onOpenURL { bootstrap.acceptIncomingURL($0) }
         }
+        // `.commands` is a `Scene` modifier, not a `View` one (measured in Task 1's bench) — it has to sit here,
+        // after `WindowGroup { … }`'s closing brace, sibling to it, not nested inside the trailing closure beside
+        // `.task` / `.onOpenURL`.
+        .commands {
+            AppCommandMenus()
+        }
     }
 }

@@ -21,8 +21,12 @@ struct EditableReaderScreen: View {
     /// not one combined, type-erased view.
     typealias CutoutTierBuilder = (ReaderEditingChromeContext) -> ReaderEditingCutoutTierContent
 
-    @State private var editingHost = ReaderEditingHost()
+    @State private var editingHost: ReaderEditingHost
     @State private var editorViewModel: EditorViewModel
+    /// The focused value the iPad menu bar reads (Ⅳb §3, Task 6). Built once — not computed in `body` — so every
+    /// pass publishes the same object; see `AppCommandContext`'s doc comment for why a rebuilt instance would make
+    /// the menus rebuild for nothing.
+    @State private var commandContext: AppCommandContext
     @State private var isWired = false
     @Environment(\.scenePhase) private var scenePhase
     /// Second `ChromeBuilder` is the top-strip row; the first is the pad overlay. `CutoutTierBuilder` is next, and the
@@ -65,7 +69,11 @@ struct EditableReaderScreen: View {
             ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder, Bool,
         ) -> ReaderRootScreen,
     ) {
-        _editorViewModel = State(wrappedValue: EditorViewModel(
+        // Built as locals first so `editingHost`, `editorViewModel` and `commandContext` can all be seeded with the
+        // very same instances — the context has to name the objects the menu bar's enablement rule reads (same
+        // reason `MacEditableReaderScreen.init` does this).
+        let host = ReaderEditingHost()
+        let viewModel = EditorViewModel(
             scoreItem: item,
             scoresDirectory: scoresDirectory,
             gateway: gateway,
@@ -74,7 +82,10 @@ struct EditableReaderScreen: View {
             historyStore: historyStore,
             playback: playbackController,
             annotationStore: annotationStore,
-        ))
+        )
+        _editingHost = State(wrappedValue: host)
+        _editorViewModel = State(wrappedValue: viewModel)
+        _commandContext = State(wrappedValue: AppCommandContext(editor: viewModel, host: host))
         self.repository = repository
         self.analytics = analytics
         self.startInEditMode = startInEditMode
@@ -124,6 +135,9 @@ struct EditableReaderScreen: View {
             )
         }, startInEditMode)
             .onAppear { wireOnce() }
+            // Scene-scoped, matching the Mac's own publication (`MacEditableReaderScreen`): a menu command has to
+            // find the key window's editor whether or not the score surface itself holds view focus.
+            .focusedSceneValue(\.appCommandContext, commandContext)
             // The Reader owns the transport; the Editor only needs to know whether it's running, so the pad can go
             // inert while the cursor moves. Mirrored here because neither feature imports the other.
             .onChange(of: editingHost.isPlaying, initial: true) { _, isPlaying in

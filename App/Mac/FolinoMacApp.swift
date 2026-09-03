@@ -237,8 +237,11 @@ private struct MacLibraryWindowContent: View {
             // `@FocusedValue` follows scene focus, so a score window publishing `appCommandContext` does nothing
             // for the browser; the browser has to publish its own.
             .focusedSceneValue(\.appCommandContext, commandContext)
-            // Bare-key delivery for this window too (design note in `AppCommandKeyMap`) — with no editor, only the
-            // non-mutating, editor-independent rows (today: just `app.search`) can ever be enabled here.
+            // Bare-key delivery for this window too (design note in `AppCommandKeyMap`) — though the only row that
+            // actually reaches this map is `app.search`, since it's the sole BARE-key row that needs no editor.
+            // Plenty more rows are enabled with no editor here, just not through this map: Show Library, Import,
+            // and all three Display Mode rows are non-mutating and editor-independent too, so `AppCommandMenus`
+            // shows all five live — they just carry modifier-bearing shortcuts (or none at all), not a bare key.
             .background(AppCommandKeyMap(target: commandContext))
             .sheet(isPresented: $isSearching) {
                 CommandSearchSheet(context: commandContext, isPresented: $isSearching)
