@@ -96,7 +96,13 @@ this sheet normally.
     (Quit the app first if it is running, so it is not writing to the destination mid-copy.)
 
 - **Import through File ▸ Open**, then relaunch and confirm the score is still there. This exercises the
-  `NSOpenPanel` / Powerbox route the `files.user-selected.read-write` entitlement exists for.
+  `NSOpenPanel` / Powerbox route the `files.user-selected.read-write` entitlement exists for. Three ways this
+  can fail look alike from the outside but point at different layers, so separate them before reporting one:
+  **the panel never appears** — Powerbox presents the panel on the app's behalf regardless of the sandbox, so
+  this is a command-wiring problem, not an entitlement one; **the panel appears, you pick a file, and nothing
+  shows up in the library with no error** — that is the shape of a denied read, i.e. the entitlement; **the
+  panel appears, a file is chosen, and folino shows an import-error alert** — that is the parser rejecting the
+  file, not the sandbox, since a visible error is proof the bytes were readable in the first place.
 
 - **Drag-and-drop import from Finder.** `MacLibraryBrowser.swift:95` has its own `.dropDestination(for:
   URL.self)` — this is a **second, independent** import route. It reaches the sandbox through a pasteboard
