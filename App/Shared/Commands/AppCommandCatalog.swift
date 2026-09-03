@@ -18,7 +18,7 @@ enum AppCommandCatalog {
     ) -> AppCommand {
         AppCommand(
             id, titleKey, menu: menu, submenu: submenu, key: key, alternateKeys: alternateKeys,
-            modifiers: modifiers, mutating: mutating,
+            modifiers: modifiers, mutating: mutating, requiresEditor: true,
             isEnabled: { context in context.editor.map(isEnabled) ?? false },
             perform: { context in context.editor.map(perform) },
         )
@@ -78,12 +78,18 @@ enum AppCommandCatalog {
     /// engine reading a score that no longer exists. Both sit in the Revert To submenu (`AppCommandMenus` splits it
     /// out) so the File menu's top level can also carry the shell's own rows (`shell`, below) without mixing the two
     /// kinds together.
+    ///
+    /// **Not built through `editorRow`, even though both need an editor.** `editorRow`'s `perform` calls into the
+    /// EDITOR; these two call back into the CONTEXT (`confirmDiscard()` / `confirmRevert()` raise the screen's own
+    /// confirmation dialogs), so they need `context` itself in scope and take the plain `AppCommand.init` instead —
+    /// which means `requiresEditor: true` has to be set by hand here rather than inherited from the helper.
     private static let file: [AppCommand] = [
         .init(
             "file.revert.lastOpened",
             "mac.menu.revert.lastOpened",
             menu: .file,
             submenu: .revertTo,
+            requiresEditor: true,
             isEnabled: { $0.editor?.sessionHasEdits ?? false },
         ) { $0.confirmDiscard() },
         .init(
@@ -91,6 +97,7 @@ enum AppCommandCatalog {
             "mac.menu.revert.original",
             menu: .file,
             submenu: .revertTo,
+            requiresEditor: true,
             isEnabled: { $0.editor?.canRevertToOriginal ?? false },
         ) { $0.confirmRevert() },
     ]

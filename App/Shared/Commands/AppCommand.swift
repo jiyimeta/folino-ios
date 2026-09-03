@@ -122,6 +122,16 @@ struct AppCommand: Identifiable {
         key: KeyEquivalent? = nil, alternateKeys: [KeyEquivalent] = [], modifiers: EventModifiers = [],
         mutating: Bool = true,
         platforms: Set<AppCommandPlatform> = Set(AppCommandPlatform.allCases),
+        // Whether this row's own rule reads `context.editor` at all. NOT the same test as "is `context.editor`
+        // nil": on iOS `EditableReaderScreen` publishes a non-nil `EditorViewModel` whether or not an edit session
+        // is running (Ⅳa: no edit mode on the Mac, a mode on iOS), so `context.editor == nil` never distinguishes
+        // reading from editing there — it would gate nothing. `editorRow` (`AppCommandCatalog.swift`) sets this
+        // `true` for every row it builds, since its whole point is wrapping a rule that needs an editor; the two
+        // File ▸ Revert To rows set it by hand because their `perform` calls back into the CONTEXT
+        // (`confirmDiscard` / `confirmRevert`), not the editor, so they cannot go through `editorRow` at all — see
+        // the comment on `file` in `AppCommandCatalog.swift`. A row that never asks for an editor (Display Mode,
+        // search) leaves this at its default and is unaffected by the session gate below.
+        requiresEditor: Bool = false,
         isEnabled: @escaping @MainActor @Sendable (AppCommandContext) -> Bool = { _ in true },
         perform: @escaping @MainActor @Sendable (AppCommandContext) -> Void,
     ) {
@@ -135,16 +145,16 @@ struct AppCommand: Identifiable {
         isMutating = mutating
         self.platforms = platforms
         // Two wrappers, applied outermost-first, so the cheapest refusal wins: a mutating row is dead while the
-        // transport runs (§6.2), and on iOS every row that needs an editor is dead outside an edit session —
-        // editing is a mode here, unlike the Mac (spec §3.2). A row with no editor at all (Display Mode, search)
-        // passes both guards.
+        // transport runs (§6.2), and on iOS a row that requires an editor is dead outside an edit session —
+        // editing is a mode there, unlike the Mac (spec §3.2). A row that does not require one (Display Mode,
+        // search) passes both guards.
         let rule = isEnabled
         let sessionGated: @MainActor @Sendable (AppCommandContext) -> Bool
         #if os(macOS)
         sessionGated = rule
         #else
         sessionGated = { context in
-            guard context.editor == nil || context.host?.isEditing == true else { return false }
+            guard !requiresEditor || context.host?.isEditing == true else { return false }
             return rule(context)
         }
         #endif
