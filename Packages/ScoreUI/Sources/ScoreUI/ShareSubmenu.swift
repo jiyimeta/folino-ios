@@ -92,11 +92,22 @@ public struct ShareSubmenu: View {
             )
         } label: {
             Label {
-                L10n.Common.share
+                menuTitle
             } icon: {
                 Image(systemName: "square.and.arrow.up")
             }
         }
+    }
+
+    /// macOS opens a save panel rather than a share sheet (Ⅷ §7), and "Share ▸ PDF" opening a save panel is a
+    /// mismatch. Umbrella spec §8: capability does not vary by platform, wording and placement do.
+    @ViewBuilder
+    private var menuTitle: some View {
+        #if os(iOS)
+        L10n.Common.share
+        #else
+        Text("scoreUI.share.export.action", bundle: .module)
+        #endif
     }
 }
 
