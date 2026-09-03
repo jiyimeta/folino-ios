@@ -207,29 +207,52 @@ struct FolinoMacApp: App {
 
 /// The library window's content.
 ///
-/// A view rather than inline scene content because it needs a view context: `@Environment(\.openWindow)`, the
-/// imported-score watcher, and the focused value below all require one.
+/// A view rather than inline scene content because it needs a view context: `@Environment(\.openWindow)`,
+/// `@Environment(\.dismissWindow)`, the imported-score watcher, and the focused value below all require one.
 private struct MacLibraryWindowContent: View {
     let viewModel: LibraryViewModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
         MacLibraryBrowser(
             viewModel: viewModel,
-            onOpenScore: { item in openWindow(value: MacWindowScore(scoreID: item.id)) },
+            onOpenScore: { openScore($0.id) },
             // PARITY(macos): playlist context in the reader — the `PlaylistID` is dropped here because
             //   `MacWindowScore` carries a score id and nothing else, so `MacReaderRootScreen` opens the score
             //   standalone and the playlist's continuation control and end-of-score auto-advance are unreachable.
             //   Threading a `PlaylistID` through `MacWindowScore` is what closes it. (Moved here from
             //   `MacShellView.sidebar`, which no longer exists — the gap did not close, its call site did.)
-            onOpenInPlaylist: { item, _ in openWindow(value: MacWindowScore(scoreID: item.id)) },
+            onOpenInPlaylist: { item, _ in openScore(item.id) },
         )
-        // The browser has no file importer of its own, so File ▸ Import is the *only* import route while this window
-        // is key — and on a fresh launch with an empty library it is the only import route the app has at all.
-        // `@FocusedValue` follows scene focus, so a score window publishing this does nothing for the browser; the
-        // browser has to publish its own.
-        .focusedSceneValue(\.macLibraryImportAction) { url in await viewModel.startImport(from: url) }
+        // §2.9.2 — the library is summoned *over* the score window, on the same Space, full screen included.
+        .background(MacLibraryWindowPresentation())
+            // The browser has no file importer of its own, so File ▸ Import is the *only* import route while this
+            // window is key — and on a fresh launch with an empty library it is the only import route the app has
+            // at all. `@FocusedValue` follows scene focus, so a score window publishing this does nothing for the
+            // browser; the browser has to publish its own.
+            .focusedSceneValue(\.macLibraryImportAction) { url in await viewModel.startImport(from: url) }
             .opensImportedScores(from: viewModel)
+    }
+
+    /// §2.9.1 — the library is a chooser: choosing a score opens its window and closes this one, in one gesture.
+    ///
+    /// **The dismiss is deferred by one main-actor hop, and the open is not.** These closures are reached from
+    /// `contextMenu(forSelectionType:primaryAction:)`, from `onKeyPress`, and from a context-menu button — an event
+    /// handler in the first two cases, but SwiftUI does not promise that no update is in flight when one runs, and
+    /// `ImportedScoreOpener.openImportedScore`'s measurements say two window-scene writes in one such handler are
+    /// what faults `NavigationRequestObserver`. Keeping the shape those measurements cover costs one turn of the
+    /// library staying up behind the new window, which is invisible.
+    ///
+    /// **Import and the new-score wizard deliberately do not do this.** §2.9.1 names double-click, Return and the
+    /// row's Open item; those routes go through `LibraryViewModel.pendingScoreToOpen` and `ImportedScoreOpener`
+    /// instead, whose handler genuinely does run inside an update and whose write count is the one measured hazard
+    /// in this file. Importing from the browser leaves the browser behind the new score window.
+    private func openScore(_ id: ScoreItem.ID) {
+        openWindow(value: MacWindowScore(scoreID: id))
+        Task { @MainActor in
+            dismissWindow(id: MacWindowID.library)
+        }
     }
 }
 
