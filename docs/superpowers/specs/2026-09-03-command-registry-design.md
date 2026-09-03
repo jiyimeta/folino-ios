@@ -160,8 +160,14 @@ not a floating `NSPanel` — a Spotlight-style panel means hand-building an `NSP
 buys nothing this slice needs.
 
 - **Matching** — case- and diacritic-insensitive substring, against **both the localized title and the command
-  `id`**. The id is the stable English name, so a Japanese UI still finds `notes.tuplet.triplet` by typing
-  "triplet" — MuseScore's vocabulary keeps working without a second, hand-maintained alias list.
+  `id`**. The id is the stable English name, so a Japanese UI still finds `notes.tuplet.3` — whose title there is
+  「3連符」— by typing "tuplet". MuseScore's vocabulary keeps working without a second, hand-maintained alias list.
+
+  > **Corrected 2026-09-03 during implementation:** this paragraph first claimed the same row was reachable by
+  > typing "triplet". It is not, in a Japanese UI: the id is `notes.tuplet.3` and the Japanese title is 「3連符」,
+  > so neither field contains "triplet" — only the English title does. The guarantee the id buys is that the
+  > **English MuseScore term in the id** keeps working in any language, and the id's term here is "tuplet". A test
+  > written against the wrong example passes through the title and proves nothing about the id path.
 - **Ranking** — prefix matches before substring matches; within a tier, table order. No recency, no frecency: a
   history would add persisted state for a list of about sixty rows.
 - **Disabled rows are shown, greyed, and not selectable** — the same principle as the menu bar. A user who cannot
