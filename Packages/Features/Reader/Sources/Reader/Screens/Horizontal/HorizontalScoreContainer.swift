@@ -175,7 +175,7 @@ struct HorizontalScoreContainer: View {
             scrollCaretIntoView(viewport: viewport)
         }
         // Reproject on reflow / score-swap / appear and on async annotation-load (not while annotating).
-        .onChange(of: document) { _, _ in reprojectAnnotations() }
+        .onChange(of: document) { _, _ in reflowAnnotations() }
         // See `VerticalScoreContainer`: the part-index re-seed is the one path on which the model, not the canvas,
         // is the thing that moved.
         .onChange(of: viewModel.annotationReseedTicket) { _, _ in reprojectAnnotations() }
@@ -243,6 +243,7 @@ struct HorizontalScoreContainer: View {
         AnnotationOverlaySpec(
             isAnnotating: viewModel.isAnnotating,
             isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
+            canvasSession: viewModel.annotationCanvasSession,
             displayDrawing: projectedAnnotations,
             onChange: { drawing in
                 guard let doc = document else { return }
@@ -298,6 +299,12 @@ struct HorizontalScoreContainer: View {
         projectedAnnotations = AnnotationAnchoring.display(
             viewModel.annotationDrawings, in: doc, staffFilter: annotationStaffFilter,
         )
+    }
+
+    /// See `VerticalScoreContainer.reflowAnnotations`: a reflow ends the canvas's undo history before reprojecting.
+    private func reflowAnnotations() {
+        viewModel.annotationCanvasSession.clearHistory()
+        reprojectAnnotations()
     }
 
     /// See `VerticalScoreContainer.annotationStaffFilter` — the stored anchors are in source addressing and this

@@ -105,6 +105,9 @@ extension ReaderViewModel {
         // nothing it names) would otherwise force a reproject and the canvas echo that comes with it, for nothing.
         if reloaded != annotationDrawings {
             annotationDrawings = reloaded
+            // The canvas's undo snapshots are positioned against the pre-migration staves; none of them is a state
+            // worth going back to now.
+            annotationCanvasSession.clearHistory()
             annotationReseedTicket += 1
         }
         isInkReseedPending = false

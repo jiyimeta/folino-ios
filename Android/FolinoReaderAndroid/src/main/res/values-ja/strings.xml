@@ -114,6 +114,17 @@
     <string name="reader_editing_more">その他</string>
     <string name="reader_editing_revert">元の楽譜に戻す</string>
     <string name="reader_editing_saved_as_mscz">編集内容は元のファイルの隣に MuseScore (.mscz) 形式のコピーとして保存されます。</string>
+    <string name="reader_annotation_done">完了</string>
+    <string name="reader_annotation_revert">元に戻す</string>
+    <string name="reader_annotation_discard_action">変更を破棄</string>
+    <string name="reader_annotation_discard_title">書き込みを破棄しますか？</string>
+    <string name="reader_annotation_discard_body">今回書き込んだ内容が取り消されます。元に戻すことはできません。</string>
+    <string name="reader_annotation_discard_confirm">破棄</string>
+    <string name="reader_annotation_discard_keep">書き込みを続ける</string>
+    <string name="reader_annotation_clear_title">すべての注釈を削除しますか？</string>
+    <string name="reader_annotation_clear_body">元に戻すと、この楽譜の手書き注釈が全て削除されます。</string>
+    <string name="reader_annotation_clear_confirm">すべて削除</string>
+    <string name="reader_annotation_clear_keep">キャンセル</string>
     <!-- Reader coach marks. Copy is the same feature's copy on iOS
          (Reader/Resources/Localizable.xcstrings, reader.hint.*) — the one deliberate change is the
          annotation message, which names a stylus rather than Apple Pencil. Which of these is offered,

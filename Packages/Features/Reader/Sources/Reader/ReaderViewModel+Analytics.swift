@@ -66,19 +66,10 @@ extension ReaderViewModel {
 
     // MARK: Annotation
 
-    /// Toggle annotation (Apple Pencil) mode. Entering logs `annotation_started` and starts a stroke/duration session;
-    /// exiting flushes the session as one `annotation_ended`. Entry is the mode-entry signal; the session summary is
-    /// the real pencil-usage signal (events-first: aggregated, not per-stroke).
-    func toggleAnnotation() {
-        isAnnotating.toggle()
-        if isAnnotating {
-            annotationStrokeCount = 0
-            annotationSessionStart = Date()
-            analytics.log(.annotationStarted())
-        } else {
-            endAnnotationSessionIfNeeded()
-        }
-    }
+    // Entering annotation mode logs `annotation_started` and starts a stroke/duration session; exiting flushes the
+    // session as one `annotation_ended`. Entry is the mode-entry signal; the session summary is the real
+    // pencil-usage signal (events-first: aggregated, not per-stroke). The mode transitions themselves live in
+    // `ReaderViewModel+AnnotationSession.swift`; only the counting is here.
 
     /// Count one committed stroke for the active session. Called from `annotationDrawingsDidChange` when a stroke is
     /// genuinely committed (net increase). Emits nothing on its own — the total ships in `annotation_ended`.
