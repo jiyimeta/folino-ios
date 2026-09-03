@@ -2,16 +2,22 @@ import SwiftUI
 
 /// Matching and ranking for the command sheet, kept out of the view so it can be tested without one.
 enum AppCommandSearch {
-    /// Rows whose localized title or stable id contains `query`, prefix matches first and table order within a
-    /// tier. An empty query is the whole table — that is what makes the sheet a readable index of the app on a
-    /// device with no menu bar (spec §6).
-    static func results(matching query: String, in commands: [AppCommand]) -> [AppCommand] {
+    /// Rows whose title or stable id contains `query`, prefix matches first and table order within a tier. An
+    /// empty query is the whole table — that is what makes the sheet a readable index of the app on a device with
+    /// no menu bar (spec §6). `title` defaults to the row's real `localizedTitle`, which is what every call site
+    /// (Task 5's sheet) uses; a test passes a deterministic resolver instead, so `AppCommandSearchTests` does not
+    /// depend on `Bundle.main`'s resolved language (this host's is `ja-JP`, which used to make the id-matching
+    /// test pass or fail depending on which language happened to be active, not on `results` itself).
+    static func results(
+        matching query: String, in commands: [AppCommand],
+        title: (AppCommand) -> String = { $0.localizedTitle },
+    ) -> [AppCommand] {
         let needle = normalized(query)
         guard !needle.isEmpty else { return commands }
         var prefix: [AppCommand] = []
         var substring: [AppCommand] = []
         for command in commands {
-            let haystacks = [normalized(command.localizedTitle), normalized(command.id)]
+            let haystacks = [normalized(title(command)), normalized(command.id)]
             if haystacks.contains(where: { $0.hasPrefix(needle) }) {
                 prefix.append(command)
             } else if haystacks.contains(where: { $0.contains(needle) }) {
