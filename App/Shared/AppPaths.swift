@@ -4,9 +4,13 @@ import ImportExportAppGroup
 /// Resolves on-disk locations the app uses. Centralized so AppBootstrap and any future migrations agree on layout.
 enum AppPaths {
     /// Root of the app's document storage: `~/Documents` on iOS (sandboxed), `~/Library/Application Support/folino/`
-    /// on macOS (this app is not yet sandboxed there, so `.documentDirectory` would resolve to the user's real
-    /// `~/Documents` — the wrong place for app-managed data to live, and to be recursively cleaned by
-    /// `AppBootstrap.prepareDirectories()` on every launch).
+    /// on macOS. The Mac app is sandboxed too (`2026-09-03-macos-distribution-design.md` §3), so `FileManager`
+    /// resolves that same `.applicationSupportDirectory` call inside the app's container —
+    /// `~/Library/Containers/com.KeyNumber.Folino/Data/Library/Application Support/folino/` — not the visible,
+    /// shared `~/Library/Application Support/folino/`. Application Support, not `.documentDirectory`, is used on
+    /// purpose either way: this directory holds app-managed data (the library database, the scores directory, the
+    /// share staging directory) that `AppBootstrap.prepareDirectories()` recursively cleans on every launch — not
+    /// something to keep alongside the user's own Documents.
     static var documentsRoot: URL {
         #if os(iOS)
         guard let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
@@ -57,8 +61,10 @@ enum AppPaths {
         #endif
     }
 
-    /// `<shared container>/Soundfonts/`. `nil` when the container is unavailable (entitlement/provisioning gap) — the
-    /// resolver and migration both degrade to `legacySoundfontsDirectory` so playback never breaks.
+    /// `<shared container>/Soundfonts/`. `nil` when the container is unavailable — on macOS that is `sharedContainer`
+    /// returning `nil` unconditionally, by design (see its doc comment); on iOS/Android it is a genuine
+    /// entitlement/provisioning gap. Either way the resolver and migration degrade to `legacySoundfontsDirectory` so
+    /// playback never breaks.
     ///
     /// Cross-app SoundFont sharing is **iOS-only by design**: App Groups have no clean Android equivalent
     /// (`sharedUserId` is deprecated; scoped storage / ContentProvider don't give two apps a shared private container),

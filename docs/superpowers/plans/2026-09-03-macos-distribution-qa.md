@@ -134,9 +134,13 @@ Confirm first, everywhere below: the macOS copy reads **Export…** (`scoreUI.sh
 but the Mac presentation is a save panel / folder chooser, and a leftover "Share" label would be a real bug,
 not a wording nit, since it promises a sheet the Mac never shows.
 
-For each of the four entry points below: the file lands where you chose in the panel, with the name you'd
-expect from the score title and format, and it opens correctly in an external app (Preview for PDF, MuseScore
-or a text editor for MusicXML, etc.).
+For each of the four entry points below: the file lands where you chose in the panel, **with the name and
+extension you'd expect** from the score title and format, and it opens correctly in an external app (Preview
+for PDF, MuseScore or a text editor for MusicXML, etc.). Check the extension specifically, not just the
+visible name — Finder hides known extensions by default, so an extensionless file and a correctly-named one
+can look identical in the save panel and in a Finder window. An exported file that saved without its
+extension (e.g. `Sonata` instead of `Sonata.mscz`) is the specific failure the final review's Finding 1 was
+about, and it will not open by double-click in the target app even though the save panel appeared to work.
 
 - **From a library row** — right-click a score, or its row menu (`ScoreRowMenu`) → **Export…** → pick a
   format. Expect a **save panel** for a single-file format.
@@ -158,6 +162,13 @@ whether the cause is (a) the `.fileExporter` binding never firing, (b) the sandb
 read-write` entitlement missing from the build (check with `check-macos-entitlements.sh` first — it is cheap
 and rules out the whole sandbox layer in one command), or (c) the export item producing zero files upstream
 in the view model. Check the entitlement gate before assuming the SwiftUI wiring is at fault.
+
+**No fidelity warning is shown on export, deliberately.** §7 of the distribution spec left this open:
+"whether the fidelity warning §1 imagined for *Overwrite Original…* should also appear here is left to the
+plan's copy review." The copy review's answer is no — that warning was imagined for a default-on action that
+silently overwrote the user's original file with a lossy re-encoding, which is why it needed an explicit
+heads-up. Export is neither: the user navigates to a save panel and names/chooses the destination themselves,
+which is already the moment of informed intent a warning would otherwise exist to create.
 
 ---
 

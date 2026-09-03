@@ -6,7 +6,8 @@ import UtilityUI
 /// testable without a window.
 enum ScoreExportPlan: Equatable {
     case nothing
-    /// A save panel, seeded with the file's own name minus its extension — the extension comes from `contentTypes`.
+    /// A save panel, seeded with the file's own name — extension included, since `defaultFilename` is the only
+    /// mechanism here that carries one through to the saved file.
     case single(url: URL, defaultFilename: String)
     /// A folder chooser: a save panel names one destination, and several files need a directory.
     case multiple(urls: [URL])
@@ -17,7 +18,7 @@ enum ScoreExportPlan: Equatable {
             self = .nothing
         case 1:
             let url = urls[0]
-            self = .single(url: url, defaultFilename: url.deletingPathExtension().lastPathComponent)
+            self = .single(url: url, defaultFilename: url.lastPathComponent)
         default:
             self = .multiple(urls: urls)
         }
@@ -61,10 +62,14 @@ struct ScoreExportPresentation: ViewModifier {
         ScoreExportPlan(urls: target?.urls ?? [])
     }
 
-    /// `.data` rather than a per-file type: a target can mix formats (bulk share of PDF + MSCZ), and the URLs already
-    /// carry their own extensions, which is what the exporter writes.
+    /// Resolved per-URL from each file's own extension, not hardcoded: a target can mix formats (bulk share of PDF +
+    /// MSCZ), and `UTType(filenameExtension:)` picks up the score UTIs the Mac `Info.plist` declares. The extension
+    /// itself is carried by `defaultFilename` / the URLs' own names — `contentTypes` only tells the panel what kind
+    /// of file this is, it does not by itself put an extension on anything. Falls back to `.data` for an unknown
+    /// extension, which is also what an empty target collapses to.
     private var contentTypes: [UTType] {
-        [.data]
+        let resolved = (target?.urls ?? []).map { UTType(filenameExtension: $0.pathExtension) ?? .data }
+        return resolved.isEmpty ? [.data] : resolved
     }
 
     private var singleItem: URL? {
