@@ -23,6 +23,8 @@ struct MacEditableReaderScreen: View {
     @State private var didOpenSession = false
     @State private var isConfirmingDiscard = false
     @State private var isConfirmingRevert = false
+    /// Raised by the bare `Z` row (`AppCommandContext.presentSearch`, filled in `wireOnce()`).
+    @State private var isSearching = false
     /// The window's undo manager, which is what SwiftUI's own Edit ▸ Undo / Redo items drive (design §5.2). The
     /// session stays the source of truth; the manager holds only `registerSystemUndo`'s trampolines.
     @Environment(\.undoManager) private var undoManager
@@ -113,6 +115,9 @@ struct MacEditableReaderScreen: View {
         // Scene-scoped, deliberately: a menu command must find the KEY WINDOW's editor whether or not the score
         // surface itself holds view focus.
         .focusedSceneValue(\.appCommandContext, editingTarget)
+        .sheet(isPresented: $isSearching) {
+            CommandSearchSheet(context: editingTarget, isPresented: $isSearching)
+        }
         .confirmationDialog(
             Text("mac.revert.lastOpened.title"),
             isPresented: $isConfirmingDiscard,
@@ -255,7 +260,9 @@ struct MacEditableReaderScreen: View {
         // alive for the life of the process. Every closed score window would leak its session.
         let discard = $isConfirmingDiscard
         let revert = $isConfirmingRevert
+        let searching = $isSearching
         editingTarget.confirmDiscard = { discard.wrappedValue = true }
         editingTarget.confirmRevert = { revert.wrappedValue = true }
+        editingTarget.presentSearch = { searching.wrappedValue = true }
     }
 }

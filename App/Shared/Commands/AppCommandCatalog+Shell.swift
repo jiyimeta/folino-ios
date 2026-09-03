@@ -67,6 +67,15 @@ extension AppCommandCatalog {
         displayModeRow(.page, "mac.menu.displayMode.page"),
         displayModeRow(.vertical, "mac.menu.displayMode.vertical"),
         displayModeRow(.horizontal, "mac.menu.displayMode.horizontal"),
+        // `Z` is free in MuseScore's Mac map (umbrella §2.2) and is the Master Palette's successor. It is
+        // non-mutating, so it stays live while the transport runs — and works with no score open, since
+        // `presentSearch` is answered by whichever screen is on screen (`MacShellView`'s empty-window branch
+        // included).
+        .init(
+            "app.search", "mac.menu.commandSearch", menu: .view, key: "z", mutating: false,
+            isEnabled: { _ in true },
+            perform: { $0.presentSearch() },
+        ),
     ]
 
     /// Drives the checkmark in the View ▸ Display Mode submenu (`AppCommandMenus`).

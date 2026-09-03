@@ -190,4 +190,13 @@ struct AppCommandCatalogTests {
         #expect(macKeys.contains("m"))
         #expect(macKeys.contains("b"))
     }
+
+    /// `Z` is free in MuseScore's Mac map (umbrella §2.2) and is the Master Palette's successor. It is
+    /// non-mutating, so it stays live while the transport runs.
+    @Test @MainActor func `search is bound to a bare Z and survives playback`() {
+        let search = AppCommandCatalog.allIncludingOtherPlatforms.first { $0.id == "app.search" }
+        #expect(search?.key?.character == "z")
+        #expect(search?.modifiers.isEmpty == true)
+        #expect(search?.isMutating == false)
+    }
 }

@@ -33,6 +33,9 @@ struct MacShellView: View {
     /// mutually exclusive, so this and `MacEditableReaderScreen`'s `editingTarget` are never both live for the same
     /// scene at once.
     @State private var libraryOnlyContext = AppCommandContext(editor: nil, host: nil)
+    /// Raised by the bare `Z` row while this window is showing no score (§2.9.4) — `libraryOnlyContext.presentSearch`
+    /// is filled below, alongside `showLibrary` / `importScore`.
+    @State private var isSearching = false
 
     /// The one adapter this view reads itself, unwrapped once in `init` (see the guard there for why it is
     /// guaranteed non-nil) rather than at every use site: `openScoreItem` resolves the window's id against it. The
@@ -148,9 +151,13 @@ struct MacShellView: View {
             // rows are loaded by the time `openScoreItem` is asked, and a `nil` here means genuinely absent.
             Color.clear
                 .focusedSceneValue(\.appCommandContext, libraryOnlyContext)
+                .sheet(isPresented: $isSearching) {
+                    CommandSearchSheet(context: libraryOnlyContext, isPresented: $isSearching)
+                }
                 .task {
                     libraryOnlyContext.showLibrary = { openWindow(id: MacWindowID.library) }
                     libraryOnlyContext.importScore = { MacCommandContextWiring.presentImportPanel(importAction) }
+                    libraryOnlyContext.presentSearch = { isSearching = true }
                     // Only when nothing else is showing a score. `MacScoreWindowRegistry` holds the live score
                     // windows, and after F6's change an EMPTY window never registers — so `isEmpty` here means
                     // "no other window is showing a score", which is exactly §2.9.5's condition. Summoning
