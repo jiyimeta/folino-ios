@@ -128,4 +128,15 @@ object ReaderAnnotationJNI {
             arena,
         ).toByteArray()
     }
+
+    /**
+     * Which control ends an annotation session, for a session that has (or hasn't) changed anything on a score that
+     * carries (or doesn't carry) ink. No bytes to marshal — the only reason it crosses at all is that the RULE is
+     * shared: `AnnotationSessionEndMode.derive` is the one place either platform decides this, and iOS's own header
+     * calls the same function in-process. A three-line Kotlin copy would read as free and then drift.
+     */
+    fun sessionEndMode(sessionHasChanges: Boolean, hasInk: Boolean): AnnotationSessionEndMode =
+        AnnotationSessionEndMode.fromRawValue(
+            SwiftJavaJNI.nativeAnnotationSessionEndMode(sessionHasChanges, hasInk),
+        )
 }

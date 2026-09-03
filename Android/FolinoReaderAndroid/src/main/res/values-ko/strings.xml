@@ -114,6 +114,17 @@
     <string name="reader_editing_more">더보기</string>
     <string name="reader_editing_revert">원본 악보로 되돌리기</string>
     <string name="reader_editing_saved_as_mscz">편집 내용은 원본 파일 옆에 MuseScore(.mscz) 사본으로 저장됩니다.</string>
+    <string name="reader_annotation_done">완료</string>
+    <string name="reader_annotation_revert">되돌리기</string>
+    <string name="reader_annotation_discard_action">변경 사항 버리기</string>
+    <string name="reader_annotation_discard_title">주석을 버릴까요?</string>
+    <string name="reader_annotation_discard_body">이번에 그린 주석이 제거됩니다. 되돌릴 수 없습니다.</string>
+    <string name="reader_annotation_discard_confirm">버리기</string>
+    <string name="reader_annotation_discard_keep">계속 주석 달기</string>
+    <string name="reader_annotation_clear_title">모든 주석을 삭제할까요?</string>
+    <string name="reader_annotation_clear_body">되돌리면 이 악보의 손글씨 주석이 모두 삭제됩니다.</string>
+    <string name="reader_annotation_clear_confirm">모두 삭제</string>
+    <string name="reader_annotation_clear_keep">취소</string>
     <!-- Reader coach marks. Copy is the same feature's copy on iOS
          (Reader/Resources/Localizable.xcstrings, reader.hint.*) — the one deliberate change is the
          annotation message, which names a stylus rather than Apple Pencil. Which of these is offered,

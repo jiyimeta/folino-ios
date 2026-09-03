@@ -114,6 +114,17 @@
     <string name="reader_editing_more">更多</string>
     <string name="reader_editing_revert">還原為原始樂譜</string>
     <string name="reader_editing_saved_as_mscz">編輯內容將儲存為原始檔案旁的 MuseScore (.mscz) 副本。</string>
+    <string name="reader_annotation_done">完成</string>
+    <string name="reader_annotation_revert">還原</string>
+    <string name="reader_annotation_discard_action">放棄更改</string>
+    <string name="reader_annotation_discard_title">要放棄標注嗎？</string>
+    <string name="reader_annotation_discard_body">本次繪製的標注將被移除，且無法復原。</string>
+    <string name="reader_annotation_discard_confirm">放棄</string>
+    <string name="reader_annotation_discard_keep">繼續標注</string>
+    <string name="reader_annotation_clear_title">要刪除所有標注嗎？</string>
+    <string name="reader_annotation_clear_body">還原會刪除這份樂譜上的全部手寫標注。</string>
+    <string name="reader_annotation_clear_confirm">全部刪除</string>
+    <string name="reader_annotation_clear_keep">取消</string>
     <!-- Reader coach marks. Copy is the same feature's copy on iOS
          (Reader/Resources/Localizable.xcstrings, reader.hint.*) — the one deliberate change is the
          annotation message, which names a stylus rather than Apple Pencil. Which of these is offered,

@@ -119,6 +119,20 @@
     <string name="reader_editing_more">More</string>
     <string name="reader_editing_revert">Revert to original score</string>
     <string name="reader_editing_saved_as_mscz">Edits are saved as a MuseScore (.mscz) copy next to the original file.</string>
+    <!-- The annotation session's own header (AnnotationTopBar.kt). Copy is the same feature's copy on iOS
+         (Reader/Resources/Localizable.xcstrings, reader.annotation.* and ScoreUI's sessionEnd.revert.short),
+         which is why the clear-all wording says "annotations" where the toggle above says "annotate". -->
+    <string name="reader_annotation_done">Done</string>
+    <string name="reader_annotation_revert">Revert</string>
+    <string name="reader_annotation_discard_action">Discard Changes</string>
+    <string name="reader_annotation_discard_title">Discard annotations?</string>
+    <string name="reader_annotation_discard_body">The annotations you drew in this session will be removed. This cannot be undone.</string>
+    <string name="reader_annotation_discard_confirm">Discard</string>
+    <string name="reader_annotation_discard_keep">Keep annotating</string>
+    <string name="reader_annotation_clear_title">Delete all annotations?</string>
+    <string name="reader_annotation_clear_body">Reverting deletes every handwritten annotation on this score.</string>
+    <string name="reader_annotation_clear_confirm">Delete All</string>
+    <string name="reader_annotation_clear_keep">Cancel</string>
     <!-- Reader coach marks. Copy is the same feature's copy on iOS
          (Reader/Resources/Localizable.xcstrings, reader.hint.*) — the one deliberate change is the
          annotation message, which names a stylus rather than Apple Pencil. Which of these is offered,

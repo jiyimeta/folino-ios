@@ -25,10 +25,12 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -856,6 +858,12 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
         // A different score means the undo/redo history belongs to a layer that's about to be replaced;
         // history is session-scoped per score and must not carry entries across the retarget.
         resetHistory()
+        // An annotation session belongs to the score it was opened on, and so does the baseline ✕ would restore.
+        // Ending it here is mostly belt-and-braces — the Reader already auto-exits annotation mode when playback
+        // starts, and a playlist auto-advance is the retarget that happens in practice — but the failure it rules
+        // out is silent: the rehydrated layer is a fresh list of fresh wires, so a session left open across the
+        // swap would compare unequal to the OLD score's baseline and show "there is something to keep" forever.
+        setAnnotationMode(false)
         // Suspend the layout recompute until the new score's handle is published. The recompute loop
         // skips while the handle is null, so the last Ready(program) keeps rendering unchanged — without
         // this, the incoming score's per-score display options (e.g. staff size) would briefly re-lay-out
@@ -1268,8 +1276,99 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app), EditSessionHost
     // the prior collector instead of stacking a second one on the same ViewModel.
     private var annotationDrawingsJob: Job? = null
 
-    fun toggleAnnotationMode() { _annotationMode.value = !_annotationMode.value }
-    fun setAnnotationMode(on: Boolean) { _annotationMode.value = on }
+    /**
+     * The layer as it stood when the current session began — what ✕ puts back — and `null` whenever no session is
+     * open. Also the whole of "has this session changed anything": the layer is compared against it rather than
+     * latched by a flag, so drawing a stroke and undoing it reads as unchanged again, exactly as iOS's
+     * `AnnotationCanvasSession.hasChanges` does by comparing the canvas against its seed.
+     *
+     * The comparison is sound HERE in a way it is not on iOS. `DrawingAnchorWire` is a data class whose
+     * `encodedDrawing` is a `ByteArray`, so equality on it is per-field with reference equality on those bytes —
+     * and an undo restores the very list instance the history pushed, elements and all, so stepping back to the
+     * baseline compares equal. Nothing re-encodes a stroke in place. (iOS cannot do this: `PKDrawing`'s bytes
+     * change across a round trip, which is why that side compares at the canvas instead.)
+     */
+    private val _annotationSessionBaseline = MutableStateFlow<List<DrawingAnchorWire>?>(null)
+
+    /**
+     * Whether the open session has put ink down or taken it away, for the header to observe. False whenever no
+     * session is open.
+     *
+     * A `combine` publishes through a coroutine, so this value settles a dispatch after the layer moves. That is
+     * fine for drawing a button and NOT fine for deciding whether ✕ has something to confirm, which is why
+     * [discardAnnotationSession] re-derives it synchronously instead of reading this.
+     */
+    val annotationSessionHasChanges: StateFlow<Boolean> =
+        combine(_drawings, _annotationSessionBaseline) { current, baseline ->
+            baseline != null && current != baseline
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /**
+     * Which control the session header shows in its trailing slot. **Derived, never set** — and derived by shared
+     * Swift (`AnnotationSessionEndMode.derive`, through [ReaderAnnotationJNI.sessionEndMode]), which is the same
+     * call iOS's own header makes, so the two platforms cannot drift on when "Revert" is offered.
+     */
+    val annotationSessionEndMode: StateFlow<AnnotationSessionEndMode> =
+        combine(annotationSessionHasChanges, _drawings) { hasChanges, drawings ->
+            ReaderAnnotationJNI.sessionEndMode(sessionHasChanges = hasChanges, hasInk = drawings.isNotEmpty())
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, AnnotationSessionEndMode.COMMIT_UNCHANGED)
+
+    fun toggleAnnotationMode() { setAnnotationMode(!_annotationMode.value) }
+
+    /**
+     * Open or close a session. Every way in and out funnels here so the baseline is always in step with
+     * [annotationMode] — including the Reader's own auto-exit when playback starts or the layout leaves VERTICAL,
+     * which ends the session the way ✓ does: the ink stays, because it was already saved as it was drawn.
+     */
+    fun setAnnotationMode(on: Boolean) {
+        if (on == _annotationMode.value) return
+        _annotationSessionBaseline.value = if (on) currentDrawings() else null
+        _annotationMode.value = on
+    }
+
+    /**
+     * ✕ — leave the session and put the ink back the way it was when it began. A session that changed nothing just
+     * leaves: there is nothing to restore, and reseeding the layer would cost a save of exactly what is already
+     * stored.
+     */
+    fun discardAnnotationSession() {
+        val baseline = _annotationSessionBaseline.value ?: run { setAnnotationMode(false); return }
+        // Read the layer here rather than trusting [annotationSessionHasChanges]: that one is published through a
+        // `combine` and can still be a dispatch behind a stroke committed off the main thread, and the difference
+        // between "restore the baseline" and "do nothing" is the user's ink.
+        val hadChanges = currentDrawings() != baseline
+        setAnnotationMode(false)
+        if (hadChanges) replaceAnnotationLayer(baseline)
+    }
+
+    /**
+     * The annotation layer's "revert to original": leave the session and delete every annotation on the score.
+     * Offered only in [AnnotationSessionEndMode.CLEAR_ALL] — a session that changed nothing, on a score that carries
+     * ink from before — and confirmed before it gets here.
+     */
+    fun clearAllAnnotations() {
+        setAnnotationMode(false)
+        replaceAnnotationLayer(emptyList())
+    }
+
+    /**
+     * Swap the whole layer for [layer] and end the undo history in the same critical section, then persist.
+     *
+     * The history has to go with it: its entries describe ink this replacement just threw away, so an undo after
+     * ✕ or clear-all would restore a layer the user explicitly discarded. iOS's `replaceAnnotationLayer` ends its
+     * history for the same reason. Doing both under [layerLock] keeps the invariant every other mutation here
+     * upholds — `_drawings`, `history` and the `_canUndo`/`_canRedo` publish move together, never in two steps a
+     * racing pen commit can land between.
+     */
+    private fun replaceAnnotationLayer(layer: List<DrawingAnchorWire>) {
+        synchronized(layerLock) {
+            _drawings.value = layer
+            history.clear()
+            _canUndo.value = false
+            _canRedo.value = false
+        }
+        saveController.drawingsChanged(layer)
+    }
 
     // Toolbar tool-state selection (pen color/width, eraser width). Plain MutableStateFlow + setter,
     // the same shape as [layoutOptions]/[setLayoutOptions] — no persistence here; a
