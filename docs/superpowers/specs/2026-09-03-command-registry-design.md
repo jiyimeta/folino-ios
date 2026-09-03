@@ -227,7 +227,25 @@ carry their disabled state.
 Gate (App-only change; no package is touched): iOS app build, Mac app build, `FolinoTests`, `FolinoMacTests`.
 `Scripts/build-macos-packages.sh` is run anyway, as the cheap check that nothing leaked into a package.
 
-## 10. Documents this revises
+## 10. One thing Ⅳd inherits, recorded here because it constrains the table
+
+ssm sub-project Ⅰ's Spanners group (intents 62–72, landed 2026-09-03) does not behave like the groups before it,
+and the difference lands on this table rather than on Ⅳd's wiring:
+
+**A spanner cannot be toggled by applying its `set…` twice.** Every other group's planner returns `nil` when the
+value is already what you asked for, so a row that reapplies is harmless. `SetSlur` / `SetHairpin` / … instead
+**refuse** the second application with `duplicateSpanner(at:kind:)`. A toggle row for a spanner is therefore
+`set…` **paired with `RemoveSpanner`**, chosen by reading the current value — the same shape `SetArticulation`
+already forced with its `present:` parameter. A registry that assumes "one row, one intent, reapplication is
+inert" is correct for groups 0–5 and wrong here.
+
+Two smaller inheritances, for whoever writes those rows: the `set…` intents take a range and **narrow to the
+voice of the earlier onset** (a cross-staff range is narrowed, not refused), and `RemoveSpanner` points at the
+chord for slurs but at the spanner element itself for every other kind — so a row that removes a volta should
+address it through `SetVolta.affectedLocation`, which reports where the write actually landed, rather than the
+slot the user selected.
+
+## 11. Documents this revises
 
 - `docs/superpowers/specs/2026-09-02-macos-edit-session-design.md` §5 — "Ⅳb generalizes the table" is now this
   document; §7's "command search, the iPad menu bar, the iPhone search floor" loses the iPhone half.
