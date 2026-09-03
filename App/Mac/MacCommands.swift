@@ -6,7 +6,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// The menu-bar skeleton the shell itself needs — Show Library, Import, and the display-mode picker. The editing
-/// menus live in `MacEditingMenus`.
+/// menus live in `AppCommandMenus`.
 ///
 /// `macLibraryImportAction` is published via `focusedSceneValue` by `MacShellView` and by the library browser's window
 /// content both, since `@FocusedValue` follows *scene* focus and one window's publication is invisible from another.

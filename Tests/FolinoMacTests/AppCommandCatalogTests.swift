@@ -11,36 +11,36 @@ import Testing
 /// that make it safe to generate menus and key equivalents from it: ids identify, bare keys do not collide, no row
 /// is homeless, the MuseScore letters and digits are where §6's table puts them, and nothing that writes to the
 /// score survives the transport running.
-struct MacEditingCommandsTests {
+struct AppCommandCatalogTests {
     private func key(_ id: String) -> Character? {
-        MacEditingCommands.all.first { $0.id == id }?.key?.character
+        AppCommandCatalog.all.first { $0.id == id }?.key?.character
     }
 
     @Test func `every command id is unique`() {
-        let ids = MacEditingCommands.all.map(\.id)
+        let ids = AppCommandCatalog.all.map(\.id)
         #expect(Set(ids).count == ids.count)
     }
 
     @Test func `every bare key is bound at most once and never with modifiers`() {
-        let bare = MacEditingCommands.all.filter(\.isBareKey)
+        let bare = AppCommandCatalog.all.filter(\.isBareKey)
         // Hoisted out of `#expect`: `allSatisfy` is `rethrows`, and the macro's expansion of a rethrowing call
         // taking a key path does not typecheck.
         let everyBareKeyIsUnmodified = bare.allSatisfy(\.modifiers.isEmpty)
         #expect(everyBareKeyIsUnmodified)
         // `bareKeys`, not `key`: an alias (⌦ beside ⌫) is a bare key the key map delivers too, and it has to be
         // unique against every other one.
-        let keys = MacEditingCommands.all.flatMap(\.bareKeys).map(\.character)
+        let keys = AppCommandCatalog.all.flatMap(\.bareKeys).map(\.character)
         #expect(!keys.isEmpty)
         #expect(Set(keys).count == keys.count)
         // A row with an alias but no primary key would silently bind nothing.
-        let everyAliasHasAPrimary = MacEditingCommands.all.allSatisfy { $0.alternateKeys.isEmpty || $0.isBareKey }
+        let everyAliasHasAPrimary = AppCommandCatalog.all.allSatisfy { $0.alternateKeys.isEmpty || $0.isBareKey }
         #expect(everyAliasHasAPrimary)
     }
 
     /// A modifier-bearing shortcut is a menu item's key equivalent, so the pair (key, modifiers) has to be unique
     /// too — two items sharing one would leave AppKit to pick, silently.
     @Test func `every modified shortcut is bound at most once`() {
-        let pairs = MacEditingCommands.all.compactMap { command -> String? in
+        let pairs = AppCommandCatalog.all.compactMap { command -> String? in
             guard let key = command.key, !command.isBareKey else { return nil }
             return "\(key.character)+\(command.modifiers.rawValue)"
         }
@@ -51,16 +51,16 @@ struct MacEditingCommandsTests {
     /// Design §6: MuseScore's `N` (note-input mode toggle) is deliberately unbound — folino's editing model is
     /// caret & pad, with no mode to toggle. A bound `N` would be bound to something a MuseScore hand does not expect.
     @Test func `no bare key is N`() {
-        let keys = MacEditingCommands.all.flatMap(\.bareKeys).map(\.character)
+        let keys = AppCommandCatalog.all.flatMap(\.bareKeys).map(\.character)
         #expect(!keys.contains("n"))
     }
 
     @Test func `every menu has at least one command and every command is in a menu`() {
-        for menu in MacEditingMenu.allCases {
-            #expect(!MacEditingCommands.commands(in: menu).isEmpty, "\(menu)")
+        for menu in AppCommandMenu.allCases {
+            #expect(!AppCommandCatalog.commands(in: menu).isEmpty, "\(menu)")
         }
-        let placed = MacEditingMenu.allCases.flatMap { MacEditingCommands.commands(in: $0) }.count
-        #expect(placed == MacEditingCommands.all.count)
+        let placed = AppCommandMenu.allCases.flatMap { AppCommandCatalog.commands(in: $0) }.count
+        #expect(placed == AppCommandCatalog.all.count)
     }
 
     @Test func `the MuseScore letters and digits are bound as the spec's table says`() {
@@ -78,7 +78,7 @@ struct MacEditingCommandsTests {
 
     @Test func `the tuplet and voice digits carry the modifiers the key map assigns them`() {
         func modifiers(_ id: String) -> EventModifiers? {
-            MacEditingCommands.all.first { $0.id == id }?.modifiers
+            AppCommandCatalog.all.first { $0.id == id }?.modifiers
         }
         #expect(modifiers("notes.tuplet.9") == .command)
         #expect(modifiers("notes.voice.1") == [.command, .option])
@@ -90,8 +90,8 @@ struct MacEditingCommandsTests {
     /// notice one that was never added.
     @Test func `every title key resolves in the App's string catalog`() {
         let missing = "␀"
-        let keys = MacEditingCommands.all.map(\.titleKey)
-            + MacEditingSubmenu.allCases.map(\.titleKey)
+        let keys = AppCommandCatalog.all.map(\.titleKey)
+            + AppCommandSubmenu.allCases.map(\.titleKey)
             + ["mac.menu.notes", "mac.menu.measures", "mac.menu.score", "mac.menu.revertTo"]
         for key in keys {
             let localized = Bundle.main.localizedString(forKey: key, value: missing, table: nil)
@@ -103,8 +103,8 @@ struct MacEditingCommandsTests {
     @Test @MainActor func `every mutating command is disabled while playback runs`() {
         let editor = PreviewEditorFactory.makeViewModel()
         editor.isPlaybackActive = true
-        let target = MacEditingTarget(editor: editor, host: ReaderEditingHost())
-        for command in MacEditingCommands.all where command.isMutating {
+        let target = AppCommandContext(editor: editor, host: ReaderEditingHost())
+        for command in AppCommandCatalog.all where command.isMutating {
             #expect(!command.isEnabled(target), "\(command.id)")
         }
     }
@@ -115,8 +115,8 @@ struct MacEditingCommandsTests {
     @Test @MainActor func `voice selection stays live while playback runs`() {
         let editor = PreviewEditorFactory.makeViewModel()
         editor.isPlaybackActive = true
-        let target = MacEditingTarget(editor: editor, host: ReaderEditingHost())
-        let voice = MacEditingCommands.all.first { $0.id == "notes.voice.1" }
+        let target = AppCommandContext(editor: editor, host: ReaderEditingHost())
+        let voice = AppCommandCatalog.all.first { $0.id == "notes.voice.1" }
         #expect(voice != nil)
         #expect(voice?.isMutating == false)
         #expect(voice.map { $0.isEnabled(target) } == true)

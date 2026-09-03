@@ -2,7 +2,7 @@ import Editor
 import SwiftUI
 
 /// Where a command lives in the menu bar (design §5.1).
-enum MacEditingMenu: CaseIterable {
+enum AppCommandMenu: CaseIterable {
     case file, edit, notes, measures, score
 }
 
@@ -10,8 +10,8 @@ enum MacEditingMenu: CaseIterable {
 ///
 /// Design §5.1 writes the Notes menu with `▸` groups — Accidental ▸, Duration ▸, Chord ▸, Tuplet ▸, Voice ▸ — and
 /// this is what makes the generated menu match: without it the Notes menu is one flat list of fifty rows. The
-/// grouping is presentation only; `MacEditingCommands.all` and the key map are unaffected by it.
-enum MacEditingSubmenu: String, CaseIterable {
+/// grouping is presentation only; `AppCommandCatalog.all` and the key map are unaffected by it.
+enum AppCommandSubmenu: String, CaseIterable {
     case pitch, duration, accidental, chord, tuplet, voice
 
     /// The submenu's own key in the App's `Localizable.xcstrings`.
@@ -26,25 +26,40 @@ enum MacEditingSubmenu: String, CaseIterable {
     }
 }
 
-/// One editing command, declared exactly once. `MacEditingMenus` turns the table into menu items and
-/// `MacEditingKeyMap` (the bench chose view-level delivery) into key equivalents; Ⅳb turns the same rows into
+/// The platform a command row is offered on. iPhone is `pad` too — it reaches the same rows through the search
+/// sheet, and no row is iPhone-specific.
+enum AppCommandPlatform: CaseIterable {
+    case mac, pad
+
+    /// The platform this build runs on.
+    static var current: AppCommandPlatform {
+        #if os(macOS)
+        .mac
+        #else
+        .pad
+        #endif
+    }
+}
+
+/// One editing command, declared exactly once. `AppCommandMenus` turns the table into menu items and
+/// `AppCommandKeyMap` (the bench chose view-level delivery) into key equivalents; Ⅳb turns the same rows into
 /// search results. Titles are keys in the App's `Localizable.xcstrings`.
-struct MacEditingCommand: Identifiable {
+struct AppCommand: Identifiable {
     let id: String
     /// The row's title as a key in the App's `Localizable.xcstrings` — stored as the key itself, not as a
-    /// `LocalizedStringKey`, so the table can be checked against the catalog (`MacEditingCommandsTests`) and so
+    /// `LocalizedStringKey`, so the table can be checked against the catalog (`AppCommandCatalogTests`) and so
     /// Ⅳb's search index can match on it.
     let titleKey: String
     var title: LocalizedStringKey {
         LocalizedStringKey(titleKey)
     }
 
-    let menu: MacEditingMenu
-    let submenu: MacEditingSubmenu?
+    let menu: AppCommandMenu
+    let submenu: AppCommandSubmenu?
     /// The key equivalent, if any. `isBareKey` says it carries no modifier — the case the bench (Task 1) decides the
     /// delivery of; modifier-bearing shortcuts always sit on the menu item.
     let key: KeyEquivalent?
-    /// Extra BARE keys that fire the same command, delivered by `MacEditingKeyMap` only — a menu item shows one
+    /// Extra BARE keys that fire the same command, delivered by `AppCommandKeyMap` only — a menu item shows one
     /// key equivalent and that is `key`. Design §6's `⌫ / ⌦` row is the whole reason this exists: the two are one
     /// command, and a second table row for the alias would put a duplicate "Delete" in the Notes menu.
     let alternateKeys: [KeyEquivalent]
@@ -61,15 +76,19 @@ struct MacEditingCommand: Identifiable {
 
     /// Whether the command changes the score. Every mutating command is inert while the transport runs (§6.2).
     let isMutating: Bool
-    let isEnabled: @MainActor @Sendable (MacEditingTarget) -> Bool
-    let perform: @MainActor @Sendable (MacEditingTarget) -> Void
+    /// The platforms this row is offered on. Defaults to both — most rows are shared; a platform-specific row
+    /// narrows this explicitly.
+    let platforms: Set<AppCommandPlatform>
+    let isEnabled: @MainActor @Sendable (AppCommandContext) -> Bool
+    let perform: @MainActor @Sendable (AppCommandContext) -> Void
 
     init(
-        _ id: String, _ titleKey: String, menu: MacEditingMenu, submenu: MacEditingSubmenu? = nil,
+        _ id: String, _ titleKey: String, menu: AppCommandMenu, submenu: AppCommandSubmenu? = nil,
         key: KeyEquivalent? = nil, alternateKeys: [KeyEquivalent] = [], modifiers: EventModifiers = [],
         mutating: Bool = true,
-        isEnabled: @escaping @MainActor @Sendable (MacEditingTarget) -> Bool = { _ in true },
-        perform: @escaping @MainActor @Sendable (MacEditingTarget) -> Void,
+        platforms: Set<AppCommandPlatform> = Set(AppCommandPlatform.allCases),
+        isEnabled: @escaping @MainActor @Sendable (AppCommandContext) -> Bool = { _ in true },
+        perform: @escaping @MainActor @Sendable (AppCommandContext) -> Void,
     ) {
         self.id = id
         self.titleKey = titleKey
@@ -79,12 +98,13 @@ struct MacEditingCommand: Identifiable {
         self.alternateKeys = alternateKeys
         self.modifiers = modifiers
         isMutating = mutating
+        self.platforms = platforms
         // A mutating command is disabled during playback before its own rule is consulted. Written as an `if`
         // rather than a ternary because a closure literal in a ternary is not inferred `@Sendable`, and the table
         // is a global constant, so every stored closure has to be.
         if mutating {
-            self.isEnabled = { @Sendable @MainActor target in
-                !target.editor.isPlaybackActive && isEnabled(target)
+            self.isEnabled = { @Sendable @MainActor context in
+                context.editor?.isPlaybackActive != true && isEnabled(context)
             }
         } else {
             self.isEnabled = isEnabled

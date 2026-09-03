@@ -113,7 +113,7 @@ struct FolinoMacApp: App {
         }
         .commands {
             MacCommands()
-            MacEditingMenus()
+            AppCommandMenus()
         }
         // **Measured, on the first launch anyone was able to observe.** `.defaultLaunchBehavior(.presented)` on the
         // library `Window` below is not enough on its own: a `WindowGroup` is the default launch scene because it is

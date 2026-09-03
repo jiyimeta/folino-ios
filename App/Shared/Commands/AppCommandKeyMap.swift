@@ -7,14 +7,14 @@ import SwiftUI
 /// Each button is `.disabled` exactly when its command is, so a key the editor cannot use is not swallowed here
 /// either; `perform` still re-checks, because a disabled control is a rendering fact and the guard is a
 /// correctness one.
-struct MacEditingKeyMap: View {
-    let target: MacEditingTarget
+struct AppCommandKeyMap: View {
+    let target: AppCommandContext
 
     /// One bare key, with the command it fires. A row can contribute more than one (design §6's `⌫ / ⌦`), and
     /// unwrapping the key here keeps a force-unwrap — or a fallback that would collide with the transport's Space —
     /// out of the body.
     private struct KeyBinding: Identifiable {
-        let command: MacEditingCommand
+        let command: AppCommand
         let key: KeyEquivalent
         var id: String {
             "\(command.id)/\(key.character)"
@@ -22,13 +22,13 @@ struct MacEditingKeyMap: View {
     }
 
     private var bindings: [KeyBinding] {
-        MacEditingCommands.all.flatMap { command in
+        AppCommandCatalog.all.flatMap { command in
             command.bareKeys.map { KeyBinding(command: command, key: $0) }
         }
     }
 
     var body: some View {
-        if MacEditingKeyDelivery.current == .viewLevel {
+        if AppCommandKeyDelivery.current == .viewLevel {
             ForEach(bindings) { binding in
                 Button("") {
                     if binding.command.isEnabled(target) {

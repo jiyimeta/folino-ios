@@ -4,39 +4,6 @@ import Reader
 import SwiftUI
 import UtilityCore
 
-/// What the menus act on: the editor behind the key score window, and the two confirmations the File menu's
-/// Revert To items arm. Published as a `focusedSceneValue` by every score window so `MacEditingMenus` reads the
-/// right editor when several score windows are open — and reads `nil` when none is key.
-///
-/// A class, and one instance per screen: the focused value has to be the SAME object on every body pass, or each
-/// pass republishes a new value and the menus rebuild for nothing. `MacEditableReaderScreen` holds it in `@State`
-/// and fills the two closures in `wireOnce()`.
-@MainActor
-final class MacEditingTarget {
-    let editor: EditorViewModel
-    let host: ReaderEditingHost
-    /// Called by File ▸ Revert To ▸ Last Opened; the screen owns the confirmation this arms.
-    var confirmDiscard: () -> Void = {}
-    /// Called by File ▸ Revert To ▸ Original; the screen owns the confirmation this arms.
-    var confirmRevert: () -> Void = {}
-
-    init(editor: EditorViewModel, host: ReaderEditingHost) {
-        self.editor = editor
-        self.host = host
-    }
-}
-
-private struct MacEditingTargetKey: FocusedValueKey {
-    typealias Value = MacEditingTarget
-}
-
-extension FocusedValues {
-    var macEditingTarget: MacEditingTarget? {
-        get { self[MacEditingTargetKey.self] }
-        set { self[MacEditingTargetKey.self] = newValue }
-    }
-}
-
 /// The Mac sibling of `App/iOS/EditableReaderScreen.swift`: one `ReaderEditingHost` + one `EditorViewModel` per
 /// score window, wired by the shared `wireEditingSeam`, handed into `MacReaderRootScreen`. No chrome builders — the
 /// Mac has no pad, no top strip and no cutout tier; its editing controls are the menu bar and the keyboard.
@@ -48,8 +15,8 @@ struct MacEditableReaderScreen: View {
     @State private var editingHost: ReaderEditingHost
     @State private var editorViewModel: EditorViewModel
     /// The focused value the menus read. Created here rather than computed in `body` so every pass publishes one
-    /// and the same object — see `MacEditingTarget`.
-    @State private var editingTarget: MacEditingTarget
+    /// and the same object — see `AppCommandContext`.
+    @State private var editingTarget: AppCommandContext
     @State private var isWired = false
     /// `true` once this window has opened an edit session at least once. Read only by `onDisappear`'s fallback
     /// unregister — see the comment there.
@@ -107,7 +74,7 @@ struct MacEditableReaderScreen: View {
         )
         _editingHost = State(wrappedValue: host)
         _editorViewModel = State(wrappedValue: viewModel)
-        _editingTarget = State(wrappedValue: MacEditingTarget(editor: viewModel, host: host))
+        _editingTarget = State(wrappedValue: AppCommandContext(editor: viewModel, host: host))
     }
 
     var body: some View {
@@ -131,11 +98,11 @@ struct MacEditableReaderScreen: View {
         // Bare-key delivery, shape B (the bench's provisional answer — see
         // `docs/superpowers/plans/2026-09-02-macos-edit-session-bench.md`): the letters and digits are view-level
         // `.keyboardShortcut`s inside this window's tree, so a focused text field in a sheet keeps the letter.
-        // Modifier-bearing shortcuts stay on the menu items, in `MacEditingMenus`.
-        .background(MacEditingKeyMap(target: editingTarget))
+        // Modifier-bearing shortcuts stay on the menu items, in `AppCommandMenus`.
+        .background(AppCommandKeyMap(target: editingTarget))
         // Scene-scoped, deliberately: a menu command must find the KEY WINDOW's editor whether or not the score
         // surface itself holds view focus.
-        .focusedSceneValue(\.macEditingTarget, editingTarget)
+        .focusedSceneValue(\.appCommandContext, editingTarget)
         .confirmationDialog(
             Text("mac.revert.lastOpened.title"),
             isPresented: $isConfirmingDiscard,
