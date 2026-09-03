@@ -1,4 +1,5 @@
-- Added creating a score from scratch
-- Added note entry for drum staves
-- Added rehearsal mark editing
-- Improved editing mode
+- Added reading of scanned PDF scores
+- Improved annotation
+- Added sharing a PDF with annotations
+- Added external keyboard support on iPad
+- Fixed minor issues

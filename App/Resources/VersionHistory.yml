@@ -1,3 +1,30 @@
+- version: 1.15.0
+  descriptions:
+    - en: Added reading of scanned PDF scores
+      ja: スキャンしたPDF楽譜の読み取りに対応
+      ko: 스캔한 PDF 악보 읽기 기능 추가
+      zh-Hans: 新增读取扫描版 PDF 乐谱的功能
+      zh-Hant: 新增讀取掃描版 PDF 樂譜的功能
+    - en: Improved annotation
+      ja: 書き込み機能の改善
+      ko: 필기 기능 개선
+      zh-Hans: 改进手写批注功能
+      zh-Hant: 改進手寫註記功能
+    - en: Added sharing a PDF with annotations
+      ja: 書き込み付きPDF共有機能を追加
+      ko: 필기가 포함된 PDF 공유 기능 추가
+      zh-Hans: 新增带批注 PDF 的分享功能
+      zh-Hant: 新增帶註記 PDF 的分享功能
+    - en: Added external keyboard support on iPad
+      ja: iPadで外付けキーボード操作に対応
+      ko: iPad 외장 키보드 조작 지원 추가
+      zh-Hans: 新增 iPad 外接键盘操作支持
+      zh-Hant: 新增 iPad 外接鍵盤操作支援
+    - en: Fixed minor issues
+      ja: 細かな不具合を修正
+      ko: 사소한 문제 수정
+      zh-Hans: 修复细微问题
+      zh-Hant: 修正細微問題
 - version: 1.14.0
   descriptions:
     - en: Added creating a score from scratch
