@@ -28,7 +28,7 @@ enum ScoreExportPlan: Equatable {
 /// modifier chain — the house rule from `UtilityUI/PlatformToolbarCompat.swift`, and the thing SwiftFormat's
 /// `--ifdef no-indent` fights when it is broken.
 ///
-/// **iOS presents the system share sheet; macOS presents a save panel.** Not a arbitrary difference: on iPhone the
+/// **iOS presents the system share sheet; macOS presents a save panel.** Not an arbitrary difference: on iPhone the
 /// share sheet *is* the filesystem — Mail, AirDrop and Messages are how a file leaves. On a Mac "put this where I
 /// said" is the primary act and Finder owns everything downstream, so routing a file through a sharing service to
 /// reach a folder is the long way round. Umbrella spec §8: capability does not vary by platform, placement does.
