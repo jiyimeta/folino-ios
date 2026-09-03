@@ -114,7 +114,13 @@ struct AppPathsTests {
 
 - [ ] **Step 3: Run the test and watch it fail**
 
-Run:
+`Tests/FolinoMacTests` is a directory-sourced XcodeGen target, so a new file is not in the test bundle until the project is regenerated. Without this the run fails with "no tests matched", which looks nothing like the assertion failure you are after:
+
+```
+xcodegen generate
+```
+
+Then:
 ```
 xcodebuild test -project Folino.xcodeproj -scheme FolinoMac -destination 'platform=macOS' -skipPackagePluginValidation -only-testing:FolinoMacTests/AppPathsTests
 ```
@@ -1122,9 +1128,10 @@ DERIVED="$(mktemp -d)"
 trap 'rm -rf "$DERIVED"' EXIT
 
 echo "==> building $APP_NAME"
+# `-target`, not `-scheme`: xcodebuild rejects the two together, and no scheme builds this target for the
+# `build` action (it is in the FolinoMac scheme's TEST targets only, as a compile-error canary).
 xcodebuild \
   -project Folino.xcodeproj \
-  -scheme FolinoMac \
   -target "$APP_NAME" \
   -destination 'platform=macOS' \
   -derivedDataPath "$DERIVED" \
