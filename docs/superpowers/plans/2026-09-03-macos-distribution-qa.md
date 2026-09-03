@@ -1,9 +1,35 @@
 # macOS distribution QA
 
-## 0. Blocker — the sandboxed app crashes ~3 seconds after every launch
+## 0a. The App Sandbox is currently switched OFF on `main`, on purpose
 
-**Every interactive item on this sheet is unrunnable until this is fixed. Read this section before working
-through the rest of the list, or you will spend time wondering why the app never shows a window.**
+This sub-project's work merged to `main` with **one line held back**: `CODE_SIGN_ENTITLEMENTS` in `project.yml`'s
+`FolinoMac` target is commented out, so the Mac app builds unsandboxed and **launches normally**. Everything else —
+the entitlements file, the export path, the fastlane lanes, the parity markers — is on `main` and live.
+
+That was a deliberate trade, made because §0b below would otherwise have put a Mac app that cannot launch on
+`main`, blocking every other macOS sub-project (the library chooser's own QA sheet, Ⅳb–Ⅳd) and zeroing the
+app-hosted `FolinoMacTests` suite for everyone.
+
+**Consequences while it is off, none of them subtle:**
+
+- `Scripts/check-macos-entitlements.sh` **fails by design** — three missing keys. The artifact genuinely has no
+  entitlements; the script is telling the truth. This is not a regression to chase.
+- **Sections 3–6 of this sheet cannot be run yet**, because they are about sandbox behavior. Sections 4 and 5 can
+  be *partly* exercised against the unsandboxed build (export still works), but they do not prove the sandboxed
+  case, which is the one that ships.
+- A Mac dev machine's previously downloaded high-quality SoundFont will appear to be missing once, and
+  re-download: `AppPaths.sharedContainer` now returns `nil` on macOS unconditionally, so SoundFonts resolve to
+  `~/Library/Application Support/Soundfonts` instead of the group container they were in. Expected, one time.
+
+**Turning it back on** is uncommenting that one line and running `xcodegen generate` — do it as soon as the pin in
+§0b moves, and then run this whole sheet.
+
+---
+
+## 0b. Blocker — with the sandbox ON, the app crashes ~3 seconds after every launch
+
+**This is why §0a is off.** Every sandbox item on this sheet is unrunnable until this is fixed. Read this section
+before working through the rest of the list, or you will spend time wondering why the app never shows a window.
 
 The sandboxed Mac app crashes on the unconditional startup path `AppBootstrap.start()` →
 `installAudioStack()` → `AudioStackFactory.make()` → `LivePlaybackController.init` → `PlaybackEngine.init` →
@@ -24,8 +50,8 @@ happens on every launch, not intermittently.
 locally registered `AudioComponent` must carry `kAudioComponentFlag_SandboxSafe` to be instantiable from a
 sandboxed host — the file's own comment ("all `AVAudioUnitEffect` needs") is true unsandboxed and false
 inside the sandbox. **This is not a defect of this sub-project.** The App Sandbox entitlements themselves
-(Section 3 below) are correct and pass `Scripts/check-macos-entitlements.sh`; they are simply not enough to
-make the app launch, because a separate, pinned dependency crashes first.
+(Section 3 below) are correct and were measured passing `Scripts/check-macos-entitlements.sh` while the switch in
+§0a was on; they are simply not enough to make the app launch, because a separate, pinned dependency crashes first.
 
 A one-line fix (`componentFlags: AudioComponentFlags.sandboxSafe.rawValue`) has been **requested of the
 session that owns `swift-sheet-music`**. **folino's `ssm` version pin is not to be moved ahead of that fix

@@ -5,6 +5,12 @@
 # CODE_SIGN_ENTITLEMENTS is a live risk. Without this gate it would surface at App Store upload — the slowest
 # possible place to find it.
 #
+# EXPECTED TO FAIL RIGHT NOW, AND THAT IS NOT A REGRESSION. The App Sandbox is deliberately switched off: the
+# CODE_SIGN_ENTITLEMENTS line in project.yml's FolinoMac target is commented out, because a sandboxed build crashes
+# at launch until swift-sheet-music ships a sandbox-safe SoftClipAudioUnit. The reasoning, and the one line that
+# turns it back on, are in project.yml beside that comment. This script will report three missing keys until then —
+# which is exactly what it should say about an artifact that genuinely has no entitlements.
+#
 # Run from anywhere; it locates the repo root relative to itself.
 set -euo pipefail
 
