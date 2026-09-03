@@ -1,8 +1,3 @@
-// PARITY(android): annotation-session strip — while annotating, Android's reader header still shows its reading
-//   controls. It owes the same row: ✕ / undo / redo leading, the display inspector and the session-end control
-//   trailing (state from the shared `AnnotationSessionEndMode.derive`), with share / info / note editing / the
-//   playback inspector hidden for the session, and ✕ restoring the ink the session began with.
-
 import Domain
 import ReaderAnnotationCore
 import SwiftUI

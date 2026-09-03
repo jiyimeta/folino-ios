@@ -179,3 +179,13 @@ public func nativeDecodeInkStroke(finkBytes: Data) -> Data {
     guard let stroke = try? InkStrokeCodec.decode(finkBytes) else { return Data() }
     return RawInkStrokeWire(InkStrokeRawFields(stroke)).encodeToData()
 }
+
+/// Which control ends an annotation session: 0 keep-and-leave, 1 keep-and-leave-emphasized, 2 delete-every-annotation
+/// — `AnnotationSessionEndMode.rawValue`. The only rule about it lives in that enum, and both readers ask it rather
+/// than each deciding: iOS calls `derive` in-process, Android calls it here.
+///
+/// Not a Data round trip because there is nothing to marshal — two flags in, one case out. Kotlin maps the raw value
+/// back in `ReaderAnnotationJNI.sessionEndMode`.
+public func nativeAnnotationSessionEndMode(sessionHasChanges: Bool, hasInk: Bool) -> Int32 {
+    AnnotationSessionEndMode.derive(sessionHasChanges: sessionHasChanges, hasInk: hasInk).rawValue
+}

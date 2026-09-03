@@ -12,11 +12,16 @@
 /// drop what you just did, not to be offered a rollback of everything.
 ///
 /// Platform-neutral so iOS and Android agree on which control they show; the Android strip derives its state from the
-/// same two inputs.
-public enum AnnotationSessionEndMode: Sendable, Equatable {
-    case commitUnchanged
-    case commitEdited
-    case clearAll
+/// same two inputs, calling `derive` across JNI (`nativeAnnotationSessionEndMode`) rather than re-deciding in Kotlin —
+/// three lines of branching are still one rule, and a second copy of it is a second thing to keep in step.
+///
+/// The `Int32` raw value exists for exactly that crossing, and for nothing else: jextract carries primitives, not
+/// Swift enums, so the bridge hands the raw value over and Kotlin maps it back (the same shape
+/// `TransportModeSwipeOutcome` already uses). The cases are ordered by that wire contract, so **never renumber them**.
+public enum AnnotationSessionEndMode: Int32, Sendable, Equatable {
+    case commitUnchanged = 0
+    case commitEdited = 1
+    case clearAll = 2
 
     public static func derive(sessionHasChanges: Bool, hasInk: Bool) -> Self {
         if sessionHasChanges {
