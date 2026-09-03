@@ -43,10 +43,25 @@ this sheet normally.
 
 1. **Enable the macOS platform on the App Store Connect record** (app id `6766994527`, `com.KeyNumber.Folino`).
    The Mac app shares the iOS record by design — that is what makes Ⅶ's purchase universal — but the macOS
-   platform has to be added to it before any `.pkg` will upload.
-2. **A Mac Installer Distribution certificate.** A Mac App Store `.pkg` is signed with a different certificate
-   from the app-signing one. Whether `-allowProvisioningUpdates` mints it automatically is UNVERIFIED; the first
-   `fastlane mac archive_and_upload` is what settles it. If it fails, create it in the Developer portal.
+   platform has to be added to it before any `.pkg` will upload. **Still unconfirmed**, and not answerable from
+   the API: `/v1/apps/6766994527/appStoreVersions` returns 20 versions, all `IOS`, which is equally consistent
+   with "macOS is enabled but has no version yet". Check the app's page in App Store Connect, or discover it at
+   the first upload.
+
+2. ~~**A Mac Installer Distribution certificate.**~~ **Resolved 2026-09-03 — it already exists and works.**
+   A full `xcodebuild archive` + `-exportArchive` (`method: app-store`, automatic signing,
+   `-allowProvisioningUpdates`, no upload) produced a 59 MB `folino.pkg`, and `pkgutil --check-signature` reports
+   it signed by **`3rd Party Mac Developer Installer: Kiichi Ito (944L8NCGUH)`**, expiring 2027-07-20, chaining to
+   Apple WWDR and the Apple Root CA. The export path is therefore proven end to end: signing, entitlements, and
+   the provisioning profile are all coherent for a Mac App Store package.
+
+   **Do not try to confirm this certificate with `security`** — it cannot see it, and the resulting false
+   negative is convincing. `security find-identity -v` defaults to the *codesigning* policy, which excludes
+   installer identities; `security find-certificate -c` matches the common-name **prefix**, so `-c "Installer"`
+   never matches `3rd Party Mac Developer Installer: …`; and the certificate does not appear in the enumerable
+   login keychain at all (Xcode keeps automatically-managed signing assets in a protected store). It also does
+   not appear in the App Store Connect API's `/v1/certificates` listing. The signed artifact is the only probe
+   that answers this question.
 
 ---
 
