@@ -897,7 +897,9 @@ Rows with no editor at all (Display Mode, search) are unaffected — the guard p
 rule `AppCommandContext`'s doc comment records), and publish
 `.focusedSceneValue(\.appCommandContext, commandContext)`.
 
-`FolinoApp`: add `.commands { AppCommandMenus() }` to the `WindowGroup`.
+`FolinoApp`: chain `.commands { AppCommandMenus() }` onto the **`Scene`** — after `WindowGroup { … }`'s closing
+brace, a sibling of it, not inside its trailing closure beside `.task` / `.onOpenURL`. `.commands` is a `Scene`
+modifier; nesting it fails with "value of type 'some View' has no member 'commands'" (measured in Task 1's bench).
 
 - [ ] **Step 5: Run the tests and build**
 
