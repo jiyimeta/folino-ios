@@ -12,8 +12,8 @@ extension ReaderLayoutMode {
     ///
     /// One definition rather than one per call site, because two call sites have to agree exactly:
     /// `MacReaderRootScreen` picks the container with it (and reports the same value as `currentLayoutMode`, so
-    /// analytics can never name a mode that is not on screen), and `MacCommands` resolves the View ▸ Display Mode
-    /// picker's selection with it.
+    /// analytics can never name a mode that is not on screen), and `AppCommandCatalog` (`App/Shared/Commands/
+    /// AppCommandCatalog+Shell.swift`) resolves the View ▸ Display Mode submenu's checkmark with it.
     public static func macDisplayMode(storedRawValue raw: String) -> ReaderLayoutMode {
         ReaderLayoutMode(rawValue: raw) ?? .page
     }

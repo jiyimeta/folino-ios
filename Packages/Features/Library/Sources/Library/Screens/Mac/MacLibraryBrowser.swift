@@ -110,7 +110,8 @@ public struct MacLibraryBrowser: View {
     /// **iOS's fourth item, Import, is deliberately absent.** It arms `viewModel.isFileImporterPresented`, and the
     /// `.fileImporter` that answers it lives on `LibraryRootScreen`, not in `libraryRootPresentations` — so the item
     /// would be a third silent no-op. The Mac already imports through File ▸ Import (⇧⌘I), which drives
-    /// `NSOpenPanel` directly; see `MacCommands.presentImportPanel`. A menu-bar command is the platform's own idiom.
+    /// `NSOpenPanel` directly; see `MacCommandContextWiring.presentImportPanel`. A menu-bar command is the
+    /// platform's own idiom.
     @ToolbarContentBuilder
     private var addMenuToolbarItem: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
@@ -270,8 +271,8 @@ public struct MacLibraryBrowser: View {
     }
 }
 
-/// Mirrors `ScoreImportContentTypes.isImportable` in `App/Mac/MacCommands.swift` — Library cannot import App, so the
-/// same filename-extension check against `ScoreFileTypes.allowed` is duplicated here rather than shared.
+/// Mirrors `ScoreImportContentTypes.isImportable` in `App/Mac/MacCommandContextWiring.swift` — Library cannot import
+/// App, so the same filename-extension check against `ScoreFileTypes.allowed` is duplicated here rather than shared.
 private func isImportableScoreURL(_ url: URL) -> Bool {
     guard let type = UTType(filenameExtension: url.pathExtension) else { return false }
     return ScoreFileTypes.allowed.contains { type.conforms(to: $0) }

@@ -112,8 +112,7 @@ struct FolinoMacApp: App {
             .task { startAppServices() }
         }
         .commands {
-            MacCommands()
-            MacEditingMenus()
+            AppCommandMenus()
         }
         // **Measured, on the first launch anyone was able to observe.** `.defaultLaunchBehavior(.presented)` on the
         // library `Window` below is not enough on its own: a `WindowGroup` is the default launch scene because it is
@@ -213,6 +212,14 @@ private struct MacLibraryWindowContent: View {
     let viewModel: LibraryViewModel
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
+    /// The library window has no editor, but File ▸ Show Library / Import still have to work while it is key — and
+    /// on a fresh launch with an empty library it is the only import route the app has at all. Created once (not
+    /// computed in `body`) so every pass publishes the same object — see `AppCommandContext`.
+    @State private var commandContext = AppCommandContext(editor: nil, host: nil)
+    /// Raised by the bare `Z` row while the library is key — spec §7's install table names this window (not
+    /// `MacShellView`'s transient empty-window branch) as the real "no score open" surface, since a score window
+    /// never shows an empty state for longer than one main-actor hop.
+    @State private var isSearching = false
 
     var body: some View {
         MacLibraryBrowser(
@@ -227,11 +234,25 @@ private struct MacLibraryWindowContent: View {
         )
         // §2.9.2 — the library is summoned *over* the score window, on the same Space, full screen included.
         .background(MacLibraryWindowPresentation())
-            // The browser has no file importer of its own, so File ▸ Import is the *only* import route while this
-            // window is key — and on a fresh launch with an empty library it is the only import route the app has
-            // at all. `@FocusedValue` follows scene focus, so a score window publishing this does nothing for the
-            // browser; the browser has to publish its own.
-            .focusedSceneValue(\.macLibraryImportAction) { url in await viewModel.startImport(from: url) }
+            // `@FocusedValue` follows scene focus, so a score window publishing `appCommandContext` does nothing
+            // for the browser; the browser has to publish its own.
+            .focusedSceneValue(\.appCommandContext, commandContext)
+            // Bare-key delivery for this window too (design note in `AppCommandKeyMap`) — though the only row that
+            // actually reaches this map is `app.search`, since it's the sole BARE-key row that needs no editor.
+            // Plenty more rows are enabled with no editor here, just not through this map: Show Library, Import,
+            // and all three Display Mode rows are non-mutating and editor-independent too, so `AppCommandMenus`
+            // shows all five live — they just carry modifier-bearing shortcuts (or none at all), not a bare key.
+            .background(AppCommandKeyMap(target: commandContext))
+            .sheet(isPresented: $isSearching) {
+                CommandSearchSheet(context: commandContext, isPresented: $isSearching)
+            }
+            .onAppear {
+                commandContext.showLibrary = { openWindow(id: MacWindowID.library) }
+                commandContext.importScore = {
+                    MacCommandContextWiring.presentImportPanel { url in await viewModel.startImport(from: url) }
+                }
+                commandContext.presentSearch = { isSearching = true }
+            }
             .opensImportedScores(from: viewModel)
     }
 

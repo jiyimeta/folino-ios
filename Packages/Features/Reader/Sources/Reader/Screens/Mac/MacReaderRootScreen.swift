@@ -160,8 +160,8 @@ public struct MacReaderRootScreen: View {
         .toolbar {
             // PARITY(macos): File ▸ Export… — export is reachable from this toolbar and from the library rows, but
             //   not from the menu bar, which is its Mac-idiomatic home. The command belongs in
-            //   `App/Mac/MacCommands.swift`, a file a parallel session was rewriting when Ⅷ landed. Placement, not
-            //   capability.
+            //   `App/Shared/Commands/AppCommandCatalog.swift` now (was `App/Mac/MacCommands.swift`, deleted when
+            //   Ⅳb generalized it into the cross-platform command registry). Placement, not capability.
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     ShareFormatMenuItems(

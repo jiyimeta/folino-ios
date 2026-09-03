@@ -21,8 +21,15 @@ struct EditableReaderScreen: View {
     /// not one combined, type-erased view.
     typealias CutoutTierBuilder = (ReaderEditingChromeContext) -> ReaderEditingCutoutTierContent
 
-    @State private var editingHost = ReaderEditingHost()
+    @State private var editingHost: ReaderEditingHost
     @State private var editorViewModel: EditorViewModel
+    /// The focused value the iPad menu bar reads (Ⅳb §3, Task 6). Built once — not computed in `body` — so every
+    /// pass publishes the same object; see `AppCommandContext`'s doc comment for why a rebuilt instance would make
+    /// the menus rebuild for nothing.
+    @State private var commandContext: AppCommandContext
+    /// Raised by the bare `Z` row (`AppCommandContext.presentSearch`, filled in `wireOnce()`) — the same mechanism
+    /// `MacEditableReaderScreen` uses.
+    @State private var isSearching = false
     @State private var isWired = false
     @Environment(\.scenePhase) private var scenePhase
     /// Second `ChromeBuilder` is the top-strip row; the first is the pad overlay. `CutoutTierBuilder` is next, and the
@@ -65,7 +72,11 @@ struct EditableReaderScreen: View {
             ReaderEditingHost, @escaping ChromeBuilder, @escaping ChromeBuilder, @escaping CutoutTierBuilder, Bool,
         ) -> ReaderRootScreen,
     ) {
-        _editorViewModel = State(wrappedValue: EditorViewModel(
+        // Built as locals first so `editingHost`, `editorViewModel` and `commandContext` can all be seeded with the
+        // very same instances — the context has to name the objects the menu bar's enablement rule reads (same
+        // reason `MacEditableReaderScreen.init` does this).
+        let host = ReaderEditingHost()
+        let viewModel = EditorViewModel(
             scoreItem: item,
             scoresDirectory: scoresDirectory,
             gateway: gateway,
@@ -74,7 +85,10 @@ struct EditableReaderScreen: View {
             historyStore: historyStore,
             playback: playbackController,
             annotationStore: annotationStore,
-        ))
+        )
+        _editingHost = State(wrappedValue: host)
+        _editorViewModel = State(wrappedValue: viewModel)
+        _commandContext = State(wrappedValue: AppCommandContext(editor: viewModel, host: host))
         self.repository = repository
         self.analytics = analytics
         self.startInEditMode = startInEditMode
@@ -124,6 +138,18 @@ struct EditableReaderScreen: View {
             )
         }, startInEditMode)
             .onAppear { wireOnce() }
+            // Mounted unconditionally, not gated on `editingHost.isEditing`: every row's own `isEnabled` already
+            // carries that gate on iOS (`AppCommand.init`'s `requiresEditor` branch, Task 6), and `AppCommandKeyMap`
+            // disables each button to match — a second, `isEditing`-gated mount would just duplicate a check the
+            // catalog already makes. `AppCommandCatalogTests` pins this: an editing row's bare key stays disabled
+            // outside a session, and `app.search`'s `Z` (which needs no editor) stays enabled throughout.
+            .background { AppCommandKeyMap(target: commandContext) }
+            .sheet(isPresented: $isSearching) {
+                CommandSearchSheet(context: commandContext, isPresented: $isSearching)
+            }
+            // Scene-scoped, matching the Mac's own publication (`MacEditableReaderScreen`): a menu command has to
+            // find the key window's editor whether or not the score surface itself holds view focus.
+            .focusedSceneValue(\.appCommandContext, commandContext)
             // The Reader owns the transport; the Editor only needs to know whether it's running, so the pad can go
             // inert while the cursor moves. Mirrored here because neither feature imports the other.
             .onChange(of: editingHost.isPlaying, initial: true) { _, isPlaying in
@@ -145,5 +171,21 @@ struct EditableReaderScreen: View {
         guard !isWired else { return }
         isWired = true
         wireEditingSeam(host: editingHost, viewModel: editorViewModel, repository: repository, analytics: analytics)
+        // A binding, not `self`: a closure that captured this view whole would capture `_commandContext`'s own
+        // State box with it, and the context — which holds the closure — would then keep itself, the editor and
+        // the host alive for the life of the process (same reasoning as `MacEditableReaderScreen.wireOnce`).
+        let searching = $isSearching
+        commandContext.presentSearch = { searching.wrappedValue = true }
+        // File ▸ Revert To ×2 (final review F1): the iOS chrome already owns this confirmation — `EditorDiscardButton`
+        // / `EditorSessionEndButton` (mounted by the cutout tier, or by `EditorTopBarView`'s expanded row as
+        // `endGroup`) and `EditorTopBarView`'s folded row (`overflowMenu.revertMenuRow`, presented by
+        // `revertConfirmationPopover(on:)` in `EditorTopBarView+SessionEnd.swift`) all raise the same popover by
+        // setting these same two `EditorViewModel` flags. Setting them here from the menu bar reaches whichever one
+        // is actually in the tree, the same way `AppCommandKeyMap`'s bare keys reach a view-level control instead of
+        // duplicating it. A local copy of the class reference, not `self`, for the same reason `searching` above is a
+        // binding and not `self`.
+        let viewModel = editorViewModel
+        commandContext.confirmDiscard = { viewModel.isConfirmingDiscard = true }
+        commandContext.confirmRevert = { viewModel.isConfirmingRevert = true }
     }
 }

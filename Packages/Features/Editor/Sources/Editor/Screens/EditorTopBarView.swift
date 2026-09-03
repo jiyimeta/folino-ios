@@ -130,8 +130,8 @@ public struct EditorTopBarView: View {
             case .folded:
                 HStack(spacing: 12) {
                     trailingAccessory
-                    overflowMenu
-                        .interactiveGlassCompat()
+                    // See `EditorTopBarView+SessionEnd.swift`: `endGroup` isn't mounted in this branch.
+                    revertConfirmationPopover(on: overflowMenu.interactiveGlassCompat())
                 }
             }
         }

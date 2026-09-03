@@ -45,7 +45,8 @@ struct MacTransportBar: View {
 
     /// Play/pause, and the space bar's only vehicle.
     ///
-    /// **`.keyboardShortcut` on this button rather than a `MacCommands` menu item, and that is a measured choice.**
+    /// **`.keyboardShortcut` on this button rather than an `AppCommandMenus` menu item, and that is a measured
+    /// choice.**
     /// An `NSMenuItem` whose key equivalent is an unmodified Space steals the key outright: with an editable field's
     /// field editor as the key window's first responder, `NSMenu.performKeyEquivalent(with:)` still returns `true`
     /// and still fires the item — AppKit has no text-field exemption, so File ▸ … ▸ Play would swallow every space
