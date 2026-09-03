@@ -86,3 +86,31 @@ state, the filter is wrong, not the app.
    it goes in.
 2. **Nothing in Section A has been observed by a machine.** Every §2.9 rule is about windows, Spaces and tabs;
    the gates prove only that nothing regressed. Section A is the acceptance condition.
+
+## Section F — why open-as-tab is built the way it is
+
+**Hand-verified 2026-09-03**: opening a second score into an existing score window keeps that window's position and
+size, shows no flash of a separate window, and — with the host in full screen — leaves no empty black full-screen
+Space behind. Both windowed and full screen were checked.
+
+It reads as one clean step, but it is two: the join perturbs the new window's geometry and a correction puts it
+back. What makes the correction invisible is that **the new tab is not selected until after it lands**. A tab group
+renders at its selected tab's geometry, so while the newcomer is unselected the group keeps showing the host at the
+host's own frame. **If you move that selection earlier, the window visibly jumps** — that was measured twice before
+the current arrangement was found. The selection at the end of `MacWindowTabAssist.restoreHostGeometry` is
+load-bearing; treat it as part of the mechanism, not as a tidy-up.
+
+Four alternatives were measured and rejected on the way; do not re-run them (full reasoning is on
+`restoreHostGeometry`):
+
+| Attempt | Result |
+| --- | --- |
+| `setFrame` before `addTabbedWindow` | No trace — the join aligns the newcomer's top-left to the host's and keeps its own size, discarding the write. |
+| `.defaultWindowPlacement` on the score `WindowGroup` (macOS 15) | Correct size at birth, but the join then grows the window by the tab bar's height and the position ends up wrong and STAYS wrong — worse, because nothing corrects it. |
+| `NSWindowController.shouldCascadeWindows = false` | No effect. The controller is real and per-window, so this is not the single-controller trap `christiantietze.de` documents — its prescribed 1:1 fix is already in place. |
+| `NSWindowTabGroup.addWindow` instead of `addTabbedWindow` | Identical behavior. |
+
+**If a future macOS changes the timing and the jump comes back**, the structural fix is to stop letting SwiftUI mint
+the window — a hand-built `NSWindowController` + `NSHostingController` for the second and later tabs — which removes
+the race instead of hiding it, at the cost of re-implementing `WindowGroup(for:)`'s value dedupe (§2.3's "opening an
+already-open score brings its window forward"), scene restoration, and the `focusedSceneValue` menu wiring.
