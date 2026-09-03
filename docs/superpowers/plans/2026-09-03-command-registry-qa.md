@@ -4,10 +4,18 @@ Plan: [`2026-09-03-command-registry.md`](2026-09-03-command-registry.md). Spec:
 [`2026-09-03-command-registry-design.md`](../specs/2026-09-03-command-registry-design.md). Bench:
 [`2026-09-03-command-registry-bench.md`](2026-09-03-command-registry-bench.md).
 
-One item per acceptance condition. Each records **Observed** or **Not observed**; the sheet ships with
-everything not already observed left that way — no item is marked Observed without the evidence that earned it.
-Items marked ★ are the ones no build gate can check; all macOS/iPadOS items in this sheet are ★, since the gate
-(below) is table-property tests and app/package builds, not UI.
+One item per acceptance condition. Each records **Observed** or **Not observed**; no item is marked Observed
+without the evidence that earned it. Items marked ★ are the ones no build gate can check; all macOS/iPadOS items
+in this sheet are ★, since the gate (below) is table-property tests and app/package builds, not UI.
+
+> **All 12 items were run by the user on 2026-09-04**, on both apps freshly built from `2cf02198` (process start
+> time checked against the binary's mtime first — an earlier pass had been run against a three-hour-old build, and
+> that is the only way to catch it). **Eleven passed on the first run. Item 2 failed** — the score's layout changed
+> correctly but the Display Mode checkmark never moved, on macOS and iPadOS alike — and was fixed in `2cf02198`
+> (the menu now observes the stored value through `@AppStorage`; a plain `UserDefaults` read is invisible to
+> SwiftUI, so nothing re-evaluated the menu). **Item 2 was then re-run and passed.** The two tests added with that
+> fix pin which raw value maps to which row; they cannot pin that SwiftUI re-evaluates the menu, which is why this
+> item stays ★.
 
 **What the built thing actually is, so the steps below match it and not the plan's first sketch:**
 
@@ -29,23 +37,23 @@ Items marked ★ are the ones no build gate can check; all macOS/iPadOS items in
 
 | # | Steps and what to look for | Status |
 | --- | --- | --- |
-| 1 | Open a score window. **File**: after Save, a "Revert To" submenu (Last Opened / Original); after New, top-level "Show Library" (⌘O) and "Import…" (⇧⌘I) rows. **Edit**: after Undo/Redo, a divider then the note-editing rows. **Notes / Measures / Score**: each its own menu, with the same `▸`-grouped rows (Pitch, Duration, Accidental, Chord, Tuplet, Voice, …) as before Ⅳb. **View**: before the system's Toolbar item, a "Display Mode" **submenu** (Page / Vertical / Horizontal) then a divider then a top-level "Find Command…" row. Nothing that was reachable before Ⅳb is missing or silently moved to a different menu. | Not observed ★ |
-| 2 | View ▸ Display Mode ▸ Page, then Vertical, then Horizontal. After each pick, reopen View ▸ Display Mode: the row matching the mode actually on screen shows a checkmark and the other two don't. | Not observed ★ |
-| 3 | File ▸ Show Library opens (or raises) the library window. File ▸ Import opens the native `NSOpenPanel`; importing a file through it succeeds the same way it did before Ⅳb. | Not observed ★ |
-| 4 | With a score window key, press `Z` (no modifier): the command search sheet appears (a plain `.sheet`, not a floating panel). Type to filter; press `Return`: the top result runs and the sheet closes. Reopen with `Z`; press `Esc`: the sheet closes with nothing run. A click on a row also runs it. | Not observed ★ |
-| 5 | Start playback (`Space`). Open Notes / Measures / Edit: every mutating row is greyed (Display Mode and Find Command stay enabled — both are non-mutating). Open the sheet (`Z`): the same mutating rows appear greyed in the list and a click on one does nothing. Stop playback: the rows re-enable in both the menu bar and the sheet. | Not observed ★ |
-| 6 | Open a rehearsal-mark text field (Measures ▸ Rehearsal Mark…). With the field focused, type a bare letter that collides with a Notes bare-key command (e.g. `c`, a pitch letter). The letter lands in the field as text; no note is written and no command fires. | Not observed ★ |
+| 1 | Open a score window. **File**: after Save, a "Revert To" submenu (Last Opened / Original); after New, top-level "Show Library" (⌘O) and "Import…" (⇧⌘I) rows. **Edit**: after Undo/Redo, a divider then the note-editing rows. **Notes / Measures / Score**: each its own menu, with the same `▸`-grouped rows (Pitch, Duration, Accidental, Chord, Tuplet, Voice, …) as before Ⅳb. **View**: before the system's Toolbar item, a "Display Mode" **submenu** (Page / Vertical / Horizontal) then a divider then a top-level "Find Command…" row. Nothing that was reachable before Ⅳb is missing or silently moved to a different menu. | Observed ✓ |
+| 2 | View ▸ Display Mode ▸ Page, then Vertical, then Horizontal. After each pick, reopen View ▸ Display Mode: the row matching the mode actually on screen shows a checkmark and the other two don't. | Observed ✓ |
+| 3 | File ▸ Show Library opens (or raises) the library window. File ▸ Import opens the native `NSOpenPanel`; importing a file through it succeeds the same way it did before Ⅳb. | Observed ✓ |
+| 4 | With a score window key, press `Z` (no modifier): the command search sheet appears (a plain `.sheet`, not a floating panel). Type to filter; press `Return`: the top result runs and the sheet closes. Reopen with `Z`; press `Esc`: the sheet closes with nothing run. A click on a row also runs it. | Observed ✓ |
+| 5 | Start playback (`Space`). Open Notes / Measures / Edit: every mutating row is greyed (Display Mode and Find Command stay enabled — both are non-mutating). Open the sheet (`Z`): the same mutating rows appear greyed in the list and a click on one does nothing. Stop playback: the rows re-enable in both the menu bar and the sheet. | Observed ✓ |
+| 6 | Open a rehearsal-mark text field (Measures ▸ Rehearsal Mark…). With the field focused, type a bare letter that collides with a Notes bare-key command (e.g. `c`, a pitch letter). The letter lands in the field as text; no note is written and no command fires. | Observed ✓ |
 
 ## iPadOS 26
 
 | # | Steps and what to look for | Status |
 | --- | --- | --- |
-| 7 | With a hardware keyboard connected on the iPadOS 26.5 simulator (or device) and a score on screen, reveal the system menu bar: File, Edit, Notes, Measures, Score and View all appear, populated the same way as the macOS items above. | Not observed ★ — see evidence note below |
-| 8 | Open a score for **reading** (no edit session started). The Notes / Measures / Score rows are visible in the menu bar but greyed; Display Mode and Find Command stay live. Enter an edit session: the same rows become enabled without closing and reopening the menu. | Not observed ★ |
-| 9 | With a hardware keyboard and a score on screen, press bare `Z` (no modifier): the command search sheet is presented. | Not observed ★ — see evidence note below |
-| 10 | In an edit session, with a note selected and a hardware keyboard connected, type MuseScore letters (`c d e f g a b`) and duration digits (`1`–`7`): notes are written the same way they are on the Mac. | Not observed ★ |
-| 11 | Focus the library's search field and type a letter that also matches a bare-key command (e.g. `z`, or a duration digit). The letter lands in the search field; no command fires. | Not observed ★ — see evidence note below |
-| 12 | Boot an 18.6 iPad simulator (below the iOS 26 menu-bar floor). Launch the app: it launches normally, no crash, and existing hardware-keyboard behavior is unaffected — except that, per spec §8's "second, smaller risk," a connected hardware keyboard's ⌘-hold HUD may now additionally list the app's key commands, which is a new but expected surface, not a regression. | Not observed ★ |
+| 7 | With a hardware keyboard connected on the iPadOS 26.5 simulator (or device) and a score on screen, reveal the system menu bar: File, Edit, Notes, Measures, Score and View all appear, populated the same way as the macOS items above. | Observed ✓ — see evidence note below |
+| 8 | Open a score for **reading** (no edit session started). The Notes / Measures / Score rows are visible in the menu bar but greyed; Display Mode and Find Command stay live. Enter an edit session: the same rows become enabled without closing and reopening the menu. | Observed ✓ |
+| 9 | With a hardware keyboard and a score on screen, press bare `Z` (no modifier): the command search sheet is presented. | Observed ✓ — see evidence note below |
+| 10 | In an edit session, with a note selected and a hardware keyboard connected, type MuseScore letters (`c d e f g a b`) and duration digits (`1`–`7`): notes are written the same way they are on the Mac. | Observed ✓ |
+| 11 | Focus the library's search field and type a letter that also matches a bare-key command (e.g. `z`, or a duration digit). The letter lands in the search field; no command fires. | Observed ✓ — see evidence note below |
+| 12 | Boot an 18.6 iPad simulator (below the iOS 26 menu-bar floor). Launch the app: it launches normally, no crash, and existing hardware-keyboard behavior is unaffected — except that, per spec §8's "second, smaller risk," a connected hardware keyboard's ⌘-hold HUD may now additionally list the app's key commands, which is a new but expected surface, not a regression. | Observed ✓ |
 
 ### Evidence already in hand (from Task 1's bench, `iPad-Bench-26`, iOS 26.5 simulator, human-observed 2026-09-03) — items 7, 9, 11 above are graded against it rather than shipped fully blank
 
