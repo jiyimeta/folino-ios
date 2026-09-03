@@ -1,3 +1,7 @@
+// PARITY(macos): Finder document types — `.mscz` double-click and Open With do not reach folino; the open panel
+//   below is the only import route. Needs `CFBundleDocumentTypes` in `App/Mac/Info.plist` plus an open handler in
+//   the scene layer, which is why Ⅷ left it alone: that layer was being rewritten concurrently.
+
 import AppKit
 import Domain
 import Library

@@ -360,9 +360,7 @@ public struct ReaderRootScreen: View {
             EditScoreInfoSheet(model: viewModel, item: viewModel.scoreItem)
                 .onAppear { viewModel.analytics.logScreen(.scoreInfo) }
         }
-        .sheet(item: $viewModel.shareTarget) { target in
-            ActivityViewControllerRepresentable(items: target.urls)
-        }
+        .scoreExportPresentation(target: $viewModel.shareTarget)
         // The compact-width half of the inspectors: at this width a popover adapts to a sheet anyway, so nothing is
         // lost by presenting it from here — and the strip's buttons stay bare `Button`s, which is what lets them
         // survive being moved into the overflow menu.

@@ -1,6 +1,3 @@
-// PARITY(macos): system share sheet — macOS needs an NSSharingServicePicker equivalent, wired into
-//   ScoreShareTarget's call sites.
-
 #if os(iOS)
 import SwiftUI
 import UIKit
