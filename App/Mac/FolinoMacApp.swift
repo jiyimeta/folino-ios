@@ -216,6 +216,10 @@ private struct MacLibraryWindowContent: View {
     /// on a fresh launch with an empty library it is the only import route the app has at all. Created once (not
     /// computed in `body`) so every pass publishes the same object — see `AppCommandContext`.
     @State private var commandContext = AppCommandContext(editor: nil, host: nil)
+    /// Raised by the bare `Z` row while the library is key — spec §7's install table names this window (not
+    /// `MacShellView`'s transient empty-window branch) as the real "no score open" surface, since a score window
+    /// never shows an empty state for longer than one main-actor hop.
+    @State private var isSearching = false
 
     var body: some View {
         MacLibraryBrowser(
@@ -233,11 +237,18 @@ private struct MacLibraryWindowContent: View {
             // `@FocusedValue` follows scene focus, so a score window publishing `appCommandContext` does nothing
             // for the browser; the browser has to publish its own.
             .focusedSceneValue(\.appCommandContext, commandContext)
+            // Bare-key delivery for this window too (design note in `AppCommandKeyMap`) — with no editor, only the
+            // non-mutating, editor-independent rows (today: just `app.search`) can ever be enabled here.
+            .background(AppCommandKeyMap(target: commandContext))
+            .sheet(isPresented: $isSearching) {
+                CommandSearchSheet(context: commandContext, isPresented: $isSearching)
+            }
             .onAppear {
                 commandContext.showLibrary = { openWindow(id: MacWindowID.library) }
                 commandContext.importScore = {
                     MacCommandContextWiring.presentImportPanel { url in await viewModel.startImport(from: url) }
                 }
+                commandContext.presentSearch = { isSearching = true }
             }
             .opensImportedScores(from: viewModel)
     }

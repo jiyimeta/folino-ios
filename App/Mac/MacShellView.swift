@@ -33,8 +33,9 @@ struct MacShellView: View {
     /// mutually exclusive, so this and `MacEditableReaderScreen`'s `editingTarget` are never both live for the same
     /// scene at once.
     @State private var libraryOnlyContext = AppCommandContext(editor: nil, host: nil)
-    /// Raised by the bare `Z` row while this window is showing no score (§2.9.4) — `libraryOnlyContext.presentSearch`
-    /// is filled below, alongside `showLibrary` / `importScore`.
+    /// Raised by the bare `Z` row during this branch's brief life (§2.9.4) — `libraryOnlyContext.presentSearch` is
+    /// filled below, alongside `showLibrary` / `importScore`. Not the real "no score open" surface; see the comment
+    /// on the `.sheet` below.
     @State private var isSearching = false
 
     /// The one adapter this view reads itself, unwrapped once in `init` (see the guard there for why it is
@@ -151,6 +152,8 @@ struct MacShellView: View {
             // rows are loaded by the time `openScoreItem` is asked, and a `nil` here means genuinely absent.
             Color.clear
                 .focusedSceneValue(\.appCommandContext, libraryOnlyContext)
+                // Kept for completeness, but this is NOT the real "no score open" surface `Z` has to reach — this
+                // branch dismisses itself one main-actor hop below, so the library window is where that case lives.
                 .sheet(isPresented: $isSearching) {
                     CommandSearchSheet(context: libraryOnlyContext, isPresented: $isSearching)
                 }
