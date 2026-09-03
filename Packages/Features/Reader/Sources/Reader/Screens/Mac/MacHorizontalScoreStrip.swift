@@ -1,6 +1,5 @@
-// PARITY(macos): horizontal mode's hosted subtree — the strip draws the staves and the committed ink and nothing
-//   over them. This is the layer where the live annotation canvas and the note-editing overlay would mount, as
-//   they do in the iOS `HorizontalZoomedSurface`; see `MacHorizontalScoreContainer`.
+// PARITY(macos): horizontal mode's live annotation canvas — the strip draws the staves, the committed ink, the
+//   selection and the caret; the live canvas the iOS `HorizontalZoomedSurface` mounts here is Ⅴ's.
 
 #if os(macOS)
 import Domain
@@ -20,24 +19,23 @@ struct MacHorizontalScoreStrip: View {
     let document: LayoutDocument?
     let score: Score
     let scoreOptions: ScoreViewOptions
-    /// Read ONLY inside the click handler, never in `body` — see `tapSeekGesture`. A gesture action runs outside
-    /// SwiftUI's observation tracking, so touching it there registers no dependency and no scroll frame reaches the
-    /// engraving through it.
-    let viewportState: MacScoreViewportState
-
-    /// The name the click-to-seek gesture reads its location in: the un-padded `ScoreView` frame, which is the
-    /// `LayoutDocument`'s own coordinate space.
-    private static let coordinateSpace = "macHorizontalStrip"
+    /// The note-editing seam. Read INSIDE `body` (never handed down as a value), because the strip is the
+    /// `NSHostingView`'s root and is rebuilt only when the container bumps `layoutGeneration` — a body read of this
+    /// `@Observable` object is what registers the dependency that redraws the strip when the selection moves.
+    let editingHost: ReaderEditingHost?
 
     var body: some View {
         if let document {
             ZStack(alignment: .topLeading) {
                 ScoreView(
                     document: document, score: score, options: scoreOptions,
+                    // `displaySelection`, not `selection`: the editor addresses the unfiltered score, this document is
+                    // laid out from the staff-filtered one. See `ReaderEditingHost.displayItem(for:)`.
+                    selection: editingHost?.isEditing == true ? (editingHost?.displaySelection ?? .none) : .none,
+                    voiceColors: ReaderEditingPresentation.voiceColors,
                     // The only cursor read in the hosted tree, and the reason `state.cursor` exists.
                     playbackCursor: state.cursor, playbackCursorColor: .accentColor.opacity(0.6),
                 )
-                .gesture(tapSeekGesture(document: document))
 
                 // Committed ink over the notation, banded to the column the window shows. Its own view so that a
                 // scroll past a column boundary invalidates this leaf and not the engraving beside it.
@@ -51,8 +49,13 @@ struct MacHorizontalScoreStrip: View {
                         end: viewModel.repeatModel.pendingRepeatB,
                     )
                 }
+
+                // Last in the stack — over `ScoreView`, which paints itself opaque white. The caret blends
+                // (`EditingSelectionOverlay`), it does not sit on top by z-order.
+                if let host = editingHost, host.isEditing {
+                    EditingSelectionOverlay(host: host, score: score, document: document)
+                }
             }
-            .coordinateSpace(name: Self.coordinateSpace)
             .frame(width: document.size.width, height: document.size.height, alignment: .topLeading)
             .padding(MacHorizontalMetrics.contentInset)
             // The strip's paper runs edge to edge inside the scroll view, so AppKit's overlay scroller rides on white
@@ -68,40 +71,6 @@ struct MacHorizontalScoreStrip: View {
                 .controlSize(.large)
                 .padding(80)
         }
-    }
-
-    /// Click-to-seek, in the document's own space.
-    ///
-    /// **Clicks that land under the sticky pane are rejected, and that is a correctness rule rather than a polish
-    /// one.** The pane is `allowsHitTesting(false)` — deliberately, so it can never swallow a scroll — which means a
-    /// click on it falls straight through to the music it is covering, and that music is by definition scrolled
-    /// past: clicking the frozen part labels would seek to a measure the reader cannot see. Guarding here rather
-    /// than trying to swallow the click on the pane keeps the fix independent of how AppKit and SwiftUI order hit
-    /// testing between a representable and the SwiftUI siblings drawn over it.
-    ///
-    /// The covered span is `[scoreScrollX, stickyTrailingX]` — the same trailing edge that drives which measure the
-    /// pane displays, so the guard and the pane can never disagree about where the pane ends. This mirrors
-    /// `MacPageScoreLayer`'s guard against clicks on the blank paper below a sheet's last system: a named coordinate
-    /// space is wider than what the reader can act on, and the gesture is where that gets reconciled.
-    private func tapSeekGesture(document: LayoutDocument) -> some Gesture {
-        SpatialTapGesture(coordinateSpace: .named(Self.coordinateSpace))
-            .onEnded { value in
-                guard !isUnderStickyPane(documentX: value.location.x, document: document) else { return }
-                guard let cursor = nearestCursor(at: value.location, in: document) else { return }
-                viewModel.playbackSession.setManualCursor(cursor)
-            }
-    }
-
-    /// Whether `documentX` is hidden behind the sticky pane at the current scroll offset. False whenever the pane is
-    /// not on screen, which is every scroll position before the score's own bracket reaches the leading edge.
-    private func isUnderStickyPane(documentX: CGFloat, document: LayoutDocument) -> Bool {
-        guard !state.measureContexts.isEmpty else { return false }
-        let geometry = MacStickyPaneGeometry(document: document, scrollX: viewportState.scroll.x)
-        guard geometry.isVisible else { return false }
-        return documentX < document.stickyTrailingX(
-            scoreScrollX: geometry.scoreScrollX,
-            measureContexts: state.measureContexts,
-        )
     }
 }
 

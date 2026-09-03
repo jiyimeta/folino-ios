@@ -1,6 +1,9 @@
-// PARITY(macos): page mode's note-editing subtree — the Mac's equivalent is `MacPageDeck`, which draws the same
-//   engraved page and the same committed ink but hosts no editing chrome. The selection overlay and tap routing
-//   here are the half of `PagedScoreContainer`'s debt that lives at this layer; Ⅳ closes it.
+// PARITY(macos): page mode's note-editing subtree — the selection overlay and tap routing here are the half of
+//   `PagedScoreContainer`'s debt that lives at this layer.
+//
+//   Revised 2026-09-02 during implementation: The Mac sibling (`MacPageScoreLayer`) carries the same selection
+//   tint, tap routing and caret. Not on the Mac, by design (`2026-09-02-macos-edit-session-design.md` §4.4): the
+//   floating pitch callout (`SelectionCalloutLayer`) — the keyboard is its replacement.
 
 #if os(iOS)
 import Domain

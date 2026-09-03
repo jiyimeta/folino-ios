@@ -34,6 +34,9 @@ struct MacScoreScrollRequest: Equatable {
 /// scroll view and pass `nil`, which registers no observer at all: their bodies re-render exactly as often as they did
 /// before this existed.
 ///
+/// Clicks do NOT come through here. They arrive on the AppKit side, via `MagnifyingScoreScrollView.onClick` — see
+/// `MacScoreClickMapping` for why a magnified `NSScrollView` makes SwiftUI's own gesture geometry unusable.
+///
 /// `@Observable` rather than a `Binding` so the reads are per-property and per-view: the container reads `scroll` and
 /// `magnification` to place the pane, and the score strip inside the hosting view reads neither, so a scroll frame
 /// never reaches the engraving.
@@ -47,23 +50,6 @@ final class MacScoreViewportState {
     /// The scroll view's magnification, tracked continuously — including mid-pinch, which `magnification`'s binding
     /// deliberately is not. See `MagnifyingScoreScrollView.magnification`.
     var magnification: CGFloat = 1
-}
-
-/// The magnification range the host allows, carried by the reference implementation. 0.25 is small enough to see a
-/// multi-page spread at once; 4.0 is where the engraving is being inspected rather than read. Non-generic so the
-/// container can clamp its own fit-to-window seed against the same numbers the scroll view enforces.
-enum MacScoreMagnification {
-    static let minimum: CGFloat = 0.25
-    static let maximum: CGFloat = 4.0
-
-    /// Bring a computed fit into the range the scroll view will accept.
-    ///
-    /// The two seeds that call this stay separate on purpose: the page deck fits a fixed sheet on BOTH axes inside a
-    /// deck-padded viewport, horizontal mode fits only the strip's HEIGHT inside an inset one. Only the clamp is
-    /// common, and folding two different fits into one function would take more arguments than it saves lines.
-    static func clamped(_ magnification: CGFloat) -> CGFloat {
-        min(max(magnification, minimum), maximum)
-    }
 }
 
 /// Hosts a SwiftUI page deck inside an `NSScrollView` whose `allowsMagnification` does the zooming.
@@ -97,6 +83,14 @@ struct MagnifyingScoreScrollView<Content: View>: NSViewRepresentable {
     /// Live viewport mirroring for a container that draws an overlay outside this scroll view, or `nil` for one that
     /// does not. See `MacScoreViewportState` — passing `nil` registers no observers and no KVO.
     var viewportState: MacScoreViewportState?
+    /// A click on the hosted content, in the content's OWN unmagnified coordinates.
+    ///
+    /// **The only way a click reaches the score, and it is deliberately not a SwiftUI gesture.** SwiftUI hit-tests
+    /// hosted content at `hostedPoint × magnification` against unscaled layout frames, so at any zoom but 1x the
+    /// click is delivered to the wrong view entirely — see `MacScoreClickMapping` for the measurement. An
+    /// `NSClickGestureRecognizer` on the document view converts through AppKit's own clip-view transform instead,
+    /// which is correct at every magnification, and hands the container a point it can map itself.
+    var onClick: ((CGPoint) -> Void)?
     @ViewBuilder let content: () -> Content
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -124,6 +118,18 @@ struct MagnifyingScoreScrollView<Content: View>: NSViewRepresentable {
         scrollView.magnification = magnification
         context.coordinator.lastGeneration = contentGeneration
         context.coordinator.viewportState = viewportState
+        context.coordinator.onClick = onClick
+
+        // The click channel. Attached to the hosting view rather than the scroll view so that
+        // `location(in:)` is already in the hosted content's own coordinates; AppKit walks the clip view's scaled
+        // bounds on the way, which is exactly the step SwiftUI gets wrong.
+        let clickRecognizer = NSClickGestureRecognizer(
+            target: context.coordinator, action: #selector(MagnifyingScoreScrollCoordinator.handleClick(_:)),
+        )
+        // The recognizer must not swallow the mouse-down: the hosted tree still has its own SwiftUI controls, and a
+        // click that never reaches them would break them for a fix that is only about the score surface.
+        clickRecognizer.delaysPrimaryMouseButtonEvents = false
+        hosting.addGestureRecognizer(clickRecognizer)
 
         // `NSScrollView` fires `didEndLiveMagnify` once the gesture settles; mirroring its final value into the
         // binding is what lets a later external write be recognized as a change at all.
@@ -161,6 +167,7 @@ struct MagnifyingScoreScrollView<Content: View>: NSViewRepresentable {
         let coordinator = context.coordinator
         coordinator.binding = $magnification
         coordinator.viewportState = viewportState
+        coordinator.onClick = onClick
         if coordinator.lastGeneration != contentGeneration {
             coordinator.lastGeneration = contentGeneration
             (nsView.documentView as? NSHostingView<Content>)?.rootView = content()
@@ -238,6 +245,8 @@ final class MagnifyingScoreScrollCoordinator: NSObject {
     var isLiveMagnifying = false
     /// True only while `updateNSView` is moving the scroll view itself. See the comment at that call site.
     var isApplyingUpdate = false
+    /// The container's click handler. See `MagnifyingScoreScrollView.onClick`.
+    var onClick: ((CGPoint) -> Void)?
     /// KVO on `NSScrollView.magnification`, live only between will-start and did-end live magnification. AppKit
     /// posts no "during live magnify" notification, so observing the property is the only continuous signal — and
     /// the sticky pane's `scaleEffect` has to track the pinch or it visibly detaches from the staves mid-gesture.
@@ -288,6 +297,13 @@ final class MagnifyingScoreScrollCoordinator: NSObject {
         if let magnification {
             viewportState.magnification = magnification
         }
+    }
+
+    /// The click channel. `location(in:)` on the recognizer's own view walks AppKit's view transforms, including the
+    /// clip view's magnified bounds, so this point is already in the hosted content's unmagnified coordinates.
+    @objc func handleClick(_ recognizer: NSClickGestureRecognizer) {
+        guard let view = recognizer.view else { return }
+        onClick?(recognizer.location(in: view))
     }
 }
 #endif

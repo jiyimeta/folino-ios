@@ -102,9 +102,11 @@ final class AppBootstrap {
         let crashEnabled = UserDefaults.standard
             .object(forKey: PrivacySettingsKey.crashReportingEnabled) as? Bool ?? true
         // PARITY(macos): Firebase registration — FirebaseAnalytics ships a macOS slice and Crashlytics is a source
-        //   target, so neither is a platform blocker. What is missing is a console registration for a Mac app
-        //   sharing com.KeyNumber.Folino, its own GoogleService-Info.plist, and a decision on attaching the
-        //   upload-symbols post-build script (project.yml:110). Until then the Mac composes the no-ops.
+        //   target, and both are already LINKED into the Mac binary through Packages/Infrastructure/Package.swift;
+        //   the no-op is at this call site, not at the link line. `com.apple.security.network.client` is now
+        //   declared (Ⅷ §2), so the sandbox is no longer a blocker either. What is missing is a console
+        //   registration for a Mac app sharing com.KeyNumber.Folino, its own GoogleService-Info.plist, and a
+        //   decision on attaching the upload-symbols post-build script. Until then the Mac composes the no-ops.
         #if os(iOS)
         crashReporter = FirebaseCrashReporter.configure(collectionEnabled: crashEnabled)
         configureAnalytics()

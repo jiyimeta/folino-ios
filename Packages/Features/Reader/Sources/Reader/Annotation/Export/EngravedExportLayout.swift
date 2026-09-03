@@ -25,6 +25,10 @@ enum EngravedExportLayout {
         let pages: [EngravedPagePlacement]
         /// Every page's size in points. Uniform across the document.
         let pageSize: CGSize
+        /// The staff size the engraving is drawn at, in page points. Against the reader's on-screen staff size this
+        /// gives how many page points one on-screen document unit is worth, which the ink export needs to reproduce
+        /// PencilKit's on-screen stroke widths (see `PencilKitInkWidth`).
+        let staffSize: CGFloat
     }
 
     /// The export options this feature uses. `title` reaches the PDF's metadata, not the page chrome.
@@ -76,6 +80,8 @@ enum EngravedExportLayout {
                 offsetY: margins.top - batch.startY,
             )
         }
-        return Resolved(document: document, pages: pages, pageSize: resolved.page.size)
+        return Resolved(
+            document: document, pages: pages, pageSize: resolved.page.size, staffSize: resolved.staffSize,
+        )
     }
 }

@@ -1,3 +1,7 @@
+// PARITY(macos): Finder document types — `.mscz` double-click and Open With do not reach folino; the open panel
+//   below is the only import route. Needs `CFBundleDocumentTypes` in `App/Mac/Info.plist` plus an open handler in
+//   the scene layer, which is why Ⅷ left it alone: that layer was being rewritten concurrently.
+
 import AppKit
 import Domain
 import Library
@@ -5,19 +9,12 @@ import Reader
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The menu-bar skeleton. Sub-project Ⅳ fills in the editing commands and the full key map; this is only what the
-/// shell itself needs, plus the display-mode picker a reader wants on day one.
+/// The menu-bar skeleton the shell itself needs — Show Library, Import, and the display-mode picker. The editing
+/// menus live in `MacEditingMenus`.
+///
+/// `macLibraryImportAction` is published via `focusedSceneValue` by `MacShellView` and by the library browser's window
+/// content both, since `@FocusedValue` follows *scene* focus and one window's publication is invisible from another.
 struct MacCommands: Commands {
-    /// The frontmost window's open score and import action, published via `focusedSceneValue` — the score by
-    /// `MacShellView`, the import action by `MacShellView` and by the library browser's window content both, since
-    /// `@FocusedValue` follows *scene* focus and one window's publication is invisible from another. So these always
-    /// read the state of whichever window is key, which is the right notion of "current selection" for a File-menu
-    /// command in a multi-window app.
-    ///
-    /// `macCurrentScoreID` is the *window's* open score, not a library row: File ▸ Open in New Window duplicates the
-    /// score you are looking at. Opening a specific row in a new window is the browser's job and the browser has it
-    /// — every score row's own context menu carries an Open in New Window item (see `RowOpenAffordance`).
-    @FocusedValue(\.macCurrentScoreID) private var currentScoreID
     @FocusedValue(\.macLibraryImportAction) private var libraryImportAction
     @Environment(\.openWindow) private var openWindow
 
@@ -58,21 +55,6 @@ struct MacCommands: Commands {
             // Settings window, say). Disabling rather than letting `presentImportPanel` open a panel whose picked
             // files `action?(url)` would silently drop.
             .disabled(libraryImportAction == nil)
-            Button {
-                if let currentScoreID {
-                    // A fresh `tabInstance` every time: `WindowGroup(for:)` reuses (refocuses) a window whose
-                    // presented value already equals the one passed to `openWindow(value:)`, so a bare
-                    // `ScoreItem.ID` here would just refocus the window this score is already showing in whenever
-                    // that happens to be the frontmost one. See `MacWindowScore`'s doc comment.
-                    openWindow(value: MacWindowScore(scoreID: currentScoreID))
-                }
-            } label: {
-                // Not "Open in New Tab": at the default "Prefer tabs when opening documents" system setting,
-                // `openWindow(value:)` opens a standalone window, and whether AppKit later folds it into a tab is
-                // decided by `MacWindowTabAssist` and that system preference — this label can't promise a tab.
-                Text("mac.menu.openInNewWindow")
-            }
-            .disabled(currentScoreID == nil)
         }
         CommandGroup(before: .toolbar) {
             Picker(selection: displayMode) {
@@ -118,17 +100,8 @@ struct MacCommands: Commands {
 }
 
 extension FocusedValues {
-    private struct CurrentScoreIDKey: FocusedValueKey {
-        typealias Value = ScoreItem.ID
-    }
-
     private struct LibraryImportActionKey: FocusedValueKey {
         typealias Value = (URL) async -> Void
-    }
-
-    var macCurrentScoreID: ScoreItem.ID? {
-        get { self[CurrentScoreIDKey.self] }
-        set { self[CurrentScoreIDKey.self] = newValue }
     }
 
     var macLibraryImportAction: ((URL) async -> Void)? {

@@ -81,6 +81,8 @@ extension EditorSessionCore {
             owedMapping = mapping.allSatisfy { $0.value == $0.key } ? nil : mapping
             self.session = ScoreEditSession(score: sessionOpenScore)
             sessionEditDepth = 0
+            // The rebuilt session carries no stack at all, so whatever the adopted one brought went with it.
+            sessionOpenUndoStepCount = 0
         }
         revision += 1
         rederiveSelection()
@@ -199,6 +201,7 @@ extension EditorSessionCore {
         session = nil
         sessionOpenScore = nil
         sessionEditDepth = 0
+        sessionOpenUndoStepCount = 0
         select(nil)
         revision += 1
         return reverted

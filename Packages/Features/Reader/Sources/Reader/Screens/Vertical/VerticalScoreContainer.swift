@@ -5,7 +5,7 @@
 // PARITY(macos): vertical mode's live overlays — the Mac draws and scrolls vertical mode in its own
 //   `MacVerticalScoreContainer`, so the mode itself is not owed. What this container still has that its Mac sibling
 //   does not: the live PencilKit annotation canvas it hands to the scroll host (Ⅴ — macOS ships no `PKCanvasView`
-//   at all) and the note-editing overlay in its zoomed subtree (Ⅳ). Zoom is settled, not owed; see `PinchState`.
+//   at all). Zoom is settled, not owed; see `PinchState`.
 
 #if os(iOS)
 import Domain
@@ -241,7 +241,7 @@ struct VerticalScoreContainer: View {
         // with the round-tripped `display(...)` projection (different bytes from the live ink, so the echo guard can't
         // suppress it) would wipe the just-committed stroke. The user-edit path instead keeps `projectedAnnotations`
         // equal to the live drawing (see `annotationSpec`), so `applyDrawing` is a no-op for the user's own ink.
-        .onChange(of: document) { _, _ in reprojectAnnotations() }
+        .onChange(of: document) { _, _ in reflowAnnotations() }
         // The one time the MODEL moves under the canvas rather than the other way round: a part add / remove /
         // reorder rewrites every stroke's anchor, so what is on screen is now drawn against the wrong staves. See
         // `ReaderViewModel.annotationReseedTicket`.
@@ -259,6 +259,7 @@ struct VerticalScoreContainer: View {
         AnnotationOverlaySpec(
             isAnnotating: viewModel.isAnnotating,
             isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
+            canvasSession: viewModel.annotationCanvasSession,
             displayDrawing: projectedAnnotations,
             onChange: { drawing in
                 guard let doc = document else { return }
@@ -339,6 +340,13 @@ struct VerticalScoreContainer: View {
         projectedAnnotations = AnnotationAnchoring.display(
             viewModel.annotationDrawings, in: doc, staffFilter: annotationStaffFilter,
         )
+    }
+
+    /// A reflow moves every anchor's projection, so the canvas's undo snapshots describe geometry that no longer
+    /// exists: the history ends before the ink is reprojected.
+    private func reflowAnnotations() {
+        viewModel.annotationCanvasSession.clearHistory()
+        reprojectAnnotations()
     }
 
     /// The source↔display staff translation for whatever the reader is currently hiding. Read at call time (not

@@ -2392,6 +2392,40 @@
         }
       }
     },
+    "scoreUI.share.export.action" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "書き出す…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "내보내기…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匯出…"
+          }
+        }
+      }
+    },
     "scoreUI.share.vocalTuner.action" : {
       "localizations" : {
         "en" : {
@@ -2491,6 +2525,41 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "拍號"
+          }
+        }
+      }
+    },
+    "sessionEnd.revert.short" : {
+      "comment" : "Label on the revert control in the editing strip. Short on purpose — it sits beside the display cutout, where the full 'Revert to Original' does not fit. The full wording stays as the control's accessibility label.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revert"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "元に戻す"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "되돌리기"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "還原"
           }
         }
       }

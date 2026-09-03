@@ -162,6 +162,19 @@ public final class EditorSessionCore {
     /// score; `sessionHasEdits` checks both.
     public internal(set) var sessionEditDepth = 0
 
+    /// How many steps the ADOPTED session's undo stack already held when this session opened. Zero for a fresh one,
+    /// and handed in by the host: the count cannot be asked for — `ScoreEditSession` publishes `canUndo`, not a
+    /// depth — so it is tallied as the edits are made and deposited with the session the host retains.
+    public internal(set) var sessionOpenUndoStepCount = 0
+
+    /// How many steps the live session can still undo — the whole stack, including what an adopted session brought
+    /// with it. `sessionEditDepth` is exactly the signed movement of that stack since the session opened (`apply`
+    /// and `redo` push, `undo` pops, each only on success), so opening depth plus movement is the current depth.
+    /// Clamped because an Android mirror can be driven out of step with the relay it replays.
+    public var undoableStepCount: Int {
+        max(0, sessionOpenUndoStepCount + sessionEditDepth)
+    }
+
     /// Set once `discardSessionEdits()` has run, so `endSession()` does not then deposit the session it just undid
     /// into the history store and offer it back on the next open.
     public internal(set) var didDiscardSession = false
@@ -283,11 +296,19 @@ public final class EditorSessionCore {
     ///
     /// The adopted score is returned so the host can publish it: a resumed session opens on the score the previous
     /// one LEFT, which is not the `score` the caller just parsed off disk.
+    ///
+    /// `adoptedUndoStepCount` is how deep `adopted`'s undo stack is — the host deposited it with the session and
+    /// hands it back here; it is ignored (and must be 0) when nothing is adopted.
     @discardableResult
-    public func beginSession(score: Score, adopting adopted: ScoreEditSession? = nil) -> Score? {
+    public func beginSession(
+        score: Score,
+        adopting adopted: ScoreEditSession? = nil,
+        adoptedUndoStepCount: Int = 0,
+    ) -> Score? {
         session = adopted ?? ScoreEditSession(score: score)
         sessionOpenScore = session?.score
         sessionEditDepth = 0
+        sessionOpenUndoStepCount = adopted != nil ? max(0, adoptedUndoStepCount) : 0
         didDiscardSession = false
         capturedOriginalThisSession = false
         revision = 0

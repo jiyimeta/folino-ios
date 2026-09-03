@@ -18,6 +18,8 @@ struct MacPageDeck: View {
     let score: Score
     let scoreOptions: ScoreViewOptions
     let pageSize: CGSize
+    /// The note-editing seam, forwarded to every sheet. See `MacPagedScoreContainer.editingHost`.
+    let editingHost: ReaderEditingHost?
 
     var body: some View {
         if let doc = document, !pages.isEmpty {
@@ -40,6 +42,7 @@ struct MacPageDeck: View {
                         scoreOptions: scoreOptions,
                         pageSize: pageSize,
                         ink: ink,
+                        editingHost: editingHost,
                     )
                 }
             }
@@ -51,11 +54,19 @@ struct MacPageDeck: View {
         }
     }
 
+    private func pageDocument(forPage index: Int, in doc: LayoutDocument) -> LayoutDocument {
+        Self.pageDocument(forPage: index, pages: pages, in: doc)
+    }
+
     /// A sub-document holding only this page's systems. Same trick the iOS `PagedZoomedSurface` uses and for the same
     /// reason — a `ScoreView` over the full document would build a `SystemLayerView` for every system in the score, on
     /// every sheet, multiplying the deck's layout cost by its page count. `size` stays the full document's so the
     /// systems keep their document-space `origin.y` and the `-pageStartY` offset still lands them correctly.
-    private func pageDocument(forPage index: Int, in doc: LayoutDocument) -> LayoutDocument {
+    ///
+    /// Static because the container resolves clicks against the same sub-document (see
+    /// `MacPagedScoreContainer.handleClick`): restricting `nearestCursor` to one page's systems is what stops a click
+    /// on the blank run-out below a page's last system from seeking to the next page's first system.
+    static func pageDocument(forPage index: Int, pages: [Range<Int>], in doc: LayoutDocument) -> LayoutDocument {
         LayoutDocument(
             size: doc.size,
             systems: Array(doc.systems[pages[index]]),
@@ -65,7 +76,8 @@ struct MacPageDeck: View {
     }
 }
 
-/// One sheet of paper: the white card, its edge, and the page number beneath it. Deliberately does NOT read the
+/// One sheet of paper: the white card and the page number beneath it — no edge and no shadow, by the user's call.
+/// Deliberately does NOT read the
 /// cursor — the leaf inside it does, so a playback tick redraws the engraving without re-laying-out the card.
 struct MacScorePage: View {
     let viewModel: ReaderViewModel
@@ -79,6 +91,8 @@ struct MacScorePage: View {
     /// The whole score's committed ink, already projected into document space by the deck. This sheet draws its own
     /// share of it — see `MacScoreInkOverlay`.
     let ink: PKDrawing
+    /// The note-editing seam. See `MacPagedScoreContainer.editingHost`.
+    let editingHost: ReaderEditingHost?
 
     var body: some View {
         VStack(spacing: 6) {
@@ -107,14 +121,13 @@ struct MacScorePage: View {
             scoreOptions: scoreOptions,
             contentSize: content,
             ink: ink,
+            editingHost: editingHost,
         )
         .frame(width: content.width, height: content.height, alignment: .topLeading)
         .clipped()
         .padding(MacPageDeckMetrics.margin)
         .frame(width: pageSize.width, height: pageSize.height, alignment: .topLeading)
         .background(MacReaderGround.paper)
-        .overlay(Rectangle().stroke(Color.gray.opacity(0.35), lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
     }
 }
 
@@ -130,20 +143,23 @@ struct MacPageScoreLayer: View {
     let contentSize: CGSize
     /// The whole score's committed ink in document space; this layer draws the band the sheet shows.
     let ink: PKDrawing
-
-    /// The name the click-to-seek gesture reads its location in: the full document's own coordinate space, which is
-    /// what `nearestCursor` expects. The sheet is a window onto it, opened by the `-pageStartY` offset below.
-    private static let coordinateSpace = "macScorePage"
+    /// The note-editing seam. Read INSIDE `body` (never handed down as a value), because this layer is inside the
+    /// deck's `NSHostingView` root and is rebuilt only when the container bumps `layoutGeneration` — a body read of
+    /// this `@Observable` object is what registers the dependency that redraws the sheet when the selection moves.
+    let editingHost: ReaderEditingHost?
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             ScoreView(
                 document: pageDocument, score: score, options: scoreOptions,
+                // `displaySelection`, not `selection`: the editor addresses the unfiltered score, this document is
+                // laid out from the staff-filtered one. See `ReaderEditingHost.displayItem(for:)`.
+                selection: editingHost?.isEditing == true ? (editingHost?.displaySelection ?? .none) : .none,
+                voiceColors: ReaderEditingPresentation.voiceColors,
                 // The ONLY cursor read in the deck, and it is this sheet's own slot — `nil` on every sheet the cursor
                 // is not on. See `MacPageDeckCursorState` for why it is not one shared property.
                 playbackCursor: cursorSlot?.cursor, playbackCursorColor: .accentColor.opacity(0.6),
             )
-            .gesture(tapSeekGesture())
 
             // Committed ink over the notation. The band is what this sheet shows of the document, so a stroke drawn
             // across a page boundary appears on both sheets and is clipped by each — the card's `.clipped()` does
@@ -162,26 +178,15 @@ struct MacPageScoreLayer: View {
                     end: viewModel.repeatModel.pendingRepeatB,
                 )
             }
+
+            // Last in the stack — over `ScoreView`, which paints itself opaque white. The caret blends
+            // (`EditingSelectionOverlay`), it does not sit on top by z-order.
+            if let host = editingHost, host.isEditing {
+                EditingSelectionOverlay(host: host, score: score, document: pageDocument)
+            }
         }
-        .coordinateSpace(name: Self.coordinateSpace)
         .frame(width: contentSize.width, height: pageDocument.size.height, alignment: .topLeading)
         .offset(y: -pageStartY)
-    }
-
-    /// Click-to-seek. With no playback controller wired on the Mac yet this still moves the displayed cursor —
-    /// `ReaderPlaybackSession.setManualCursor` guards every `controller` call.
-    private func tapSeekGesture() -> some Gesture {
-        SpatialTapGesture(coordinateSpace: .named(Self.coordinateSpace))
-            .onEnded { value in
-                // The named space spans the whole document, and `.clipped()` clips drawing but not hit testing — a
-                // click on the blank paper below this page's last system would otherwise resolve to a system on the
-                // next sheet and move the cursor somewhere the user did not click. Same guard the iOS paged surface
-                // states at length.
-                let pageEndY = pageStartY + contentSize.height
-                guard value.location.y >= pageStartY, value.location.y <= pageEndY else { return }
-                guard let cursor = nearestCursor(at: value.location, in: pageDocument) else { return }
-                viewModel.playbackSession.setManualCursor(cursor)
-            }
     }
 }
 #endif

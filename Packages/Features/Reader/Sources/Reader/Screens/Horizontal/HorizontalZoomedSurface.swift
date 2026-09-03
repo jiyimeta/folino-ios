@@ -1,6 +1,9 @@
-// PARITY(macos): horizontal mode's note-editing subtree — the Mac's equivalent is `MacHorizontalScoreStrip`, which
-//   draws the same staves and the same committed ink but hosts no editing chrome. The selection overlay and tap
-//   routing here are the half of `HorizontalScoreContainer`'s debt that lives at this layer; Ⅳ closes it.
+// PARITY(macos): horizontal mode's note-editing subtree — the selection overlay and tap routing here are the half
+//   of `HorizontalScoreContainer`'s debt that lives at this layer.
+//
+//   Revised 2026-09-02 during implementation: The Mac sibling (`MacHorizontalScoreStrip`) carries the same
+//   selection tint, tap routing and caret. Not on the Mac, by design (`2026-09-02-macos-edit-session-design.md`
+//   §4.4): the floating pitch callout (`SelectionCalloutLayer`) — the keyboard is its replacement.
 
 #if os(iOS)
 import SheetMusicUI

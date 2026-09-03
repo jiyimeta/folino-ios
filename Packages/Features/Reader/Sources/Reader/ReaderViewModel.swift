@@ -27,6 +27,16 @@ final class ReaderViewModel {
             }
             return nil
         }
+
+        /// Whether a parsed score is on screen. An `Equatable` projection of a state that isn't: the Mac reader
+        /// watches it with `onChange` to reopen the editing session after a revert's reload lands.
+        var isLoaded: Bool {
+            if case .loaded = self {
+                true
+            } else {
+                false
+            }
+        }
     }
 
     /// Always the same instance (set once at init); declared `var` only so `@Bindable` projections like
@@ -175,6 +185,17 @@ final class ReaderViewModel {
 
     var viewportZoom: CGFloat = 1.0
     var isAnnotating = false // true → canvas draws; false → all touches reach navigation + tap-to-seek
+    /// The ink as it stood when the current annotation session began — what ✕ restores. `nil` outside a session.
+    /// Ignored for observation: nothing renders from it; it is read once, on the way out.
+    @ObservationIgnored var annotationSessionBaseline: [DrawingAnchor]?
+    /// What the live canvas reports about the session — undo / redo availability and whether anything changed. One
+    /// per view model, handed to every score container so whichever canvas is mounted writes into the same object.
+    let annotationCanvasSession = AnnotationCanvasSession()
+    /// The ✕ and clear-all confirmations. On the view model rather than the buttons because the same button is
+    /// mounted in two places depending on the device (the control tier or the cutout band), and the confirmation has
+    /// to survive being asked from either.
+    var isConfirmingAnnotationDiscard = false
+    var isConfirmingAnnotationClear = false
     /// Strokes committed since the current annotation session began. Flushed into `annotation_ended` on exit.
     @ObservationIgnored var annotationStrokeCount = 0
     /// Wall-clock start of the current annotation session, for `annotation_ended`'s `duration_sec`.

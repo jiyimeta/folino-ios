@@ -36,13 +36,10 @@ struct PlaylistDetailScreen: View {
             playlistName: playlist.name,
             items: orderedItems,
             onOpen: openScore,
-            // Both go through `openScore`, on both platforms, because a playlist opens into playlist *context*:
-            // `onOpenInPlaylist` is the screen's only open channel and it carries the `PlaylistID`. On the Mac that
-            // closure ends in `openWindow(value:)`, so a row here does open a window — what it cannot do is open a
-            // second one distinct from the default. See the `PARITY(macos)` marker on `MacLibraryWindowContent`'s
-            // `onOpenInPlaylist`: the playlist id is dropped at the window boundary, and closing that gap is what
-            // gives this pair two different meanings.
-            onOpenInNewWindow: openScore,
+            // `openScore` routes through `onOpenInPlaylist`, the screen's only open channel, which carries the
+            // `PlaylistID`. On the Mac that closure ends in `openWindow(value:)`, so a row here does open a window —
+            // see the `PARITY(macos)` marker on `MacLibraryWindowContent`'s `onOpenInPlaylist` for what is still
+            // missing (the playlist id is dropped at the window boundary).
             onMove: { offsets, destination in move(from: offsets, to: destination) },
             onRemoveFromPlaylist: { item in removeFromPlaylist(item) },
             onRename: { newName in Task { await commitRename(newName) } },
@@ -113,7 +110,7 @@ struct PlaylistDetailScreen: View {
     }
 
     /// Log `select_content` attributed to this playlist, then hand the item to the reader-traversal callback. The
-    /// single source both `onOpen` and `onOpenInNewWindow` pass to `PlaylistDetailView` — see that call's comment.
+    /// source `onOpen` passes to `PlaylistDetailView` — see that call's comment.
     private func openScore(_ item: ScoreItem) {
         library.analytics.log(.scoreOpened(from: .playlist))
         onOpenInPlaylist(item, playlist.id)

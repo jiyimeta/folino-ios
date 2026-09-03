@@ -8,6 +8,11 @@ import Foundation
 /// is the ordering that needs a run loop: cancel the debounce, join the save already running, unwind, then write the
 /// unwound score back over the edited one.
 extension EditorViewModel {
+    /// The confirmation a discard shows. Same reason as `revertConfirmationMessage`: two hosts, one wording.
+    public var discardConfirmationMessage: String {
+        String(localized: "editor.discard.confirm.message", bundle: .module)
+    }
+
     public func discardSessionEdits() async {
         guard isSessionActive else { return }
         // Marked (and the retained stack dropped) even when there is nothing to unwind: leaving without edits must

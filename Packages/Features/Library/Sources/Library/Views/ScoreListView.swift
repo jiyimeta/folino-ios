@@ -32,9 +32,6 @@ struct ScoreListView<RowMenu: View>: View {
     let isManualOrderActive: Bool
     let showsManualOrderOption: Bool
     let onTap: (ScoreItem) -> Void
-    /// **macOS only**, in effect: iOS passes the same closure as `onTap` (no window concept there), so this call
-    /// site never changes iOS's meaning. See `RowOpenAffordance.macScoreOpenAffordance`.
-    let onOpenInNewWindow: (ScoreItem) -> Void
     let onToggleFavorite: (ScoreItem) -> Void
     /// Invoked when the user picks Delete in the row context menu or the trailing swipe. Soft-delete, so no
     /// confirmation alert.
@@ -71,7 +68,7 @@ struct ScoreListView<RowMenu: View>: View {
     //   menu bar (Ⅳ).
     private var listWithChrome: some View {
         list
-            .macScoreOpenAffordance(selectedIDs, in: items, onOpen: onTap, onOpenInNewWindow: onOpenInNewWindow)
+            .macScoreOpenAffordance(selectedIDs, in: items, onOpen: onTap)
             .searchable(text: $searchText)
             .toolbar { trailingToolbarItems }
             .bulkSelectionEditModeCompat(isSelecting: isSelecting)
@@ -118,10 +115,6 @@ struct ScoreListView<RowMenu: View>: View {
     /// ⌘/⇧-click selection then offers the bulk actions instead, mirroring how AppKit list views resolve a
     /// selection-vs-single-item context menu. A single selected row keeps the row menu, which already offers
     /// everything the bulk menu does (plus Open / Edit Info), so nothing is lost there.
-    ///
-    /// On macOS, Open in New Window is appended here too — this is where `macScoreOpenAffordance` says Open items
-    /// belong now that its own `menu:` closure is empty (see that helper's doc comment). `rowMenu(item)` already
-    /// contains Open (`scoreRowMenu`'s first button), so only the new action is added.
     @ViewBuilder
     private func effectiveRowMenu(for item: ScoreItem) -> some View {
         #if os(macOS)
@@ -129,9 +122,6 @@ struct ScoreListView<RowMenu: View>: View {
             bulkActionsMenuContent
         } else {
             rowMenu(item)
-            Button { onOpenInNewWindow(item) } label: {
-                Text("library.open.newWindow", bundle: .module)
-            }
         }
         #else
         rowMenu(item)
@@ -252,7 +242,6 @@ private struct ScoreListViewPreviewHost: View {
                 isManualOrderActive: isManualOrderActive,
                 showsManualOrderOption: showsManualOrderOption,
                 onTap: { _ in },
-                onOpenInNewWindow: { _ in },
                 onToggleFavorite: { _ in },
                 onConfirmDelete: { _ in },
                 onSelectSort: { sort = $0; isManualOrderActive = false },
@@ -299,7 +288,6 @@ private struct ScoreListViewPreviewHost: View {
             isManualOrderActive: false,
             showsManualOrderOption: false,
             onTap: { _ in },
-            onOpenInNewWindow: { _ in },
             onToggleFavorite: { _ in },
             onConfirmDelete: { _ in },
             onSelectSort: { _ in },

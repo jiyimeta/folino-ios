@@ -1,10 +1,13 @@
 import EditorCore
+import ScoreUI
 import SwiftUI
 import UtilityUI
 
 // The two controls that end an editing session, modelled on the pair Photos puts either side of the display cutout:
 // ✕ leading, which throws this session's work away, and a single trailing control that either commits it or offers
-// to go back to the original.
+// to go back to the original. The drawn surfaces are ScoreUI's (`SessionDiscardLabel` / `SessionEndControlLabel`),
+// shared with the Reader's annotation session so the two strips read as the same physical thing; what is decided
+// HERE is what the controls do to the score.
 //
 // Shared, public types rather than private pieces of `EditorTopBarView` because the App mounts them in TWO separate
 // places depending on the device: the Reader's own `ReaderCutoutTier` (via `ReaderRootScreen.editingCutoutTier`) on a
@@ -19,15 +22,14 @@ import UtilityUI
 /// ✕ — throws away everything this session did and leaves.
 ///
 /// Only asks first when there is something to throw away; on a session that changed nothing this is simply the way
-/// out, and a confirmation would be noise. The dialog itself lives on `EditorTopBarView`'s stable root (like the
-/// revert one), because this button is drawn in whichever tier the device has.
+/// out, and a confirmation would be noise.
 public struct EditorDiscardButton: View {
     @Bindable var viewModel: EditorViewModel
     /// Leaves the session. A closure, not a view-model call, because leaving routes through
     /// `ReaderEditingHost.requestExit()`, which this package cannot see.
     let onExit: () -> Void
     /// `true` in the cutout tier, where the control is drawn to the band's own proportions rather than the control
-    /// tier's — see `EditorSessionBandMetrics`.
+    /// tier's — see `SessionBandMetrics`.
     let inCutoutBand: Bool
 
     public init(viewModel: EditorViewModel, onExit: @escaping () -> Void, inCutoutBand: Bool = false) {
@@ -51,14 +53,14 @@ public struct EditorDiscardButton: View {
                 }
             }
         } label: {
-            label
+            SessionDiscardLabel(inCutoutBand: inCutoutBand)
         }
         .tint(.primary)
         .frame(minHeight: 44)
         .accessibilityLabel(Text("editor.discard.action", bundle: .module))
         .destructiveConfirmationPopover(
             isPresented: $viewModel.isConfirmingDiscard,
-            message: String(localized: "editor.discard.confirm.message", bundle: .module),
+            message: viewModel.discardConfirmationMessage,
             actionTitle: Text("editor.discard.confirm.action", bundle: .module),
         ) {
             Task {
@@ -67,36 +69,11 @@ public struct EditorDiscardButton: View {
             }
         }
     }
-
-    /// Split out of the `Button` closure: an `if` directly inside a button label trips SwiftUI's preview
-    /// instrumentation ("ambiguous use of `__designTimeSelection`"), which takes every `#Preview` in this file down
-    /// with it.
-    @ViewBuilder
-    private var label: some View {
-        if inCutoutBand {
-            Image(systemName: "xmark")
-                .font(EditorSessionBandMetrics.glyphFont)
-                .bandPill()
-                .interactiveGlassCompat()
-        } else {
-            Image(systemName: "xmark")
-                .font(.system(size: 17, weight: .semibold))
-                .frame(width: 44, height: 44)
-        }
-    }
 }
 
-/// The trailing control, which is three controls wearing one slot. Which one is showing is the whole status readout
-/// for the session, so it is derived — never set — and changes the instant the score does:
-///
-/// * **nothing has ever been edited** — a checkmark on plain glass. Leaving changes nothing, so it is quiet.
-/// * **the score differs from the original, but not because of this session** — revert, on red. The only thing worth
-///   offering is undoing the *previous* work, and it is destructive, so it is the one coloured control in the strip.
-/// * **this session has changed something** — a checkmark on yellow. Committing is now a real act with a real
-///   result, and the colour says the score is not what it was when you opened it.
-///
-/// The session's own edits win over the revert offer deliberately: while you are mid-edit, the thing you want is to
-/// keep or drop what you just did, not to be offered a rollback of everything.
+/// The trailing control, which is three controls wearing one slot — see `SessionEndControlStyle` for what each
+/// state means. Which one is showing is derived from `EditorViewModel.sessionEndMode`, never set, and changes the
+/// instant the score does.
 public struct EditorSessionEndButton: View {
     @Bindable var viewModel: EditorViewModel
     /// Leaves the session, keeping the changes — see `EditorDiscardButton.onExit`.
@@ -122,6 +99,14 @@ public struct EditorSessionEndButton: View {
         viewModel.sessionEndMode
     }
 
+    private var style: SessionEndControlStyle {
+        switch mode {
+        case .commitUnchanged: .commitUnchanged
+        case .commitEdited: .commitEdited
+        case .revert: .revert
+        }
+    }
+
     public var body: some View {
         Button(role: mode == .revert ? .destructive : nil) {
             if mode == .revert {
@@ -130,7 +115,7 @@ public struct EditorSessionEndButton: View {
                 onExit()
             }
         } label: {
-            label
+            SessionEndControlLabel(style: style, inCutoutBand: inCutoutBand)
         }
         .tint(.primary)
         // The drawn pill is smaller than the touch target in both tiers, deliberately: 26pt keeps it inside the
@@ -150,15 +135,7 @@ public struct EditorSessionEndButton: View {
     /// that predates originals being kept may be restoring an already-edited state, and ink anchored to the notation
     /// can move under it. `RevertPolicy` decides which apply.
     private var revertMessage: String {
-        let warnings = viewModel.revertWarnings(hasMusicalAnnotations: hasMusicalAnnotations)
-        var lines = [String(localized: "editor.revert.confirm.body", bundle: .module)]
-        if warnings.contains(.musicalAnnotationsMayShift) {
-            lines.append(String(localized: "editor.revert.confirm.inkMayShift", bundle: .module))
-        }
-        if warnings.contains(.originalMayNotBeImportTime) {
-            lines.append(String(localized: "editor.revert.confirm.mayNotBeImport", bundle: .module))
-        }
-        return lines.joined(separator: "\n\n")
+        viewModel.revertConfirmationMessage(hasMusicalAnnotations: hasMusicalAnnotations)
     }
 
     private var accessibilityKey: LocalizedStringKey {
@@ -168,85 +145,6 @@ public struct EditorSessionEndButton: View {
         case .revert:
             viewModel.revertsToConversionOutput ? "editor.revert.action.pdf" : "editor.revert.action"
         }
-    }
-
-    /// The red and the yellow are carried BY the glass (`tintedGlassCompat`), not painted as a flat fill behind it,
-    /// so a coloured state belongs to the same family of surfaces as the uncoloured one — the control changes colour,
-    /// not material. It is also the control's single surface: an earlier version put a glass pill around the button
-    /// and a smaller filled capsule inside it, which read as two stacked controls.
-    @ViewBuilder
-    private var label: some View {
-        switch mode {
-        case .commitUnchanged:
-            checkmark
-                .interactiveGlassCompat()
-        case .commitEdited:
-            checkmark
-                .foregroundStyle(.black)
-                .tintedGlassCompat(.yellow, in: .capsule)
-        case .revert:
-            revertLabel
-        }
-    }
-
-    @ViewBuilder
-    private var checkmark: some View {
-        if inCutoutBand {
-            Image(systemName: "checkmark")
-                .font(EditorSessionBandMetrics.glyphFont)
-                .bandPill()
-        } else {
-            Image(systemName: "checkmark")
-                .font(.system(size: 17, weight: .semibold))
-                .frame(width: 44, height: 44)
-        }
-    }
-
-    @ViewBuilder
-    private var revertLabel: some View {
-        if inCutoutBand {
-            Text("editor.revert.action.short", bundle: .module)
-                .font(EditorSessionBandMetrics.font)
-                .foregroundStyle(.white)
-                .bandPill()
-                .tintedGlassCompat(.red, in: .capsule)
-        } else {
-            Text("editor.revert.action.short", bundle: .module)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .frame(minHeight: 34)
-                .tintedGlassCompat(.red, in: .capsule)
-        }
-    }
-}
-
-/// The band's own proportions, taken from a Photos screenshot rather than chosen: its ✕ and 元に戻す are each 26pt
-/// tall and 64–66pt wide, centred in the 62pt reserved band.
-///
-/// The Reader owns the band itself and its horizontal inset (`ReaderTopBarLayout.cutoutTierHorizontalInset`, from the
-/// same measurement). Editor cannot see that type — Features don't import each other — so these numbers live here.
-/// Nothing enforces the pairing; if one moves, look at the other.
-enum EditorSessionBandMetrics {
-    static let height: CGFloat = 26
-    static let minimumWidth: CGFloat = 64
-    /// Small on purpose: a 26pt pill cannot carry body text. Photos' own label measures ~13pt.
-    static let font: Font = .footnote.weight(.semibold)
-    /// Glyphs sit a touch larger than the text does, or ✕ and ✓ read as specks against a word of the same weight.
-    static let glyphFont: Font = .system(size: 14, weight: .semibold)
-}
-
-extension View {
-    /// Shapes a label into the band's pill: fixed height, matched minimum width, capsule-clipped so whatever surface
-    /// the caller puts behind it is that pill and nothing else.
-    fileprivate func bandPill() -> some View {
-        padding(.horizontal, 10)
-            .frame(
-                minWidth: EditorSessionBandMetrics.minimumWidth,
-                minHeight: EditorSessionBandMetrics.height,
-            )
-            .frame(height: EditorSessionBandMetrics.height)
-            .clipShape(.capsule)
     }
 }
 

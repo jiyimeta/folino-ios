@@ -1,11 +1,17 @@
+// swiftlint:disable file_length
+// MacReaderRootScreen composes the score/PDF content, the transport bar, and the always-open note-editing lifecycle
+// seam (`ReaderEditingHost`, design §1/§2); that breadth puts it just over the file_length budget. The budget holds
+// until `MacScoreContentView` moves to its own file, a Ⅳb/Ⅳc follow-up.
+
 // PARITY(macos): the Mac reading surface's chrome — this screen renders the score in all three display modes, shows
-//   an imported PDF and the ink committed on either, lets them scroll, and plays them from a transport bar. The
-//   inspectors, the share / annotate / edit controls, and the score ⇄ original-PDF switch are all still iOS-only; see
-//   `ReaderRootScreen` for the surface being caught up to.
+//   an imported PDF and committed ink, plays them from a transport bar, edits them from the menu bar and the
+//   keyboard, and exports through a save panel. The inspectors and the score ⇄ original-PDF switch are still
+//   iOS-only; see `ReaderRootScreen` for the surface being caught up to.
 
 #if os(macOS)
 import Domain
 import PDFKit
+import ScoreUI
 import SheetMusicCore
 import SwiftUI
 import UtilityCore
@@ -19,10 +25,9 @@ import UtilityCore
 /// and the interactive-pop-gesture restoration. None of that comes across, so the two screens diverge rather than
 /// growing a seam of `#if`s down the middle of an 800-line file.
 ///
-/// What it deliberately does NOT do yet, each owned by a later task: the inspectors, the note-editing seam
-/// (`ReaderEditingHost`), and the score ⇄ original-PDF switch (the reader shows whichever rendition `displaySource`
-/// names, but has no chrome to change it). The transport is here — `MacTransportBar`, its own sibling of
-/// `ReaderTransportControl`.
+/// What it deliberately does NOT do yet, each owned by a later slice: the inspectors and panels (Ⅳc) and the
+/// score ⇄ original-PDF switch (the reader shows whichever rendition `displaySource` names, but has no chrome to
+/// change it). The transport is here — `MacTransportBar`, its own sibling of `ReaderTransportControl`.
 @MainActor
 public struct MacReaderRootScreen: View {
     @State private var viewModel: ReaderViewModel
@@ -59,6 +64,10 @@ public struct MacReaderRootScreen: View {
     /// `pdfPlaybackParser` is what an imported PDF's on-PDF cursor and click-to-seek are built out of: without it
     /// `loadPDF`'s background parse resolves to `.unavailable` and the document reads as a plain PDF. Optional for the
     /// same reason it is on iOS — a caller with no OMR still gets a working reader.
+    ///
+    /// `editingHost` is the note-editing seam the composition root fills (`MacEditableReaderScreen`). **The Mac has
+    /// no edit mode**: with a host, the session opens the moment the score has loaded and closes when the window
+    /// does (design §1). `nil` is a read-only reader, which is what previews and tests get.
     public init(
         scoreItem: ScoreItem,
         repository: any ScoreLibraryRepository,
@@ -70,8 +79,10 @@ public struct MacReaderRootScreen: View {
         scoresDirectory: URL,
         playbackController: (any PlaybackController)? = nil,
         pdfPlaybackParser: (any PDFPlaybackParser)? = nil,
+        editingHost: ReaderEditingHost? = nil,
         analytics: any Analytics = NoopAnalytics(),
     ) {
+        self.editingHost = editingHost
         // The Mac takes the iPad's pair of untouched-preference defaults: a Mac window is a large screen, so the
         // roomier staff size and the engraver's authored break boundaries are the right starting point. Same call the
         // iOS screen makes through `ReaderDeviceDefaults.staffSize` / `.honorLayoutBreaks`, with the idiom decision
@@ -101,6 +112,29 @@ public struct MacReaderRootScreen: View {
         .macDisplayMode(storedRawValue: layoutModeRaw)
     }
 
+    /// The note-editing seam, or `nil` for a read-only reader. Held here (rather than in `MacScoreContentView`) so
+    /// `editingScore` below is computed once per this screen's body pass rather than once per read inside the
+    /// content view.
+    private let editingHost: ReaderEditingHost?
+
+    /// Non-nil only while note editing. The caller has already applied the transforms that rewrite values in place —
+    /// clef overrides and the written-pitch view — plus the hidden-staves filter, whose renumbering
+    /// `ReaderEditingHost` re-stamps. Raw in every other respect (no global transpose, no collapsed multi-measure
+    /// rests) so the element indices the Editor tracks stay valid.
+    private var editingScore: Score? {
+        ReaderEditingDisplay.score(
+            host: editingHost,
+            clefOverrides: viewModel.layoutModel.staffClefOverrides,
+            hiddenStaves: viewModel.layoutModel.hiddenStaves,
+        )
+    }
+
+    /// Which edit `editingScore` is. Travels WITH the score (see `MacReaderRootScreen.editingScoreVersion`) so a
+    /// container's relayout key can never advance ahead of the score it is keyed to.
+    private var editingScoreVersion: Int {
+        ReaderEditingDisplay.version(host: editingHost)
+    }
+
     public var body: some View {
         // Two children, and this body reads no playback state of its own: `MacScoreContentView` reads the cursors,
         // and the transport's seek region reads the position, each inside its own body. A tick therefore never
@@ -115,11 +149,35 @@ public struct MacReaderRootScreen: View {
                 showInvisibleElements: showInvisibleElements,
                 showAllMeasureNumbers: showAllMeasureNumbers,
                 autoFollowEnabled: autoFollowEnabled,
+                editingScore: editingScore,
+                editingScoreVersion: editingScoreVersion,
+                editingHost: editingHost,
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             MacTransportBar(viewModel: viewModel)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .toolbar {
+            // PARITY(macos): File ▸ Export… — export is reachable from this toolbar and from the library rows, but
+            //   not from the menu bar, which is its Mac-idiomatic home. The command belongs in
+            //   `App/Mac/MacCommands.swift`, a file a parallel session was rewriting when Ⅷ landed. Placement, not
+            //   capability.
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    ShareFormatMenuItems(
+                        loadFormats: { [viewModel] in await viewModel.availableShareFormats() },
+                        onShare: { format in Task { await viewModel.requestShare(format: format) } },
+                    )
+                } label: {
+                    Label {
+                        Text("reader.export.action", bundle: .module)
+                    } icon: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                }
+            }
+        }
+        .scoreExportPresentation(target: $viewModel.shareTarget)
         // **This screen pins no appearance at all, and that is a measured decision rather than an omission.**
         //
         // `ReaderRootScreen` pins iOS to light because the Reader's CONTENT is light. That reason covers the paper
@@ -155,11 +213,17 @@ public struct MacReaderRootScreen: View {
             viewModel.currentLayoutMode = layoutMode
             viewModel.playbackSession.startObservingCursor()
             viewModel.playbackSession.startObservingSoundfontDownload()
+            if let host = editingHost {
+                wireEditingSeam(host)
+            }
             await viewModel.load()
             await viewModel.playbackSession.prepareForPlayback()
             // Seed the engine from the persisted preference at view start, exactly as the iOS screen does — and it
             // reaches a real engine here now that the Mac builds a `LivePlaybackController`.
             await viewModel.tempoModel.setMetronomeEnabled(isMetronomeEnabled)
+            // Design §1: the Mac has no edit mode. The session opens as soon as there is a score to edit, and stays
+            // open for the window's lifetime — `endEditing()` in `onDisappear` is the other end.
+            beginEditingIfLoaded()
         }
         .onAppear { viewModel.analytics.logScreen(.reader) }
         .onDisappear {
@@ -168,6 +232,9 @@ public struct MacReaderRootScreen: View {
             // no PiP on the Mac, and closing the window (or switching the detail column to another score) is
             // always a real close.
             let viewModel = viewModel
+            // Before the annotation flush and the engine release: `onEndEditing` starts the Editor's own flush, and
+            // releasing the engine must not race a save that is still reading the score.
+            endEditing()
             viewModel.endAnnotationSessionIfNeeded()
             Task {
                 await viewModel.flushPendingAnnotationSave()
@@ -182,6 +249,80 @@ public struct MacReaderRootScreen: View {
         .onChange(of: layoutMode) { _, newValue in
             viewModel.currentLayoutMode = newValue
         }
+        // Mirror playback state into the seam so the App can put the editing keys to sleep while the cursor runs
+        // (design §6.2). Reads `isPlaying`, not the cursor — re-renders on play / pause only, never per tick (same
+        // as iOS).
+        .onChange(of: viewModel.playbackSession.isPlaying, initial: true) { _, isPlaying in
+            editingHost?.isPlaying = isPlaying
+        }
+        // A revert (`wireRevertReload`) clears the edited score, asks the session to exit, and reloads the file. On
+        // iOS that exit ends edit mode; here there is no mode to end, so the session is closed and reopened on the
+        // reloaded score. `loadState` is what says the reload landed.
+        .onChange(of: editingHost?.isExitRequested ?? false) { _, requested in
+            guard requested, let host = editingHost else { return }
+            endEditing()
+            host.resetExitRequest()
+        }
+        .onChange(of: viewModel.loadState.isLoaded) { _, loaded in
+            if loaded {
+                beginEditingIfLoaded()
+            }
+        }
+    }
+
+    /// The Reader-owned half of the editing seam, identical in content to what `ReaderRootScreen.task` installs on
+    /// iOS: the addressing providers, the visibility flip, play-from-selection, the edited score for the engine, and
+    /// the revert / part-remap reloads.
+    private func wireEditingSeam(_ host: ReaderEditingHost) {
+        // Design §4.2: the selection IS the playhead while stopped. Selecting puts the displayed cursor away, and
+        // `startCursorProvider` below makes Space start from the selected note — the same pairing iOS uses.
+        host.onSelectionMade = { [weak viewModel] in
+            viewModel?.playbackSession.hideDisplayedCursor()
+        }
+        // What the Editor addresses (the whole score, hidden staves included) and what the reader has hidden —
+        // together these let the host re-stamp IDs between source and rendered addressing.
+        host.sourceScoreProvider = { [weak viewModel, weak host] in
+            host?.editedScore ?? viewModel?.loadState.score
+        }
+        host.hiddenStavesProvider = { [weak viewModel] in
+            viewModel?.layoutModel.hiddenStaves ?? []
+        }
+        host.onToggleStaffVisibility = { [weak viewModel] address in
+            Task { await viewModel?.layoutModel.toggleStaff(address) }
+        }
+        viewModel.wireRevertReload(host: host)
+        viewModel.wirePartRemapReload(host: host)
+        viewModel.playbackSession.startCursorProvider = { [weak host] in
+            guard let host, host.isEditing, case let .single(item) = host.selection else { return nil }
+            return .item(item)
+        }
+        // The score a press of play should catch the engine up with — see
+        // `ReaderViewModel.adoptEditedScoreForPlaybackIfStale`.
+        viewModel.editedScoreProvider = { [weak host] in
+            guard let host, host.isEditing else { return nil }
+            return host.editedScore
+        }
+    }
+
+    /// Opens the editing session on the loaded score. A no-op for a PDF-only item or a failed load — there is nothing
+    /// to edit — and for a reader built without a host.
+    private func beginEditingIfLoaded() {
+        guard let host = editingHost, !host.isEditing, case let .loaded(score) = viewModel.loadState else { return }
+        host.editedScore = score
+        host.editGeneration += 1
+        host.isEditing = true
+        host.onBeginEditing(score)
+    }
+
+    /// Closes the session with the window: the App flushes the autosave and tears the session down. Unlike the iOS
+    /// `finishEditing()`, nothing is adopted back into the reader — the window is going away.
+    private func endEditing() {
+        guard let host = editingHost, host.isEditing else { return }
+        host.onEndEditing()
+        host.isEditing = false
+        host.selection = .none
+        host.caretItem = nil
+        host.resetExitRequest()
     }
 }
 
@@ -204,6 +345,38 @@ struct MacScoreContentView: View {
     let showAllMeasureNumbers: Bool
     let autoFollowEnabled: Bool
 
+    /// Non-nil only while note editing. The caller has already applied the transforms that rewrite values in place —
+    /// clef overrides and the written-pitch view — plus the hidden-staves filter, whose renumbering
+    /// `ReaderEditingHost` re-stamps. Raw in every other respect (no global transpose, no collapsed multi-measure
+    /// rests) so the element indices the Editor tracks stay valid.
+    let editingScore: Score?
+    /// Which edit `editingScore` is. Travels WITH the score (see `MacReaderRootScreen.editingScoreVersion`) so a
+    /// container's relayout key can never advance ahead of the score it is keyed to.
+    let editingScoreVersion: Int
+    /// The note-editing seam, or `nil` for a read-only reader. Mirrors the iOS `ScoreContentView`: whether the
+    /// reader is editing changes only the containers' INPUTS — which score, and whether the element-renumbering
+    /// display transforms apply — never which container is mounted, so the laid-out document survives an edit.
+    let editingHost: ReaderEditingHost?
+
+    /// The score the containers render: the editing score while editing, the display-transformed one otherwise.
+    private var renderedScore: Score? {
+        editingScore ?? viewModel.visibleScore
+    }
+
+    private var isEditing: Bool {
+        editingScore != nil
+    }
+
+    /// Multi-measure-rest collapse renumbers elements within a staff, which no staff remap can undo — off while
+    /// editing, exactly as on iOS.
+    private var effectiveCollapseMultiMeasureRests: Bool {
+        isEditing ? false : collapseMultiMeasureRests
+    }
+
+    private var effectiveTransposeSemitones: Int {
+        isEditing ? 0 : viewModel.transposeModel.effectiveSemitones
+    }
+
     var body: some View {
         // The original PDF wins over whatever the load state holds — the same condition `ScoreContentView` branches
         // on, and it is a display-source question, not a load-state one: for an item folino read OUT of a PDF both
@@ -222,7 +395,7 @@ struct MacScoreContentView: View {
         case .loading:
             ProgressView().controlSize(.large)
         case .loaded:
-            if let score = viewModel.visibleScore {
+            if let score = renderedScore {
                 scoreContainer(score: score)
             } else {
                 ProgressView().controlSize(.large)
@@ -257,42 +430,48 @@ struct MacScoreContentView: View {
                 score: score,
                 staffSize: viewModel.layoutModel.effectiveStaffSize,
                 honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
-                collapseMultiMeasureRests: collapseMultiMeasureRests,
+                collapseMultiMeasureRests: effectiveCollapseMultiMeasureRests,
                 showInvisibleElements: showInvisibleElements,
                 showAllMeasureNumbers: showAllMeasureNumbers,
                 playbackCursor: viewModel.playbackSession.displayCursor,
                 pageAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
                 autoFollowEnabled: autoFollowEnabled,
-                transposeSemitones: viewModel.transposeModel.effectiveSemitones,
+                transposeSemitones: effectiveTransposeSemitones,
+                editingScoreVersion: editingScoreVersion,
                 viewModel: viewModel,
+                editingHost: editingHost,
             )
         case .horizontal:
             MacHorizontalScoreContainer(
                 score: score,
                 staffSize: viewModel.layoutModel.effectiveStaffSize,
                 honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
-                collapseMultiMeasureRests: collapseMultiMeasureRests,
+                collapseMultiMeasureRests: effectiveCollapseMultiMeasureRests,
                 showInvisibleElements: showInvisibleElements,
                 showAllMeasureNumbers: showAllMeasureNumbers,
                 playbackCursor: viewModel.playbackSession.displayCursor,
                 scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
                 autoFollowEnabled: autoFollowEnabled,
-                transposeSemitones: viewModel.transposeModel.effectiveSemitones,
+                transposeSemitones: effectiveTransposeSemitones,
+                editingScoreVersion: editingScoreVersion,
                 viewModel: viewModel,
+                editingHost: editingHost,
             )
         case .vertical:
             MacVerticalScoreContainer(
                 score: score,
                 staffSize: viewModel.layoutModel.effectiveStaffSize,
                 honorLayoutBreaks: viewModel.layoutModel.effectiveHonorLayoutBreaks,
-                collapseMultiMeasureRests: collapseMultiMeasureRests,
+                collapseMultiMeasureRests: effectiveCollapseMultiMeasureRests,
                 showInvisibleElements: showInvisibleElements,
                 showAllMeasureNumbers: showAllMeasureNumbers,
                 playbackCursor: viewModel.playbackSession.displayCursor,
                 scrollAnchorCursor: viewModel.playbackSession.scrollAnchorCursor,
                 autoFollowEnabled: autoFollowEnabled,
-                transposeSemitones: viewModel.transposeModel.effectiveSemitones,
+                transposeSemitones: effectiveTransposeSemitones,
+                editingScoreVersion: editingScoreVersion,
                 viewModel: viewModel,
+                editingHost: editingHost,
             )
         }
     }

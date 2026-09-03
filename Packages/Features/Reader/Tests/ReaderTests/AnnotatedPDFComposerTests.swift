@@ -103,7 +103,7 @@ struct AnnotatedPDFComposerTests {
     @MainActor
     func `composing with no placements returns a document with the same pages`() throws {
         let base = try Self.baseDocument(pages: 2)
-        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: [], placements: [])
+        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: [], placements: []).data
         #expect(try Self.open(out).numberOfPages == 2)
     }
 
@@ -111,7 +111,7 @@ struct AnnotatedPDFComposerTests {
     @MainActor
     func `the composed page keeps the base page's size`() throws {
         let base = try Self.baseDocument(pages: 1, size: CGSize(width: 400, height: 600))
-        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: [], placements: [])
+        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: [], placements: []).data
         let page = try #require(try Self.open(out).page(at: 1))
         let box = page.getBoxRect(.mediaBox)
         #expect(abs(box.width - 400) < 0.5)
@@ -130,7 +130,7 @@ struct AnnotatedPDFComposerTests {
             InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 400, px: 0, py: 0)),
             InkPlacement(pageIndex: 0, drawingIndex: 1, transform: StrokeTransform(sp: 400, px: 50, py: 50)),
         ]
-        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements)
+        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements).data
         let document = try #require(PDFDocument(data: out))
         let firstPage = try #require(document.page(at: 0))
         let secondPage = try #require(document.page(at: 1))
@@ -187,7 +187,7 @@ struct AnnotatedPDFComposerTests {
         let out = try AnnotatedPDFComposer.compose(
             basePDF: base, drawings: [drawing],
             placements: [InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 1, px: 0, py: 0))],
-        )
+        ).data
         let document = try #require(PDFDocument(data: out))
         let page = try #require(document.page(at: 0))
         return try #require(page.annotations.first).bounds
@@ -201,14 +201,16 @@ struct AnnotatedPDFComposerTests {
         // conversion must reverse that order AND preserve the separation exactly: the mark's box must sit 200 points
         // ABOVE the anchor's. Both strokes are the same width, so `PKDrawing.bounds` inflates each by the same
         // amount and the centers' separation is padding-independent — which is what lets this pin the flip's sign
-        // and its unit scale numerically rather than settling for an ordering check.
+        // and its unit scale numerically rather than settling for an ordering check. `PKDrawing.bounds` is
+        // integral in canvas units, so each box can round outward by up to a canvas unit (0.75pt) on either edge;
+        // the tolerance covers that and nothing more.
         let topBounds = try Self.soleAnnotationBounds(drawing: Self.asymmetricFixture()[0])
         let bottomBounds = try Self.soleAnnotationBounds(drawing: Self.asymmetricFixture()[1])
 
         let separation = CGFloat(Self.anchorPageLocalY - Self.markPageLocalY)
         #expect(
-            abs((topBounds.midY - bottomBounds.midY) - separation) < 0.01,
-            "expected the flip to put the mark exactly 200 points above the anchor in bottom-left page space",
+            abs((topBounds.midY - bottomBounds.midY) - separation) < 1,
+            "expected the flip to put the mark 200 points above the anchor in bottom-left page space",
         )
         #expect(
             topBounds.minY > bottomBounds.maxY,
@@ -226,7 +228,7 @@ struct AnnotatedPDFComposerTests {
         let base = try Self.baseDocument(pages: 1)
         let out = try AnnotatedPDFComposer.compose(
             basePDF: base, drawings: Self.asymmetricFixture(), placements: Self.asymmetricPlacements(),
-        )
+        ).data
 
         // Dead-center on strokeMark, mapped straight across the page/PDF-space flip.
         let onTheInk = CGPoint(x: Self.sampleX, y: Self.markPageSpaceY)
@@ -261,7 +263,7 @@ struct AnnotatedPDFComposerTests {
         let base = try Self.baseDocument(pages: 1)
         let out = try AnnotatedPDFComposer.compose(
             basePDF: base, drawings: Self.asymmetricFixture(), placements: Self.asymmetricPlacements(),
-        )
+        ).data
         let sample = CGPoint(x: Self.sampleX, y: Self.markPageSpaceY)
         let size = CGSize(width: 400, height: 600)
         let document = try #require(PDFDocument(data: out))
@@ -285,27 +287,39 @@ struct AnnotatedPDFComposerTests {
         )
     }
 
-    /// What the export writes is a plain, unlocked `/Ink` annotation and nothing else. Apple's private keys were
-    /// tried and measured not to buy anything — Apple's markup needs a `crdt` container no public PencilKit API
-    /// emits (see `docs/engineering/crdt-ink-format/`) — so `/PPK` and `/PPKType` cost bytes for no behavior, and
-    /// Books' `/F` locking is the opposite of what folino wants: these marks are meant to be selectable and
-    /// deletable in Preview and other PDF editors.
+    /// What the export writes is an unlocked `/Ink` annotation carrying exactly one piece of Apple's private
+    /// vocabulary: `/AAPL:AKExtras` → `AAPL:AKAnnotationV2`, the archive AnnotationKit reads to make the mark
+    /// ERASABLE rather than merely visible.
+    ///
+    /// The `/PPK` route was tried and measured not to buy anything — Apple's markup needs a `crdt` container no
+    /// public PencilKit API emits (see `docs/engineering/crdt-ink-format/`) — so `/PPK` and `/PPKType` still cost
+    /// bytes for no behavior and must stay absent. And Books' `/F` locking is still the opposite of what folino
+    /// wants: an editable payload does not make the mark Books' property. These marks stay selectable and
+    /// deletable in Preview and every other PDF editor, which is what the flag assertions below pin.
     @Test
     @MainActor
-    func `the exported annotation is a plain unlocked Ink annotation with no private PencilKit keys`() throws {
+    func `the exported annotation is an unlocked Ink annotation carrying only Apple's editable ink payload`(
+    ) throws {
         let base = try Self.baseDocument(pages: 1)
         let drawings = [Self.drawing(kind: .page(PageAnchor(pageIndex: 0)))]
         let placements = [
             InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 400, px: 20, py: 30)),
         ]
-        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements)
+        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements).data
         let document = try #require(PDFDocument(data: out))
         let annotation = try #require(document.page(at: 0)?.annotations.first)
 
         #expect(annotation.type == "Ink")
         #expect(annotation.value(forAnnotationKey: PDFAnnotationKey(rawValue: "PPK")) == nil)
         #expect(annotation.value(forAnnotationKey: PDFAnnotationKey(rawValue: "PPKType")) == nil)
-        #expect(annotation.value(forAnnotationKey: PDFAnnotationKey(rawValue: "AAPL:AKExtras")) == nil)
+
+        let base64 = try #require(
+            AnnotatedPDFComposerAKTests.akPayloadString(of: annotation),
+            "expected AKAnnotationV2 — without it Apple's markup shows the ink but cannot erase it",
+        )
+        let archive = try #require(Data(base64Encoded: base64))
+        #expect(!archive.isEmpty, "an empty archive is the same silent failure as no archive at all")
+
         // Books writes /F = 644 (Print + Locked + LockedContents). Anything with bit 8 (Locked, 128) or bit 10
         // (LockedContents, 512) set would stop a generic editor from deleting the mark.
         let flags = (annotation.value(forAnnotationKey: .flags) as? NSNumber)?.intValue ?? 0
@@ -329,11 +343,16 @@ struct AnnotatedPDFComposerTests {
         let out = try AnnotatedPDFComposer.compose(
             basePDF: base, drawings: [drawing],
             placements: [InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 1, px: 0, py: 0))],
-        )
+        ).data
         let document = try #require(PDFDocument(data: out))
         let annotation = try #require(document.page(at: 0)?.annotations.first)
         let lineWidth = try #require(annotation.border?.lineWidth)
-        #expect(abs(lineWidth - 2) < 0.01, "expected the median (2), not the mean (~34.3) or the first sample (1)")
+        // The width is what PencilKit draws for the archived size (the median, 2, in canvas units) scaled onto the
+        // page — compare against that, not against the mean (~34.3) or the first sample (1).
+        let k = AKInkGeometry.canvasScale
+        let expected = max(0.25, PencilKitInkWidth.renderedWidth(ink: .pen, size: 2 * k) / k)
+        #expect(abs(lineWidth - expected) < 0.01, "expected the median (2) through the pen curve")
+        #expect(abs(lineWidth - PencilKitInkWidth.renderedWidth(ink: .pen, size: 34.3 * k) / k) > 1)
     }
 
     @Test
@@ -352,7 +371,7 @@ struct AnnotatedPDFComposerTests {
         let placements = [
             InkPlacement(pageIndex: 1, drawingIndex: 0, transform: StrokeTransform(sp: 400, px: 0, py: 0)),
         ]
-        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements)
+        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements).data
         let composed = try #require(PDFDocument(data: out))
 
         #expect(composed.pageCount == 2)
@@ -376,7 +395,7 @@ struct AnnotatedPDFComposerTests {
         let placements = [
             InkPlacement(pageIndex: 0, drawingIndex: 0, transform: StrokeTransform(sp: 400, px: 0, py: 0)),
         ]
-        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements)
+        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: drawings, placements: placements).data
         let document = try #require(PDFDocument(data: out))
         let page = try #require(document.page(at: 0))
         #expect(page.rotation == 90, "the composer never touches the page, so /Rotate must pass through untouched")
@@ -393,7 +412,7 @@ struct AnnotatedPDFComposerTests {
         ]
         let out = try AnnotatedPDFComposer.compose(
             basePDF: base, drawings: drawings, placements: placements,
-        )
+        ).data
         #expect(try Self.open(out).numberOfPages == 1)
     }
 
@@ -404,7 +423,7 @@ struct AnnotatedPDFComposerTests {
         let placements = [
             InkPlacement(pageIndex: 0, drawingIndex: 3, transform: StrokeTransform(sp: 400, px: 0, py: 0)),
         ]
-        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: [], placements: placements)
+        let out = try AnnotatedPDFComposer.compose(basePDF: base, drawings: [], placements: placements).data
         let document = try #require(PDFDocument(data: out))
         let page = try #require(document.page(at: 0))
         #expect(page.annotations.isEmpty)

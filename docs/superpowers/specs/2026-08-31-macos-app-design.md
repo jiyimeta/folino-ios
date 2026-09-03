@@ -26,7 +26,9 @@ folino for macOS is **not** a document-based app in the `NSDocument` sense. Scor
 - Every axis on which folino can beat MuseScore — collaboration, annotations, cross-device sync — presupposes that **a score has a stable identity**. A document-only model delegates identity to the filesystem path, which is to say it has none.
 - The "opens in a new window instead of a tab" complaint (§5.3) is **independent** of this choice. It is solved by adopting standard `NSWindow` tabbing, which a library app gets exactly as easily as a document app.
 
-**The cost, and how it is paid.** The one workflow that gets longer is "receive an `.mscz` over Drive/AirDrop, edit it, send it back": open → edit → export, rather than open → edit → ⌘S. This is absorbed **as a per-score attribute, not as a second mode**: an imported score remembers its *origin* (a security-scoped bookmark) and mirrors saves back to it. On by default, switchable per score. The library stays the single truth; the origin is only a write target. This respects the standing "never split the experience into two modes" rule (`feedback_no_experience_divergence`).
+**The cost, and how it is paid.** The one workflow that gets longer is "receive an `.mscz` over Drive/AirDrop, edit it, send it back": open → edit → export, rather than open → edit → ⌘S. **That extra action is the whole cost, and folino pays it.** The library is the only place bytes live; nothing is written back to where a score came from.
+
+> **Amended 2026-09-03.** This paragraph originally absorbed the cost as a per-score attribute: an imported score would remember its *origin* (a security-scoped bookmark) and mirror saves back to it, on by default. **That is withdrawn, permanently** — it reintroduces the two-place split this section rejects MuseScore 4 for; it is a platform split rather than a per-score attribute, because folino's import routes (`.onOpenURL`, the Share Extension, AirDrop) are one-shot by construction and only a panel-picked file could ever carry an origin, which on iPhone and Android is the minority route; and `SheetMusic.exportMSCZ` re-encodes the container without carrying the source archive's other entries across, so mirroring would damage MuseScore-authored files it overwrote. The requirement that a re-opened file resolves to the same library item survives untouched: that is content-hash duplicate resolution, which needs no bookmark. Full reasoning and the two shapes a future need would take instead: `2026-09-03-macos-distribution-design.md` §1.
 
 **Consequence that must be stated plainly:** deciding that the library is shared makes **personal cloud sync (collaboration SP2) a hard prerequisite for *shipping* macOS**. A Mac whose library cannot show the scores already on the user's iPad is an island, which contradicts the reason this decision was made. It is not a prerequisite for *building* macOS: the seam is a Domain protocol, so the two tracks develop independently and meet at the release. See §9.
 
@@ -309,9 +311,9 @@ Not building 38 dedicated command UIs for iPhone in v1 is a **scheduling** decis
 | **Ⅱ** | **ssm: macOS foundations** — hit-testing / selection / caret / playback cursor on the page deck; fixed-width vertical **as an option**; `MSCZWriter` extra entries; `AVAudioEngineConfigurationChange` | — |
 | **Ⅲa** | **folino packages on macOS** — `.macOS(.v15)` declarations, UIKit separation, iOS-only SwiftUI behind UtilityUI compat helpers. Covers Utility, ScoreUI, Infrastructure, ImportExport, Settings, Editor | — |
 | **Ⅲb** | **Mac app shell** — new target, window/tab/menu bar/panel skeleton, `Infrastructure.Audio` on macOS, **and the macOS form of `Reader` and `Library`**; revise `module-architecture.md` | Ⅲa |
-| **Ⅳ** | **Mac editing UI** — palette / inspector / mixer / piano / drum pad, command registry and search, key map; iPad menu bar and the iPhone search floor; PARITY bookkeeping | Ⅲb, Ⅱ (consumes Ⅰ incrementally) |
+| **Ⅳ** | **Mac editing UI** — four slices, see `2026-09-02-macos-edit-session-design.md`: **Ⅳa** the always-editable score window (menu index, MuseScore key map, one window per score); Ⅳb command registry and search, iPad menu bar, iPhone search floor; Ⅳc panels; Ⅳd consuming Ⅰ | Ⅲb; Ⅳc–Ⅳd consume Ⅰ incrementally. **Ⅱ is not a prerequisite for Ⅳa** — the Mac surfaces are `ScoreView`-based and hit-test through the shared `LayoutDocument.editingHitTest`. |
 | **Ⅴ** | **`.folino` format + Mac annotation canvas** — container spec, UTType declaration, three exports, author snapshot, reconciliation rules | 0b, Ⅱ, Ⅲb |
-| **Ⅷ** | **Mac distribution** — App Sandbox + security-scoped bookmark persistence (what §1's origin mirroring actually requires), signing, notarization / App Store submission, a mac release lane, Mac screenshots | Ⅲb |
+| **Ⅷ** | **Mac distribution** — App Sandbox, signing, App Store submission, a mac release lane, Mac screenshots. Spec: `2026-09-03-macos-distribution-design.md`. Bookmark persistence is **gone** with §1's origin mirroring; the sandbox requirement collapses to `files.user-selected.read-write` because import copies the picked bytes inside the security scope | Ⅲb |
 | **Ⅶ** | **folino Pro (M5 IAP)** — ships with collaboration; iOS↔Mac universal purchase | Ⅵc, Ⅷ |
 
 ### Notes on the dependencies
@@ -360,6 +362,7 @@ What remains on the branch is then the smallest possible set: the SP2–SP5 impl
 - `docs/product/architecture.md` — the `CloudSync` module description.
 - ssm `Docs/edit-commands.md` — §C is stale (§6).
 - `2026-08-03-cloud-sync-and-group-collaboration-design.md` — Non-Goals says "iOS/iPadOS and Android clients only"; macOS is unmentioned throughout (§9, Ⅵc).
+- **This document**, §1 — origin mirroring was withdrawn on 2026-09-03 by `2026-09-03-macos-distribution-design.md` §1. The amendment is in place; anything downstream that still assumes a per-score origin is stale.
 
 ## 11. Open questions
 

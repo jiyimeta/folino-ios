@@ -1,7 +1,6 @@
-// PARITY(macos): horizontal reader extras — the Mac strip renders and scrolls the score, draws committed ink, and
-//   carries the sticky leading pane. The iOS `HorizontalScoreContainer`'s pinch-zoom commit (`PinchState` /
-//   `ScoreScrollHost`), its live annotation canvas, and its note-editing seam have no Mac equivalent; zoom lives on
-//   `NSScrollView.magnification` here instead, and PencilKit ships no `PKCanvasView` on macOS at all.
+// PARITY(macos): horizontal mode's live annotation canvas — the Mac strip renders, scrolls, edits the score and
+//   carries the sticky pane; the live PencilKit canvas the iOS `HorizontalScoreContainer` hands its host has no
+//   Mac form because PencilKit ships no `PKCanvasView` on macOS (Ⅴ).
 
 #if os(macOS)
 import Domain
@@ -46,14 +45,23 @@ struct MacHorizontalScoreContainer: View {
     /// Transpose offset in semitones. Only used to invalidate the layout cache via `MacScoreLayoutKey` — the
     /// score passed in is already transposed.
     let transposeSemitones: Int
+    /// Which edit `score` is while note editing, 0 otherwise. Keyed on INSTEAD of `editingHost.editGeneration` — see
+    /// `ReaderEditingDisplay.version`.
+    var editingScoreVersion = 0
     let viewModel: ReaderViewModel
+    /// The note-editing seam. `nil` keeps this container byte-identical to the read-only reader (previews, tests).
+    /// With a host, clicks route to `editingHost.onTap`, the rebuilt `LayoutDocument` is published to
+    /// `editingHost.document` for hit-testing, and the surface tints the selection and draws the caret.
+    var editingHost: ReaderEditingHost?
 
-    @State private var state = MacHorizontalScoreState()
+    /// Not private: the click routing lives in MacHorizontalScoreContainer+Click.swift, split out under SwiftLint's
+    /// file-length ceiling, and the sticky-pane guard there reads both of these.
+    @State var state = MacHorizontalScoreState()
     /// Off-main engraver holding this surface's incremental `LayoutCache`; see `ScoreRelayoutEngine`.
     @State private var relayoutEngine = ScoreRelayoutEngine()
     /// Live scroll offset and magnification, mirrored out of AppKit so the sticky pane can track the score it sits
     /// over. See `MacScoreViewportState` — this is the one container that asks for it.
-    @State private var viewportState = MacScoreViewportState()
+    @State var viewportState = MacScoreViewportState()
     /// The control channel for magnification: external writes in (the fit seed), the settled value out. The live
     /// value during a pinch is `viewportState.magnification`.
     @State private var magnification: CGFloat = 1.0
@@ -78,6 +86,7 @@ struct MacHorizontalScoreContainer: View {
                 contentGeneration: layoutGeneration,
                 scrollRequest: scrollRequest,
                 viewportState: viewportState,
+                onClick: handleClick,
             ) {
                 MacHorizontalScoreStrip(
                     viewModel: viewModel,
@@ -85,7 +94,7 @@ struct MacHorizontalScoreContainer: View {
                     document: state.document,
                     score: score,
                     scoreOptions: scoreOptions,
-                    viewportState: viewportState,
+                    editingHost: editingHost,
                 )
             }
             stickyPane
@@ -203,6 +212,7 @@ struct MacHorizontalScoreContainer: View {
             showInvisibleElements: showInvisibleElements,
             showAllMeasureNumbers: showAllMeasureNumbers,
             transposeSemitones: transposeSemitones,
+            editingScoreVersion: editingScoreVersion,
         )
     }
 
@@ -214,6 +224,7 @@ struct MacHorizontalScoreContainer: View {
         let contexts = LayoutEngine.measureContexts(for: score)
         state.measureContexts = contexts
         state.document = newDocument
+        editingHost?.document = newDocument
         projectInk(into: newDocument)
         layoutGeneration += 1
     }

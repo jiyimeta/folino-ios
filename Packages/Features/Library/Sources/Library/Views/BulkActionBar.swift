@@ -67,11 +67,6 @@ func bulkActionMenuItems(
     allFavorited: Bool,
     onFavorite: @escaping () -> Void,
 ) -> some View {
-    // PARITY(macos): bulk Share formats — every format here ends in `ScoreShareTarget`, which only
-    //   `ActivityViewControllerRepresentable` knows how to present, and that is iOS-only (see its own marker). The
-    //   rows are omitted on macOS rather than shown opening an empty sheet; restoring them is the same one step as
-    //   the row menu's Share — an `NSSharingServicePicker` behind `ScoreShareTarget`.
-    #if os(iOS)
     if !availableShareFormats.isEmpty {
         ForEach(availableShareFormats, id: \.self) { format in
             Button {
@@ -82,7 +77,6 @@ func bulkActionMenuItems(
         }
         Divider()
     }
-    #endif
     Button(action: onAddToPlaylist) {
         Label {
             Text("library.playlist.add.actionEllipsis", bundle: .module)
@@ -144,8 +138,6 @@ func bulkActionsContextMenuItems(
 }
 #endif
 
-// Only the iOS branch of `bulkActionMenuItems` draws share rows, so this label switch has no macOS caller.
-#if os(iOS)
 @MainActor
 @ViewBuilder
 private func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
@@ -166,7 +158,6 @@ private func bulkShareFormatLabel(_ format: ScoreShareFormat) -> some View {
         Label { Text("library.format.pdf", bundle: .module) } icon: { Image(systemName: "doc.richtext") }
     }
 }
-#endif
 
 #if DEBUG
 #Preview("Enabled") {

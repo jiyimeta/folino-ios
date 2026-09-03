@@ -47,6 +47,14 @@ final class AnnotationCanvasHandle {
 struct AnnotationOverlaySpec {
     var isAnnotating: Bool
     var isPencilPreferred: Bool
+    /// Where the controller reports undo / redo availability and whether the session changed the ink — read by the
+    /// strip's annotation controls. `nil` (the default) for previews and hosts with no strip to report to.
+    var canvasSession: AnnotationCanvasSession?
+    /// Whether this host draws its committed ink some other way while annotation is off — the paged readers do, in
+    /// per-page `StaticInkLayer`s. Those hosts get the canvas HIDDEN between sessions rather than emptied, which is
+    /// what lets PencilKit's undo survive the gap (`AnnotationCanvasSession`). A continuous reader, whose only ink
+    /// on screen IS this canvas, leaves it `false` and keeps showing it.
+    var hidesWhenIdle = false
     /// The model projected to the current layout (Task B2 `display(...)`). The controller seeds the canvas with this
     /// whenever it changes — on load and on reflow — guarded against echoing the user's own in-progress ink.
     var displayDrawing: PKDrawing
@@ -62,6 +70,18 @@ struct AnnotationOverlaySpec {
     var isInkDimmed = false
 }
 
+/// The live canvas, with one addition: the undo manager PencilKit registers its strokes on is supplied by the
+/// controller (`sessionUndoManager`) rather than found on the responder chain, so the history lives as long as the
+/// score is open rather than as long as the canvas is first responder — see `AnnotationCanvasSession`. Falls back to
+/// the chain until the controller attaches one.
+final class AnnotationCanvas: PKCanvasView {
+    var sessionUndoManager: UndoManager?
+
+    override var undoManager: UndoManager? {
+        sessionUndoManager ?? super.undoManager
+    }
+}
+
 /// Owns the annotation `PKCanvasView`: installs it as a viewport-pinned subview of the host scroll view, mirrors the
 /// host's scroll/zoom onto PencilKit's own scroll machinery, forwards drawing changes, and manages the tool picker.
 /// Created and retained by `ScoreScrollHost`'s Coordinator.
@@ -73,7 +93,9 @@ struct AnnotationOverlaySpec {
 /// surface small; the tall document lives in PencilKit's own scroll/zoom.
 @MainActor
 final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
-    private weak var canvas: PKCanvasView?
+    /// Internal rather than private, along with the session-tracking properties below, so the session half of this
+    /// controller (`AnnotationCanvasController+Session.swift`) can reach them from its own file.
+    weak var canvas: AnnotationCanvas?
     private var onChange: (PKDrawing) -> Void = { _ in }
     private var lastSeededDrawing = PKDrawing()
     private var toolPicker: PKToolPicker?
@@ -91,7 +113,21 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
     /// wet-to-dry echo of the page we just left) are NOT user edits — swallow them until the user puts a tool down
     /// on the new page. Otherwise the echo clobbers `projectedAnnotations` back to the old ink and/or mis-anchors it
     /// to the new page. Armed by `reseedForPageTurn`, cleared by the tool lifecycle.
-    private var ignoreEchoesUntilUserDraws = false
+    var ignoreEchoesUntilUserDraws = false
+    /// The strip's view of the session — see `AnnotationCanvasSession`. Replaced on every `update`, so the object the
+    /// current view model owns is always the one written to.
+    var canvasSession: AnnotationCanvasSession?
+    /// The drawing bytes the current session started from on the CURRENT page — `nil` outside a session. What the
+    /// canvas holds is compared against this after every change to answer "has the session changed anything?";
+    /// undoing back to it reads as unchanged again. Carried forward by a programmatic reseed (a reflow) while nothing
+    /// has changed, so a re-projection of the same ink is not mistaken for an edit.
+    var sessionSeedBytes: Data?
+    /// Latched at a page turn if the page being left differed from its seed: a change on an earlier page is still a
+    /// change, even though that page's undo stack is gone.
+    var changedOnEarlierPages = false
+    /// The session undo manager's notifications, observed so the strip's buttons follow a swipe or a palette undo
+    /// that never passes through this controller.
+    var undoObservers: [any NSObjectProtocol] = []
 
     /// Leave headroom under the GPU's hard 16,384px max 2D-texture edge (see the class ROOT-CAUSE NOTE) so we split the
     /// zoom *before* PencilKit starts dropping strokes from the right — internal padding / rounding eats a little of
@@ -105,7 +141,7 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
         spec.handle.controller = self
         defaultPanTouchTypes = scroll.panGestureRecognizer.allowedTouchTypes
         defaultPinchTouchTypes = pinch?.allowedTouchTypes ?? []
-        let view = PKCanvasView()
+        let view = AnnotationCanvas()
         view.translatesAutoresizingMaskIntoConstraints = false
         view.backgroundColor = .clear
         view.isOpaque = false
@@ -140,6 +176,10 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
         guard let canvas else { return }
         onChange = spec.onChange
         spec.handle.controller = self
+        canvasSession = spec.canvasSession
+        if canvas.sessionUndoManager !== spec.canvasSession?.undoManager {
+            attachUndoManager()
+        }
         state = spec.state
         // Re-assert each cycle: .pencilOnly re-enables the canvas's own pan.
         canvas.drawingPolicy = spec.isPencilPreferred ? .pencilOnly : .anyInput
@@ -156,7 +196,14 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
         // `isAnnotating` (the annotation toggle is hidden during editing, but this guards belt-and-suspenders).
         canvas.isUserInteractionEnabled = !spec.isInkDimmed && spec.isAnnotating
         canvas.alpha = spec.isInkDimmed ? 0.4 : 1.0
-        applyDrawing(spec.displayDrawing)
+        // Hidden rather than emptied between sessions where the host draws its own committed ink — see
+        // `AnnotationOverlaySpec.hidesWhenIdle`. While hidden the drawing is left exactly as the last session left
+        // it, which is what keeps PencilKit's undo working when the next one opens; nothing is on screen to be
+        // stale, and the seed the next session needs arrives through `applyDrawing` when it unhides.
+        canvas.isHidden = spec.hidesWhenIdle && !spec.isAnnotating
+        if !canvas.isHidden {
+            applyDrawing(spec.displayDrawing)
+        }
         applyToolPicker(visible: spec.isAnnotating)
         sync(scrollOffset: scroll.contentOffset)
     }
@@ -237,6 +284,7 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
         lastSeededDrawing = canvasView.drawing // our own edit is the source of truth; don't let applyDrawing echo it
         inkRightEdge = Self.rightEdge(of: canvasView.drawing)
+        publishSessionState()
         // After a page-turn reseed, swallow echoes until the user actually puts a tool down on the new page — see
         // `ignoreEchoesUntilUserDraws`. The next genuine stroke re-enables capture and recaptures the whole canvas.
         guard !ignoreEchoesUntilUserDraws else { return }
@@ -259,25 +307,57 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
     /// next render. Unconditional assign (unlike `applyDrawing`'s byte-identity guard, which a stale same-instance
     /// echo could satisfy and skip — the original linger). Guard the canvas FIRST so a nil canvas never advances
     /// `lastSeededDrawing` past an un-applied seed (which would later read as byte-equal and silently skip).
+    ///
     func reseedForPageTurn(_ drawing: PKDrawing) {
         guard let canvas else { return }
         ignoreEchoesUntilUserDraws = true
         lastSeededDrawing = drawing
         inkRightEdge = Self.rightEdge(of: drawing)
-        canvas.drawing = drawing
+        // A change made on the page being left is still a change, so it is latched before the seed moves to the
+        // new page.
+        if let seed = sessionSeedBytes {
+            if canvas.drawing.dataRepresentation() != seed {
+                changedOnEarlierPages = true
+            }
+            sessionSeedBytes = drawing.dataRepresentation()
+        }
+        setDrawing(drawing, on: canvas)
+        publishSessionState()
     }
 
     /// Seed/replace the canvas only when the projected model actually changed (load or reflow); never echo the user's
     /// own in-progress edits back onto the canvas.
     private func applyDrawing(_ drawing: PKDrawing) {
         guard let canvas else { return }
-        if drawing.dataRepresentation() != lastSeededDrawing.dataRepresentation() {
+        let bytes = drawing.dataRepresentation()
+        if bytes != lastSeededDrawing.dataRepresentation() {
             lastSeededDrawing = drawing
             inkRightEdge = Self.rightEdge(of: drawing)
-            if canvas.drawing.dataRepresentation() != drawing.dataRepresentation() {
-                canvas.drawing = drawing
+            if canvas.drawing.dataRepresentation() != bytes {
+                // A reseed mid-session is the same ink re-projected (a reflow, or a re-seed from the store), not an
+                // edit: carry the baseline forward while nothing has changed, so the strip keeps reading
+                // "unchanged". Once something HAS changed the seed stays where it was — the ✕ restore works from the
+                // model, not from here.
+                if sessionSeedBytes != nil, !sessionHasChangesNow {
+                    sessionSeedBytes = bytes
+                }
+                setDrawing(drawing, on: canvas)
+                publishSessionState()
             }
         }
+    }
+
+    /// Replace what the canvas holds, and end the undo history with it.
+    ///
+    /// The history has to go: PencilKit's undo actions restore the drawing they were registered against, and after a
+    /// wholesale replacement the manager still reports `canUndo` while undoing does nothing and empties the stack —
+    /// a button that lies. Every caller here is a moment the old ink genuinely stopped being what is on screen (a
+    /// page turn, a reflow, a re-seed from the store). The case that must NOT come through here is leaving and
+    /// re-entering annotation mode with the same ink, which is why the paged readers hide the canvas rather than
+    /// empty it (`AnnotationOverlaySpec.hidesWhenIdle`).
+    private func setDrawing(_ drawing: PKDrawing, on canvas: AnnotationCanvas) {
+        canvas.drawing = drawing
+        canvasSession?.clearHistory()
     }
 
     /// Rightmost inked column in document points, or `0` when there is no ink — `PKDrawing.bounds` is `.null` for an
@@ -288,19 +368,26 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
         return maxX.isFinite ? max(0, maxX) : 0
     }
 
+    /// Also where the session's tracking (`AnnotationCanvasController+Session.swift`) begins and ends: the picker
+    /// going up is the first moment the canvas is live, and it coming down is the last.
     private func applyToolPicker(visible: Bool) {
         guard let canvas else { return }
         if visible {
             guard canvas.window != nil else { return }
+            let isNewSession = toolPicker == nil
             let picker = toolPicker ?? PKToolPicker()
             toolPicker = picker
             picker.setVisible(true, forFirstResponder: canvas)
             picker.addObserver(canvas)
             canvas.becomeFirstResponder()
-        } else {
-            toolPicker?.setVisible(false, forFirstResponder: canvas)
-            toolPicker?.removeObserver(canvas)
+            if isNewSession {
+                beginSessionTracking()
+            }
+        } else if let picker = toolPicker {
+            picker.setVisible(false, forFirstResponder: canvas)
+            picker.removeObserver(canvas)
             toolPicker = nil
+            endSessionTracking()
         }
     }
 }
