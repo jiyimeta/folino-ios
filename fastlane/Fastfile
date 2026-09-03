@@ -202,7 +202,7 @@ platform :mac do
         build_number: build,
         includes: "preReleaseVersion"
       )
-      # CURRENT_PROJECT_VERSION is project-wide (project.yml:13), so the same version+build string exists on BOTH
+      # CURRENT_PROJECT_VERSION is project-wide (project.yml), so the same version+build string exists on BOTH
       # platforms of this app record. Without the platform filter this lane happily reports the iOS build as ready.
       target = builds.find do |b|
         b.version == build &&
