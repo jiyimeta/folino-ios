@@ -127,3 +127,130 @@ platform :ios do
     )
   end
 end
+
+platform :mac do
+  # `before_all` is scoped to its platform block: the :ios one above does NOT run for these lanes.
+  before_all do
+    app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_filepath: ENV.fetch("ASC_KEY_PATH"),
+      duration: 1200,
+      in_house: false
+    )
+  end
+
+  desc "Archive Release build and upload the Mac .pkg to App Store Connect (no submit)"
+  lane :archive_and_upload do |options|
+    version = options.fetch(:version)
+    build = options.fetch(:build)
+
+    gym(
+      scheme: "FolinoMac",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "build/fastlane",
+      output_name: "Folino-mac-#{version}-#{build}",
+      clean: true,
+      derived_data_path: "build/DerivedDataMac",
+      xcargs: "-skipPackagePluginValidation -skipMacroValidation",
+      export_options: {
+        method: "app-store",
+        signingStyle: "automatic",
+        teamID: CredentialsManager::AppfileConfig.try_fetch_value(:team_id)
+      },
+      export_xcargs: "-allowProvisioningUpdates"
+    )
+
+    # No Crashlytics dSYM upload, unlike the iOS lane: the Mac composes the no-op crash reporter because there is
+    # no Firebase registration for it yet (see the PARITY(macos) marker in AppBootstrap). Uploading symbols for an
+    # app that never reports would only make the absence harder to notice.
+
+    # `platform` defaults to "ios". Without it this uploads a Mac .pkg against the iOS platform of the shared
+    # app record — the two platforms live under one record, which is what makes the purchase universal.
+    upload_to_app_store(
+      app_identifier: "com.KeyNumber.Folino",
+      platform: "osx",
+      app_version: version,
+      pkg: lane_context[SharedValues::PKG_OUTPUT_PATH],
+      skip_screenshots: true,
+      skip_metadata: true,
+      submit_for_review: false,
+      force: true,
+      precheck_include_in_app_purchases: false,
+      run_precheck_before_submit: false
+    )
+  end
+
+  desc "Poll App Store Connect until the uploaded Mac build finishes processing"
+  lane :wait_for_build do |options|
+    require "spaceship"
+
+    version = options.fetch(:version)
+    build = options.fetch(:build).to_s
+    timeout = 1800
+    interval = 30
+
+    app = Spaceship::ConnectAPI::App.find("com.KeyNumber.Folino") \
+      || UI.user_error!("App not found in App Store Connect")
+
+    started_at = Time.now
+    loop do
+      builds = Spaceship::ConnectAPI::Build.all(
+        app_id: app.id,
+        version: version,
+        build_number: build,
+        includes: "preReleaseVersion"
+      )
+      # CURRENT_PROJECT_VERSION is project-wide (project.yml:13), so the same version+build string exists on BOTH
+      # platforms of this app record. Without the platform filter this lane happily reports the iOS build as ready.
+      target = builds.find do |b|
+        b.version == build &&
+          b.pre_release_version&.version == version &&
+          b.pre_release_version&.platform == "MAC_OS"
+      end
+
+      state = target&.processing_state
+      case state
+      when "VALID"
+        UI.success("Mac build #{version} (#{build}) is processed and ready to submit.")
+        break
+      when "INVALID", "FAILED"
+        UI.user_error!("Mac build processing failed (state=#{state}).")
+      end
+
+      if Time.now - started_at > timeout
+        UI.user_error!("Timed out after #{timeout}s waiting for Mac build #{version} (#{build}).")
+      end
+
+      UI.message("Waiting for processing... (state=#{state || 'not yet visible'})")
+      sleep interval
+    end
+  end
+
+  desc "Push Mac metadata + release notes (+ optional screenshots), then submit for review."
+  lane :submit do |options|
+    version = options.fetch(:version)
+    build = options.fetch(:build)
+    screenshots_path = options[:screenshots_path]   # may be nil
+
+    upload_to_app_store(
+      app_identifier: "com.KeyNumber.Folino",
+      platform: "osx",
+      app_version: version,
+      build_number: build.to_s,
+      skip_binary_upload: true,
+      skip_screenshots: screenshots_path.nil?,
+      screenshots_path: screenshots_path,
+      overwrite_screenshots: !screenshots_path.nil?,
+      # Metadata stays out of this lane until Mac copy exists as its own directory: fastlane/metadata is the iOS
+      # tree, and pushing it here would put iOS release notes on the Mac version. Mac metadata is entered by hand
+      # in App Store Connect until a Mac release is actually cut.
+      skip_metadata: true,
+      submit_for_review: true,
+      automatic_release: true,
+      force: true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+end

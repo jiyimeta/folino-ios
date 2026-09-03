@@ -13,12 +13,16 @@ cd "$(dirname "$0")/.."
 DERIVED="$(mktemp -d)"
 trap 'rm -rf "$DERIVED"' EXIT
 
+# Pin the configuration explicitly: APP below hardcodes .../Build/Products/Debug/folino.app, and if the
+# scheme's default configuration ever changed, xcodebuild would keep succeeding while writing to a path this
+# script no longer checks.
 xcodebuild \
   -project Folino.xcodeproj \
   -scheme FolinoMac \
   -destination 'platform=macOS' \
   -derivedDataPath "$DERIVED" \
   -skipPackagePluginValidation \
+  -configuration Debug \
   build >/dev/null
 
 APP="$DERIVED/Build/Products/Debug/folino.app"
