@@ -5,6 +5,26 @@ import SwiftUI
 /// inserts into it with `CommandGroup(before: .toolbar)`) rather than minting a menu of its own.
 enum AppCommandMenu: CaseIterable {
     case file, edit, notes, measures, score, view
+
+    /// The menu's own key in the App's `Localizable.xcstrings`, or `nil` for a menu that carries no title of its
+    /// own — `.file`, `.edit` and `.view` merge their rows into the system's own File/Edit/View menus
+    /// (`AppCommandMenus`'s `CommandGroup(after: .newItem)` / `.undoRedo` / `CommandGroup(before: .toolbar)`), so
+    /// there is no app-owned title to look up. Kept here, alongside the literal keys `AppCommandMenus` already
+    /// uses for `.notes` / `.measures` / `.score`, so `AppCommandSearch.menuPath(of:)` (Ⅳb Task 4) has one place to
+    /// read a menu's display name from instead of re-deriving it.
+    var titleKey: String? {
+        switch self {
+        case .notes: "mac.menu.notes"
+        case .measures: "mac.menu.measures"
+        case .score: "mac.menu.score"
+        case .file, .edit, .view: nil
+        }
+    }
+
+    /// `titleKey` as a `LocalizedStringKey`, or `nil` where there is no title to show.
+    var title: LocalizedStringKey? {
+        titleKey.map { LocalizedStringKey($0) }
+    }
 }
 
 /// The submenu a command sits in, or `nil` for a row that lives at the top of its menu.
@@ -60,6 +80,13 @@ struct AppCommand: Identifiable {
     let titleKey: String
     var title: LocalizedStringKey {
         LocalizedStringKey(titleKey)
+    }
+
+    /// `title`, resolved to a `String`. `LocalizedStringKey` cannot be read back once built — its stored key is
+    /// private to SwiftUI — so `AppCommandSearch` (Ⅳb Task 4) needs this to match a typed query against the row's
+    /// displayed title rather than only its stable `id`.
+    var localizedTitle: String {
+        Bundle.main.localizedString(forKey: titleKey, value: titleKey, table: nil)
     }
 
     let menu: AppCommandMenu
