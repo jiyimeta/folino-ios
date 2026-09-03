@@ -105,9 +105,16 @@ not a pipe's terminal stage.
 | 3 | `xcodebuild … -scheme Folino -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max,OS=26.5' … build` | 0 | `** BUILD SUCCEEDED **` |
 | 4 | `xcodebuild test … -scheme Folino … -only-testing:FolinoTests` | 0 | `** TEST SUCCEEDED **` — Swift Testing run: **41 tests in 8 suites, all passed** (0 failures), no `-testLanguage` / `-testRegion` flag, on this ja-JP host |
 | 5 | `xcodebuild test … -scheme FolinoMac -destination 'platform=macOS' … -only-testing:FolinoMacTests` | 0 | `** TEST SUCCEEDED **` — **51 tests in 7 suites, all passed**, no `-testLanguage` / `-testRegion` flag |
+| 6 | `xcodebuild … -scheme FolinoScreenshot … build` | 0 | `** BUILD SUCCEEDED **` — added to the gate after the final review found `project.yml` compiles `App/Shared` into this target too |
 
 Both counts match the expectation recorded going into this task (FolinoTests 41/8, FolinoMacTests 51/7,
 9 packages, both app builds green) exactly — no divergence to report.
+
+> **Re-run after the final-review fix wave, the `main` merge (swift-sheet-music 2.3.1 → 2.4.0, scanned-PDF
+> import) and the folded-top-bar revert fix — head `e5cba108`, run by the controller, 2026-09-03:** all six
+> steps exit 0. **FolinoTests 41 tests in 8 suites**, **FolinoMacTests 55 tests in 7 suites** (up from 51: the
+> fix wave added four), `FolinoScreenshot` build succeeding, 9 macOS packages, both app builds green. No count
+> moved across the `main` merge itself.
 
 One log artifact worth naming rather than skipping past: `xcodebuild`'s XCTest-style summary line for the
 iOS run reads `Executed 0 tests, with 0 failures` — that line only counts XCTest-style test methods, and every
