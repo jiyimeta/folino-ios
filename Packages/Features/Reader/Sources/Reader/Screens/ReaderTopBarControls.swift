@@ -39,6 +39,15 @@ struct ReaderTopBarControls: View {
     /// regular split view.
     var onToggleSidebar: (@MainActor () -> Void)?
 
+    /// Whether this device's top safe-area inset is wide enough to host a control — see
+    /// `ReaderTopBarLayout.hasCutoutTier(topSafeAreaInset:)`. Only the annotation row reads it (the reading row
+    /// never uses the band): with a tier, ✕ and the session-end control are the band's, not this row's.
+    var hasCutoutTier = false
+
+    /// Whether the annotation row draws its own undo / redo pair — true where PencilKit's tool picker does not
+    /// carry one, i.e. a compact horizontal size class. See `annotationUndoRedoGroup`.
+    var showsAnnotationUndoRedo = false
+
     /// How much of the trailing row has to fold into a single overflow menu, in the order the row gives things up.
     /// Ordered least to most aggressive, so `collapse >= .noteEditing` reads "note editing has folded". The order IS
     /// the priority statement: score-info and share go first, being read-once document actions; then the
@@ -81,6 +90,21 @@ struct ReaderTopBarControls: View {
     }
 
     var body: some View {
+        // The shadow is applied once, outside the branch, so the reading and annotation rows — and the editing row,
+        // which applies the same one — read as the same physical surface.
+        Group {
+            if viewModel.isAnnotating {
+                annotationRow
+            } else {
+                readingRow
+            }
+        }
+        .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
+    }
+
+    /// The Reader's own controls, outside a session — see the type's doc comment for the row's shape. The annotation
+    /// session's row is `annotationRow` (`ReaderTopBarControls+Annotation.swift`).
+    private var readingRow: some View {
         HStack(spacing: 12) {
             leadingAffordance
             pdfBadgeButton
@@ -113,7 +137,6 @@ struct ReaderTopBarControls: View {
             .layoutPriority(1)
             inspectorGroup
         }
-        .shadow(color: .gray.opacity(0.3), radius: 10, y: 5)
     }
 
     /// One candidate row for `ViewThatFits`. Only the score-actions / note-editing / annotation cluster lives here —
@@ -311,8 +334,9 @@ struct ReaderTopBarControls: View {
         ) { inspectors.playbackInspector }
     }
 
-    /// Shared with the editing strip — see `ReaderDisplayInspectorButton` for why it is a standalone view.
-    private var displayInspectorButton: some View {
+    /// Shared with the editing strip — see `ReaderDisplayInspectorButton` for why it is a standalone view. Internal
+    /// rather than private because the annotation row (`ReaderTopBarControls+Annotation.swift`) mounts it too.
+    var displayInspectorButton: some View {
         ReaderDisplayInspectorButton(
             viewModel: viewModel,
             anchorsInspectorPopovers: anchorsInspectorPopovers,
@@ -332,8 +356,9 @@ struct ReaderTopBarControls: View {
         .accessibilityLabel(label)
     }
 
-    /// The 44×44 tappable glyph shared by the strip's buttons and menus.
-    private func topBarIcon(_ systemImage: String) -> some View {
+    /// The 44×44 tappable glyph shared by the strip's buttons and menus. Internal for the same reason as
+    /// `topBarButton`: the annotation row's `⋯` menu is built out of it.
+    func topBarIcon(_ systemImage: String) -> some View {
         Image(systemName: systemImage)
             .font(.system(size: 20, weight: .medium))
             .frame(width: 44, height: 44)

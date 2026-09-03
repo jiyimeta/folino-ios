@@ -283,7 +283,11 @@ struct PagedScoreContainer: View {
             followCursor(.item(item))
         }
         .onChange(of: pageState.pageIndex) { _, _ in reprojectCurrentPage(viewport: viewport) }
-        .onChange(of: document) { _, _ in reprojectCurrentPage(viewport: viewport) }
+        .onChange(of: document) { _, _ in
+            // A reflow moves every anchor's projection; the canvas's undo snapshots describe the old geometry.
+            viewModel.annotationCanvasSession.clearHistory()
+            reprojectCurrentPage(viewport: viewport)
+        }
         // See `VerticalScoreContainer`: the part-index re-seed is the one path on which the model, not the canvas,
         // is the thing that moved.
         .onChange(of: viewModel.annotationReseedTicket) { _, _ in reprojectCurrentPage(viewport: viewport) }
@@ -293,8 +297,14 @@ struct PagedScoreContainer: View {
                 reprojectCurrentPage(viewport: viewport)
             }
         }
-        // Entering/leaving annotation hands the current page off between its static layer and the live canvas.
-        .onChange(of: viewModel.isAnnotating) { _, _ in reprojectCurrentPage(viewport: viewport) }
+        // Entering and leaving annotation mode hands the current page off between its static layer and the live
+        // canvas — and does so WITHOUT reprojecting. Entering and leaving is the one transition that
+        // must not touch the live canvas's drawing: a programmatic replacement leaves PencilKit's undo actions
+        // pointing at ink that is no longer there, so undo in the next session does nothing and then goes dead
+        // (`AnnotationCanvasSession`). Leaving hides the canvas instead of emptying it (`hidesWhenIdle`), the static
+        // ink layers take the page over, and entering finds the canvas already holding exactly this page's ink.
+        // Everything that genuinely moves the ink under the canvas — a page turn, a reflow, a re-seed — still
+        // reprojects, above.
         .onAppear { reprojectCurrentPage(viewport: viewport) }
     }
 
@@ -377,6 +387,8 @@ struct PagedScoreContainer: View {
         AnnotationOverlaySpec(
             isAnnotating: viewModel.isAnnotating,
             isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
+            canvasSession: viewModel.annotationCanvasSession,
+            hidesWhenIdle: true,
             displayDrawing: projectedAnnotations,
             onChange: { drawing in
                 // Capture ONLY while annotating: leaving annotation empties the live canvas, and that programmatic
@@ -429,15 +441,20 @@ struct PagedScoreContainer: View {
         )
     }
 
-    /// Not `private`: reactive reseed points (pageIndex / document / isAnnotating / model change) call this.
+    /// Not `private`: reactive reseed points (pageIndex / document / model change) call this.
     func reprojectCurrentPage(viewport: CGSize) {
         projectedAnnotations = projectedDrawing(viewport: viewport)
     }
 
-    /// The current page's annotation model projected to band space, or an empty drawing when not annotating / no
-    /// resolvable band (which force-clears the live canvas — see `reseedLiveCanvasForPageTurn`).
+    /// The current page's annotation model projected to band space, or an empty drawing when there is no resolvable
+    /// band (which force-clears the live canvas — see `reseedLiveCanvasForPageTurn`).
+    ///
+    /// Projected whether or not annotation is on, unlike the rest of the live-canvas machinery: while the mode is
+    /// off the canvas is hidden rather than emptied (see the `isAnnotating` note in `body`), so what this returns is
+    /// what the canvas will be holding when the mode comes back on — an empty drawing here would wipe it on the way
+    /// in.
     private func projectedDrawing(viewport: CGSize) -> PKDrawing {
-        guard viewModel.isAnnotating, let doc = document, let band = currentPageBand(viewport: viewport) else {
+        guard let doc = document, let band = currentPageBand(viewport: viewport) else {
             return PKDrawing()
         }
         return AnnotationAnchoring.displayPaged(
