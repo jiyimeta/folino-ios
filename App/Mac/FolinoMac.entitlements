@@ -5,7 +5,7 @@
     <!-- Required for Mac App Store distribution. -->
     <key>com.apple.security.app-sandbox</key>
     <true/>
-    <!-- File import via NSOpenPanel (App/Mac/MacCommands.swift) and export via the save panel (ScoreUI's
+    <!-- File import via NSOpenPanel (App/Mac/MacCommandContextWiring.swift) and export via the save panel (ScoreUI's
          ScoreExportPresentation). Under the sandbox both go through Powerbox: only the file the user actually
          picked crosses the boundary, which is why no security-scoped bookmark is needed — LiveScoreFileImporter
          copies the bytes while that scope is open. -->

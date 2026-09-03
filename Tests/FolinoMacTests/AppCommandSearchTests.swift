@@ -1,4 +1,8 @@
+// `@testable` for `PreviewEditorFactory`, which is internal to the Editor package — same reason
+// `AppCommandCatalogTests` takes it, and the repo rule is never to widen access for a test.
+@testable import Editor
 @testable import folino
+import Reader
 import SwiftUI
 import Testing
 
@@ -68,5 +72,21 @@ struct AppCommandSearchTests {
         let rest = table.first { $0.id == "notes.rest" }
         #expect(rest != nil)
         #expect(rest.map(AppCommandSearch.menuPath) == [AppCommandMenu.notes.title].compactMap(\.self))
+    }
+
+    /// Spec §9: "disabled rows are present in the results and carry their disabled state" — the sheet greys a row
+    /// rather than hiding it (final review F7). `results` does no filtering by `isEnabled` at all, so this fails
+    /// the moment someone adds that filtering rather than only the day it happens to matter.
+    @Test @MainActor func `disabled rows are present in the results and carry their disabled state`() {
+        let editor = PreviewEditorFactory.makeViewModel()
+        editor.isPlaybackActive = true
+        let context = AppCommandContext(editor: editor, host: ReaderEditingHost())
+        let tie = table.first { $0.id == "notes.tie" }
+        #expect(tie != nil)
+        #expect(tie.map { $0.isEnabled(context) } == false, "a mutating row must be disabled while playback runs")
+        let matches = AppCommandSearch.results(matching: "notes.tie", in: table)
+        #expect(matches.contains { $0.id == "notes.tie" }, "a disabled row must still appear in the results")
+        let found = matches.first { $0.id == "notes.tie" }
+        #expect(found.map { $0.isEnabled(context) } == false, "the returned row must still report its disabled state")
     }
 }

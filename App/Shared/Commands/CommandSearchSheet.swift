@@ -28,8 +28,26 @@ struct CommandSearchSheet: View {
                     .onTapGesture { run(command) }
             }
             .listStyle(.plain)
+            // Spec §6: `Esc` closes the sheet without running anything. Explicit rather than relying on any
+            // platform default (final review F4 — there wasn't one to rely on): a hidden button carrying
+            // `.keyboardShortcut(.cancelAction)` is the standard SwiftUI idiom for wiring `Esc` to dismiss, and it
+            // resolves the same way on both platforms this sheet reaches (macOS, and iPad with a hardware keyboard).
+            .overlay {
+                // Empty title, same as `AppCommandKeyMap`'s bare-key buttons: this control is never seen, only its
+                // shortcut fires, so there is no display string to carry a catalog key.
+                Button("") { isPresented = false }
+                    .keyboardShortcut(.cancelAction)
+                    .accessibilityHidden(true)
+                    .hidden()
+            }
         }
+        // A Mac-sized floor, not an iPhone one: `app.search` needs no editor and the key map that delivers its bare
+        // `Z` is mounted unconditionally, so this sheet is reachable from a hardware keyboard on every iPhone size
+        // (final review F3) — 420pt exceeds a compact iPhone's own width (375pt on a 13 mini, 320pt on an SE) and
+        // clips the search field and the key-equivalent column. iOS sizes itself from its content instead.
+        #if os(macOS)
         .frame(minWidth: 420, minHeight: 360)
+        #endif
         .onAppear { isFieldFocused = true }
     }
 

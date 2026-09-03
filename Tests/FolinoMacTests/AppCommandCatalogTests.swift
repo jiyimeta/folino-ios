@@ -146,6 +146,42 @@ struct AppCommandCatalogTests {
         #expect(showLibrary?.isEnabled(context) == true)
     }
 
+    /// `AppCommandMenus.effectiveTarget` (final review F2) falls back to exactly this context whenever no screen
+    /// has published a focused one — the Settings window key, or every window closed. Before this branch, Show
+    /// Library and Display Mode both worked with no focused window at all (the deleted `MacCommands`); this pins
+    /// that the fallback restores it, without also reviving Import or any editing row, which genuinely need a
+    /// focused window's own action.
+    @Test @MainActor func `the app level fallback answers Show Library, but leaves Import and editing rows dead`() {
+        let fallback = AppCommandContext.appLevelFallback(showLibrary: {})
+        let showLibrary = AppCommandCatalog.allIncludingOtherPlatforms.first { $0.id == "file.showLibrary" }
+        let importRow = AppCommandCatalog.allIncludingOtherPlatforms.first { $0.id == "file.import" }
+        let tie = AppCommandCatalog.allIncludingOtherPlatforms.first { $0.id == "notes.tie" }
+        #expect(showLibrary?.isEnabled(fallback) == true, "Show Library needs only openWindow, not a focused screen")
+        #expect(importRow?.isEnabled(fallback) == false, "Import still needs the focused window's own import action")
+        #expect(tie?.isEnabled(fallback) == false, "an editing row still needs a real editor")
+    }
+
+    /// The three Display Mode rows are not gated on Show Library at all (`AppCommandCatalog+Shell.swift`'s
+    /// `displayMode.isEnabled` is always `{ _ in true }`), so they must answer from the fallback whether or not
+    /// `showLibrary` itself was filled.
+    @Test @MainActor func `display mode stays live from the app level fallback`() {
+        let fallback = AppCommandContext.appLevelFallback(showLibrary: nil)
+        for mode in ["page", "vertical", "horizontal"] {
+            let row = AppCommandCatalog.allIncludingOtherPlatforms.first { $0.id == "view.displayMode.\(mode)" }
+            #expect(row?.isEnabled(fallback) == true, "\(mode)")
+        }
+    }
+
+    /// Final review F5: the three menus with their own `CommandMenu` (`AppCommandMenus.body`) must read the exact
+    /// same title the search breadcrumb does (`AppCommandSearch.menuPath`, which reads `AppCommandMenu.title`) — the
+    /// one declaration `titleKey` names, not two that could drift apart.
+    @Test func `a menu with its own CommandMenu names itself the same way the search breadcrumb does`() {
+        for menu: AppCommandMenu in [.notes, .measures, .score] {
+            #expect(menu.title != nil, "\(menu)")
+            #expect(menu.commandMenuTitle == menu.title, "\(menu)")
+        }
+    }
+
     /// A small fixture table for the two tests below — NOT `AppCommandCatalog.allIncludingOtherPlatforms`. Asserting
     /// the platform-filter mechanism against the real table doesn't work today: `file.showLibrary` / `file.import`
     /// (the only Mac-only rows) carry modifier-bearing shortcuts, so they never contribute a bare key either way,

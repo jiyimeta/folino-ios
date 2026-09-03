@@ -28,6 +28,19 @@ final class AppCommandContext {
         self.editor = editor
         self.host = host
     }
+
+    /// What `AppCommandMenus` reads when no screen has published a focused context — the Settings window is key on
+    /// macOS, or every window is closed (final review F2). `showLibrary` is the one row that still has to work from
+    /// there: it needs nothing but `openWindow`, exactly like the old `MacCommands`, which drove it with no focused
+    /// value at all (`git show 9ab26f47:App/Mac/MacCommands.swift`) — deleted in this branch, replaced by this table.
+    /// `importScore` is left `nil` on purpose: Import genuinely needs the FOCUSED window's own import action, the
+    /// same reason the old code disabled it when `libraryImportAction` was nil; every editing row stays disabled
+    /// too, since its own `isEnabled` reads `editor` / `host`, both `nil` here.
+    static func appLevelFallback(showLibrary: (() -> Void)?) -> AppCommandContext {
+        let context = AppCommandContext(editor: nil, host: nil)
+        context.showLibrary = showLibrary
+        return context
+    }
 }
 
 private struct AppCommandContextKey: FocusedValueKey {

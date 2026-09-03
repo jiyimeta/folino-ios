@@ -5,6 +5,27 @@ import SwiftUI
 /// the focused value.
 struct AppCommandMenus: Commands {
     @FocusedValue(\.appCommandContext) private var target
+    /// Scene-independent, so this reads even with no window key — exactly what `effectiveTarget`'s fallback needs.
+    /// Cross-platform (`OpenWindowAction` exists on iOS too); only its use below is Mac-only.
+    @Environment(\.openWindow) private var openWindow
+
+    /// The context every row actually reads: the focused one if a screen published it, otherwise an app-level
+    /// fallback (final review F2) so Show Library and the whole Display Mode submenu still answer with nothing
+    /// focused — the Settings window key, or every window closed, both states the old `MacCommands` survived
+    /// (`git show 9ab26f47:App/Mac/MacCommands.swift`). Never `nil`: every row's own `isEnabled` decides its state
+    /// from here, instead of a blanket disable that would also take Import and every editing row down with it —
+    /// which stay correctly disabled anyway, since their own rule reads `showLibrary`/`importScore`/`editor`/`host`,
+    /// none of which this fallback fills.
+    private var effectiveTarget: AppCommandContext {
+        guard let target else {
+            #if os(macOS)
+            return .appLevelFallback(showLibrary: { openWindow(id: MacWindowID.library) })
+            #else
+            return .appLevelFallback(showLibrary: nil)
+            #endif
+        }
+        return target
+    }
 
     var body: some Commands {
         CommandGroup(after: .saveItem) {
@@ -13,25 +34,27 @@ struct AppCommandMenus: Commands {
             } label: {
                 Text(AppCommandSubmenu.revertTo.title)
             }
-            .disabled(target == nil)
         }
         CommandGroup(after: .newItem) {
             // Top-level `.file` rows only — Show Library and Import. The revert rows are in the submenu above.
             ForEach(AppCommandCatalog.topLevelCommands(in: .file)) { command in
-                AppCommandMenuItem(command: command, target: target)
+                AppCommandMenuItem(command: command, target: effectiveTarget, hasFocusedTarget: target != nil)
             }
         }
         CommandGroup(after: .undoRedo) {
             Divider()
             items(in: .edit)
         }
-        CommandMenu(Text("mac.menu.notes")) {
+        // `commandMenuTitle` (`AppCommand.swift`), not a string literal here — final review F5: the search sheet's
+        // breadcrumb (`AppCommandSearch.menuPath`) reads the very same `AppCommandMenu.title`, so the two cannot
+        // name a menu two different ways.
+        CommandMenu(Text(AppCommandMenu.notes.commandMenuTitle)) {
             items(in: .notes)
         }
-        CommandMenu(Text("mac.menu.measures")) {
+        CommandMenu(Text(AppCommandMenu.measures.commandMenuTitle)) {
             items(in: .measures)
         }
-        CommandMenu(Text("mac.menu.score")) {
+        CommandMenu(Text(AppCommandMenu.score.commandMenuTitle)) {
             items(in: .score)
         }
         // Lands in the system's own View menu, not a menu of its own — matches where `MacCommands`'s Display Mode
@@ -46,7 +69,7 @@ struct AppCommandMenus: Commands {
     @ViewBuilder
     private func items(in menu: AppCommandMenu) -> some View {
         ForEach(AppCommandCatalog.topLevelCommands(in: menu)) { command in
-            AppCommandMenuItem(command: command, target: target)
+            AppCommandMenuItem(command: command, target: effectiveTarget, hasFocusedTarget: target != nil)
         }
         ForEach(AppCommandCatalog.submenus(in: menu), id: \.self) { submenu in
             Menu {
@@ -54,7 +77,6 @@ struct AppCommandMenus: Commands {
             } label: {
                 Text(submenu.title)
             }
-            .disabled(target == nil)
         }
     }
 
@@ -62,24 +84,29 @@ struct AppCommandMenus: Commands {
     /// also holds a second kind of row (`shell`'s Show Library / Import) that `items(in:)` would otherwise mix in.
     private func items(in menu: AppCommandMenu, submenu: AppCommandSubmenu) -> some View {
         ForEach(AppCommandCatalog.commands(in: menu, submenu: submenu)) { command in
-            AppCommandMenuItem(command: command, target: target)
+            AppCommandMenuItem(command: command, target: effectiveTarget, hasFocusedTarget: target != nil)
         }
     }
 }
 
 private struct AppCommandMenuItem: View {
     let command: AppCommand
-    let target: AppCommandContext?
+    /// The real focused context, or `AppCommandMenus`'s app-level fallback — never `nil` (final review F2).
+    let target: AppCommandContext
+    /// Whether a screen actually published a focused context — kept apart from `target` (which is never nil now)
+    /// because `AppCommandShortcut`'s provisional delivery-A branch means something narrower: a view-scoped editing
+    /// target actually being focused, not merely "some context, possibly the app-level fallback, answers".
+    let hasFocusedTarget: Bool
 
     var body: some View {
-        let enabled = target.map(command.isEnabled) ?? false
+        let enabled = command.isEnabled(target)
         Button {
             // `isEnabled` is asked again here, not just for `.disabled` above — the same rule, and for the same
             // reason, as `AppCommandKeyMap`: a disabled control is a rendering fact and the guard is a correctness
             // one. `.disabled` holds only if this `Commands` body is re-evaluated when the `@Observable` editor's
             // `isPlaybackActive` flips, which is unverified for a menu bar, and §6.2 is not a claim to leave
             // resting on that.
-            if let target, command.isEnabled(target) {
+            if command.isEnabled(target) {
                 command.perform(target)
             }
         } label: {
@@ -97,7 +124,7 @@ private struct AppCommandMenuItem: View {
             }
         }
         .disabled(!enabled)
-        .modifier(AppCommandShortcut(command: command, hasTarget: target != nil))
+        .modifier(AppCommandShortcut(command: command, hasTarget: hasFocusedTarget))
     }
 }
 

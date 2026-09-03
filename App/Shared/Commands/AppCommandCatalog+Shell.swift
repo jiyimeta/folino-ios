@@ -1,5 +1,6 @@
 import Domain
 import Foundation
+import Reader
 import SwiftUI
 
 /// Split out of `AppCommandCatalog.swift` so that file stays under SwiftLint's `file_length` budget — the same

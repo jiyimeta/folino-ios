@@ -176,5 +176,14 @@ struct EditableReaderScreen: View {
         // the host alive for the life of the process (same reasoning as `MacEditableReaderScreen.wireOnce`).
         let searching = $isSearching
         commandContext.presentSearch = { searching.wrappedValue = true }
+        // File ▸ Revert To ×2 (final review F1): the iOS chrome already owns this confirmation — `EditorDiscardButton`
+        // / `EditorSessionEndButton` (mounted by the cutout tier or `EditorTopBarView`'s folded row, whichever this
+        // device has) and `EditorTopBarView.revertMenuRow` all raise the same popover by setting these same two
+        // `EditorViewModel` flags. Setting them here from the menu bar reaches whichever one is actually in the tree,
+        // the same way `AppCommandKeyMap`'s bare keys reach a view-level control instead of duplicating it. A local
+        // copy of the class reference, not `self`, for the same reason `searching` above is a binding and not `self`.
+        let viewModel = editorViewModel
+        commandContext.confirmDiscard = { viewModel.isConfirmingDiscard = true }
+        commandContext.confirmRevert = { viewModel.isConfirmingRevert = true }
     }
 }

@@ -9,9 +9,10 @@ enum AppCommandMenu: CaseIterable {
     /// The menu's own key in the App's `Localizable.xcstrings`, or `nil` for a menu that carries no title of its
     /// own — `.file`, `.edit` and `.view` merge their rows into the system's own File/Edit/View menus
     /// (`AppCommandMenus`'s `CommandGroup(after: .newItem)` / `.undoRedo` / `CommandGroup(before: .toolbar)`), so
-    /// there is no app-owned title to look up. Kept here, alongside the literal keys `AppCommandMenus` already
-    /// uses for `.notes` / `.measures` / `.score`, so `AppCommandSearch.menuPath(of:)` (Ⅳb Task 4) has one place to
-    /// read a menu's display name from instead of re-deriving it.
+    /// there is no app-owned title to look up. The one place `.notes` / `.measures` / `.score` name themselves —
+    /// `AppCommandMenus`'s own `CommandMenu`s read it through `commandMenuTitle` below, and
+    /// `AppCommandSearch.menuPath(of:)` (Ⅳb Task 4) reads it directly — so a rename here cannot leave the menu bar
+    /// and the search breadcrumb naming a menu two different ways (final review F5).
     var titleKey: String? {
         switch self {
         case .notes: "mac.menu.notes"
@@ -24,6 +25,20 @@ enum AppCommandMenu: CaseIterable {
     /// `titleKey` as a `LocalizedStringKey`, or `nil` where there is no title to show.
     var title: LocalizedStringKey? {
         titleKey.map { LocalizedStringKey($0) }
+    }
+
+    /// `title`, for the three menus that get a `CommandMenu` of their own — `.notes` / `.measures` / `.score`.
+    /// `AppCommandMenus.body` reads this rather than a string literal of its own, so its `CommandMenu` titles and
+    /// `AppCommandSearch.menuPath`'s breadcrumb (which reads `title` directly) can never name a menu two different
+    /// ways (final review F5: they used to be two separate declarations, with nothing pinning them to agree).
+    /// Traps rather than force-unwrapping (`force_unwrapping` is an opt-in SwiftLint rule this repo enables) on
+    /// `.file` / `.edit` / `.view`, which is a caller error — those three fold into a system menu and were never
+    /// meant to reach a `CommandMenu` label at all.
+    var commandMenuTitle: LocalizedStringKey {
+        guard let title else {
+            preconditionFailure("\(self) has no title of its own — it merges into a system menu")
+        }
+        return title
     }
 }
 
