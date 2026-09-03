@@ -297,8 +297,14 @@ struct PagedScoreContainer: View {
                 reprojectCurrentPage(viewport: viewport)
             }
         }
-        // Entering/leaving annotation hands the current page off between its static layer and the live canvas.
-        .onChange(of: viewModel.isAnnotating) { _, _ in reprojectCurrentPage(viewport: viewport) }
+        // Entering and leaving annotation mode hands the current page off between its static layer and the live
+        // canvas — and does so WITHOUT reprojecting. Entering and leaving is the one transition that
+        // must not touch the live canvas's drawing: a programmatic replacement leaves PencilKit's undo actions
+        // pointing at ink that is no longer there, so undo in the next session does nothing and then goes dead
+        // (`AnnotationCanvasSession`). Leaving hides the canvas instead of emptying it (`hidesWhenIdle`), the static
+        // ink layers take the page over, and entering finds the canvas already holding exactly this page's ink.
+        // Everything that genuinely moves the ink under the canvas — a page turn, a reflow, a re-seed — still
+        // reprojects, above.
         .onAppear { reprojectCurrentPage(viewport: viewport) }
     }
 
@@ -382,7 +388,7 @@ struct PagedScoreContainer: View {
             isAnnotating: viewModel.isAnnotating,
             isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
             canvasSession: viewModel.annotationCanvasSession,
-            historyKey: pageState.pageIndex,
+            hidesWhenIdle: true,
             displayDrawing: projectedAnnotations,
             onChange: { drawing in
                 // Capture ONLY while annotating: leaving annotation empties the live canvas, and that programmatic
@@ -435,15 +441,20 @@ struct PagedScoreContainer: View {
         )
     }
 
-    /// Not `private`: reactive reseed points (pageIndex / document / isAnnotating / model change) call this.
+    /// Not `private`: reactive reseed points (pageIndex / document / model change) call this.
     func reprojectCurrentPage(viewport: CGSize) {
         projectedAnnotations = projectedDrawing(viewport: viewport)
     }
 
-    /// The current page's annotation model projected to band space, or an empty drawing when not annotating / no
-    /// resolvable band (which force-clears the live canvas — see `reseedLiveCanvasForPageTurn`).
+    /// The current page's annotation model projected to band space, or an empty drawing when there is no resolvable
+    /// band (which force-clears the live canvas — see `reseedLiveCanvasForPageTurn`).
+    ///
+    /// Projected whether or not annotation is on, unlike the rest of the live-canvas machinery: while the mode is
+    /// off the canvas is hidden rather than emptied (see the `isAnnotating` note in `body`), so what this returns is
+    /// what the canvas will be holding when the mode comes back on — an empty drawing here would wipe it on the way
+    /// in.
     private func projectedDrawing(viewport: CGSize) -> PKDrawing {
-        guard viewModel.isAnnotating, let doc = document, let band = currentPageBand(viewport: viewport) else {
+        guard let doc = document, let band = currentPageBand(viewport: viewport) else {
             return PKDrawing()
         }
         return AnnotationAnchoring.displayPaged(
@@ -467,7 +478,7 @@ struct PagedScoreContainer: View {
     func reseedLiveCanvasForPageTurn(viewport: CGSize) {
         let drawing = projectedDrawing(viewport: viewport)
         projectedAnnotations = drawing
-        annotationHandle.reseedForPageTurn(drawing, historyKey: pageState.pageIndex)
+        annotationHandle.reseedForPageTurn(drawing)
     }
 
     var scoreOptions: ScoreViewOptions {

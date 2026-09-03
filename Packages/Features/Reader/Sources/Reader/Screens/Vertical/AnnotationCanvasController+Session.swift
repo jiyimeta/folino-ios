@@ -3,23 +3,20 @@ import Foundation
 import PencilKit
 
 // What the controller tells the strip about the session in progress — undo / redo availability and whether the ink
-// has changed — and how the per-page undo managers reach the canvas. Split out of `AnnotationCanvasView.swift` to
-// keep that file inside SwiftLint's file-length budget; the stored properties it works on stay declared with the
-// controller.
+// has changed. Split out of `AnnotationCanvasView.swift` to keep that file inside SwiftLint's file-length budget;
+// the stored properties it works on stay declared with the controller.
 //
-// The history is PencilKit's own, on a manager we supply per page — see `AnnotationCanvasSession`. The strip's undo
-// and redo drive that manager exactly as the palette's buttons and a three-finger swipe do, so the three can never
-// disagree; this controller only watches it, to keep the strip's buttons current.
+// The history is PencilKit's own, on the manager `AnnotationCanvasSession` owns. The strip's undo and redo drive
+// that manager exactly as the palette's buttons and a three-finger swipe do, so the three can never disagree; this
+// controller only watches it, to keep the strip's buttons current.
 
 extension AnnotationCanvasController {
-    /// Point the canvas at `historyKey`'s undo manager and watch it. Called whenever the key changes — a page turn,
-    /// or the first `update` — and at session start, so a canvas that outlived a `clearHistory` re-attaches.
+    /// Point the canvas at the session's undo manager and watch it. Called once the canvas and the session are both
+    /// known, and again if a later `update` brings a different session object.
     func attachUndoManager() {
         guard let canvas, let canvasSession else { return }
-        let manager = canvasSession.undoManager(for: historyKey)
-        if canvas.pageUndoManager !== manager {
-            canvas.pageUndoManager = manager
-        }
+        let manager = canvasSession.undoManager
+        canvas.sessionUndoManager = manager
         for observer in undoObservers {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -60,7 +57,7 @@ extension AnnotationCanvasController {
         changedOnEarlierPages = false
         canvasSession?.performUndo = { [weak canvas] in canvas?.undoManager?.undo() }
         canvasSession?.performRedo = { [weak canvas] in canvas?.undoManager?.redo() }
-        attachUndoManager()
+        publishSessionState()
     }
 
     /// Mirror of `beginSessionTracking`, run when the tool picker comes down. The history stays — it is what the

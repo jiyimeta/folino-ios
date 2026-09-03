@@ -33,10 +33,8 @@ final class AnnotationCanvasHandle {
     fileprivate weak var controller: AnnotationCanvasController?
 
     /// Force the live canvas to `drawing` for the new page and suppress echo capture until the user next draws.
-    /// `historyKey` names the page the canvas now shows, so its undo history is the one the strip works on — see
-    /// `AnnotationOverlaySpec.historyKey`.
-    func reseedForPageTurn(_ drawing: PKDrawing, historyKey: Int) {
-        controller?.reseedForPageTurn(drawing, historyKey: historyKey)
+    func reseedForPageTurn(_ drawing: PKDrawing) {
+        controller?.reseedForPageTurn(drawing)
     }
 }
 
@@ -52,11 +50,11 @@ struct AnnotationOverlaySpec {
     /// Where the controller reports undo / redo availability and whether the session changed the ink — read by the
     /// strip's annotation controls. `nil` (the default) for previews and hosts with no strip to report to.
     var canvasSession: AnnotationCanvasSession?
-    /// Which page's undo history the canvas is showing — the page index in a paged reader, `0` in a continuous
-    /// one. Histories are kept per page across page turns and sessions (`AnnotationCanvasSession.histories`).
-    /// A page-turn commit hands the new key over imperatively (`AnnotationCanvasHandle.reseedForPageTurn`), ahead
-    /// of the render that carries it here.
-    var historyKey = 0
+    /// Whether this host draws its committed ink some other way while annotation is off — the paged readers do, in
+    /// per-page `StaticInkLayer`s. Those hosts get the canvas HIDDEN between sessions rather than emptied, which is
+    /// what lets PencilKit's undo survive the gap (`AnnotationCanvasSession`). A continuous reader, whose only ink
+    /// on screen IS this canvas, leaves it `false` and keeps showing it.
+    var hidesWhenIdle = false
     /// The model projected to the current layout (Task B2 `display(...)`). The controller seeds the canvas with this
     /// whenever it changes — on load and on reflow — guarded against echoing the user's own in-progress ink.
     var displayDrawing: PKDrawing
@@ -72,14 +70,15 @@ struct AnnotationOverlaySpec {
     var isInkDimmed = false
 }
 
-/// The live canvas, with one addition: the undo manager PencilKit registers its strokes on is supplied per page by
-/// the controller (`pageUndoManager`) rather than found on the responder chain, so a page's history survives a page
-/// turn and a session — see `AnnotationCanvasSession`. Falls back to the chain until the controller attaches one.
+/// The live canvas, with one addition: the undo manager PencilKit registers its strokes on is supplied by the
+/// controller (`sessionUndoManager`) rather than found on the responder chain, so the history lives as long as the
+/// score is open rather than as long as the canvas is first responder — see `AnnotationCanvasSession`. Falls back to
+/// the chain until the controller attaches one.
 final class AnnotationCanvas: PKCanvasView {
-    var pageUndoManager: UndoManager?
+    var sessionUndoManager: UndoManager?
 
     override var undoManager: UndoManager? {
-        pageUndoManager ?? super.undoManager
+        sessionUndoManager ?? super.undoManager
     }
 }
 
@@ -126,11 +125,8 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
     /// Latched at a page turn if the page being left differed from its seed: a change on an earlier page is still a
     /// change, even though that page's undo stack is gone.
     var changedOnEarlierPages = false
-    /// Which page's undo manager in `canvasSession` the canvas currently stands on — see
-    /// `AnnotationOverlaySpec.historyKey`.
-    var historyKey = 0
-    /// The current page's undo manager's notifications, observed so the strip's buttons follow a swipe or a palette
-    /// undo that never passes through this controller. Re-pointed at every page turn (`attachUndoManager`).
+    /// The session undo manager's notifications, observed so the strip's buttons follow a swipe or a palette undo
+    /// that never passes through this controller.
     var undoObservers: [any NSObjectProtocol] = []
 
     /// Leave headroom under the GPU's hard 16,384px max 2D-texture edge (see the class ROOT-CAUSE NOTE) so we split the
@@ -181,8 +177,7 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
         onChange = spec.onChange
         spec.handle.controller = self
         canvasSession = spec.canvasSession
-        if historyKey != spec.historyKey || canvas.pageUndoManager == nil {
-            historyKey = spec.historyKey
+        if canvas.sessionUndoManager !== spec.canvasSession?.undoManager {
             attachUndoManager()
         }
         state = spec.state
@@ -201,7 +196,14 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
         // `isAnnotating` (the annotation toggle is hidden during editing, but this guards belt-and-suspenders).
         canvas.isUserInteractionEnabled = !spec.isInkDimmed && spec.isAnnotating
         canvas.alpha = spec.isInkDimmed ? 0.4 : 1.0
-        applyDrawing(spec.displayDrawing)
+        // Hidden rather than emptied between sessions where the host draws its own committed ink — see
+        // `AnnotationOverlaySpec.hidesWhenIdle`. While hidden the drawing is left exactly as the last session left
+        // it, which is what keeps PencilKit's undo working when the next one opens; nothing is on screen to be
+        // stale, and the seed the next session needs arrives through `applyDrawing` when it unhides.
+        canvas.isHidden = spec.hidesWhenIdle && !spec.isAnnotating
+        if !canvas.isHidden {
+            applyDrawing(spec.displayDrawing)
+        }
         applyToolPicker(visible: spec.isAnnotating)
         sync(scrollOffset: scroll.contentOffset)
     }
@@ -306,10 +308,7 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
     /// echo could satisfy and skip — the original linger). Guard the canvas FIRST so a nil canvas never advances
     /// `lastSeededDrawing` past an un-applied seed (which would later read as byte-equal and silently skip).
     ///
-    /// `historyKey` switches the canvas onto the new page's undo manager (see `AnnotationOverlaySpec.historyKey`);
-    /// it has to arrive here rather than through the next `update`, or the first stroke on the new page would be
-    /// registered on the old page's manager.
-    func reseedForPageTurn(_ drawing: PKDrawing, historyKey: Int) {
+    func reseedForPageTurn(_ drawing: PKDrawing) {
         guard let canvas else { return }
         ignoreEchoesUntilUserDraws = true
         lastSeededDrawing = drawing
@@ -322,11 +321,7 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
             }
             sessionSeedBytes = drawing.dataRepresentation()
         }
-        canvas.drawing = drawing
-        if self.historyKey != historyKey {
-            self.historyKey = historyKey
-            attachUndoManager()
-        }
+        setDrawing(drawing, on: canvas)
         publishSessionState()
     }
 
@@ -339,19 +334,30 @@ final class AnnotationCanvasController: NSObject, PKCanvasViewDelegate {
             lastSeededDrawing = drawing
             inkRightEdge = Self.rightEdge(of: drawing)
             if canvas.drawing.dataRepresentation() != bytes {
-                // A reseed mid-session is the same ink re-projected (a reflow, or the re-entry seed landing a render
-                // after the session began), not an edit: carry the baseline forward while nothing has changed, so
-                // the strip keeps reading "unchanged". Once something HAS changed the seed stays where it was — the
-                // ✕ restore works from the model, not from here. The undo history is untouched here: a programmatic
-                // set neither clears nor pushes onto the manager, and a reflow's history is dropped by the container
-                // (`clearHistory`), which is the one that knows the layout moved.
+                // A reseed mid-session is the same ink re-projected (a reflow, or a re-seed from the store), not an
+                // edit: carry the baseline forward while nothing has changed, so the strip keeps reading
+                // "unchanged". Once something HAS changed the seed stays where it was — the ✕ restore works from the
+                // model, not from here.
                 if sessionSeedBytes != nil, !sessionHasChangesNow {
                     sessionSeedBytes = bytes
                 }
-                canvas.drawing = drawing
+                setDrawing(drawing, on: canvas)
                 publishSessionState()
             }
         }
+    }
+
+    /// Replace what the canvas holds, and end the undo history with it.
+    ///
+    /// The history has to go: PencilKit's undo actions restore the drawing they were registered against, and after a
+    /// wholesale replacement the manager still reports `canUndo` while undoing does nothing and empties the stack —
+    /// a button that lies. Every caller here is a moment the old ink genuinely stopped being what is on screen (a
+    /// page turn, a reflow, a re-seed from the store). The case that must NOT come through here is leaving and
+    /// re-entering annotation mode with the same ink, which is why the paged readers hide the canvas rather than
+    /// empty it (`AnnotationOverlaySpec.hidesWhenIdle`).
+    private func setDrawing(_ drawing: PKDrawing, on canvas: AnnotationCanvas) {
+        canvas.drawing = drawing
+        canvasSession?.clearHistory()
     }
 
     /// Rightmost inked column in document points, or `0` when there is no ink — `PKDrawing.bounds` is `.null` for an

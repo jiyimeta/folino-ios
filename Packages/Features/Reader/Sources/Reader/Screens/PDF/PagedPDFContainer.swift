@@ -194,8 +194,10 @@ struct PagedPDFContainer: View {
                 reprojectCurrentPage(viewport: viewport)
             }
         }
-        // Entering/leaving annotation hands the current page off between its static layer and the live canvas.
-        .onChange(of: viewModel.isAnnotating) { _, _ in reprojectCurrentPage(viewport: viewport) }
+        // Entering and leaving annotation mode hands the current page off between its static layer and the live
+        // canvas. See `PagedScoreContainer`: that transition deliberately does NOT reproject, because
+        // replacing the live canvas's drawing is what kills PencilKit's undo between sessions. The canvas is hidden
+        // while the mode is off (`hidesWhenIdle`) and the static ink layers take the page over.
         // Turn to the page the playing cursor (or its lookahead) sits on, honoring the auto-follow opt-out.
         .onChange(of: pageFollowKey) { old, new in
             guard readerShouldFollowPlayback(
@@ -231,7 +233,7 @@ struct PagedPDFContainer: View {
             isAnnotating: viewModel.isAnnotating,
             isPencilPreferred: UIDevice.current.userInterfaceIdiom == .pad,
             canvasSession: viewModel.annotationCanvasSession,
-            historyKey: pageState.pageIndex,
+            hidesWhenIdle: true,
             displayDrawing: projectedAnnotations,
             onChange: { drawing in
                 // Capture ONLY while annotating. Leaving annotation empties the live canvas (static layers take over),
@@ -276,15 +278,19 @@ struct PagedPDFContainer: View {
         )
     }
 
-    /// Not `private`: reactive reseed points (pageIndex / isAnnotating / model change) call this.
+    /// Not `private`: reactive reseed points (pageIndex / model change) call this.
     func reprojectCurrentPage(viewport: CGSize) {
         projectedAnnotations = projectedDrawing(viewport: viewport)
     }
 
-    /// The current page's annotation model projected to band space, or an empty drawing when not annotating / no
-    /// resolvable page frame (which force-clears the live canvas — see `reseedLiveCanvasForPageTurn`).
+    /// The current page's annotation model projected to page space, or an empty drawing when there is no resolvable
+    /// page frame (which force-clears the live canvas — see `reseedLiveCanvasForPageTurn`).
+    ///
+    /// Projected whether or not annotation is on — see the mirror of this comment in `PagedScoreContainer`: the
+    /// canvas is hidden rather than emptied while the mode is off, so an empty drawing here would wipe it on the
+    /// way back in.
     private func projectedDrawing(viewport: CGSize) -> PKDrawing {
-        guard viewModel.isAnnotating, let frame = currentPageFrame(viewport: viewport) else {
+        guard let frame = currentPageFrame(viewport: viewport) else {
             return PKDrawing()
         }
         let idx = min(max(pageState.pageIndex, 0), max(document.pageCount - 1, 0))
@@ -299,7 +305,7 @@ struct PagedPDFContainer: View {
     func reseedLiveCanvasForPageTurn(viewport: CGSize) {
         let drawing = projectedDrawing(viewport: viewport)
         projectedAnnotations = drawing
-        annotationHandle.reseedForPageTurn(drawing, historyKey: pageState.pageIndex)
+        annotationHandle.reseedForPageTurn(drawing)
     }
 
     private func commitPinch(

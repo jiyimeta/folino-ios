@@ -132,16 +132,15 @@ struct AnnotationSessionTests {
     @Test func `discarding and clearing end the undo history, finishing keeps it`() {
         let vm = Self.makeVM()
         vm.annotationDrawings = Self.strokes(1)
-        let manager = vm.annotationCanvasSession.undoManager(for: 0)
+        let manager = vm.annotationCanvasSession.undoManager
         let target = NSObject()
         manager.registerUndo(withTarget: target) { _ in }
         vm.beginAnnotationSession()
         vm.annotationCanvasSession.canUndo = true
         vm.finishAnnotationSession()
+        // The history is what carries undo into the next session, so leaving must not touch it.
         #expect(manager.canUndo)
         #expect(vm.annotationCanvasSession.canUndo)
-        // The same page gets the same manager back — that is what carries the history across sessions.
-        #expect(vm.annotationCanvasSession.undoManager(for: 0) === manager)
 
         vm.beginAnnotationSession()
         vm.annotationCanvasSession.hasChanges = true
