@@ -21,8 +21,11 @@ struct AppCommandKeyMap: View {
         }
     }
 
+    /// `.current`, not `.all` — the menu (`AppCommandMenus`) and this key map have to read the same platform-
+    /// filtered population, or a platform-restricted row would stay hidden from the menu while its bare key kept
+    /// firing here.
     private var bindings: [KeyBinding] {
-        AppCommandCatalog.all.flatMap { command in
+        AppCommandCatalog.current.flatMap { command in
             command.bareKeys.map { KeyBinding(command: command, key: $0) }
         }
     }
