@@ -158,6 +158,9 @@ targets:
     sources:
       - path: App/Shared
       - path: App/Mac
+      - path: App/PrivacyInfo.xcprivacy
+        type: file
+        buildPhase: resources
       - path: App/Resources/Assets.xcassets
         type: file
         buildPhase: resources

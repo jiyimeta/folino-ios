@@ -158,10 +158,14 @@ public struct MacReaderRootScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .toolbar {
+            // PARITY(macos): File ▸ Export… — export is reachable from this toolbar and from the library rows, but
+            //   not from the menu bar, which is its Mac-idiomatic home. The command belongs in
+            //   `App/Mac/MacCommands.swift`, a file a parallel session was rewriting when Ⅷ landed. Placement, not
+            //   capability.
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     ShareFormatMenuItems(
-                        loadFormats: { await viewModel.availableShareFormats() },
+                        loadFormats: { [viewModel] in await viewModel.availableShareFormats() },
                         onShare: { format in Task { await viewModel.requestShare(format: format) } },
                     )
                 } label: {
