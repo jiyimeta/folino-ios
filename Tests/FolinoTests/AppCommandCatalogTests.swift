@@ -39,6 +39,22 @@ struct AppCommandCatalogTests {
         #expect(search?.isEnabled(context) == true, "a row that needs no editor must survive the session gate")
     }
 
+    /// Justifies `EditableReaderScreen` mounting one `AppCommandKeyMap` unconditionally rather than gating it on
+    /// `editingHost.isEditing` (Ⅳb Task 7): a bare letter bound to an editing row must already be disabled outside
+    /// a session through the row's OWN `isEnabled` (Task 6's `requiresEditor` gate), and `app.search`'s bare `Z`
+    /// (which needs no editor) must stay enabled there — the same two facts `AppCommandKeyMap.bindings` reads to
+    /// decide whether each button fires, not a re-derivation of the catalog's own gate.
+    @Test @MainActor func `an unconditional key map still disables an editing row's bare key outside a session`() {
+        let context = AppCommandContext(editor: PreviewEditorFactory.makeViewModel(), host: ReaderEditingHost())
+        let bindings = AppCommandKeyMap.keyBindings(in: AppCommandCatalog.current)
+        let pitchA = bindings.first { $0.command.id == "notes.pitch.a" }
+        let search = bindings.first { $0.command.id == "app.search" }
+        #expect(pitchA?.key.character == "a")
+        #expect(pitchA?.command.isEnabled(context) == false, "an editing row's bare key must stay dead while reading")
+        #expect(search?.key.character == "z")
+        #expect(search?.command.isEnabled(context) == true, "app.search needs no editor and must survive the gate")
+    }
+
     /// The File ▸ Revert To rows need an editor but are NOT built through `editorRow` (their `perform` calls back
     /// into the context, not the editor — see the doc comment on `AppCommandCatalog.file`), so they are the one
     /// place `requiresEditor: true` had to be set by hand rather than inherited. Forcing `hasCapturedOriginal` true

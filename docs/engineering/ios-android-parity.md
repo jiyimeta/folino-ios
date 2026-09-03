@@ -70,7 +70,9 @@ line of source represents. Keep each to a sentence and delete it when it closes.
 
 ### Owed to iOS
 
-Nothing is currently owed to iOS.
+| Item | Where it diverges | What iOS still needs |
+| --- | --- | --- |
+| File ▸ Import | `App/Mac/MacCommandContextWiring.swift:13` | the iPad menu bar has no import row. `LibraryRootScreen` owns a non-public `.fileImporter`, so the composition root has no seam to drive; a menu row needs Library to expose one. |
 
 ### Owed to macOS
 

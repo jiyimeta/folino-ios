@@ -27,6 +27,9 @@ struct EditableReaderScreen: View {
     /// pass publishes the same object; see `AppCommandContext`'s doc comment for why a rebuilt instance would make
     /// the menus rebuild for nothing.
     @State private var commandContext: AppCommandContext
+    /// Raised by the bare `Z` row (`AppCommandContext.presentSearch`, filled in `wireOnce()`) — the same mechanism
+    /// `MacEditableReaderScreen` uses.
+    @State private var isSearching = false
     @State private var isWired = false
     @Environment(\.scenePhase) private var scenePhase
     /// Second `ChromeBuilder` is the top-strip row; the first is the pad overlay. `CutoutTierBuilder` is next, and the
@@ -135,6 +138,15 @@ struct EditableReaderScreen: View {
             )
         }, startInEditMode)
             .onAppear { wireOnce() }
+            // Mounted unconditionally, not gated on `editingHost.isEditing`: every row's own `isEnabled` already
+            // carries that gate on iOS (`AppCommand.init`'s `requiresEditor` branch, Task 6), and `AppCommandKeyMap`
+            // disables each button to match — a second, `isEditing`-gated mount would just duplicate a check the
+            // catalog already makes. `AppCommandCatalogTests` pins this: an editing row's bare key stays disabled
+            // outside a session, and `app.search`'s `Z` (which needs no editor) stays enabled throughout.
+            .background { AppCommandKeyMap(target: commandContext) }
+            .sheet(isPresented: $isSearching) {
+                CommandSearchSheet(context: commandContext, isPresented: $isSearching)
+            }
             // Scene-scoped, matching the Mac's own publication (`MacEditableReaderScreen`): a menu command has to
             // find the key window's editor whether or not the score surface itself holds view focus.
             .focusedSceneValue(\.appCommandContext, commandContext)
@@ -159,5 +171,10 @@ struct EditableReaderScreen: View {
         guard !isWired else { return }
         isWired = true
         wireEditingSeam(host: editingHost, viewModel: editorViewModel, repository: repository, analytics: analytics)
+        // A binding, not `self`: a closure that captured this view whole would capture `_commandContext`'s own
+        // State box with it, and the context — which holds the closure — would then keep itself, the editor and
+        // the host alive for the life of the process (same reasoning as `MacEditableReaderScreen.wireOnce`).
+        let searching = $isSearching
+        commandContext.presentSearch = { searching.wrappedValue = true }
     }
 }

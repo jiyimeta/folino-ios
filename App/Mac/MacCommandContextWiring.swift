@@ -10,6 +10,8 @@ import UniformTypeIdentifiers
 /// rows `AppCommandCatalog` cannot answer on its own, since opening a native panel or a sibling window is not
 /// something the shared, cross-platform table can do (was `MacCommands`).
 enum MacCommandContextWiring {
+    // PARITY(ios): File ▸ Import — the iPad menu bar has no import row. `LibraryRootScreen` owns a non-public
+    //   `.fileImporter`, so the composition root has no seam to drive; a menu row needs Library to expose one.
     /// `LibraryRootScreen` owns its own `.fileImporter` (bound to the Library module's own, non-public
     /// `isFileImporterPresented`), so a File-menu command can't trigger that one from outside the module. This
     /// drives `NSOpenPanel` directly instead — the same mechanism `.fileImporter` uses under the hood on macOS —
