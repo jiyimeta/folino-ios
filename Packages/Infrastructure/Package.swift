@@ -40,6 +40,10 @@ if !isAndroid {
     // The bundled Core ML detector that lets `PDFImporter` read scanned (image-only) pages. Apple-only by
     // construction — Core ML does not cross-compile — and `SheetMusicPDF` itself never depends on it, so the
     // Android `.so` graph is unchanged by leaving it out here.
+    //
+    // PARITY(android): Scanned-PDF import — Android needs an ONNX (or other portable) implementation of
+    //   swift-sheet-music's `OMRTileClassifier`; the rest of the detector — tiling, decoding, and assembling
+    //   detections with the classical-CV staff lines — already cross-compiles inside `SheetMusicPDF`.
     scoreFilesDependencies.append(.product(name: "SheetMusicOMRModel", package: "swift-sheet-music"))
 }
 
