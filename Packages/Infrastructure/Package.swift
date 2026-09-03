@@ -23,12 +23,25 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/groue/GRDB.swift", exact: "7.11.1"),
     .package(
         url: "https://github.com/jiyimeta/swift-sheet-music.git",
-        exact: "2.3.1",
+        exact: "2.4.0",
     ),
     .package(path: "../Domain"),
     .package(path: "../Utility"),
     .package(url: "https://github.com/firebase/firebase-ios-sdk", exact: "11.15.0"),
 ]
+
+var scoreFilesDependencies: [Target.Dependency] = [
+    "Domain",
+    .product(name: "UtilityCore", package: "Utility"),
+    .product(name: "SheetMusic", package: "swift-sheet-music"),
+    .product(name: "SheetMusicPDF", package: "swift-sheet-music"),
+]
+if !isAndroid {
+    // The bundled Core ML detector that lets `PDFImporter` read scanned (image-only) pages. Apple-only by
+    // construction — Core ML does not cross-compile — and `SheetMusicPDF` itself never depends on it, so the
+    // Android `.so` graph is unchanged by leaving it out here.
+    scoreFilesDependencies.append(.product(name: "SheetMusicOMRModel", package: "swift-sheet-music"))
+}
 
 var targets: [Target] = [
     .target(
@@ -62,12 +75,7 @@ var targets: [Target] = [
     ),
     .target(
         name: "ScoreFiles",
-        dependencies: [
-            "Domain",
-            .product(name: "UtilityCore", package: "Utility"),
-            .product(name: "SheetMusic", package: "swift-sheet-music"),
-            .product(name: "SheetMusicPDF", package: "swift-sheet-music"),
-        ],
+        dependencies: scoreFilesDependencies,
         plugins: swiftLintPlugins,
     ),
     .target(

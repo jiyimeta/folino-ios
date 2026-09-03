@@ -27,7 +27,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(path: "../../ScoreUI"),
     .package(
         url: "https://github.com/jiyimeta/swift-sheet-music.git",
-        exact: "2.3.1",
+        exact: "2.4.0",
     ),
 ]
 
