@@ -19,6 +19,8 @@ func scoreRowMenu(
     onOpenInVocalTuner: @escaping () -> Void,
     onRequestDelete: ((ScoreItem) -> Void)?,
 ) -> some View {
+    let companionHandoff = companionHandoffAction(onOpenInVocalTuner)
+
     Button { onOpen(item) } label: {
         Label {
             L10n.Common.open
@@ -55,18 +57,14 @@ func scoreRowMenu(
         }
     }
 
-    // PARITY(macos): score-row Share and Open in VocalTuner — both end in `ScoreShareTarget`, which only
-    //   `ActivityViewControllerRepresentable` knows how to present, and that is iOS-only (see its own marker); the
-    //   Mac has no VocalTuner to hand off to either, so its `VocalTunerHandoff` is the no-op one and the row would
-    //   do nothing at all. The whole submenu is omitted on macOS rather than left opening an empty sheet. What
-    //   macOS needs is an `NSSharingServicePicker` behind `ScoreShareTarget`; the companion row comes back with it
-    //   only if VocalTuner ships a Mac app.
-    #if os(iOS)
+    // PARITY(macos): score-row Open in VocalTuner — the companion row is omitted on macOS because the Mac's
+    //   `VocalTunerHandoff` is the no-op one: the hand-off rides the cross-app App Group, which the Mac does not
+    //   join (`AppPaths.sharedContainer` is nil there, Ⅷ §2). It comes back with the App Group tasks, and only if
+    //   VocalTuner ships a Mac app.
     Divider()
     ShareSubmenu(
-        loadFormats: loadShareFormats, onShare: onShare, companionAction: onOpenInVocalTuner,
+        loadFormats: loadShareFormats, onShare: onShare, companionAction: companionHandoff,
     )
-    #endif
 
     if let onRequestDelete {
         Divider()
@@ -78,4 +76,14 @@ func scoreRowMenu(
             }
         }
     }
+}
+
+/// `nil` on macOS — see the marker at the call site. A computed value rather than an `#if` inside the call, because
+/// an `#if` in a view builder's argument list is what SwiftFormat's `--ifdef no-indent` fights on every commit.
+private func companionHandoffAction(_ action: @escaping () -> Void) -> (() -> Void)? {
+    #if os(iOS)
+    action
+    #else
+    nil
+    #endif
 }

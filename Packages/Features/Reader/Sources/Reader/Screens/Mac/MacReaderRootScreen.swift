@@ -4,13 +4,14 @@
 // until `MacScoreContentView` moves to its own file, a Ⅳb/Ⅳc follow-up.
 
 // PARITY(macos): the Mac reading surface's chrome — this screen renders the score in all three display modes, shows
-//   an imported PDF and committed ink, plays them from a transport bar, and edits them from the menu bar and the
-//   keyboard. The inspectors, the share / annotate controls, and the score ⇄ original-PDF switch are still iOS-only;
-//   see `ReaderRootScreen` for the surface being caught up to.
+//   an imported PDF and committed ink, plays them from a transport bar, edits them from the menu bar and the
+//   keyboard, and exports through a save panel. The inspectors and the score ⇄ original-PDF switch are still
+//   iOS-only; see `ReaderRootScreen` for the surface being caught up to.
 
 #if os(macOS)
 import Domain
 import PDFKit
+import ScoreUI
 import SheetMusicCore
 import SwiftUI
 import UtilityCore
@@ -156,6 +157,27 @@ public struct MacReaderRootScreen: View {
             MacTransportBar(viewModel: viewModel)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .toolbar {
+            // PARITY(macos): File ▸ Export… — export is reachable from this toolbar and from the library rows, but
+            //   not from the menu bar, which is its Mac-idiomatic home. The command belongs in
+            //   `App/Mac/MacCommands.swift`, a file a parallel session was rewriting when Ⅷ landed. Placement, not
+            //   capability.
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    ShareFormatMenuItems(
+                        loadFormats: { [viewModel] in await viewModel.availableShareFormats() },
+                        onShare: { format in Task { await viewModel.requestShare(format: format) } },
+                    )
+                } label: {
+                    Label {
+                        Text("reader.export.action", bundle: .module)
+                    } icon: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                }
+            }
+        }
+        .scoreExportPresentation(target: $viewModel.shareTarget)
         // **This screen pins no appearance at all, and that is a measured decision rather than an omission.**
         //
         // `ReaderRootScreen` pins iOS to light because the Reader's CONTENT is light. That reason covers the paper
