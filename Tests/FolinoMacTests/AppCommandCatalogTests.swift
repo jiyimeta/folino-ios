@@ -145,16 +145,43 @@ struct AppCommandCatalogTests {
         #expect(showLibrary?.isEnabled(context) == true)
     }
 
-    /// Now that `file.showLibrary` and `file.import` are genuinely Mac-only, `AppCommandKeyMap` (what actually
-    /// delivers a bare key) must read the same platform-filtered population the menu is built from — `.current`,
-    /// not `.all`. Written against `AppCommandCatalog.current` rather than a hand-listed set of ids so it keeps
-    /// working when Ⅳd adds rows; and against the key map's own `bindings`, not a duplicate of the filter, so a
-    /// future edit that swaps `.current` back for `.all` there is caught even though today's two Mac-only rows
-    /// carry no bare key of their own.
-    @Test @MainActor func `the key map delivers exactly the bare keys the current platform's table has`() {
-        let bindings = AppCommandKeyMap(target: AppCommandContext(editor: nil, host: nil)).bindings
-        let keyMapBareKeys = Set(bindings.map(\.key.character))
-        let catalogBareKeys = Set(AppCommandCatalog.current.flatMap(\.bareKeys).map(\.character))
-        #expect(keyMapBareKeys == catalogBareKeys)
+    /// A small fixture table for the two tests below — NOT `AppCommandCatalog.all`. Asserting the platform-filter
+    /// mechanism against the real table doesn't work today: `file.showLibrary` / `file.import` (the only Mac-only
+    /// rows) carry modifier-bearing shortcuts, so they never contribute a bare key either way, and `FolinoMacTests`
+    /// only ever runs on macOS, so `AppCommandCatalog.current == .all` there regardless of whether the filter is
+    /// applied at all. A test written against that coincidence would stay green even if `AppCommandKeyMap.bindings`
+    /// were changed back to read `.all` — this fixture carries a bare-key row on each single platform so the filter
+    /// itself is what the assertion depends on.
+    private var fixtureCommands: [AppCommand] {
+        [
+            AppCommand(
+                "fixture.mac", "fixture.mac", menu: .file, key: "m", mutating: false, platforms: [.mac],
+            ) { _ in },
+            AppCommand(
+                "fixture.pad", "fixture.pad", menu: .file, key: "p", mutating: false, platforms: [.pad],
+            ) { _ in },
+            AppCommand("fixture.both", "fixture.both", menu: .file, key: "b", mutating: false) { _ in },
+        ]
+    }
+
+    /// Pins the mechanism `AppCommandKeyMap.bindings` relies on: filtering to a platform, then computing bare keys,
+    /// must never leak a bare key from a row the OTHER platform owns. Exercises the same two functions `bindings`
+    /// composes (`AppCommandCatalog.filtered` then `AppCommandKeyMap.keyBindings(in:)`), not a re-derivation of
+    /// either, so a regression in either one fails this test.
+    @Test @MainActor func `the key map never delivers a key from a row this platform does not have`() {
+        let padRows = AppCommandCatalog.filtered(fixtureCommands, for: .pad)
+        let padKeys = Set(AppCommandKeyMap.keyBindings(in: padRows).map(\.key.character))
+        #expect(!padKeys.contains("m"), "a Mac-only row's key leaked into the iPad's key map")
+        #expect(padKeys.contains("p"))
+        #expect(padKeys.contains("b"))
+    }
+
+    /// The reverse direction: filtering for Mac must not leak the iPad-only row's key either.
+    @Test @MainActor func `the key map never delivers a key from a row the Mac does not have`() {
+        let macRows = AppCommandCatalog.filtered(fixtureCommands, for: .mac)
+        let macKeys = Set(AppCommandKeyMap.keyBindings(in: macRows).map(\.key.character))
+        #expect(!macKeys.contains("p"), "an iPad-only row's key leaked into the Mac's key map")
+        #expect(macKeys.contains("m"))
+        #expect(macKeys.contains("b"))
     }
 }

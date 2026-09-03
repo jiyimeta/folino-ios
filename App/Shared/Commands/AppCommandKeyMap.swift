@@ -12,8 +12,8 @@ struct AppCommandKeyMap: View {
 
     /// One bare key, with the command it fires. A row can contribute more than one (design §6's `⌫ / ⌦`), and
     /// unwrapping the key here keeps a force-unwrap — or a fallback that would collide with the transport's Space —
-    /// out of the body. Not `private`: `AppCommandCatalogTests` pins `bindings` against `AppCommandCatalog.current`
-    /// directly, so both it and `bindings` need to be reachable from the test target.
+    /// out of the body. Not `private`: `AppCommandCatalogTests` exercises `keyBindings(in:)` directly, so both it
+    /// and `KeyBinding` need to be reachable from the test target.
     struct KeyBinding: Identifiable {
         let command: AppCommand
         let key: KeyEquivalent
@@ -22,13 +22,21 @@ struct AppCommandKeyMap: View {
         }
     }
 
+    /// The bare-key computation, pulled out as a pure function of `commands` so a test can feed it a small fixture
+    /// table instead of the real `AppCommandCatalog.current` — see that property's doc comment for why testing
+    /// against the real table can't tell a correct filter from a deleted one. `bindings` below is the one and only
+    /// call site that actually reads `.current`.
+    static func keyBindings(in commands: [AppCommand]) -> [KeyBinding] {
+        commands.flatMap { command in
+            command.bareKeys.map { KeyBinding(command: command, key: $0) }
+        }
+    }
+
     /// `.current`, not `.all` — the menu (`AppCommandMenus`) and this key map have to read the same platform-
     /// filtered population, or a platform-restricted row would stay hidden from the menu while its bare key kept
     /// firing here. Not `private`, for the same reason `KeyBinding` above is not.
     var bindings: [KeyBinding] {
-        AppCommandCatalog.current.flatMap { command in
-            command.bareKeys.map { KeyBinding(command: command, key: $0) }
-        }
+        Self.keyBindings(in: AppCommandCatalog.current)
     }
 
     var body: some View {

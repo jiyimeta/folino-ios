@@ -50,7 +50,14 @@ enum AppCommandCatalog {
 
     /// The rows this platform has. `all` stays unfiltered so the tests can assert about the whole table.
     static var current: [AppCommand] {
-        all.filter { $0.platforms.contains(AppCommandPlatform.current) }
+        filtered(all, for: AppCommandPlatform.current)
+    }
+
+    /// The filter `current` applies, pulled out as a pure function so a test can exercise it against a small
+    /// fixture table instead of `all` — asserting against the real (and currently coincidental) shape of `all`
+    /// would pass even if this filter were deleted entirely, since today's only Mac-only rows carry no bare key.
+    static func filtered(_ commands: [AppCommand], for platform: AppCommandPlatform) -> [AppCommand] {
+        commands.filter { $0.platforms.contains(platform) }
     }
 
     static let all: [AppCommand] = file + edit + notes + measures + score + shell + view
