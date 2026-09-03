@@ -1,22 +1,30 @@
 import Editor
 import SwiftUI
 
-/// Where a command lives in the menu bar (design §5.1).
+/// Where a command lives in the menu bar (design §5.1). `.view` reuses the system's own View menu (`AppCommandMenus`
+/// inserts into it with `CommandGroup(before: .toolbar)`) rather than minting a menu of its own.
 enum AppCommandMenu: CaseIterable {
-    case file, edit, notes, measures, score
+    case file, edit, notes, measures, score, view
 }
 
 /// The submenu a command sits in, or `nil` for a row that lives at the top of its menu.
 ///
 /// Design §5.1 writes the Notes menu with `▸` groups — Accidental ▸, Duration ▸, Chord ▸, Tuplet ▸, Voice ▸ — and
-/// this is what makes the generated menu match: without it the Notes menu is one flat list of fifty rows. The
-/// grouping is presentation only; `AppCommandCatalog.all` and the key map are unaffected by it.
+/// this is what makes the generated menu match: without it the Notes menu is one flat list of fifty rows. `displayMode`
+/// (View) and `revertTo` (File) are the same mechanism reused for a menu that mixes row kinds — the grouping is
+/// presentation only; `AppCommandCatalog.all` and the key map are unaffected by it.
 enum AppCommandSubmenu: String, CaseIterable {
-    case pitch, duration, accidental, chord, tuplet, voice
+    case pitch, duration, accidental, chord, tuplet, voice, displayMode, revertTo
 
-    /// The submenu's own key in the App's `Localizable.xcstrings`.
+    /// The submenu's own key in the App's `Localizable.xcstrings`. Interpolating `mac.menu.notes.\(rawValue)` only
+    /// fits the Notes ▸ groups; `displayMode` sits in the View menu and `revertTo` in the File menu, so both need an
+    /// explicit key instead.
     var titleKey: String {
-        "mac.menu.notes.\(rawValue)"
+        switch self {
+        case .displayMode: "mac.menu.displayMode"
+        case .revertTo: "mac.menu.revertTo"
+        default: "mac.menu.notes.\(rawValue)"
+        }
     }
 
     /// Built through `LocalizedStringKey(_:)` rather than by interpolating into a `LocalizedStringKey` literal —

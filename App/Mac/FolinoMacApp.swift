@@ -112,7 +112,6 @@ struct FolinoMacApp: App {
             .task { startAppServices() }
         }
         .commands {
-            MacCommands()
             AppCommandMenus()
         }
         // **Measured, on the first launch anyone was able to observe.** `.defaultLaunchBehavior(.presented)` on the
@@ -213,6 +212,10 @@ private struct MacLibraryWindowContent: View {
     let viewModel: LibraryViewModel
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
+    /// The library window has no editor, but File ▸ Show Library / Import still have to work while it is key — and
+    /// on a fresh launch with an empty library it is the only import route the app has at all. Created once (not
+    /// computed in `body`) so every pass publishes the same object — see `AppCommandContext`.
+    @State private var commandContext = AppCommandContext(editor: nil, host: nil)
 
     var body: some View {
         MacLibraryBrowser(
@@ -227,11 +230,15 @@ private struct MacLibraryWindowContent: View {
         )
         // §2.9.2 — the library is summoned *over* the score window, on the same Space, full screen included.
         .background(MacLibraryWindowPresentation())
-            // The browser has no file importer of its own, so File ▸ Import is the *only* import route while this
-            // window is key — and on a fresh launch with an empty library it is the only import route the app has
-            // at all. `@FocusedValue` follows scene focus, so a score window publishing this does nothing for the
-            // browser; the browser has to publish its own.
-            .focusedSceneValue(\.macLibraryImportAction) { url in await viewModel.startImport(from: url) }
+            // `@FocusedValue` follows scene focus, so a score window publishing `appCommandContext` does nothing
+            // for the browser; the browser has to publish its own.
+            .focusedSceneValue(\.appCommandContext, commandContext)
+            .onAppear {
+                commandContext.showLibrary = { openWindow(id: MacWindowID.library) }
+                commandContext.importScore = {
+                    MacCommandContextWiring.presentImportPanel { url in await viewModel.startImport(from: url) }
+                }
+            }
             .opensImportedScores(from: viewModel)
     }
 

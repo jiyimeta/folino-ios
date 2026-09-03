@@ -270,8 +270,8 @@ public struct MacLibraryBrowser: View {
     }
 }
 
-/// Mirrors `ScoreImportContentTypes.isImportable` in `App/Mac/MacCommands.swift` — Library cannot import App, so the
-/// same filename-extension check against `ScoreFileTypes.allowed` is duplicated here rather than shared.
+/// Mirrors `ScoreImportContentTypes.isImportable` in `App/Mac/MacCommandContextWiring.swift` — Library cannot import
+/// App, so the same filename-extension check against `ScoreFileTypes.allowed` is duplicated here rather than shared.
 private func isImportableScoreURL(_ url: URL) -> Bool {
     guard let type = UTType(filenameExtension: url.pathExtension) else { return false }
     return ScoreFileTypes.allowed.contains { type.conforms(to: $0) }

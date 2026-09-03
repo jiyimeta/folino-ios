@@ -37,7 +37,10 @@ struct MacEditableReaderScreen: View {
     private let annotationCoordinator: AnnotationSaveCoordinator
     private let analytics: any Analytics
 
-    init(item: ScoreItem, bootstrap: AppBootstrap) {
+    init(
+        item: ScoreItem, bootstrap: AppBootstrap,
+        showLibrary: @escaping () -> Void, importScore: @escaping () -> Void,
+    ) {
         self.item = item
         self.bootstrap = bootstrap
         // Non-nil for the same reason `MacShellView.init`'s are: this screen is only ever built from that view's
@@ -74,7 +77,14 @@ struct MacEditableReaderScreen: View {
         )
         _editingHost = State(wrappedValue: host)
         _editorViewModel = State(wrappedValue: viewModel)
-        _editingTarget = State(wrappedValue: AppCommandContext(editor: viewModel, host: host))
+        // File ▸ Show Library / Import aren't editing commands (`editor`/`host` above are what those are), but
+        // this window's `AppCommandContext` is the only one published while a score is showing (`MacShellView`'s
+        // own is published only in its empty-window branch, mutually exclusive with this screen), so the two rows
+        // have to answer through it too.
+        let target = AppCommandContext(editor: viewModel, host: host)
+        target.showLibrary = showLibrary
+        target.importScore = importScore
+        _editingTarget = State(wrappedValue: target)
     }
 
     var body: some View {

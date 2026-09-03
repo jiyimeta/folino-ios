@@ -9,11 +9,17 @@ struct AppCommandMenus: Commands {
     var body: some Commands {
         CommandGroup(after: .saveItem) {
             Menu {
-                items(in: .file)
+                items(in: .file, submenu: .revertTo)
             } label: {
-                Text("mac.menu.revertTo")
+                Text(AppCommandSubmenu.revertTo.title)
             }
             .disabled(target == nil)
+        }
+        CommandGroup(after: .newItem) {
+            // Top-level `.file` rows only — Show Library and Import. The revert rows are in the submenu above.
+            ForEach(AppCommandCatalog.topLevelCommands(in: .file)) { command in
+                AppCommandMenuItem(command: command, target: target)
+            }
         }
         CommandGroup(after: .undoRedo) {
             Divider()
@@ -28,6 +34,12 @@ struct AppCommandMenus: Commands {
         CommandMenu(Text("mac.menu.score")) {
             items(in: .score)
         }
+        // Lands in the system's own View menu, not a menu of its own — matches where `MacCommands`'s Display Mode
+        // picker used to sit.
+        CommandGroup(before: .toolbar) {
+            items(in: .view)
+            Divider()
+        }
     }
 
     /// One menu's rows: its top-level commands first, then a submenu per `▸` group design §5.1 names.
@@ -38,13 +50,19 @@ struct AppCommandMenus: Commands {
         }
         ForEach(AppCommandCatalog.submenus(in: menu), id: \.self) { submenu in
             Menu {
-                ForEach(AppCommandCatalog.commands(in: menu, submenu: submenu)) { command in
-                    AppCommandMenuItem(command: command, target: target)
-                }
+                items(in: menu, submenu: submenu)
             } label: {
                 Text(submenu.title)
             }
             .disabled(target == nil)
+        }
+    }
+
+    /// Just one submenu's rows — the File menu's Revert To needs this on its own, since the File menu's top level
+    /// also holds a second kind of row (`shell`'s Show Library / Import) that `items(in:)` would otherwise mix in.
+    private func items(in menu: AppCommandMenu, submenu: AppCommandSubmenu) -> some View {
+        ForEach(AppCommandCatalog.commands(in: menu, submenu: submenu)) { command in
+            AppCommandMenuItem(command: command, target: target)
         }
     }
 }
@@ -65,7 +83,18 @@ private struct AppCommandMenuItem: View {
                 command.perform(target)
             }
         } label: {
-            Text(command.title)
+            // Draws the checkmark in the View ▸ Display Mode submenu — the affordance `MacCommands`'s `Picker`
+            // used to give the same three rows, now with one source of truth instead of two (design note in
+            // `AppCommandCatalog+Shell.swift`).
+            if AppCommandCatalog.isDisplayModeCurrent(command) {
+                Label {
+                    Text(command.title)
+                } icon: {
+                    Image(systemName: "checkmark")
+                }
+            } else {
+                Text(command.title)
+            }
         }
         .disabled(!enabled)
         .modifier(AppCommandShortcut(command: command, hasTarget: target != nil))

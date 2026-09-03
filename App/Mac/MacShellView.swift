@@ -18,14 +18,21 @@ struct MacShellView: View {
     /// is now opening a *window* rather than swapping a detail column's content, so nothing here ever writes it back.
     let window: MacWindowScore?
     /// The process's one `LibraryViewModel`, owned by `FolinoMacApp`. This window needs it for exactly one thing:
-    /// publishing File ▸ Import as a focused scene value, so the menu command still works while a score window is
-    /// key. `@FocusedValue` follows *scene* focus, so the browser window's own publication is invisible from here —
-    /// a score window has to publish its own, and it has to be the same view model the browser is watching.
+    /// `importAction` below, which File ▸ Import (via `AppCommandContext.importScore`) drives so the menu command
+    /// still works while a score window is key. `@FocusedValue` follows *scene* focus, so the browser window's own
+    /// context is invisible from here — a score window has to publish its own, and its `importScore` closure has
+    /// to reach the same view model the browser is watching.
     let libraryVM: LibraryViewModel
     @Environment(\.openWindow) private var openWindow
     /// §2.9.4's other half: a score window with no score closes itself. `dismiss()` in the root view of a window
     /// scene closes that window.
     @Environment(\.dismiss) private var dismiss
+    /// File ▸ Show Library / Import must work even in the momentary empty-window state (§2.9.4) — the same two rows
+    /// `MacEditableReaderScreen`'s own context answers once a score is showing. Created once (not computed in
+    /// `body`) so every pass publishes the same object — see `AppCommandContext`. The two branches of `content` are
+    /// mutually exclusive, so this and `MacEditableReaderScreen`'s `editingTarget` are never both live for the same
+    /// scene at once.
+    @State private var libraryOnlyContext = AppCommandContext(editor: nil, host: nil)
 
     /// The one adapter this view reads itself, unwrapped once in `init` (see the guard there for why it is
     /// guaranteed non-nil) rather than at every use site: `openScoreItem` resolves the window's id against it. The
@@ -62,7 +69,6 @@ struct MacShellView: View {
             // window opts out with instead. Reading it once is sound: a window's score-ness never changes from
             // empty to non-empty, because the window's value is fixed the moment `openWindow(value:)` mints it.
             .background(MacWindowTabAssist(isScoreWindow: openScoreItem != nil))
-            .focusedSceneValue(\.macLibraryImportAction, importAction)
             // A score window must open what its own File ▸ Import brought in, even with the browser closed — see
             // `ImportedScoreOpener`. The browser installs the same watcher; `MacImportedScoreClaim` is what stops
             // them from opening the score twice.
@@ -95,8 +101,9 @@ struct MacShellView: View {
     /// ordinary path: a clean import sets `pendingScoreToOpen`, which `opensImportedScores` turns into a score
     /// window without the browser ever appearing.
     ///
-    /// One state write is not at issue here: this runs from `NSOpenPanel`'s completion (`MacCommands`), not from
-    /// inside a SwiftUI update, and `openWindow` is the only call it makes.
+    /// One state write is not at issue here: this runs from `NSOpenPanel`'s completion
+    /// (`MacCommandContextWiring.presentImportPanel`), not from inside a SwiftUI update, and `openWindow` is the
+    /// only call it makes.
     private func importAction(_ url: URL) async {
         await libraryVM.startImport(from: url)
         guard libraryVM.hasPendingImportPrompt else { return }
@@ -109,21 +116,26 @@ struct MacShellView: View {
             // `id(item.id)` so switching the window to another score builds a fresh `MacEditableReaderScreen` — and
             // with it a fresh `ReaderViewModel`, `ReaderEditingHost` and `EditorViewModel`, each created once per
             // screen instance in a `@State`.
-            MacEditableReaderScreen(item: item, bootstrap: bootstrap)
-                .id(item.id)
-                .toolbar {
-                    ToolbarItem(placement: .navigation) {
-                        Button {
-                            openWindow(id: MacWindowID.library)
-                        } label: {
-                            Label {
-                                Text("mac.toolbar.showLibrary")
-                            } icon: {
-                                Image(systemName: "square.grid.2x2")
-                            }
+            MacEditableReaderScreen(
+                item: item,
+                bootstrap: bootstrap,
+                showLibrary: { openWindow(id: MacWindowID.library) },
+                importScore: { MacCommandContextWiring.presentImportPanel(importAction) },
+            )
+            .id(item.id)
+            .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    Button {
+                        openWindow(id: MacWindowID.library)
+                    } label: {
+                        Label {
+                            Text("mac.toolbar.showLibrary")
+                        } icon: {
+                            Image(systemName: "square.grid.2x2")
                         }
                     }
                 }
+            }
         } else {
             // §2.9.4 — a score window never shows an empty state. This is reached when the window's `scoreID` names
             // a row the library holds neither live nor in the trash (permanently deleted, or a restored window value
@@ -135,7 +147,10 @@ struct MacShellView: View {
             // is true, and `AppBootstrap.finishStartup` awaits `repository.refresh()` before setting it — so the
             // rows are loaded by the time `openScoreItem` is asked, and a `nil` here means genuinely absent.
             Color.clear
+                .focusedSceneValue(\.appCommandContext, libraryOnlyContext)
                 .task {
+                    libraryOnlyContext.showLibrary = { openWindow(id: MacWindowID.library) }
+                    libraryOnlyContext.importScore = { MacCommandContextWiring.presentImportPanel(importAction) }
                     // Only when nothing else is showing a score. `MacScoreWindowRegistry` holds the live score
                     // windows, and after F6's change an EMPTY window never registers — so `isEmpty` here means
                     // "no other window is showing a score", which is exactly §2.9.5's condition. Summoning

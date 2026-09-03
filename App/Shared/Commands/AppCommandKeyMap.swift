@@ -12,8 +12,9 @@ struct AppCommandKeyMap: View {
 
     /// One bare key, with the command it fires. A row can contribute more than one (design §6's `⌫ / ⌦`), and
     /// unwrapping the key here keeps a force-unwrap — or a fallback that would collide with the transport's Space —
-    /// out of the body.
-    private struct KeyBinding: Identifiable {
+    /// out of the body. Not `private`: `AppCommandCatalogTests` pins `bindings` against `AppCommandCatalog.current`
+    /// directly, so both it and `bindings` need to be reachable from the test target.
+    struct KeyBinding: Identifiable {
         let command: AppCommand
         let key: KeyEquivalent
         var id: String {
@@ -23,8 +24,8 @@ struct AppCommandKeyMap: View {
 
     /// `.current`, not `.all` — the menu (`AppCommandMenus`) and this key map have to read the same platform-
     /// filtered population, or a platform-restricted row would stay hidden from the menu while its bare key kept
-    /// firing here.
-    private var bindings: [KeyBinding] {
+    /// firing here. Not `private`, for the same reason `KeyBinding` above is not.
+    var bindings: [KeyBinding] {
         AppCommandCatalog.current.flatMap { command in
             command.bareKeys.map { KeyBinding(command: command, key: $0) }
         }

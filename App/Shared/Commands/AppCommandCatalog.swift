@@ -1,3 +1,4 @@
+import Domain
 import Editor
 import SheetMusicCore
 import SwiftUI
@@ -52,24 +53,28 @@ enum AppCommandCatalog {
         all.filter { $0.platforms.contains(AppCommandPlatform.current) }
     }
 
-    static let all: [AppCommand] = file + edit + notes + measures + score
+    static let all: [AppCommand] = file + edit + notes + measures + score + shell + view
 
     // MARK: File (design §5.3)
 
     /// Both rows are `mutating`, unlike the rest of the File menu: they rewrite the score wholesale, which is
     /// exactly what §6.2 closes off while the transport runs — a revert under a running cursor would leave the
-    /// engine reading a score that no longer exists.
+    /// engine reading a score that no longer exists. Both sit in the Revert To submenu (`AppCommandMenus` splits it
+    /// out) so the File menu's top level can also carry the shell's own rows (`shell`, below) without mixing the two
+    /// kinds together.
     private static let file: [AppCommand] = [
         .init(
             "file.revert.lastOpened",
             "mac.menu.revert.lastOpened",
             menu: .file,
+            submenu: .revertTo,
             isEnabled: { $0.editor?.sessionHasEdits ?? false },
         ) { $0.confirmDiscard() },
         .init(
             "file.revert.original",
             "mac.menu.revert.original",
             menu: .file,
+            submenu: .revertTo,
             isEnabled: { $0.editor?.canRevertToOriginal ?? false },
         ) { $0.confirmRevert() },
     ]
@@ -334,6 +339,7 @@ enum AppCommandCatalog {
 
     // MARK: Measures, Score
 
-    // `measures` and `score` live in `AppCommandCatalog+MeasuresAndScore.swift` — split out so this file stays
-    // under SwiftLint's `file_length` budget. See that file's header comment.
+    // `measures` and `score` live in `AppCommandCatalog+MeasuresAndScore.swift`; `shell` and `view` (was
+    // `MacCommands`) live in `AppCommandCatalog+Shell.swift` — both split out so this file stays under SwiftLint's
+    // `file_length` budget. See each file's header comment.
 }

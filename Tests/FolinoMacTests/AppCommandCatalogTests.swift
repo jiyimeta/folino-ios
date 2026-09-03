@@ -121,4 +121,40 @@ struct AppCommandCatalogTests {
         #expect(voice?.isMutating == false)
         #expect(voice.map { $0.isEnabled(target) } == true)
     }
+
+    @Test func `the app level rows are in the table`() {
+        let ids = Set(AppCommandCatalog.all.map(\.id))
+        #expect(ids.contains("file.showLibrary"))
+        #expect(ids.contains("file.import"))
+        #expect(ids.contains("view.displayMode.page"))
+    }
+
+    /// Spec §3.2: a row is filtered out only where the concept does not exist. Show Library and Import are the
+    /// only two, and Display Mode is deliberately NOT one of them — it writes the same preference key the iOS
+    /// reader's visual inspector writes.
+    @Test func `only the two library rows are Mac only`() {
+        let macOnly = AppCommandCatalog.all.filter { $0.platforms == [.mac] }.map(\.id)
+        #expect(Set(macOnly) == ["file.showLibrary", "file.import"])
+    }
+
+    @Test @MainActor func `the app level rows are disabled when the context cannot serve them`() {
+        let context = AppCommandContext(editor: nil, host: nil)
+        let showLibrary = AppCommandCatalog.all.first { $0.id == "file.showLibrary" }
+        #expect(showLibrary?.isEnabled(context) == false)
+        context.showLibrary = {}
+        #expect(showLibrary?.isEnabled(context) == true)
+    }
+
+    /// Now that `file.showLibrary` and `file.import` are genuinely Mac-only, `AppCommandKeyMap` (what actually
+    /// delivers a bare key) must read the same platform-filtered population the menu is built from — `.current`,
+    /// not `.all`. Written against `AppCommandCatalog.current` rather than a hand-listed set of ids so it keeps
+    /// working when Ⅳd adds rows; and against the key map's own `bindings`, not a duplicate of the filter, so a
+    /// future edit that swaps `.current` back for `.all` there is caught even though today's two Mac-only rows
+    /// carry no bare key of their own.
+    @Test @MainActor func `the key map delivers exactly the bare keys the current platform's table has`() {
+        let bindings = AppCommandKeyMap(target: AppCommandContext(editor: nil, host: nil)).bindings
+        let keyMapBareKeys = Set(bindings.map(\.key.character))
+        let catalogBareKeys = Set(AppCommandCatalog.current.flatMap(\.bareKeys).map(\.character))
+        #expect(keyMapBareKeys == catalogBareKeys)
+    }
 }
