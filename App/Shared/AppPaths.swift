@@ -3,10 +3,6 @@ import ImportExportAppGroup
 
 /// Resolves on-disk locations the app uses. Centralized so AppBootstrap and any future migrations agree on layout.
 enum AppPaths {
-    // PARITY(macos): document root — this is the pre-sandbox location (`~/Library/Application Support/folino/`),
-    //   not the App Sandbox container. Sub-project Ⅷ moves it into the sandbox with a security-scoped bookmark;
-    //   Application Support is already where that container's equivalent maps, so nothing here has to move twice
-    //   in spirit.
     /// Root of the app's document storage: `~/Documents` on iOS (sandboxed), `~/Library/Application Support/folino/`
     /// on macOS (this app is not yet sandboxed there, so `.documentDirectory` would resolve to the user's real
     /// `~/Documents` — the wrong place for app-managed data to live, and to be recursively cleaned by
@@ -40,10 +36,25 @@ enum AppPaths {
     /// and VocalTuner share one copy. See `docs/superpowers/specs/2026-06-26-shared-soundfont-app-group-design.md`.
     static let sharedAppGroupIdentifier = SharedAppGroupIDs.identifier
 
-    /// Root of the cross-app shared App Group container, or `nil` when it is unavailable (entitlement/provisioning
-    /// gap). Callers that write into it — the incoming-score drain, the capability stamp — degrade to doing nothing.
+    /// Root of the cross-app shared App Group container, or `nil` when it is unavailable. Callers that write into it
+    /// — the incoming-score drain, the capability stamp — degrade to doing nothing.
+    ///
+    /// **`nil` on macOS, unconditionally.** The Mac does not join the App Group: `App/Mac/SharedContainerTasks.swift`
+    /// declines every App Group launch task by construction, and this is the other half of that decision. It has to
+    /// be explicit rather than inherited from a missing entitlement, because macOS does not behave like iOS here — an
+    /// unsandboxed Mac app gets a real path back from `containerURL(forSecurityApplicationGroupIdentifier:)` whether
+    /// or not it holds the entitlement, and creates the directory on demand. That is how the Mac's SoundFonts ended
+    /// up in `~/Library/Group Containers/…` (measured 2026-09-03) by way of `AudioStackFactory`, which is shared
+    /// code. Under the App Sandbox that path is not writable, and `AppBootstrap.prepareDirectories()` creates the
+    /// SoundFont directory with `try` — so leaving this to chance is a failed launch, not a missing SoundFont.
+    ///
+    /// The sub-project that wires the cross-app tasks removes this gate and adds the entitlement together.
     static var sharedContainer: URL? {
+        #if os(macOS)
+        nil
+        #else
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: sharedAppGroupIdentifier)
+        #endif
     }
 
     /// `<shared container>/Soundfonts/`. `nil` when the container is unavailable (entitlement/provisioning gap) — the
