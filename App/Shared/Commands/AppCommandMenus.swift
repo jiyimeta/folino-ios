@@ -1,3 +1,4 @@
+import Domain
 import SwiftUI
 
 /// The editing half of the menu bar, generated from `AppCommandCatalog`. Every command has a home here (umbrella
@@ -8,6 +9,11 @@ struct AppCommandMenus: Commands {
     /// Scene-independent, so this reads even with no window key — exactly what `effectiveTarget`'s fallback needs.
     /// Cross-platform (`OpenWindowAction` exists on iOS too); only its use below is Mac-only.
     @Environment(\.openWindow) private var openWindow
+    /// The only reason `AppCommandMenuItem`'s checkmark tracks the stored Display Mode at all: `@AppStorage` is a
+    /// `DynamicProperty`, so SwiftUI re-evaluates this `Commands` struct's `body` when the key changes — a plain
+    /// `UserDefaults` read would not. `MacCommands` relied on the exact same mechanism through its `Picker`
+    /// (`git show 9ab26f47:App/Mac/MacCommands.swift`).
+    @AppStorage(ReaderGlobalSettingsKey.layoutMode) private var layoutModeRaw = ReaderLayoutMode.page.rawValue
 
     /// The context every row actually reads: the focused one if a screen published it, otherwise an app-level
     /// fallback (final review F2) so Show Library and the whole Display Mode submenu still answer with nothing
@@ -38,7 +44,10 @@ struct AppCommandMenus: Commands {
         CommandGroup(after: .newItem) {
             // Top-level `.file` rows only — Show Library and Import. The revert rows are in the submenu above.
             ForEach(AppCommandCatalog.topLevelCommands(in: .file)) { command in
-                AppCommandMenuItem(command: command, target: effectiveTarget, hasFocusedTarget: target != nil)
+                AppCommandMenuItem(
+                    command: command, target: effectiveTarget, hasFocusedTarget: target != nil,
+                    displayModeRaw: layoutModeRaw,
+                )
             }
         }
         CommandGroup(after: .undoRedo) {
@@ -69,7 +78,10 @@ struct AppCommandMenus: Commands {
     @ViewBuilder
     private func items(in menu: AppCommandMenu) -> some View {
         ForEach(AppCommandCatalog.topLevelCommands(in: menu)) { command in
-            AppCommandMenuItem(command: command, target: effectiveTarget, hasFocusedTarget: target != nil)
+            AppCommandMenuItem(
+                command: command, target: effectiveTarget, hasFocusedTarget: target != nil,
+                displayModeRaw: layoutModeRaw,
+            )
         }
         ForEach(AppCommandCatalog.submenus(in: menu), id: \.self) { submenu in
             Menu {
@@ -84,7 +96,10 @@ struct AppCommandMenus: Commands {
     /// also holds a second kind of row (`shell`'s Show Library / Import) that `items(in:)` would otherwise mix in.
     private func items(in menu: AppCommandMenu, submenu: AppCommandSubmenu) -> some View {
         ForEach(AppCommandCatalog.commands(in: menu, submenu: submenu)) { command in
-            AppCommandMenuItem(command: command, target: effectiveTarget, hasFocusedTarget: target != nil)
+            AppCommandMenuItem(
+                command: command, target: effectiveTarget, hasFocusedTarget: target != nil,
+                displayModeRaw: layoutModeRaw,
+            )
         }
     }
 }
@@ -97,6 +112,10 @@ private struct AppCommandMenuItem: View {
     /// because `AppCommandShortcut`'s provisional delivery-A branch means something narrower: a view-scoped editing
     /// target actually being focused, not merely "some context, possibly the app-level fallback, answers".
     let hasFocusedTarget: Bool
+    /// `AppCommandMenus`'s observed copy of the stored Display Mode — threaded in rather than read fresh here, for
+    /// the same reason `AppCommandMenus` holds it as `@AppStorage` in the first place (see that property's doc
+    /// comment).
+    let displayModeRaw: String
 
     var body: some View {
         let enabled = command.isEnabled(target)
@@ -113,7 +132,7 @@ private struct AppCommandMenuItem: View {
             // Draws the checkmark in the View ▸ Display Mode submenu — the affordance `MacCommands`'s `Picker`
             // used to give the same three rows, now with one source of truth instead of two (design note in
             // `AppCommandCatalog+Shell.swift`).
-            if AppCommandCatalog.isDisplayModeCurrent(command) {
+            if AppCommandCatalog.isDisplayModeCurrent(command, storedRawValue: displayModeRaw) {
                 Label {
                     Text(command.title)
                 } icon: {

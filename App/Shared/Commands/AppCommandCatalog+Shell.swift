@@ -33,34 +33,24 @@ extension AppCommandCatalog {
 
     // MARK: View — Display Mode
 
-    /// `@AppStorage` is a property wrapper for a `View`, not for a table of static rows, so the read and write here
-    /// are plain `UserDefaults` — the same key `MacCommands` wrote, so the checkmark still names the mode actually
-    /// on screen.
+    /// `@AppStorage` is a property wrapper for a `View`, not for a table of static rows, so the write here is a
+    /// plain `UserDefaults` set — the same key `MacCommands` wrote, so the checkmark (`isDisplayModeCurrent` below)
+    /// still names the mode actually on screen. Only the write lives here: reading needs SwiftUI observation, which
+    /// only a `DynamicProperty` at the call site (`AppCommandMenus`'s `@AppStorage`) can give it — see
+    /// `isDisplayModeCurrent`'s doc comment.
     ///
     /// Not filtered to Mac only: this writes the same key the iOS reader's visual inspector writes, so a score
     /// opened on the Mac and on the iPad agrees about what mode it is in — Ⅳb's search sheet is expected to surface
-    /// these same three rows on iOS. `ReaderLayoutMode.macDisplayMode` — the Mac reader's own resolution function,
-    /// which `MacReaderRootScreen` also reads — is Mac-only in the `Reader` package, so this file (shared with iOS)
-    /// calls it only under `#if os(macOS)`; the fallback below is the exact same resolution, spelled out, for the
-    /// platforms where that convenience does not exist.
-    private static var storedLayoutMode: ReaderLayoutMode {
-        get {
-            let raw = UserDefaults.standard.string(forKey: ReaderGlobalSettingsKey.layoutMode)
-                ?? ReaderLayoutMode.page.rawValue
-            #if os(macOS)
-            return ReaderLayoutMode.macDisplayMode(storedRawValue: raw)
-            #else
-            return ReaderLayoutMode(rawValue: raw) ?? .page
-            #endif
-        }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: ReaderGlobalSettingsKey.layoutMode) }
+    /// these same three rows on iOS.
+    private static func storeLayoutMode(_ mode: ReaderLayoutMode) {
+        UserDefaults.standard.set(mode.rawValue, forKey: ReaderGlobalSettingsKey.layoutMode)
     }
 
     private static func displayModeRow(_ mode: ReaderLayoutMode, _ titleKey: String) -> AppCommand {
         AppCommand(
             "view.displayMode.\(mode.rawValue)", titleKey, menu: .view, submenu: .displayMode, mutating: false,
             isEnabled: { _ in true },
-            perform: { _ in storedLayoutMode = mode },
+            perform: { _ in storeLayoutMode(mode) },
         )
     }
 
@@ -80,7 +70,19 @@ extension AppCommandCatalog {
     ]
 
     /// Drives the checkmark in the View ▸ Display Mode submenu (`AppCommandMenus`).
-    static func isDisplayModeCurrent(_ command: AppCommand) -> Bool {
-        command.id == "view.displayMode.\(storedLayoutMode.rawValue)"
+    ///
+    /// `storedRawValue` MUST come from an observed property at the call site — `@AppStorage` in a `Commands` struct,
+    /// which is a `DynamicProperty` and so does invalidate that struct's `body` when the key changes — never from a
+    /// fresh `UserDefaults` read taken here. A plain read is not observed by SwiftUI, so nothing would tell the menu
+    /// to re-evaluate when the stored mode changes elsewhere (the Reader's own picker, or the other platform), and
+    /// the checkmark would stay on whichever row was current when the menu was first built. This bug shipped once
+    /// already for exactly that reason; there is deliberately no no-argument overload to fall back to.
+    static func isDisplayModeCurrent(_ command: AppCommand, storedRawValue raw: String) -> Bool {
+        #if os(macOS)
+        let mode = ReaderLayoutMode.macDisplayMode(storedRawValue: raw)
+        #else
+        let mode = ReaderLayoutMode(rawValue: raw) ?? .page
+        #endif
+        return command.id == "view.displayMode.\(mode.rawValue)"
     }
 }

@@ -1,3 +1,5 @@
+import Domain
+
 // `@testable` for `PreviewEditorFactory`, which is internal to the Editor package: the repo rule is never to widen
 // access for a test.
 @testable import Editor
@@ -234,5 +236,39 @@ struct AppCommandCatalogTests {
         #expect(search?.key?.character == "z")
         #expect(search?.modifiers.isEmpty == true)
         #expect(search?.isMutating == false)
+    }
+
+    /// `isDisplayModeCurrent` is now a pure function of its `storedRawValue` argument (the bug this pins: the
+    /// checkmark used to be driven by an unobserved `UserDefaults` read, so it never moved when the mode changed —
+    /// see `AppCommandCatalog+Shell.swift`'s doc comment). This does NOT cover that SwiftUI actually re-evaluates
+    /// the `Commands` body when `@AppStorage` changes — that is QA item 2's eye check, not something a unit test
+    /// on this pure function can see.
+    @Test func `isDisplayModeCurrent answers true only for its own row's stored raw value`() {
+        let rows: [(mode: ReaderLayoutMode, id: String)] = [
+            (.page, "view.displayMode.page"),
+            (.vertical, "view.displayMode.vertical"),
+            (.horizontal, "view.displayMode.horizontal"),
+        ]
+        for row in rows {
+            let command = AppCommandCatalog.allIncludingOtherPlatforms.first { $0.id == row.id }
+            #expect(command != nil, "\(row.id)")
+            guard let command else { continue }
+            for other in rows {
+                let expected = other.mode == row.mode
+                let actual = AppCommandCatalog.isDisplayModeCurrent(command, storedRawValue: other.mode.rawValue)
+                #expect(actual == expected, "\(row.id) against \(other.mode.rawValue)")
+            }
+        }
+    }
+
+    /// An unrecognized stored raw value must resolve to the same mode the reader would actually draw — `.page`,
+    /// per `ReaderLayoutMode.macDisplayMode(storedRawValue:)` — never leaving every row unchecked.
+    @Test func `an unrecognized stored raw value resolves to the mode the reader would draw`() {
+        let page = AppCommandCatalog.allIncludingOtherPlatforms.first { $0.id == "view.displayMode.page" }
+        #expect(page != nil)
+        guard let page else { return }
+        #expect(AppCommandCatalog.isDisplayModeCurrent(page, storedRawValue: "not-a-real-mode"))
+        let vertical = AppCommandCatalog.allIncludingOtherPlatforms.first { $0.id == "view.displayMode.vertical" }
+        #expect(vertical.map { AppCommandCatalog.isDisplayModeCurrent($0, storedRawValue: "not-a-real-mode") } == false)
     }
 }
