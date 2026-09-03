@@ -311,6 +311,9 @@ final class AppCommandContext {
 }
 ```
 
+The initializer's playback guard becomes optional-aware in the same edit — `context.editor?.isPlaybackActive !=
+true` in place of `!target.editor.isPlaybackActive`, so a context with no editor is not treated as playing.
+
 Every `isEnabled` / `perform` closure in the catalog that reads `target.editor` now unwraps it. Use one helper at
 the top of `AppCommandCatalog` so the ~50 rows stay one-liners:
 
@@ -440,18 +443,33 @@ enum AppCommandMenu: CaseIterable {
     ]
 ```
 
-Display Mode is three rows in `.view`, each writing `ReaderGlobalSettingsKey.layoutMode` through the context. Add
-to `AppCommandContext`:
+Display Mode is three rows in the `.view` menu, in a new `displayMode` submenu — `.view` also holds the search row
+(Task 5) at its top level, so the modes must not be the whole menu:
 
 ```swift
-    /// The reader's shared display-mode preference, read and written through the same key the iOS visual
-    /// inspector uses, so a score agrees about its mode across devices.
-    @AppStorage(ReaderGlobalSettingsKey.layoutMode)
-    private var layoutModeRaw: String = ReaderLayoutMode.page.rawValue
+enum AppCommandSubmenu: String, CaseIterable {
+    case pitch, duration, accidental, chord, tuplet, voice, displayMode
+}
 ```
 
-`@AppStorage` cannot live in a plain class — put the read/write in the row instead, as a pair of free functions in
-`AppCommandCatalog`:
+`AppCommandSubmenu.titleKey` interpolates `mac.menu.notes.\(rawValue)`, which is wrong for a View submenu. Give the
+enum an explicit key instead:
+
+```swift
+    var titleKey: String {
+        switch self {
+        case .displayMode: "mac.menu.displayMode"
+        case .revertTo: "mac.menu.revertTo"
+        default: "mac.menu.notes.\(rawValue)"
+        }
+    }
+```
+
+(`revertTo` is added in Step 4; both cases exist by the end of this task.)
+
+Each row writes `ReaderGlobalSettingsKey.layoutMode`. `@AppStorage` is a property wrapper for a `View`, not for a
+table of static rows, so the read and write are plain `UserDefaults` — the same key and the same resolution
+function `MacCommands` used, so the checkmark still names the mode actually on screen:
 
 ```swift
     private static var storedLayoutMode: ReaderLayoutMode {
@@ -466,10 +484,15 @@ to `AppCommandContext`:
 
     private static func displayModeRow(_ mode: ReaderLayoutMode, _ titleKey: String) -> AppCommand {
         AppCommand(
-            "view.displayMode.\(mode.rawValue)", titleKey, menu: .view, mutating: false,
+            "view.displayMode.\(mode.rawValue)", titleKey, menu: .view, submenu: .displayMode, mutating: false,
             isEnabled: { _ in true },
             perform: { _ in storedLayoutMode = mode },
         )
+    }
+
+    /// Drives the checkmark in the View ▸ Display Mode submenu.
+    static func isDisplayModeCurrent(_ command: AppCommand) -> Bool {
+        command.id == "view.displayMode.\(storedLayoutMode.rawValue)"
     }
 ```
 
@@ -479,24 +502,36 @@ source of truth.
 
 - [ ] **Step 4: Generate the whole menu bar from the table**
 
-In `AppCommandMenus`, add the two groups `MacCommands` used to own, and a checkmark for the display-mode rows:
+The File menu now holds two kinds of row, so the Revert To pair moves into its own submenu rather than being
+identified by id. Add `revertTo` to `AppCommandSubmenu` (titleKey `mac.menu.revertTo`), mark the two existing
+revert rows `submenu: .revertTo`, and let the generation split them:
 
 ```swift
+        CommandGroup(after: .saveItem) {
+            Menu {
+                items(in: .file, submenu: .revertTo)
+            } label: {
+                Text(AppCommandSubmenu.revertTo.title)
+            }
+            .disabled(context == nil)
+        }
         CommandGroup(after: .newItem) {
-            items(in: .file, matching: { $0.id.hasPrefix("file.showLibrary") || $0.id == "file.import" })
+            // Top-level `.file` rows only — Show Library and Import. The revert rows are in the submenu above.
+            ForEach(AppCommandCatalog.topLevelCommands(in: .file)) { command in
+                AppCommandMenuItem(command: command, context: context)
+            }
         }
         CommandGroup(before: .toolbar) {
-            Menu {
-                items(in: .view)
-            } label: {
-                Text("mac.menu.displayMode")
-            }
+            items(in: .view)
             Divider()
         }
 ```
 
-The checkmark is a `Label` with a `checkmark` image when `AppCommandCatalog.isDisplayModeCurrent(command)`; add
-that predicate beside `storedLayoutMode`.
+`items(in:)` already emits top-level rows first and then one `Menu` per submenu, so the search row (Task 5) sits at
+the top of the group and the three modes sit inside a Display Mode submenu. No new generation shape is needed.
+
+The checkmark is drawn by `AppCommandMenuItem`: when `AppCommandCatalog.isDisplayModeCurrent(command)` is true the
+label becomes `Label { Text(command.title) } icon: { Image(systemName: "checkmark") }`.
 
 - [ ] **Step 5: Move the `NSOpenPanel` half to `MacCommandContextWiring`**
 
@@ -674,8 +709,15 @@ Expected: FAIL — no `app.search` row.
         ),
 ```
 
-Add `"mac.menu.commandSearch"` to `App/Resources/Localizable.xcstrings` with en `Find Command…` and ja
-`コマンドを検索…`.
+Add **two** keys to `App/Resources/Localizable.xcstrings`:
+
+| key | en | ja |
+| --- | --- | --- |
+| `mac.menu.commandSearch` | `Find Command…` | `コマンドを検索…` |
+| `mac.commandSearch.placeholder` | `Search commands` | `コマンドを検索` |
+
+Edit the catalog by hand rather than letting Xcode regenerate it — a missed key is silently recreated as a stale
+entry (recorded repo-wide trap).
 
 - [ ] **Step 4: Build the sheet**
 
@@ -815,20 +857,36 @@ Expected: FAIL — the editing rows are enabled, because nothing consults `isEdi
 
 - [ ] **Step 3: Add the iOS enablement rule**
 
-In `AppCommand`'s initializer, after the playback rule:
+`AppCommand.isEnabled` is a `let`, so it is composed once rather than reassigned. Replace the initializer's
+existing `if mutating { … } else { … }` assignment with a single composition:
 
 ```swift
-        // iOS is a mode: the rows exist in the iPad menu bar while reading, greyed, and come alive when the
-        // session opens (spec §3.2). macOS is always editable inside a score window, so it asks only for an
-        // editor.
-        #if !os(macOS)
-        let sessionGated = self.isEnabled
-        self.isEnabled = { context in
+        // Two wrappers, applied outermost-first, so the cheapest refusal wins: a mutating row is dead while the
+        // transport runs (§6.2), and on iOS every row that needs an editor is dead outside an edit session —
+        // editing is a mode here, unlike the Mac (spec §3.2). A row with no editor at all (Display Mode, search)
+        // passes both guards.
+        let rule = isEnabled
+        let sessionGated: @MainActor @Sendable (AppCommandContext) -> Bool
+        #if os(macOS)
+        sessionGated = rule
+        #else
+        sessionGated = { context in
             guard context.editor == nil || context.host?.isEditing == true else { return false }
-            return sessionGated(context)
+            return rule(context)
         }
         #endif
+        if mutating {
+            self.isEnabled = { context in
+                guard context.editor?.isPlaybackActive != true else { return false }
+                return sessionGated(context)
+            }
+        } else {
+            self.isEnabled = sessionGated
+        }
 ```
+
+Note the playback guard now reads `context.editor?.isPlaybackActive != true` rather than
+`!target.editor.isPlaybackActive`, because the editor is optional from Task 2 onward.
 
 Rows with no editor at all (Display Mode, search) are unaffected — the guard passes when `editor` is `nil`.
 
