@@ -12,7 +12,7 @@ enum AppCommandMenu: CaseIterable {
 /// Design §5.1 writes the Notes menu with `▸` groups — Accidental ▸, Duration ▸, Chord ▸, Tuplet ▸, Voice ▸ — and
 /// this is what makes the generated menu match: without it the Notes menu is one flat list of fifty rows. `displayMode`
 /// (View) and `revertTo` (File) are the same mechanism reused for a menu that mixes row kinds — the grouping is
-/// presentation only; `AppCommandCatalog.all` and the key map are unaffected by it.
+/// presentation only; `AppCommandCatalog.allIncludingOtherPlatforms` and the key map are unaffected by it.
 enum AppCommandSubmenu: String, CaseIterable {
     case pitch, duration, accidental, chord, tuplet, voice, displayMode, revertTo
 

@@ -32,9 +32,9 @@ struct AppCommandKeyMap: View {
         }
     }
 
-    /// `.current`, not `.all` — the menu (`AppCommandMenus`) and this key map have to read the same platform-
-    /// filtered population, or a platform-restricted row would stay hidden from the menu while its bare key kept
-    /// firing here. Not `private`, for the same reason `KeyBinding` above is not.
+    /// `.current`, not `.allIncludingOtherPlatforms` — the menu (`AppCommandMenus`) and this key map have to read
+    /// the same platform-filtered population, or a platform-restricted row would stay hidden from the menu while
+    /// its bare key kept firing here. Not `private`, for the same reason `KeyBinding` above is not.
     var bindings: [KeyBinding] {
         Self.keyBindings(in: AppCommandCatalog.current)
     }

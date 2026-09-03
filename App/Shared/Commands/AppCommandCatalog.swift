@@ -48,19 +48,28 @@ enum AppCommandCatalog {
         commands(in: menu).filter { $0.submenu == submenu }
     }
 
-    /// The rows this platform has. `all` stays unfiltered so the tests can assert about the whole table.
+    /// The rows this platform has. `current` is what every UI projection (menu, key map, Ⅳb's search) must read.
     static var current: [AppCommand] {
-        filtered(all, for: AppCommandPlatform.current)
+        filtered(allIncludingOtherPlatforms, for: AppCommandPlatform.current)
     }
 
     /// The filter `current` applies, pulled out as a pure function so a test can exercise it against a small
-    /// fixture table instead of `all` — asserting against the real (and currently coincidental) shape of `all`
-    /// would pass even if this filter were deleted entirely, since today's only Mac-only rows carry no bare key.
+    /// fixture table instead of `allIncludingOtherPlatforms` — asserting against the real (and currently
+    /// coincidental) shape of the real table would pass even if this filter were deleted entirely, since today's
+    /// only Mac-only rows carry no bare key.
     static func filtered(_ commands: [AppCommand], for platform: AppCommandPlatform) -> [AppCommand] {
         commands.filter { $0.platforms.contains(platform) }
     }
 
-    static let all: [AppCommand] = file + edit + notes + measures + score + shell + view
+    /// The whole table, unfiltered — every row for every platform. This exists for tests (which want to assert
+    /// about the complete declaration) and as `filtered(_:for:)`'s input; it is NOT what a UI projection reads —
+    /// that is always `current`. The name is deliberately loud: `all` reads as "obviously the thing to iterate",
+    /// and a menu, key map, or search index built from this instead of `current` would show or fire a row the
+    /// current platform does not have. Today that mistake cannot be caught by a behavioral test — the only two
+    /// platform-restricted rows (`file.showLibrary`, `file.import`) both carry modifier-bearing shortcuts, so they
+    /// never appear in a bare-key set either way, and there is no iPad-only row at all — so the name carrying the
+    /// warning is the whole defense. Add a test the moment the first platform-restricted BARE-key row lands.
+    static let allIncludingOtherPlatforms: [AppCommand] = file + edit + notes + measures + score + shell + view
 
     // MARK: File (design §5.3)
 

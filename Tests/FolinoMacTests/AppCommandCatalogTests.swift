@@ -13,34 +13,35 @@ import Testing
 /// score survives the transport running.
 struct AppCommandCatalogTests {
     private func key(_ id: String) -> Character? {
-        AppCommandCatalog.all.first { $0.id == id }?.key?.character
+        AppCommandCatalog.allIncludingOtherPlatforms.first { $0.id == id }?.key?.character
     }
 
     @Test func `every command id is unique`() {
-        let ids = AppCommandCatalog.all.map(\.id)
+        let ids = AppCommandCatalog.allIncludingOtherPlatforms.map(\.id)
         #expect(Set(ids).count == ids.count)
     }
 
     @Test func `every bare key is bound at most once and never with modifiers`() {
-        let bare = AppCommandCatalog.all.filter(\.isBareKey)
+        let bare = AppCommandCatalog.allIncludingOtherPlatforms.filter(\.isBareKey)
         // Hoisted out of `#expect`: `allSatisfy` is `rethrows`, and the macro's expansion of a rethrowing call
         // taking a key path does not typecheck.
         let everyBareKeyIsUnmodified = bare.allSatisfy(\.modifiers.isEmpty)
         #expect(everyBareKeyIsUnmodified)
         // `bareKeys`, not `key`: an alias (⌦ beside ⌫) is a bare key the key map delivers too, and it has to be
         // unique against every other one.
-        let keys = AppCommandCatalog.all.flatMap(\.bareKeys).map(\.character)
+        let keys = AppCommandCatalog.allIncludingOtherPlatforms.flatMap(\.bareKeys).map(\.character)
         #expect(!keys.isEmpty)
         #expect(Set(keys).count == keys.count)
         // A row with an alias but no primary key would silently bind nothing.
-        let everyAliasHasAPrimary = AppCommandCatalog.all.allSatisfy { $0.alternateKeys.isEmpty || $0.isBareKey }
+        let everyAliasHasAPrimary = AppCommandCatalog.allIncludingOtherPlatforms
+            .allSatisfy { $0.alternateKeys.isEmpty || $0.isBareKey }
         #expect(everyAliasHasAPrimary)
     }
 
     /// A modifier-bearing shortcut is a menu item's key equivalent, so the pair (key, modifiers) has to be unique
     /// too — two items sharing one would leave AppKit to pick, silently.
     @Test func `every modified shortcut is bound at most once`() {
-        let pairs = AppCommandCatalog.all.compactMap { command -> String? in
+        let pairs = AppCommandCatalog.allIncludingOtherPlatforms.compactMap { command -> String? in
             guard let key = command.key, !command.isBareKey else { return nil }
             return "\(key.character)+\(command.modifiers.rawValue)"
         }
@@ -51,7 +52,7 @@ struct AppCommandCatalogTests {
     /// Design §6: MuseScore's `N` (note-input mode toggle) is deliberately unbound — folino's editing model is
     /// caret & pad, with no mode to toggle. A bound `N` would be bound to something a MuseScore hand does not expect.
     @Test func `no bare key is N`() {
-        let keys = AppCommandCatalog.all.flatMap(\.bareKeys).map(\.character)
+        let keys = AppCommandCatalog.allIncludingOtherPlatforms.flatMap(\.bareKeys).map(\.character)
         #expect(!keys.contains("n"))
     }
 
@@ -60,7 +61,7 @@ struct AppCommandCatalogTests {
             #expect(!AppCommandCatalog.commands(in: menu).isEmpty, "\(menu)")
         }
         let placed = AppCommandMenu.allCases.flatMap { AppCommandCatalog.commands(in: $0) }.count
-        #expect(placed == AppCommandCatalog.all.count)
+        #expect(placed == AppCommandCatalog.allIncludingOtherPlatforms.count)
     }
 
     @Test func `the MuseScore letters and digits are bound as the spec's table says`() {
@@ -78,7 +79,7 @@ struct AppCommandCatalogTests {
 
     @Test func `the tuplet and voice digits carry the modifiers the key map assigns them`() {
         func modifiers(_ id: String) -> EventModifiers? {
-            AppCommandCatalog.all.first { $0.id == id }?.modifiers
+            AppCommandCatalog.allIncludingOtherPlatforms.first { $0.id == id }?.modifiers
         }
         #expect(modifiers("notes.tuplet.9") == .command)
         #expect(modifiers("notes.voice.1") == [.command, .option])
@@ -90,7 +91,7 @@ struct AppCommandCatalogTests {
     /// notice one that was never added.
     @Test func `every title key resolves in the App's string catalog`() {
         let missing = "␀"
-        let keys = AppCommandCatalog.all.map(\.titleKey)
+        let keys = AppCommandCatalog.allIncludingOtherPlatforms.map(\.titleKey)
             + AppCommandSubmenu.allCases.map(\.titleKey)
             + ["mac.menu.notes", "mac.menu.measures", "mac.menu.score", "mac.menu.revertTo"]
         for key in keys {
@@ -104,7 +105,7 @@ struct AppCommandCatalogTests {
         let editor = PreviewEditorFactory.makeViewModel()
         editor.isPlaybackActive = true
         let target = AppCommandContext(editor: editor, host: ReaderEditingHost())
-        for command in AppCommandCatalog.all where command.isMutating {
+        for command in AppCommandCatalog.allIncludingOtherPlatforms where command.isMutating {
             #expect(!command.isEnabled(target), "\(command.id)")
         }
     }
@@ -116,14 +117,14 @@ struct AppCommandCatalogTests {
         let editor = PreviewEditorFactory.makeViewModel()
         editor.isPlaybackActive = true
         let target = AppCommandContext(editor: editor, host: ReaderEditingHost())
-        let voice = AppCommandCatalog.all.first { $0.id == "notes.voice.1" }
+        let voice = AppCommandCatalog.allIncludingOtherPlatforms.first { $0.id == "notes.voice.1" }
         #expect(voice != nil)
         #expect(voice?.isMutating == false)
         #expect(voice.map { $0.isEnabled(target) } == true)
     }
 
     @Test func `the app level rows are in the table`() {
-        let ids = Set(AppCommandCatalog.all.map(\.id))
+        let ids = Set(AppCommandCatalog.allIncludingOtherPlatforms.map(\.id))
         #expect(ids.contains("file.showLibrary"))
         #expect(ids.contains("file.import"))
         #expect(ids.contains("view.displayMode.page"))
@@ -133,25 +134,30 @@ struct AppCommandCatalogTests {
     /// only two, and Display Mode is deliberately NOT one of them — it writes the same preference key the iOS
     /// reader's visual inspector writes.
     @Test func `only the two library rows are Mac only`() {
-        let macOnly = AppCommandCatalog.all.filter { $0.platforms == [.mac] }.map(\.id)
+        let macOnly = AppCommandCatalog.allIncludingOtherPlatforms.filter { $0.platforms == [.mac] }.map(\.id)
         #expect(Set(macOnly) == ["file.showLibrary", "file.import"])
     }
 
     @Test @MainActor func `the app level rows are disabled when the context cannot serve them`() {
         let context = AppCommandContext(editor: nil, host: nil)
-        let showLibrary = AppCommandCatalog.all.first { $0.id == "file.showLibrary" }
+        let showLibrary = AppCommandCatalog.allIncludingOtherPlatforms.first { $0.id == "file.showLibrary" }
         #expect(showLibrary?.isEnabled(context) == false)
         context.showLibrary = {}
         #expect(showLibrary?.isEnabled(context) == true)
     }
 
-    /// A small fixture table for the two tests below — NOT `AppCommandCatalog.all`. Asserting the platform-filter
-    /// mechanism against the real table doesn't work today: `file.showLibrary` / `file.import` (the only Mac-only
-    /// rows) carry modifier-bearing shortcuts, so they never contribute a bare key either way, and `FolinoMacTests`
-    /// only ever runs on macOS, so `AppCommandCatalog.current == .all` there regardless of whether the filter is
-    /// applied at all. A test written against that coincidence would stay green even if `AppCommandKeyMap.bindings`
-    /// were changed back to read `.all` — this fixture carries a bare-key row on each single platform so the filter
-    /// itself is what the assertion depends on.
+    /// A small fixture table for the two tests below — NOT `AppCommandCatalog.allIncludingOtherPlatforms`. Asserting
+    /// the platform-filter mechanism against the real table doesn't work today: `file.showLibrary` / `file.import`
+    /// (the only Mac-only rows) carry modifier-bearing shortcuts, so they never contribute a bare key either way,
+    /// there is no iPad-only row at all, and `FolinoMacTests` only ever runs on macOS — so on this platform,
+    /// `current`'s bare-key set is identical to `allIncludingOtherPlatforms`'s whether or not the filter runs at
+    /// all. These two tests exercise `filtered(_:for:)` composed with `AppCommandKeyMap.keyBindings(in:)` against a
+    /// fixture that actually has a bare key on each single platform, which real-table assertions cannot do — but
+    /// note that composition is NOT the same invariant as "`AppCommandKeyMap.bindings` passes `.current`, not
+    /// `allIncludingOtherPlatforms`, to that composition": mutation-testing `bindings` itself (swapping in
+    /// `allIncludingOtherPlatforms`) still passes all 38 tests today, for the same reason. That call-site choice has
+    /// no behavioral test until a platform-restricted BARE-key row exists; until then, the loud name on
+    /// `allIncludingOtherPlatforms` is the actual defense — see its doc comment.
     private var fixtureCommands: [AppCommand] {
         [
             AppCommand(
