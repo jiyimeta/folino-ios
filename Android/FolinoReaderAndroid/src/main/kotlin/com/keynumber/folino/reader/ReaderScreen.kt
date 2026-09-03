@@ -135,6 +135,9 @@ import com.keynumber.folino.reader.ink.AnnotationTool
 import com.keynumber.folino.reader.ink.AnnotationToolState
 import com.keynumber.folino.reader.ink.AnnotationToolbar
 import com.keynumber.folino.reader.ink.AnnotationToolbarDefaults
+import com.keynumber.folino.reader.ink.AnnotationTopBarActions
+import com.keynumber.folino.reader.ink.ClearAllAnnotationsDialog
+import com.keynumber.folino.reader.ink.DiscardAnnotationsDialog
 import com.keynumber.folino.reader.ink.EraseGestureController
 import com.keynumber.folino.reader.ink.ErasePhase
 import com.keynumber.folino.reader.ink.encodeWireArray
@@ -514,6 +517,10 @@ fun ReaderScreen(
     // and persisted by the VM's debounced save; `canUndo`/`canRedo` gate the toolbar's undo/redo
     // buttons (undo/redo history is session-only, never persisted).
     val annotationMode by readerVm.annotationMode.collectAsStateWithLifecycle()
+    // The session header's two inputs: whether this session has ink to lose (gates ✕'s confirmation and the back
+    // gesture's), and which of the three controls ends it — the latter decided by shared Swift, not here.
+    val annotationSessionHasChanges by readerVm.annotationSessionHasChanges.collectAsStateWithLifecycle()
+    val annotationEndMode by readerVm.annotationSessionEndMode.collectAsStateWithLifecycle()
     val drawings by readerVm.drawings.collectAsStateWithLifecycle()
     val toolState by readerVm.toolState.collectAsStateWithLifecycle()
     val canUndo by readerVm.canUndo.collectAsStateWithLifecycle()
@@ -953,6 +960,20 @@ fun ReaderScreen(
         if (editing.sessionHasEdits) isConfirmingDiscard = true else onEndEditing()
     }
 
+    // The annotation session's own pair of confirmations, and the same back rule: system back ends the session
+    // rather than leaving the Reader, and asks first when this session has ink to lose. Held here rather than in
+    // the bar because back is a screen-level gesture only this composable can observe — exactly why
+    // `isConfirmingDiscard` above lives here too.
+    var isConfirmingAnnotationDiscard by remember { mutableStateOf(false) }
+    var isConfirmingAnnotationClear by remember { mutableStateOf(false) }
+    BackHandler(enabled = annotationMode && !editing.isEditing) {
+        if (annotationSessionHasChanges) {
+            isConfirmingAnnotationDiscard = true
+        } else {
+            readerVm.setAnnotationMode(false)
+        }
+    }
+
     // `EditUiState.availability` only turns into a failure value as the RESULT of an `onStartEditing()`
     // attempt (`EditSessionController.begin`): it starts at `AVAILABLE` and stays there until a real
     // controller's `begin()` sets it. So "not editing, and availability reads as a refusal" is exactly a
@@ -1012,7 +1033,7 @@ fun ReaderScreen(
     // A bubble must not land on top of something the user just opened, and the tap that dismisses that thing
     // must not take the bubble with it — hence the settle delay after a blocker clears, which mirrors iOS's.
     val hintsBlocked = showPdfNotice || showInspector || showDisplayInspector || annotationMode ||
-        editing.isEditing || isConfirmingDiscard
+        editing.isEditing || isConfirmingDiscard || isConfirmingAnnotationDiscard || isConfirmingAnnotationClear
     LaunchedEffect(hintsBlocked, state::class) {
         if (hintsBlocked) return@LaunchedEffect
         delay(HINT_OFFER_SETTLE_MILLIS)
@@ -1142,6 +1163,11 @@ fun ReaderScreen(
                         ReaderHintController.markUsed(ReaderFeatureHint.ANNOTATION)
                         readerVm.toggleAnnotationMode()
                     },
+                    annotationEndMode = annotationEndMode,
+                    annotationSessionHasChanges = annotationSessionHasChanges,
+                    onEndAnnotating = { readerVm.setAnnotationMode(false) },
+                    onRequestDiscardAnnotations = { isConfirmingAnnotationDiscard = true },
+                    onRequestClearAnnotations = { isConfirmingAnnotationClear = true },
                     isPdf = isPdf,
                     onShowPdfNotice = { showPdfNotice = true },
                     editing = editing,
@@ -1517,6 +1543,29 @@ fun ReaderScreen(
             onKeepEditing = { isConfirmingDiscard = false },
         )
     }
+    if (isConfirmingAnnotationDiscard) {
+        DiscardAnnotationsDialog(
+            onDiscard = {
+                isConfirmingAnnotationDiscard = false
+                // Releases any wet stroke still waiting to be painted by the dry layer, for the same reason the
+                // toolbar's undo does: the layer is about to be replaced wholesale, and a retained wet copy would
+                // keep drawing ink that no longer exists for up to MAX_WET_RETENTION_MS.
+                inkHandoff.releaseAll()
+                readerVm.discardAnnotationSession()
+            },
+            onKeepAnnotating = { isConfirmingAnnotationDiscard = false },
+        )
+    }
+    if (isConfirmingAnnotationClear) {
+        ClearAllAnnotationsDialog(
+            onClearAll = {
+                isConfirmingAnnotationClear = false
+                inkHandoff.releaseAll()
+                readerVm.clearAllAnnotations()
+            },
+            onCancel = { isConfirmingAnnotationClear = false },
+        )
+    }
     editingUnavailableReason?.let { reason ->
         EditingUnavailableDialog(reason = reason, onDismiss = { editingUnavailableReason = null })
     }
@@ -1611,24 +1660,43 @@ fun ReaderTopBar(
     onDisplaySettings: () -> Unit,
     modifier: Modifier = Modifier,
     windowInsets: WindowInsets = TopAppBarDefaults.windowInsets,
-    /** Whether annotation (pencil) mode is currently active — drives the toggle's checked state. */
+    /**
+     * Whether an annotation session is open. Like [EditUiState.isEditing], this REPLACES the reading actions with
+     * the session's own ([AnnotationTopBarActions]) and turns the leading ← into a ✕ — annotating is a session,
+     * and a session's header shows the session's controls. While no session is open it only drives the annotate
+     * toggle's checked state.
+     */
     annotationMode: Boolean = false,
     /** Disabled while playback is active (parity w/ iOS: can't annotate while the score is playing). */
     annotationEnabled: Boolean = true,
     onToggleAnnotate: () -> Unit = {},
+    /**
+     * Which control ends the open annotation session — see [AnnotationSessionEndMode], whose value comes from
+     * shared Swift. Read only while [annotationMode] is true.
+     */
+    annotationEndMode: AnnotationSessionEndMode = AnnotationSessionEndMode.COMMIT_UNCHANGED,
+    /** Whether the open annotation session has drawn or erased anything; gates ✕'s confirmation, nothing else. */
+    annotationSessionHasChanges: Boolean = false,
+    /** Ends the annotation session keeping its ink — the trailing ✓. */
+    onEndAnnotating: () -> Unit = {},
+    /** Called instead of [onEndAnnotating] when ✕ is pressed with ink to lose. */
+    onRequestDiscardAnnotations: () -> Unit = {},
+    /** Called instead of [onEndAnnotating] when the trailing control is the destructive "Revert". */
+    onRequestClearAnnotations: () -> Unit = {},
     /** True while a fixed-layout PDF is open — shows the tappable "PDF" label beside the title. */
     isPdf: Boolean = false,
     /** Re-presents the PDF-playback caveat; invoked by the "PDF" label. */
     onShowPdfNotice: () -> Unit = {},
     /** The note-editing session's live state. While [EditUiState.isEditing] is true, this bar's `actions`
      * are REPLACED by [EditingTopBarActions] (undo / redo / voice / pad / done) rather than joined to the
-     * reading set —
-     * the same full swap [annotationMode] does NOT do (annotate only adds a toggle to the existing row);
-     * see [EditingTopBarActions]'s own doc for why editing gets the stronger treatment. The back arrow
+     * reading set — the same full swap [annotationMode] now does, for the same reason. The back arrow
      * swaps behavior too: it ends the session instead of navigating away, matching the ✓ and the
      * `BackHandler` for system back ([ReaderScreen] owns that one, since only it can observe the system
      * gesture). Defaults to an inert `EditUiState()` so this bar reads exactly as it did before editing
-     * existed. */
+     * existed.
+     *
+     * The two sessions cannot be open at once — "Edit notes" is not offered while annotating and the annotate
+     * toggle is not offered while editing — so where this bar branches on both, editing is simply tested first. */
     editing: EditUiState = EditUiState(),
     /**
      * Whether the "Edit notes" action appears in the reading-mode row at all.
@@ -1670,33 +1738,45 @@ fun ReaderTopBar(
         //
         // The PDF label stays. It is not decoration: it is what keeps the playback caveat reachable once "Don't
         // show again" has silenced the automatic presentation, and iOS keeps its `PDFBadge` for the same reason.
-        // With the title gone it simply has the slot to itself.
+        // With the title gone it simply has the slot to itself — while READING. It goes with the rest of the
+        // reading chrome for either session, because what it re-presents is the *playback* caveat, which says
+        // nothing about a score being written on or written into; iOS hides its own `PDFBadge` for both too.
         title = {
-            if (isPdf && !editing.isEditing) {
+            if (isPdf && !editing.isEditing && !annotationMode) {
                 ReaderPdfLabel(onClick = onShowPdfNotice)
             }
         },
         navigationIcon = {
-            // ✕ while editing, ← while reading. Editing turns this into a contextual bar, and a contextual bar's
-            // leading slot is Material's close — not a back arrow, which promises navigation the mode does not
-            // offer. It is also the control iOS puts in the same place (`EditorDiscardButton`), so the two
-            // platforms end a session by pressing the same thing.
+            // ✕ in either session, ← while reading. A session turns this into a contextual bar, and a contextual
+            // bar's leading slot is Material's close — not a back arrow, which promises navigation the mode does
+            // not offer. It is also the control iOS puts in the same place (`EditorDiscardButton` /
+            // `AnnotationDiscardButton`), so the two platforms end a session by pressing the same thing.
             //
-            // Leaving with edits asks first; leaving without them is just leaving. Neither ✕ nor the system back
-            // gesture ever discards silently — see `DiscardEditsDialog`.
+            // ✕ means the same thing in both: put it back the way it was when the session began. Leaving with
+            // something to lose asks first; leaving without it is just leaving. Neither ✕ nor the system back
+            // gesture ever discards silently — see `DiscardEditsDialog` / `DiscardAnnotationsDialog`.
+            val inSession = editing.isEditing || annotationMode
             IconButton(
                 onClick = {
                     when {
                         editing.isEditing && editing.sessionHasEdits -> onRequestDiscard()
                         editing.isEditing -> onEndEditing()
+                        annotationMode && annotationSessionHasChanges -> onRequestDiscardAnnotations()
+                        annotationMode -> onEndAnnotating()
                         else -> onBack()
                     }
                 },
             ) {
-                if (editing.isEditing) {
+                if (inSession) {
                     Icon(
                         Icons.Filled.Close,
-                        contentDescription = stringResource(R.string.reader_editing_discard_action),
+                        contentDescription = stringResource(
+                            if (editing.isEditing) {
+                                R.string.reader_editing_discard_action
+                            } else {
+                                R.string.reader_annotation_discard_action
+                            },
+                        ),
                     )
                 } else {
                     Icon(
@@ -1719,6 +1799,13 @@ fun ReaderTopBar(
                     onEndEditing = onEndEditing,
                     canRevertToOriginal = editing.canRevertToOriginal,
                     onRevertToOriginal = onRevertToOriginal,
+                )
+            } else if (annotationMode) {
+                AnnotationTopBarActions(
+                    endMode = annotationEndMode,
+                    onDisplaySettings = onDisplaySettings,
+                    onEndAnnotating = onEndAnnotating,
+                    onRequestClearAll = onRequestClearAnnotations,
                 )
             } else {
                 // Order matches iOS's strip exactly: the two "this score" actions, then the two that write into
